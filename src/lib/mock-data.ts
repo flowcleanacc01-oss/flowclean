@@ -1,0 +1,432 @@
+import type { Customer, LinenForm, DeliveryNote, BillingStatement, Expense, AppUser, CompanyInfo } from '@/types'
+import { STANDARD_LINEN_ITEMS } from '@/types'
+
+// ============================================================
+// Default Prices (from real quotation)
+// ============================================================
+export const DEFAULT_PRICES: Record<string, number> = Object.fromEntries(
+  STANDARD_LINEN_ITEMS.map(i => [i.code, i.defaultPrice])
+)
+
+// ============================================================
+// Company Info
+// ============================================================
+export const DEFAULT_COMPANY_INFO: CompanyInfo = {
+  name: 'บริษัท คราฟท์ แอนด์ มอร์ จำกัด',
+  nameEn: 'Craft and More Co., Ltd.',
+  address: '89/1 หมู่ 3 ต.บางกรวย อ.บางกรวย จ.นนทบุรี 11130',
+  taxId: '0125563012345',
+  branch: 'สำนักงานใหญ่',
+  phone: '081-234-5678',
+  bankName: 'ธนาคารกสิกรไทย',
+  bankAccountName: 'บจก. คราฟท์ แอนด์ มอร์',
+  bankAccountNumber: '123-4-56789-0',
+}
+
+// ============================================================
+// Sample Customers (Real hotel names)
+// ============================================================
+const perPieceItems = ['B/F', 'B/H', 'B/T', 'P/C', 'S/T', 'S/Q', 'S/K', 'D/T', 'D/Q', 'D/K', 'B/M', 'B/R', 'P/T']
+const flatRateItems = ['B/F', 'B/H', 'B/T', 'P/C', 'S/Q', 'S/K', 'D/Q', 'D/K', 'B/M']
+
+export const SAMPLE_CUSTOMERS: Customer[] = [
+  {
+    id: 'cust-01',
+    name: 'Wild Orchid Villa',
+    nameEn: 'Wild Orchid Villa',
+    address: '78 ถ.ข้าวสาร แขวงตลาดยอด เขตพระนคร กรุงเทพฯ 10200',
+    taxId: '0105548012345',
+    branch: 'สำนักงานใหญ่',
+    contactName: 'คุณสมศักดิ์',
+    contactPhone: '02-123-4567',
+    contactEmail: 'laundry@wildorchid.co.th',
+    creditDays: 30,
+    billingModel: 'per_piece',
+    monthlyFlatRate: 0,
+    enabledItems: perPieceItems,
+    priceList: [
+      { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
+      { code: 'P/C', price: 5 }, { code: 'S/T', price: 12 }, { code: 'S/Q', price: 12 },
+      { code: 'S/K', price: 12 }, { code: 'D/T', price: 29 }, { code: 'D/Q', price: 29 },
+      { code: 'D/K', price: 29 }, { code: 'B/M', price: 6 }, { code: 'B/R', price: 25 },
+      { code: 'P/T', price: 12 },
+    ],
+    notes: 'ลูกค้า VIP - ส่งทุกวัน',
+    createdAt: '2025-01-15',
+    isActive: true,
+  },
+  {
+    id: 'cust-02',
+    name: 'Villa Cha Cha Bangplumpoo',
+    nameEn: 'Villa Cha Cha Bangplumpoo',
+    address: '36 ถ.ตะนาว แขวงบวรนิเวศ เขตพระนคร กรุงเทพฯ 10200',
+    taxId: '0105551098765',
+    branch: 'สำนักงานใหญ่',
+    contactName: 'คุณวรรณา',
+    contactPhone: '02-234-5678',
+    contactEmail: 'hk@villachacha.com',
+    creditDays: 30,
+    billingModel: 'per_piece',
+    monthlyFlatRate: 0,
+    enabledItems: ['B/F', 'B/H', 'B/T', 'P/C', 'S/Q', 'S/K', 'D/Q', 'D/K', 'B/M', 'P/T'],
+    priceList: [
+      { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
+      { code: 'P/C', price: 5 }, { code: 'S/Q', price: 12 }, { code: 'S/K', price: 12 },
+      { code: 'D/Q', price: 29 }, { code: 'D/K', price: 29 }, { code: 'B/M', price: 6 },
+      { code: 'P/T', price: 12 },
+    ],
+    notes: '',
+    createdAt: '2025-02-01',
+    isActive: true,
+  },
+  {
+    id: 'cust-03',
+    name: 'Villa Cha-Cha Khaosan',
+    nameEn: 'Villa Cha-Cha Khaosan',
+    address: '22 ถ.ข้าวสาร แขวงตลาดยอด เขตพระนคร กรุงเทพฯ 10200',
+    taxId: '0105553456789',
+    branch: 'สำนักงานใหญ่',
+    contactName: 'คุณประวิทย์',
+    contactPhone: '02-345-6789',
+    contactEmail: 'ops@villachachakhaosan.com',
+    creditDays: 30,
+    billingModel: 'per_piece',
+    monthlyFlatRate: 0,
+    enabledItems: ['B/F', 'B/H', 'B/T', 'P/C', 'S/Q', 'S/K', 'D/Q', 'D/K', 'B/M'],
+    priceList: [
+      { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
+      { code: 'P/C', price: 5 }, { code: 'S/Q', price: 12 }, { code: 'S/K', price: 12 },
+      { code: 'D/Q', price: 29 }, { code: 'D/K', price: 29 }, { code: 'B/M', price: 6 },
+    ],
+    notes: 'สาขาข้าวสาร',
+    createdAt: '2025-03-10',
+    isActive: true,
+  },
+  {
+    id: 'cust-04',
+    name: 'Sawaddee House',
+    nameEn: 'Sawaddee House',
+    address: '147 ถ.ข้าวสาร แขวงตลาดยอด เขตพระนคร กรุงเทพฯ 10200',
+    taxId: '0105555111222',
+    branch: 'สำนักงานใหญ่',
+    contactName: 'คุณนภา',
+    contactPhone: '02-456-7890',
+    contactEmail: 'napa@sawaddeehouse.com',
+    creditDays: 30,
+    billingModel: 'per_piece',
+    monthlyFlatRate: 0,
+    enabledItems: ['B/F', 'B/H', 'B/T', 'P/C', 'S/Q', 'S/K', 'D/Q', 'B/M'],
+    priceList: [
+      { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
+      { code: 'P/C', price: 5 }, { code: 'S/Q', price: 12 }, { code: 'S/K', price: 12 },
+      { code: 'D/Q', price: 29 }, { code: 'B/M', price: 6 },
+    ],
+    notes: '',
+    createdAt: '2025-04-20',
+    isActive: true,
+  },
+  {
+    id: 'cust-05',
+    name: 'บ้านวัชรา',
+    nameEn: 'Baan Wachara',
+    address: '55 ซ.รามบุตรี แขวงตลาดยอด เขตพระนคร กรุงเทพฯ 10200',
+    taxId: '0105549333444',
+    branch: 'สำนักงานใหญ่',
+    contactName: 'คุณธนพล',
+    contactPhone: '02-567-8901',
+    contactEmail: 'thanapol@baanwachara.com',
+    creditDays: 30,
+    billingModel: 'monthly_flat',
+    monthlyFlatRate: 25000,
+    enabledItems: flatRateItems,
+    priceList: [],
+    notes: 'เหมาจ่ายรายเดือน 25,000 บาท',
+    createdAt: '2025-05-01',
+    isActive: true,
+  },
+  {
+    id: 'cust-06',
+    name: 'ไทยซินอุตสาหกรรม',
+    nameEn: 'Thai Sin Industry',
+    address: '99 ถ.เจริญกรุง แขวงสี่พระยา เขตบางรัก กรุงเทพฯ 10500',
+    taxId: '0105552777888',
+    branch: 'สำนักงานใหญ่',
+    contactName: 'คุณมาลี',
+    contactPhone: '02-678-9012',
+    contactEmail: 'malee@thaisin.com',
+    creditDays: 30,
+    billingModel: 'monthly_flat',
+    monthlyFlatRate: 18000,
+    enabledItems: ['B/T', 'B/H', 'B/M'],
+    priceList: [],
+    notes: 'เหมาจ่ายรายเดือน 18,000 บาท — ผ้าอุตสาหกรรม',
+    createdAt: '2026-01-15',
+    isActive: true,
+  },
+]
+
+// ============================================================
+// Sample Linen Forms (5-7 days with carry-over)
+// ============================================================
+function makeRows(data: Record<string, Partial<{ c1: number; c2: number; c3: number; c4: number; c5: number; c6: string }>>): import('@/types').LinenFormRow[] {
+  return Object.entries(data).map(([code, d]) => ({
+    code,
+    col1_normalSend: d.c1 ?? 0,
+    col2_claimSend: d.c2 ?? 0,
+    col3_washedReturn: d.c3 ?? 0,
+    col4_factoryCountIn: d.c4 ?? 0,
+    col5_factoryPackSend: d.c5 ?? 0,
+    col6_note: d.c6 ?? '',
+  }))
+}
+
+export const SAMPLE_LINEN_FORMS: LinenForm[] = [
+  // Wild Orchid Villa - Day 1 (Feb 25)
+  {
+    id: 'lf-01', formNumber: 'LF-20260225-001', customerId: 'cust-01', date: '2026-02-25',
+    status: 'confirmed',
+    rows: makeRows({
+      'B/F': { c1: 30, c2: 0, c3: 28, c4: 30, c5: 30 },
+      'B/H': { c1: 20, c2: 0, c3: 20, c4: 20, c5: 20 },
+      'B/T': { c1: 50, c2: 2, c3: 48, c4: 52, c5: 50, c6: 'เคลม 2 ผืนเปื้อนสี' },
+      'P/C': { c1: 40, c2: 0, c3: 40, c4: 40, c5: 40 },
+      'S/Q': { c1: 25, c2: 0, c3: 25, c4: 25, c5: 25 },
+      'S/K': { c1: 15, c2: 0, c3: 15, c4: 15, c5: 15 },
+      'D/Q': { c1: 10, c2: 0, c3: 10, c4: 10, c5: 10 },
+      'B/M': { c1: 20, c2: 0, c3: 20, c4: 20, c5: 20 },
+    }),
+    notes: '', createdBy: 'staff-01', updatedAt: '2026-02-26',
+  },
+  // Wild Orchid Villa - Day 2 (Feb 26) — has carry-over scenario
+  {
+    id: 'lf-02', formNumber: 'LF-20260226-001', customerId: 'cust-01', date: '2026-02-26',
+    status: 'confirmed',
+    rows: makeRows({
+      'B/F': { c1: 35, c2: 0, c3: 30, c4: 35, c5: 30 },  // carry-over: 5
+      'B/H': { c1: 22, c2: 0, c3: 20, c4: 22, c5: 22 },
+      'B/T': { c1: 55, c2: 1, c3: 50, c4: 56, c5: 50, c6: 'เคลม 1' },  // carry-over: 6
+      'P/C': { c1: 38, c2: 0, c3: 40, c4: 38, c5: 38 },
+      'S/Q': { c1: 28, c2: 0, c3: 25, c4: 28, c5: 25 },  // carry-over: 3
+      'S/K': { c1: 12, c2: 0, c3: 15, c4: 12, c5: 12 },
+      'D/Q': { c1: 8, c2: 0, c3: 10, c4: 8, c5: 8 },
+      'B/M': { c1: 18, c2: 0, c3: 20, c4: 18, c5: 18 },
+    }),
+    notes: '', createdBy: 'staff-01', updatedAt: '2026-02-27',
+  },
+  // Wild Orchid Villa - Day 3 (Feb 27) — current day
+  {
+    id: 'lf-03', formNumber: 'LF-20260227-001', customerId: 'cust-01', date: '2026-02-27',
+    status: 'delivered',
+    rows: makeRows({
+      'B/F': { c1: 32, c2: 0, c3: 30, c4: 32, c5: 32 },
+      'B/H': { c1: 25, c2: 0, c3: 22, c4: 25, c5: 25 },
+      'B/T': { c1: 48, c2: 0, c3: 50, c4: 48, c5: 48 },
+      'P/C': { c1: 42, c2: 0, c3: 38, c4: 42, c5: 42 },
+      'S/Q': { c1: 20, c2: 0, c3: 25, c4: 20, c5: 20 },
+      'S/K': { c1: 18, c2: 0, c3: 12, c4: 18, c5: 18 },
+      'D/Q': { c1: 12, c2: 0, c3: 8, c4: 12, c5: 12 },
+      'B/M': { c1: 22, c2: 0, c3: 18, c4: 22, c5: 22 },
+    }),
+    notes: '', createdBy: 'staff-02', updatedAt: '2026-02-28',
+  },
+  // Wild Orchid Villa - Day 4 (Feb 28)
+  {
+    id: 'lf-04', formNumber: 'LF-20260228-001', customerId: 'cust-01', date: '2026-02-28',
+    status: 'packed',
+    rows: makeRows({
+      'B/F': { c1: 28, c2: 0, c3: 32, c4: 28, c5: 28 },
+      'B/H': { c1: 20, c2: 0, c3: 25, c4: 20, c5: 20 },
+      'B/T': { c1: 52, c2: 3, c3: 48, c4: 55, c5: 50, c6: 'เคลม 3 - รอยด่าง' }, // carry-over: 5
+      'P/C': { c1: 35, c2: 0, c3: 42, c4: 35, c5: 35 },
+      'S/Q': { c1: 22, c2: 0, c3: 20, c4: 22, c5: 22 },
+      'S/K': { c1: 10, c2: 0, c3: 18, c4: 10, c5: 10 },
+      'D/Q': { c1: 8, c2: 0, c3: 12, c4: 8, c5: 8 },
+      'B/M': { c1: 15, c2: 0, c3: 22, c4: 15, c5: 15 },
+    }),
+    notes: '', createdBy: 'staff-01', updatedAt: '2026-03-01',
+  },
+  // Wild Orchid Villa - Day 5 (Mar 1) — processing
+  {
+    id: 'lf-05', formNumber: 'LF-20260301-001', customerId: 'cust-01', date: '2026-03-01',
+    status: 'washing',
+    rows: makeRows({
+      'B/F': { c1: 40, c2: 0, c3: 0, c4: 40, c5: 0 },
+      'B/H': { c1: 18, c2: 0, c3: 0, c4: 18, c5: 0 },
+      'B/T': { c1: 45, c2: 0, c3: 0, c4: 45, c5: 0 },
+      'P/C': { c1: 30, c2: 0, c3: 0, c4: 30, c5: 0 },
+      'S/Q': { c1: 20, c2: 0, c3: 0, c4: 20, c5: 0 },
+      'S/K': { c1: 15, c2: 0, c3: 0, c4: 15, c5: 0 },
+      'D/Q': { c1: 10, c2: 0, c3: 0, c4: 10, c5: 0 },
+      'B/M': { c1: 20, c2: 0, c3: 0, c4: 20, c5: 0 },
+    }),
+    notes: '', createdBy: 'staff-01', updatedAt: '2026-03-01',
+  },
+  // Villa Cha Cha Bangplumpoo - Day 1 (Feb 26)
+  {
+    id: 'lf-06', formNumber: 'LF-20260226-002', customerId: 'cust-02', date: '2026-02-26',
+    status: 'confirmed',
+    rows: makeRows({
+      'B/F': { c1: 20, c2: 0, c3: 18, c4: 20, c5: 20 },
+      'B/H': { c1: 15, c2: 0, c3: 15, c4: 15, c5: 15 },
+      'B/T': { c1: 35, c2: 0, c3: 33, c4: 35, c5: 35 },
+      'P/C': { c1: 30, c2: 0, c3: 30, c4: 30, c5: 30 },
+      'S/Q': { c1: 18, c2: 0, c3: 18, c4: 18, c5: 18 },
+      'D/Q': { c1: 8, c2: 0, c3: 8, c4: 8, c5: 8 },
+      'B/M': { c1: 12, c2: 0, c3: 12, c4: 12, c5: 12 },
+    }),
+    notes: '', createdBy: 'staff-02', updatedAt: '2026-02-27',
+  },
+  // Villa Cha Cha Bangplumpoo - Day 2 (Feb 28)
+  {
+    id: 'lf-07', formNumber: 'LF-20260228-002', customerId: 'cust-02', date: '2026-02-28',
+    status: 'delivered',
+    rows: makeRows({
+      'B/F': { c1: 22, c2: 0, c3: 20, c4: 22, c5: 22 },
+      'B/H': { c1: 18, c2: 0, c3: 15, c4: 18, c5: 18 },
+      'B/T': { c1: 40, c2: 1, c3: 35, c4: 41, c5: 38, c6: 'เคลม 1 ขาด' }, // carry-over: 3
+      'P/C': { c1: 28, c2: 0, c3: 30, c4: 28, c5: 28 },
+      'S/Q': { c1: 20, c2: 0, c3: 18, c4: 20, c5: 20 },
+      'D/Q': { c1: 10, c2: 0, c3: 8, c4: 10, c5: 10 },
+      'B/M': { c1: 15, c2: 0, c3: 12, c4: 15, c5: 15 },
+    }),
+    notes: '', createdBy: 'staff-01', updatedAt: '2026-03-01',
+  },
+  // Villa Cha-Cha Khaosan (Mar 1) — received
+  {
+    id: 'lf-08', formNumber: 'LF-20260301-002', customerId: 'cust-03', date: '2026-03-01',
+    status: 'received',
+    rows: makeRows({
+      'B/F': { c1: 15, c2: 0, c3: 0, c4: 0, c5: 0 },
+      'B/H': { c1: 10, c2: 0, c3: 0, c4: 0, c5: 0 },
+      'B/T': { c1: 30, c2: 2, c3: 0, c4: 0, c5: 0, c6: 'เคลม 2' },
+      'P/C': { c1: 25, c2: 0, c3: 0, c4: 0, c5: 0 },
+      'S/Q': { c1: 15, c2: 0, c3: 0, c4: 0, c5: 0 },
+      'D/Q': { c1: 6, c2: 0, c3: 0, c4: 0, c5: 0 },
+      'B/M': { c1: 10, c2: 0, c3: 0, c4: 0, c5: 0 },
+    }),
+    notes: '', createdBy: 'staff-02', updatedAt: '2026-03-01',
+  },
+  // Sawaddee House (Mar 2) — draft
+  {
+    id: 'lf-09', formNumber: 'LF-20260302-001', customerId: 'cust-04', date: '2026-03-02',
+    status: 'draft',
+    rows: makeRows({
+      'B/F': { c1: 10, c2: 0, c3: 0, c4: 0, c5: 0 },
+      'B/H': { c1: 8, c2: 0, c3: 0, c4: 0, c5: 0 },
+      'B/T': { c1: 20, c2: 0, c3: 0, c4: 0, c5: 0 },
+      'P/C': { c1: 18, c2: 0, c3: 0, c4: 0, c5: 0 },
+      'S/Q': { c1: 12, c2: 0, c3: 0, c4: 0, c5: 0 },
+      'D/Q': { c1: 5, c2: 0, c3: 0, c4: 0, c5: 0 },
+      'B/M': { c1: 8, c2: 0, c3: 0, c4: 0, c5: 0 },
+    }),
+    notes: '', createdBy: 'staff-01', updatedAt: '2026-03-02',
+  },
+  // บ้านวัชรา (flat-rate, Feb 27) — confirmed
+  {
+    id: 'lf-10', formNumber: 'LF-20260227-002', customerId: 'cust-05', date: '2026-02-27',
+    status: 'confirmed',
+    rows: makeRows({
+      'B/T': { c1: 30, c2: 0, c3: 28, c4: 30, c5: 30 },
+      'B/H': { c1: 15, c2: 0, c3: 15, c4: 15, c5: 15 },
+      'P/C': { c1: 20, c2: 0, c3: 20, c4: 20, c5: 20 },
+      'S/Q': { c1: 10, c2: 0, c3: 10, c4: 10, c5: 10 },
+      'B/M': { c1: 8, c2: 0, c3: 8, c4: 8, c5: 8 },
+    }),
+    notes: 'เหมาจ่าย', createdBy: 'staff-01', updatedAt: '2026-02-28',
+  },
+]
+
+// ============================================================
+// Sample Delivery Notes
+// ============================================================
+export const SAMPLE_DELIVERY_NOTES: DeliveryNote[] = [
+  {
+    id: 'dn-01', noteNumber: 'SD-20260226-001', customerId: 'cust-01',
+    linenFormIds: ['lf-01'],
+    date: '2026-02-26',
+    items: [
+      { code: 'B/F', quantity: 30 }, { code: 'B/H', quantity: 20 }, { code: 'B/T', quantity: 50 },
+      { code: 'P/C', quantity: 40 }, { code: 'S/Q', quantity: 25 }, { code: 'S/K', quantity: 15 },
+      { code: 'D/Q', quantity: 10 }, { code: 'B/M', quantity: 20 },
+    ],
+    driverName: 'สมชาย', vehiclePlate: 'กข-1234', receiverName: 'คุณสมศักดิ์',
+    status: 'acknowledged', notes: '', createdBy: 'staff-01', updatedAt: '2026-02-26',
+  },
+  {
+    id: 'dn-02', noteNumber: 'SD-20260228-001', customerId: 'cust-01',
+    linenFormIds: ['lf-02', 'lf-03'],
+    date: '2026-02-28',
+    items: [
+      { code: 'B/F', quantity: 62 }, { code: 'B/H', quantity: 47 }, { code: 'B/T', quantity: 98 },
+      { code: 'P/C', quantity: 80 }, { code: 'S/Q', quantity: 45 }, { code: 'S/K', quantity: 30 },
+      { code: 'D/Q', quantity: 20 }, { code: 'B/M', quantity: 40 },
+    ],
+    driverName: 'สมชาย', vehiclePlate: 'กข-1234', receiverName: 'คุณสมศักดิ์',
+    status: 'delivered', notes: '', createdBy: 'staff-01', updatedAt: '2026-02-28',
+  },
+  {
+    id: 'dn-03', noteNumber: 'SD-20260301-001', customerId: 'cust-02',
+    linenFormIds: ['lf-06'],
+    date: '2026-03-01',
+    items: [
+      { code: 'B/F', quantity: 20 }, { code: 'B/H', quantity: 15 }, { code: 'B/T', quantity: 35 },
+      { code: 'P/C', quantity: 30 }, { code: 'S/Q', quantity: 18 }, { code: 'D/Q', quantity: 8 },
+      { code: 'B/M', quantity: 12 },
+    ],
+    driverName: 'สมหญิง', vehiclePlate: 'ขค-5678', receiverName: 'คุณวรรณา',
+    status: 'acknowledged', notes: '', createdBy: 'staff-02', updatedAt: '2026-03-01',
+  },
+]
+
+// ============================================================
+// Sample Billing Statements
+// ============================================================
+export const SAMPLE_BILLING_STATEMENTS: BillingStatement[] = [
+  {
+    id: 'bs-01', billingNumber: 'WB-202602-001', customerId: 'cust-01',
+    deliveryNoteIds: ['dn-01', 'dn-02'],
+    billingMonth: '2026-02',
+    issueDate: '2026-03-01', dueDate: '2026-03-31',
+    lineItems: [
+      { code: 'B/F', name: 'ผ้าเช็ดหน้า', quantity: 97, pricePerUnit: 4, amount: 388 },
+      { code: 'B/H', name: 'ผ้าเช็ดมือ', quantity: 67, pricePerUnit: 5, amount: 335 },
+      { code: 'B/T', name: 'ผ้าเช็ดตัว', quantity: 153, pricePerUnit: 8, amount: 1224 },
+      { code: 'P/C', name: 'ปลอกหมอน', quantity: 120, pricePerUnit: 5, amount: 600 },
+      { code: 'S/Q', name: "ผ้าปู 5'", quantity: 73, pricePerUnit: 12, amount: 876 },
+      { code: 'S/K', name: "ผ้าปู 6'", quantity: 45, pricePerUnit: 12, amount: 540 },
+      { code: 'D/Q', name: "ปลอกดูเว่ 5'", quantity: 30, pricePerUnit: 29, amount: 870 },
+      { code: 'B/M', name: 'ผ้าเช็ดเท้า', quantity: 60, pricePerUnit: 6, amount: 360 },
+    ],
+    subtotal: 5193,
+    vat: 363.51,
+    grandTotal: 5556.51,
+    withholdingTax: 155.79,
+    netPayable: 5400.72,
+    status: 'sent',
+    paidDate: null, paidAmount: 0,
+    notes: 'ใบวางบิลประจำเดือน ก.พ. 2569',
+  },
+]
+
+// ============================================================
+// Sample Expenses (เหมือนเดิม)
+// ============================================================
+export const SAMPLE_EXPENSES: Expense[] = [
+  { id: 'exp-01', date: '2026-03-01', category: 'chemicals', description: 'น้ำยาซักผ้า Premium 200L', amount: 12000, reference: 'PO-2026-031', createdBy: 'admin' },
+  { id: 'exp-02', date: '2026-03-01', category: 'water', description: 'ค่าน้ำประปา ก.พ. 2026', amount: 8500, reference: '', createdBy: 'admin' },
+  { id: 'exp-03', date: '2026-03-01', category: 'electricity', description: 'ค่าไฟฟ้า ก.พ. 2026', amount: 25000, reference: '', createdBy: 'admin' },
+  { id: 'exp-04', date: '2026-02-28', category: 'labor', description: 'เงินเดือนพนักงาน ก.พ.', amount: 85000, reference: '', createdBy: 'admin' },
+  { id: 'exp-05', date: '2026-02-25', category: 'transport', description: 'ค่าน้ำมันรถส่งผ้า', amount: 4500, reference: '', createdBy: 'admin' },
+  { id: 'exp-06', date: '2026-02-20', category: 'maintenance', description: 'ซ่อมเครื่องซักผ้าอุตสาหกรรม #3', amount: 15000, reference: 'MNT-003', createdBy: 'admin' },
+  { id: 'exp-07', date: '2026-03-01', category: 'rent', description: 'ค่าเช่าโรงงาน มี.ค.', amount: 35000, reference: '', createdBy: 'admin' },
+  { id: 'exp-08', date: '2026-02-15', category: 'chemicals', description: 'น้ำยาปรับผ้านุ่ม 100L', amount: 5500, reference: 'PO-2026-028', createdBy: 'admin' },
+]
+
+// ============================================================
+// Sample Users (เหมือนเดิม)
+// ============================================================
+export const SAMPLE_USERS: AppUser[] = [
+  { id: 'admin', name: 'ติ๊ด (Admin)', email: 'flowcleanwash@gmail.com', role: 'admin', isActive: true },
+  { id: 'staff-01', name: 'สมชาย', email: 'somchai@flowclean.com', role: 'staff', isActive: true },
+  { id: 'staff-02', name: 'สมหญิง', email: 'somying@flowclean.com', role: 'staff', isActive: true },
+]

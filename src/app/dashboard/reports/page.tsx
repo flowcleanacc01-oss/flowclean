@@ -1,0 +1,356 @@
+'use client'
+
+import { useState, useMemo } from 'react'
+import { useStore } from '@/lib/store'
+import { formatCurrency, formatNumber, cn } from '@/lib/utils'
+import { Printer } from 'lucide-react'
+import MonthlySummaryGrid from '@/components/MonthlySummaryGrid'
+import MonthlyDeliveryReportPrint from '@/components/MonthlyDeliveryReportPrint'
+import MonthlyStockReportPrint from '@/components/MonthlyStockReportPrint'
+import Modal from '@/components/Modal'
+
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'carryover' | 'delivery' | 'stock'
+
+export default function ReportsPage() {
+  const { linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo } = useStore()
+  const [tab, setTab] = useState<TabKey>('monthly')
+  const [showDeliveryPrint, setShowDeliveryPrint] = useState(false)
+  const [showStockPrint, setShowStockPrint] = useState(false)
+  const [selCustomerId, setSelCustomerId] = useState(customers[0]?.id || '')
+  const [selMonth, setSelMonth] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: 'monthly', label: 'สรุปรายเดือน' },
+    { key: 'revenue', label: 'รายได้' },
+    { key: 'customer', label: 'ตามลูกค้า' },
+    { key: 'item', label: 'ตามสินค้า' },
+    { key: 'pnl', label: 'กำไร-ขาดทุน' },
+    { key: 'carryover', label: 'ผ้าค้าง' },
+    { key: 'delivery', label: 'รายงานส่งของ' },
+    { key: 'stock', label: 'สต็อกรายเดือน' },
+  ]
+
+  const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
+
+  // Revenue by customer
+  const revenueByCustomer = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const bs of billingStatements.filter(b => b.billingMonth.startsWith(selMonth.substring(0, 4)))) {
+      map[bs.customerId] = (map[bs.customerId] || 0) + bs.subtotal
+    }
+    return Object.entries(map)
+      .map(([id, amount]) => ({ customer: getCustomer(id), amount }))
+      .filter(r => r.customer)
+      .sort((a, b) => b.amount - a.amount)
+  }, [billingStatements, selMonth, getCustomer])
+
+  // Item usage
+  const itemUsage = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const dn of deliveryNotes.filter(d => d.date.startsWith(selMonth))) {
+      for (const item of dn.items) {
+        map[item.code] = (map[item.code] || 0) + item.quantity
+      }
+    }
+    const nameMap = Object.fromEntries(linenCatalog.map(i => [i.code, i.name]))
+    return Object.entries(map)
+      .map(([code, qty]) => ({ code, name: nameMap[code] || code, qty }))
+      .sort((a, b) => b.qty - a.qty)
+  }, [deliveryNotes, selMonth, linenCatalog])
+
+  // P&L
+  const pnl = useMemo(() => {
+    const revenue = billingStatements
+      .filter(b => b.billingMonth === selMonth)
+      .reduce((s, b) => s + b.subtotal, 0)
+    const totalExpense = expenses
+      .filter(e => e.date.startsWith(selMonth))
+      .reduce((s, e) => s + e.amount, 0)
+    return { revenue, totalExpense, profit: revenue - totalExpense }
+  }, [billingStatements, expenses, selMonth])
+
+  // Carry-over per customer
+  const carryOverReport = useMemo(() => {
+    return customers.filter(c => c.isActive).map(c => {
+      const co = getCarryOver(c.id, '9999-12-31') // all carry-over up to far future
+      const total = Object.values(co).reduce((s, v) => s + v, 0)
+      return { customer: c, carryOver: co, total }
+    }).filter(r => r.total > 0)
+  }, [customers, getCarryOver])
+
+  return (
+    <div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-800">รายงาน</h1>
+        <p className="text-sm text-slate-500 mt-0.5">วิเคราะห์ข้อมูลและสรุปผล</p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-1 mb-4 border-b border-slate-200">
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={cn('px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+              tab === t.key ? 'border-[#1B3A5C] text-[#1B3A5C]' : 'border-transparent text-slate-500 hover:text-slate-700')}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        {(tab === 'monthly' || tab === 'delivery' || tab === 'stock') && (
+          <select value={selCustomerId} onChange={e => setSelCustomerId(e.target.value)}
+            className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+            {customers.filter(c => c.isActive).map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        )}
+        <input type="month" value={selMonth} onChange={e => setSelMonth(e.target.value)}
+          className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+      </div>
+
+      {/* Monthly Summary Tab */}
+      {tab === 'monthly' && selCustomer && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+            <h3 className="font-semibold text-slate-800">
+              สรุปรายเดือน — {selCustomer.name} ({selMonth})
+            </h3>
+          </div>
+          <MonthlySummaryGrid
+            customer={selCustomer}
+            month={selMonth}
+            linenForms={linenForms}
+            deliveryNotes={deliveryNotes}
+            catalog={linenCatalog}
+          />
+        </div>
+      )}
+
+      {/* Revenue Tab */}
+      {tab === 'revenue' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 className="font-semibold text-slate-800 mb-4">รายได้รวม — {selMonth}</h3>
+          <div className="text-3xl font-bold text-[#1B3A5C] mb-4">
+            {formatCurrency(billingStatements.filter(b => b.billingMonth === selMonth).reduce((s, b) => s + b.subtotal, 0))}
+          </div>
+          <div className="space-y-2">
+            {revenueByCustomer.map(r => (
+              <div key={r.customer!.id} className="flex items-center justify-between py-2 border-b border-slate-100">
+                <span className="text-sm text-slate-700">{r.customer!.name}</span>
+                <span className="text-sm font-medium text-slate-800">{formatCurrency(r.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Customer Tab */}
+      {tab === 'customer' && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="text-left px-4 py-3 font-medium text-slate-600">โรงแรม</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">ยอดวางบิล</th>
+                <th className="text-center px-4 py-3 font-medium text-slate-600">จำนวนบิล</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customers.filter(c => c.isActive).map(c => {
+                const bills = billingStatements.filter(b => b.customerId === c.id)
+                const total = bills.reduce((s, b) => s + b.subtotal, 0)
+                return (
+                  <tr key={c.id} className="border-b border-slate-100">
+                    <td className="px-4 py-3 font-medium text-slate-800">{c.name}</td>
+                    <td className="px-4 py-3 text-right">{formatCurrency(total)}</td>
+                    <td className="px-4 py-3 text-center">{bills.length}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Item Tab */}
+      {tab === 'item' && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="text-left px-4 py-3 font-medium text-slate-600">รหัส</th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">รายการ</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">จำนวน (ชิ้น)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itemUsage.length === 0 ? (
+                <tr><td colSpan={3} className="text-center py-8 text-slate-400">ไม่มีข้อมูล</td></tr>
+              ) : itemUsage.map(item => (
+                <tr key={item.code} className="border-b border-slate-100">
+                  <td className="px-4 py-2 font-mono text-xs text-slate-500">{item.code}</td>
+                  <td className="px-4 py-2 text-slate-700">{item.name}</td>
+                  <td className="px-4 py-2 text-right font-medium">{formatNumber(item.qty)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* P&L Tab */}
+      {tab === 'pnl' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 className="font-semibold text-slate-800 mb-4">กำไร-ขาดทุน — {selMonth}</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center py-3 border-b border-slate-200">
+              <span className="text-slate-600">รายได้รวม</span>
+              <span className="text-lg font-bold text-emerald-600">{formatCurrency(pnl.revenue)}</span>
+            </div>
+            <div className="flex justify-between items-center py-3 border-b border-slate-200">
+              <span className="text-slate-600">ค่าใช้จ่ายรวม</span>
+              <span className="text-lg font-bold text-red-600">{formatCurrency(pnl.totalExpense)}</span>
+            </div>
+            <div className="flex justify-between items-center py-3">
+              <span className="text-slate-800 font-medium">กำไร (ขาดทุน)</span>
+              <span className={cn('text-xl font-bold', pnl.profit >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+                {formatCurrency(pnl.profit)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Carry-over Tab */}
+      {tab === 'carryover' && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="text-left px-4 py-3 font-medium text-slate-600">โรงแรม</th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">รายการผ้าค้าง</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">รวม (ชิ้น)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {carryOverReport.length === 0 ? (
+                <tr><td colSpan={3} className="text-center py-8 text-slate-400">ไม่มีผ้าค้าง</td></tr>
+              ) : carryOverReport.map(r => (
+                <tr key={r.customer.id} className="border-b border-slate-100">
+                  <td className="px-4 py-3 font-medium text-slate-800">{r.customer.name}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {Object.entries(r.carryOver).map(([code, qty]) => (
+                        <span key={code} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+                          {code} x{qty}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right font-medium text-amber-700">{r.total}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Monthly Delivery Report Tab */}
+      {tab === 'delivery' && selCustomer && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold text-slate-800">
+              รายงานส่งสินค้า — {selCustomer.name} ({selMonth})
+            </h3>
+            <button onClick={() => setShowDeliveryPrint(true)}
+              className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
+              <Printer className="w-4 h-4" />พิมพ์
+            </button>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <MonthlyDeliveryReportPrint
+              customer={selCustomer}
+              month={selMonth}
+              deliveryNotes={deliveryNotes}
+              catalog={linenCatalog}
+              company={companyInfo}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Stock Report Tab */}
+      {tab === 'stock' && selCustomer && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold text-slate-800">
+              สต็อกรายเดือน — {selCustomer.name} ({selMonth})
+            </h3>
+            <button onClick={() => setShowStockPrint(true)}
+              className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
+              <Printer className="w-4 h-4" />พิมพ์
+            </button>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <MonthlyStockReportPrint
+              customer={selCustomer}
+              month={selMonth}
+              linenForms={linenForms}
+              catalog={linenCatalog}
+              company={companyInfo}
+              getCarryOver={getCarryOver}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Report Print Modal */}
+      <Modal open={showDeliveryPrint} onClose={() => setShowDeliveryPrint(false)} title="พิมพ์รายงานส่งสินค้า" size="full">
+        {selCustomer && (
+          <div>
+            <MonthlyDeliveryReportPrint
+              customer={selCustomer}
+              month={selMonth}
+              deliveryNotes={deliveryNotes}
+              catalog={linenCatalog}
+              company={companyInfo}
+            />
+            <div className="flex justify-end mt-4 no-print">
+              <button onClick={() => window.print()}
+                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
+                <Printer className="w-4 h-4" />พิมพ์
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Stock Report Print Modal */}
+      <Modal open={showStockPrint} onClose={() => setShowStockPrint(false)} title="พิมพ์สต็อกรายเดือน" size="full">
+        {selCustomer && (
+          <div>
+            <MonthlyStockReportPrint
+              customer={selCustomer}
+              month={selMonth}
+              linenForms={linenForms}
+              catalog={linenCatalog}
+              company={companyInfo}
+              getCarryOver={getCarryOver}
+            />
+            <div className="flex justify-end mt-4 no-print">
+              <button onClick={() => window.print()}
+                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
+                <Printer className="w-4 h-4" />พิมพ์
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  )
+}
