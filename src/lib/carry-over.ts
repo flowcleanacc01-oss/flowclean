@@ -1,8 +1,8 @@
 import type { LinenForm } from '@/types'
 
 /**
- * คำนวณผ้าค้างจากรอบก่อน
- * ผ้าค้าง = sum(col4_factoryCountIn) - sum(col5_factoryPackSend) per item per customer
+ * คำนวณผ้าค้างจากรอบก่อน (v3 — 5-column model)
+ * ผ้าค้าง = sum(col2_hotelCountIn) - sum(col4_factoryApproved) per item per customer
  * เฉพาะ forms ที่มี date < beforeDate
  */
 export function calculateCarryOver(
@@ -16,7 +16,7 @@ export function calculateCarryOver(
 
   for (const form of filtered) {
     for (const row of form.rows) {
-      const diff = row.col4_factoryCountIn - row.col5_factoryPackSend
+      const diff = row.col2_hotelCountIn - row.col4_factoryApproved
       if (diff > 0) {
         result[row.code] = (result[row.code] || 0) + diff
       }

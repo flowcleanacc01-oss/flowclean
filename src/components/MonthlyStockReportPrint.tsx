@@ -14,15 +14,14 @@ interface MonthlyStockReportPrintProps {
 interface StockRow {
   code: string
   name: string
-  carryOver: number    // ยกมา (ค้าง)
-  col1Send: number     // ส่งซัก
-  col2Claim: number    // เคลม
-  totalSend: number    // รวมส่ง = col1 + col2
-  col3Return: number   // กลับ
-  col4CountIn: number  // นับเข้า
-  col5PackSend: number // แพคส่ง
-  accumulated: number  // ค้างสะสม
-  note: string         // หมายเหตุ
+  carryOver: number       // ยกมา (ค้าง)
+  col2HotelCount: number  // โรงแรมนับ
+  col3Claim: number       // เคลม
+  totalReceived: number   // รวมรับ = col2 + col3
+  col4Approved: number    // โรงงาน OK
+  col5ClaimApproved: number // เคลม OK
+  accumulated: number     // ค้างสะสม
+  note: string            // หมายเหตุ
 }
 
 export default function MonthlyStockReportPrint({
@@ -40,8 +39,8 @@ export default function MonthlyStockReportPrint({
   const usedCodes = new Set<string>()
   for (const form of forms) {
     for (const row of form.rows) {
-      if (row.col1_normalSend > 0 || row.col2_claimSend > 0 || row.col3_washedReturn > 0 ||
-          row.col4_factoryCountIn > 0 || row.col5_factoryPackSend > 0) {
+      if (row.col2_hotelCountIn > 0 || row.col3_hotelClaimCount > 0 ||
+          row.col4_factoryApproved > 0 || row.col5_factoryClaimApproved > 0) {
         usedCodes.add(row.code)
       }
     }
@@ -58,35 +57,33 @@ export default function MonthlyStockReportPrint({
   const rows: StockRow[] = items.map(item => {
     const co = carryOver[item.code] || 0
 
-    let col1 = 0, col2 = 0, col3 = 0, col4 = 0, col5 = 0
+    let col2 = 0, col3 = 0, col4 = 0, col5 = 0
     const notes: string[] = []
 
     for (const form of forms) {
       const row = form.rows.find(r => r.code === item.code)
       if (row) {
-        col1 += row.col1_normalSend
-        col2 += row.col2_claimSend
-        col3 += row.col3_washedReturn
-        col4 += row.col4_factoryCountIn
-        col5 += row.col5_factoryPackSend
-        if (row.col6_note) notes.push(row.col6_note)
+        col2 += row.col2_hotelCountIn
+        col3 += row.col3_hotelClaimCount
+        col4 += row.col4_factoryApproved
+        col5 += row.col5_factoryClaimApproved
+        if (row.note) notes.push(row.note)
       }
     }
 
-    const totalSend = col1 + col2
-    // ค้างสะสม = ยกมา + นับเข้า - แพคส่ง
-    const accumulated = co + col4 - col5
+    const totalReceived = col2 + col3
+    // ค้างสะสม = ยกมา + โรงแรมนับ - โรงงาน approved
+    const accumulated = co + col2 - col4
 
     return {
       code: item.code,
       name: item.name,
       carryOver: co,
-      col1Send: col1,
-      col2Claim: col2,
-      totalSend,
-      col3Return: col3,
-      col4CountIn: col4,
-      col5PackSend: col5,
+      col2HotelCount: col2,
+      col3Claim: col3,
+      totalReceived,
+      col4Approved: col4,
+      col5ClaimApproved: col5,
       accumulated: accumulated > 0 ? accumulated : 0,
       note: notes.length > 0 ? notes.join(', ') : '',
     }
@@ -95,16 +92,15 @@ export default function MonthlyStockReportPrint({
   // Grand totals
   const totals = rows.reduce((acc, r) => ({
     carryOver: acc.carryOver + r.carryOver,
-    col1Send: acc.col1Send + r.col1Send,
-    col2Claim: acc.col2Claim + r.col2Claim,
-    totalSend: acc.totalSend + r.totalSend,
-    col3Return: acc.col3Return + r.col3Return,
-    col4CountIn: acc.col4CountIn + r.col4CountIn,
-    col5PackSend: acc.col5PackSend + r.col5PackSend,
+    col2HotelCount: acc.col2HotelCount + r.col2HotelCount,
+    col3Claim: acc.col3Claim + r.col3Claim,
+    totalReceived: acc.totalReceived + r.totalReceived,
+    col4Approved: acc.col4Approved + r.col4Approved,
+    col5ClaimApproved: acc.col5ClaimApproved + r.col5ClaimApproved,
     accumulated: acc.accumulated + r.accumulated,
   }), {
-    carryOver: 0, col1Send: 0, col2Claim: 0, totalSend: 0,
-    col3Return: 0, col4CountIn: 0, col5PackSend: 0, accumulated: 0,
+    carryOver: 0, col2HotelCount: 0, col3Claim: 0, totalReceived: 0,
+    col4Approved: 0, col5ClaimApproved: 0, accumulated: 0,
   })
 
   // Month label
@@ -131,12 +127,11 @@ export default function MonthlyStockReportPrint({
               <th className="border border-slate-400 px-2 py-2 text-left w-14">รหัส</th>
               <th className="border border-slate-400 px-2 py-2 text-left min-w-24">รายการ</th>
               <th className="border border-slate-400 px-2 py-2 text-center bg-amber-50 w-16">ยกมา<br />(ค้าง)</th>
-              <th className="border border-slate-400 px-2 py-2 text-center w-16">ส่งซัก<br />(col1)</th>
-              <th className="border border-slate-400 px-2 py-2 text-center w-16">เคลม<br />(col2)</th>
-              <th className="border border-slate-400 px-2 py-2 text-center bg-blue-50 font-bold w-16">รวมส่ง</th>
-              <th className="border border-slate-400 px-2 py-2 text-center w-16">กลับ<br />(col3)</th>
-              <th className="border border-slate-400 px-2 py-2 text-center w-16">นับเข้า<br />(col4)</th>
-              <th className="border border-slate-400 px-2 py-2 text-center w-16">แพคส่ง<br />(col5)</th>
+              <th className="border border-slate-400 px-2 py-2 text-center w-16">โรงแรม<br />นับ</th>
+              <th className="border border-slate-400 px-2 py-2 text-center w-16">เคลม</th>
+              <th className="border border-slate-400 px-2 py-2 text-center bg-blue-50 font-bold w-16">รวมรับ</th>
+              <th className="border border-slate-400 px-2 py-2 text-center w-16">โรงงาน<br />OK</th>
+              <th className="border border-slate-400 px-2 py-2 text-center w-16">เคลม<br />OK</th>
               <th className="border border-slate-400 px-2 py-2 text-center bg-red-50 font-bold w-16">ค้างสะสม</th>
               <th className="border border-slate-400 px-2 py-2 text-left min-w-20">หมายเหตุ</th>
             </tr>
@@ -144,7 +139,7 @@ export default function MonthlyStockReportPrint({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="border border-slate-400 px-4 py-8 text-center text-slate-400">
+                <td colSpan={11} className="border border-slate-400 px-4 py-8 text-center text-slate-400">
                   ไม่มีข้อมูลสต็อกในเดือนนี้
                 </td>
               </tr>
@@ -156,14 +151,13 @@ export default function MonthlyStockReportPrint({
                 <td className={`border border-slate-400 px-2 py-1.5 text-center ${row.carryOver > 0 ? 'bg-amber-50 font-medium text-amber-700' : ''}`}>
                   {row.carryOver || '-'}
                 </td>
-                <td className="border border-slate-400 px-2 py-1.5 text-center">{row.col1Send || '-'}</td>
-                <td className="border border-slate-400 px-2 py-1.5 text-center">{row.col2Claim || '-'}</td>
+                <td className="border border-slate-400 px-2 py-1.5 text-center">{row.col2HotelCount || '-'}</td>
+                <td className="border border-slate-400 px-2 py-1.5 text-center">{row.col3Claim || '-'}</td>
                 <td className="border border-slate-400 px-2 py-1.5 text-center font-bold bg-blue-50">
-                  {row.totalSend || '-'}
+                  {row.totalReceived || '-'}
                 </td>
-                <td className="border border-slate-400 px-2 py-1.5 text-center">{row.col3Return || '-'}</td>
-                <td className="border border-slate-400 px-2 py-1.5 text-center">{row.col4CountIn || '-'}</td>
-                <td className="border border-slate-400 px-2 py-1.5 text-center">{row.col5PackSend || '-'}</td>
+                <td className="border border-slate-400 px-2 py-1.5 text-center">{row.col4Approved || '-'}</td>
+                <td className="border border-slate-400 px-2 py-1.5 text-center">{row.col5ClaimApproved || '-'}</td>
                 <td className={`border border-slate-400 px-2 py-1.5 text-center font-bold ${row.accumulated > 0 ? 'bg-red-50 text-red-700' : ''}`}>
                   {row.accumulated || '-'}
                 </td>
@@ -175,12 +169,11 @@ export default function MonthlyStockReportPrint({
             <tr className="bg-[#e8eef5] font-bold">
               <td colSpan={3} className="border border-slate-400 px-2 py-2 text-right">รวมทั้งหมด</td>
               <td className="border border-slate-400 px-2 py-2 text-center text-amber-700">{totals.carryOver || '-'}</td>
-              <td className="border border-slate-400 px-2 py-2 text-center">{totals.col1Send || '-'}</td>
-              <td className="border border-slate-400 px-2 py-2 text-center">{totals.col2Claim || '-'}</td>
-              <td className="border border-slate-400 px-2 py-2 text-center text-[#1B3A5C]">{totals.totalSend || '-'}</td>
-              <td className="border border-slate-400 px-2 py-2 text-center">{totals.col3Return || '-'}</td>
-              <td className="border border-slate-400 px-2 py-2 text-center">{totals.col4CountIn || '-'}</td>
-              <td className="border border-slate-400 px-2 py-2 text-center">{totals.col5PackSend || '-'}</td>
+              <td className="border border-slate-400 px-2 py-2 text-center">{totals.col2HotelCount || '-'}</td>
+              <td className="border border-slate-400 px-2 py-2 text-center">{totals.col3Claim || '-'}</td>
+              <td className="border border-slate-400 px-2 py-2 text-center text-[#1B3A5C]">{totals.totalReceived || '-'}</td>
+              <td className="border border-slate-400 px-2 py-2 text-center">{totals.col4Approved || '-'}</td>
+              <td className="border border-slate-400 px-2 py-2 text-center">{totals.col5ClaimApproved || '-'}</td>
               <td className="border border-slate-400 px-2 py-2 text-center text-red-700">{totals.accumulated || '-'}</td>
               <td className="border border-slate-400"></td>
             </tr>
@@ -195,12 +188,12 @@ export default function MonthlyStockReportPrint({
           <p className="font-bold text-slate-800">{forms.length} ใบ</p>
         </div>
         <div className="bg-blue-50 rounded p-2">
-          <p className="text-slate-500">รวมส่งซักทั้งเดือน</p>
-          <p className="font-bold text-[#1B3A5C]">{totals.totalSend} ชิ้น</p>
+          <p className="text-slate-500">รวมรับทั้งเดือน</p>
+          <p className="font-bold text-[#1B3A5C]">{totals.totalReceived} ชิ้น</p>
         </div>
         <div className="bg-emerald-50 rounded p-2">
-          <p className="text-slate-500">แพคส่งทั้งเดือน</p>
-          <p className="font-bold text-emerald-700">{totals.col5PackSend} ชิ้น</p>
+          <p className="text-slate-500">โรงงาน OK ทั้งเดือน</p>
+          <p className="font-bold text-emerald-700">{totals.col4Approved} ชิ้น</p>
         </div>
         <div className="bg-red-50 rounded p-2">
           <p className="text-slate-500">ค้างสะสมสิ้นเดือน</p>

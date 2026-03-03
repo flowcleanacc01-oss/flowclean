@@ -8,10 +8,11 @@ import { Plus, Search, Building2, Phone, Mail, Edit2, Trash2, Check } from 'luci
 import Modal from '@/components/Modal'
 
 const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
+  customerCode: '', customerType: 'hotel',
   name: '', nameEn: '', address: '', taxId: '', branch: 'สำนักงานใหญ่',
   contactName: '', contactPhone: '', contactEmail: '',
   creditDays: 30, billingModel: 'per_piece', monthlyFlatRate: 0,
-  enabledItems: [], priceList: [],
+  enabledItems: [], priceList: [], priceHistory: [],
   notes: '', isActive: true,
 }
 
@@ -33,10 +34,11 @@ export default function CustomersPage() {
   const handleEdit = (c: Customer) => {
     setEditId(c.id)
     setForm({
+      customerCode: c.customerCode, customerType: c.customerType,
       name: c.name, nameEn: c.nameEn, address: c.address, taxId: c.taxId, branch: c.branch,
       contactName: c.contactName, contactPhone: c.contactPhone, contactEmail: c.contactEmail,
       creditDays: c.creditDays, billingModel: c.billingModel, monthlyFlatRate: c.monthlyFlatRate,
-      enabledItems: [...c.enabledItems], priceList: [...c.priceList],
+      enabledItems: [...c.enabledItems], priceList: [...c.priceList], priceHistory: [...c.priceHistory],
       notes: c.notes, isActive: c.isActive,
     })
     setShowForm(true)

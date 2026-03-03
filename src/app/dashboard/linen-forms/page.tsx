@@ -56,12 +56,12 @@ export default function LinenFormsPage() {
     if (cust) {
       setNewRows(cust.enabledItems.map(code => ({
         code,
-        col1_normalSend: 0,
-        col2_claimSend: 0,
-        col3_washedReturn: 0,
-        col4_factoryCountIn: 0,
-        col5_factoryPackSend: 0,
-        col6_note: '',
+        col1_carryOver: 0,
+        col2_hotelCountIn: 0,
+        col3_hotelClaimCount: 0,
+        col4_factoryApproved: 0,
+        col5_factoryClaimApproved: 0,
+        note: '',
       })))
     }
   }
@@ -161,7 +161,7 @@ export default function LinenFormsPage() {
                 <tr><td colSpan={7} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
               ) : filtered.map(form => {
                 const customer = getCustomer(form.customerId)
-                const totalPieces = form.rows.reduce((s, r) => s + r.col1_normalSend + r.col2_claimSend, 0)
+                const totalPieces = form.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
                 const disc = hasDiscrepancies(form)
                 const cfg = LINEN_FORM_STATUS_CONFIG[form.status]
                 const nextStatus = NEXT_LINEN_STATUS[form.status]
@@ -227,7 +227,7 @@ export default function LinenFormsPage() {
               onChange={setNewRows}
               catalog={linenCatalog}
               carryOver={getCarryOver(newCustomerId, newDate)}
-              editableColumns={['col1', 'col2', 'col6']}
+              editableColumns={['col2', 'col3', 'note']}
             />
           )}
 
@@ -274,11 +274,11 @@ export default function LinenFormsPage() {
               carryOver={detailCarryOver}
               readOnly={detailForm.status === 'confirmed'}
               editableColumns={
-                detailForm.status === 'draft' ? ['col1', 'col2', 'col6'] :
-                detailForm.status === 'received' ? ['col4', 'col6'] :
-                PROCESS_STATUSES.includes(detailForm.status) ? ['col6'] :
-                detailForm.status === 'packed' ? ['col5', 'col6'] :
-                detailForm.status === 'delivered' ? ['col3', 'col6'] :
+                detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
+                detailForm.status === 'received' ? ['col4', 'col5', 'note'] :
+                PROCESS_STATUSES.includes(detailForm.status) ? ['note'] :
+                detailForm.status === 'packed' ? ['note'] :
+                detailForm.status === 'delivered' ? ['note'] :
                 []
               }
             />

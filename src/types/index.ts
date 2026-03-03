@@ -1,6 +1,6 @@
 // ============================================================
 // FlowClean - Laundry Factory Management System
-// Types & Interfaces (Redesigned for Linen Form workflow)
+// Types & Interfaces (v3 — 5-column model)
 // ============================================================
 
 // ============================================================
@@ -64,6 +64,19 @@ export const STANDARD_LINEN_ITEMS: LinenItemDef[] = [
 ]
 
 // ============================================================
+// Customer Type
+// ============================================================
+export type CustomerType = 'hotel' | 'spa' | 'clinic' | 'restaurant' | 'other'
+
+export const CUSTOMER_TYPE_CONFIG: Record<CustomerType, string> = {
+  hotel: 'โรงแรม',
+  spa: 'สปา',
+  clinic: 'คลินิก',
+  restaurant: 'ร้านอาหาร',
+  other: 'อื่นๆ',
+}
+
+// ============================================================
 // Customer
 // ============================================================
 export interface CustomerPriceItem {
@@ -71,8 +84,18 @@ export interface CustomerPriceItem {
   price: number
 }
 
+export interface CustomerPriceHistoryEntry {
+  code: string
+  oldPrice: number
+  newPrice: number
+  effectiveDate: string
+  changedBy: string
+}
+
 export interface Customer {
   id: string
+  customerCode: string // e.g. "HT0001" — 2 uppercase letters + 4 digits
+  customerType: CustomerType
   name: string
   nameEn: string
   address: string
@@ -86,22 +109,23 @@ export interface Customer {
   monthlyFlatRate: number
   enabledItems: string[] // list of linen codes enabled for this hotel
   priceList: CustomerPriceItem[] // per-piece prices
+  priceHistory: CustomerPriceHistoryEntry[]
   notes: string
   createdAt: string
   isActive: boolean
 }
 
 // ============================================================
-// Linen Form (ใบส่งรับผ้า) - 6 columns
+// Linen Form (ใบส่งรับผ้า) - 5 columns
 // ============================================================
 export interface LinenFormRow {
   code: string
-  col1_normalSend: number    // ส่งซักปกติ
-  col2_claimSend: number     // เคลม/ส่งซักพิเศษ
-  col3_washedReturn: number  // ซักแล้วกลับ (กรอกรอบถัดไป)
-  col4_factoryCountIn: number // โรงงานนับเข้า
-  col5_factoryPackSend: number // โรงงานแพคส่ง
-  col6_note: string           // หมายเหตุ
+  col1_carryOver: number           // คงค้าง (auto, read-only)
+  col2_hotelCountIn: number        // โรงแรมนับ (จำนวนที่โรงแรมส่งมา)
+  col3_hotelClaimCount: number     // โรงแรมเคลม (จำนวนเคลม)
+  col4_factoryApproved: number     // โรงงาน approved (auto-fill=col2, editable)
+  col5_factoryClaimApproved: number // โรงงาน approved เคลม (auto-fill=col3, editable)
+  note: string                      // หมายเหตุ
 }
 
 export type LinenFormStatus = 'draft' | 'received' | 'sorting' | 'washing' | 'drying' | 'ironing' | 'folding' | 'qc' | 'packed' | 'delivered' | 'confirmed'
@@ -167,6 +191,7 @@ export const DELIVERY_STATUS_CONFIG: Record<DeliveryNoteStatus, { label: string;
 export interface DeliveryNoteItem {
   code: string
   quantity: number
+  isClaim: boolean // เคลม = true → ราคา 0 ไม่คิดเงิน
 }
 
 export interface DeliveryNote {

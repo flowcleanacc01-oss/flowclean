@@ -26,13 +26,13 @@ export default function DashboardPage() {
   // Stats
   const stats = useMemo(() => {
     const todayForms = linenForms.filter(f => f.date === today)
-    const todayReceived = todayForms.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + r.col1_normalSend + r.col2_claimSend, 0), 0)
+    const todayReceived = todayForms.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0), 0)
 
     const inProcess = linenForms.filter(f => PROCESS_STATUSES.includes(f.status) || f.status === 'received')
-    const processingCount = inProcess.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + r.col1_normalSend + r.col2_claimSend, 0), 0)
+    const processingCount = inProcess.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0), 0)
 
     const packed = linenForms.filter(f => f.status === 'packed')
-    const packedCount = packed.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + r.col5_factoryPackSend, 0), 0)
+    const packedCount = packed.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + r.col4_factoryApproved, 0), 0)
 
     // Total carry-over across all customers
     let totalCarryOver = 0
@@ -145,7 +145,7 @@ export default function DashboardPage() {
               <tbody>
                 {recentForms.map(form => {
                   const customer = getCustomer(form.customerId)
-                  const totalPieces = form.rows.reduce((s, r) => s + r.col1_normalSend + r.col2_claimSend, 0)
+                  const totalPieces = form.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
                   const cfg = LINEN_FORM_STATUS_CONFIG[form.status]
                   return (
                     <tr key={form.id} className="border-t border-slate-100">

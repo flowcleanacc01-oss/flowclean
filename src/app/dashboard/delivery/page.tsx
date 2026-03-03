@@ -68,14 +68,14 @@ export default function DeliveryPage() {
       const form = linenForms.find(f => f.id === fId)
       if (!form) continue
       for (const row of form.rows) {
-        if (row.col5_factoryPackSend > 0) {
-          itemMap[row.code] = (itemMap[row.code] || 0) + row.col5_factoryPackSend
+        if (row.col4_factoryApproved > 0) {
+          itemMap[row.code] = (itemMap[row.code] || 0) + row.col4_factoryApproved
         }
       }
     }
     setDeliveryItems(
       Object.entries(itemMap)
-        .map(([code, quantity]) => ({ code, quantity }))
+        .map(([code, quantity]) => ({ code, quantity, isClaim: false }))
         .sort((a, b) => {
           const ai = linenCatalog.findIndex(i => i.code === a.code)
           const bi = linenCatalog.findIndex(i => i.code === b.code)
@@ -217,7 +217,7 @@ export default function DeliveryPage() {
                       onChange={() => handleFormToggle(f.id)}
                       className="rounded border-slate-300" />
                     <span className="text-sm">
-                      {f.formNumber} — {formatDate(f.date)} ({f.rows.reduce((s, r) => s + r.col5_factoryPackSend, 0)} ชิ้น)
+                      {f.formNumber} — {formatDate(f.date)} ({f.rows.reduce((s, r) => s + r.col4_factoryApproved, 0)} ชิ้น)
                     </span>
                   </label>
                 ))}

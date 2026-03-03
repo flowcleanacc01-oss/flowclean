@@ -11,16 +11,16 @@ interface LinenFormGridProps {
   catalog: LinenItemDef[]
   carryOver?: Record<string, number>
   readOnly?: boolean
-  editableColumns?: ('col1' | 'col2' | 'col3' | 'col4' | 'col5' | 'col6')[]
+  editableColumns?: ('col1' | 'col2' | 'col3' | 'col4' | 'col5' | 'note')[]
 }
 
 const COL_LABELS = [
-  { key: 'col1', label: 'ส่งซักปกติ', short: 'ปกติ' },
-  { key: 'col2', label: 'เคลม', short: 'เคลม' },
-  { key: 'col3', label: 'ซักแล้วกลับ', short: 'กลับ' },
-  { key: 'col4', label: 'นับเข้า', short: 'นับ' },
-  { key: 'col5', label: 'แพคส่ง', short: 'แพค' },
-  { key: 'col6', label: 'หมายเหตุ', short: 'Note' },
+  { key: 'col1', label: 'คงค้าง', short: 'ค้าง' },
+  { key: 'col2', label: 'โรงแรมนับ', short: 'รับ' },
+  { key: 'col3', label: 'เคลม', short: 'เคลม' },
+  { key: 'col4', label: 'โรงงาน OK', short: 'OK' },
+  { key: 'col5', label: 'เคลม OK', short: 'เคลมOK' },
+  { key: 'note', label: 'หมายเหตุ', short: 'Note' },
 ] as const
 
 export default function LinenFormGrid({
@@ -30,7 +30,7 @@ export default function LinenFormGrid({
   catalog,
   carryOver = {},
   readOnly = false,
-  editableColumns = ['col1', 'col2', 'col3', 'col4', 'col5', 'col6'],
+  editableColumns = ['col2', 'col3', 'col4', 'col5', 'note'],
 }: LinenFormGridProps) {
   const enabledItems = catalog.filter(item =>
     customer.enabledItems.includes(item.code)
@@ -44,8 +44,8 @@ export default function LinenFormGrid({
 
   const getRow = (code: string): LinenFormRow => {
     return localRows.find(r => r.code === code) || {
-      code, col1_normalSend: 0, col2_claimSend: 0, col3_washedReturn: 0,
-      col4_factoryCountIn: 0, col5_factoryPackSend: 0, col6_note: '',
+      code, col1_carryOver: 0, col2_hotelCountIn: 0, col3_hotelClaimCount: 0,
+      col4_factoryApproved: 0, col5_factoryClaimApproved: 0, note: '',
     }
   }
 
@@ -70,11 +70,11 @@ export default function LinenFormGrid({
   }
   for (const item of enabledItems) {
     const row = getRow(item.code)
-    totals.col1 += row.col1_normalSend
-    totals.col2 += row.col2_claimSend
-    totals.col3 += row.col3_washedReturn
-    totals.col4 += row.col4_factoryCountIn
-    totals.col5 += row.col5_factoryPackSend
+    totals.col1 += row.col1_carryOver
+    totals.col2 += row.col2_hotelCountIn
+    totals.col3 += row.col3_hotelClaimCount
+    totals.col4 += row.col4_factoryApproved
+    totals.col5 += row.col5_factoryClaimApproved
   }
 
   const hasCarryOver = Object.keys(carryOver).length > 0
@@ -105,7 +105,7 @@ export default function LinenFormGrid({
               {COL_LABELS.map(col => (
                 <th key={col.key} className={cn(
                   'px-3 py-2 font-medium text-slate-600 text-center',
-                  col.key === 'col6' ? 'w-32 text-left' : 'w-20'
+                  col.key === 'note' ? 'w-32 text-left' : 'w-20'
                 )}>
                   <span className="hidden sm:inline">{col.label}</span>
                   <span className="sm:hidden">{col.short}</span>
@@ -116,56 +116,50 @@ export default function LinenFormGrid({
           <tbody>
             {enabledItems.map((item) => {
               const row = getRow(item.code)
-              const sent = row.col1_normalSend + row.col2_claimSend
-              const counted = row.col4_factoryCountIn
-              const hasDiscrepancy = counted > 0 && sent !== counted
+              const hotelCount = row.col2_hotelCountIn
+              const factoryApproved = row.col4_factoryApproved
+              const hasDiscrepancy = factoryApproved > 0 && hotelCount !== factoryApproved
 
               return (
                 <tr key={item.code} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
                   <td className="px-3 py-1.5 text-slate-700">{item.name}</td>
-                  {/* Col 1 - ส่งซักปกติ */}
+                  {/* Col 1 - คงค้าง (auto, read-only) */}
                   <td className="px-1 py-1 text-center">
-                    {isEditable('col1') ? (
-                      <input type="number" min={0}
-                        value={row.col1_normalSend || ''}
-                        onChange={e => updateRow(item.code, 'col1_normalSend', parseInt(e.target.value) || 0)}
-                        className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
-                      />
-                    ) : (
-                      <span className="text-slate-700">{row.col1_normalSend || '-'}</span>
-                    )}
+                    <span className={cn('text-slate-700', (carryOver[item.code] || 0) > 0 && 'text-amber-600 font-medium')}>
+                      {carryOver[item.code] || row.col1_carryOver || '-'}
+                    </span>
                   </td>
-                  {/* Col 2 - เคลม */}
+                  {/* Col 2 - โรงแรมนับ */}
                   <td className="px-1 py-1 text-center">
                     {isEditable('col2') ? (
                       <input type="number" min={0}
-                        value={row.col2_claimSend || ''}
-                        onChange={e => updateRow(item.code, 'col2_claimSend', parseInt(e.target.value) || 0)}
+                        value={row.col2_hotelCountIn || ''}
+                        onChange={e => updateRow(item.code, 'col2_hotelCountIn', parseInt(e.target.value) || 0)}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
                     ) : (
-                      <span className="text-slate-700">{row.col2_claimSend || '-'}</span>
+                      <span className="text-slate-700">{row.col2_hotelCountIn || '-'}</span>
                     )}
                   </td>
-                  {/* Col 3 - ซักแล้วกลับ */}
+                  {/* Col 3 - เคลม */}
                   <td className="px-1 py-1 text-center">
                     {isEditable('col3') ? (
                       <input type="number" min={0}
-                        value={row.col3_washedReturn || ''}
-                        onChange={e => updateRow(item.code, 'col3_washedReturn', parseInt(e.target.value) || 0)}
+                        value={row.col3_hotelClaimCount || ''}
+                        onChange={e => updateRow(item.code, 'col3_hotelClaimCount', parseInt(e.target.value) || 0)}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
                     ) : (
-                      <span className="text-slate-700">{row.col3_washedReturn || '-'}</span>
+                      <span className="text-slate-700">{row.col3_hotelClaimCount || '-'}</span>
                     )}
                   </td>
-                  {/* Col 4 - นับเข้า */}
+                  {/* Col 4 - โรงงาน approved */}
                   <td className={cn('px-1 py-1 text-center', hasDiscrepancy && 'bg-orange-50')}>
                     {isEditable('col4') ? (
                       <input type="number" min={0}
-                        value={row.col4_factoryCountIn || ''}
-                        onChange={e => updateRow(item.code, 'col4_factoryCountIn', parseInt(e.target.value) || 0)}
+                        value={row.col4_factoryApproved || ''}
+                        onChange={e => updateRow(item.code, 'col4_factoryApproved', parseInt(e.target.value) || 0)}
                         className={cn(
                           'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
                           hasDiscrepancy ? 'border-orange-400 bg-orange-50' : 'border-slate-200'
@@ -173,34 +167,34 @@ export default function LinenFormGrid({
                       />
                     ) : (
                       <span className={cn('text-slate-700', hasDiscrepancy && 'text-orange-600 font-medium')}>
-                        {row.col4_factoryCountIn || '-'}
+                        {row.col4_factoryApproved || '-'}
                         {hasDiscrepancy && ' ⚠'}
                       </span>
                     )}
                   </td>
-                  {/* Col 5 - แพคส่ง */}
+                  {/* Col 5 - เคลม approved */}
                   <td className="px-1 py-1 text-center">
                     {isEditable('col5') ? (
                       <input type="number" min={0}
-                        value={row.col5_factoryPackSend || ''}
-                        onChange={e => updateRow(item.code, 'col5_factoryPackSend', parseInt(e.target.value) || 0)}
+                        value={row.col5_factoryClaimApproved || ''}
+                        onChange={e => updateRow(item.code, 'col5_factoryClaimApproved', parseInt(e.target.value) || 0)}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
                     ) : (
-                      <span className="text-slate-700">{row.col5_factoryPackSend || '-'}</span>
+                      <span className="text-slate-700">{row.col5_factoryClaimApproved || '-'}</span>
                     )}
                   </td>
-                  {/* Col 6 - หมายเหตุ */}
+                  {/* Note - หมายเหตุ */}
                   <td className="px-1 py-1">
-                    {isEditable('col6') ? (
+                    {isEditable('note') ? (
                       <input type="text"
-                        value={row.col6_note}
-                        onChange={e => updateRow(item.code, 'col6_note', e.target.value)}
+                        value={row.note}
+                        onChange={e => updateRow(item.code, 'note', e.target.value)}
                         className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                         placeholder="..."
                       />
                     ) : (
-                      <span className="text-slate-500 text-xs">{row.col6_note || '-'}</span>
+                      <span className="text-slate-500 text-xs">{row.note || '-'}</span>
                     )}
                   </td>
                 </tr>
@@ -210,7 +204,7 @@ export default function LinenFormGrid({
           <tfoot>
             <tr className="bg-slate-50 font-medium text-slate-700">
               <td className="px-3 py-2" colSpan={2}>รวม</td>
-              <td className="px-3 py-2 text-center">{totals.col1}</td>
+              <td className="px-3 py-2 text-center">{totals.col1 || '-'}</td>
               <td className="px-3 py-2 text-center">{totals.col2}</td>
               <td className="px-3 py-2 text-center">{totals.col3}</td>
               <td className="px-3 py-2 text-center">{totals.col4}</td>

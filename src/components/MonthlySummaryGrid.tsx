@@ -26,15 +26,15 @@ export default function MonthlySummaryGrid({ customer, month, linenForms, delive
       grid[code] = {}
     }
 
-    // Primary: use linen forms col5 (factory pack send)
+    // Primary: use linen forms col4 (factory approved)
     const monthForms = linenForms.filter(f =>
       f.customerId === customer.id && f.date.startsWith(month)
     )
     for (const form of monthForms) {
       const day = parseInt(form.date.split('-')[2])
       for (const row of form.rows) {
-        if (grid[row.code] && row.col5_factoryPackSend > 0) {
-          grid[row.code][day] = (grid[row.code][day] || 0) + row.col5_factoryPackSend
+        if (grid[row.code] && row.col4_factoryApproved > 0) {
+          grid[row.code][day] = (grid[row.code][day] || 0) + row.col4_factoryApproved
         }
       }
     }

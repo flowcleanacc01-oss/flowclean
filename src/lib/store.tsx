@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import type {
   Customer, LinenForm, LinenFormStatus, DeliveryNote, DeliveryNoteStatus,
   BillingStatement, BillingStatus, TaxInvoice, Quotation, QuotationStatus,
@@ -17,9 +17,10 @@ import {
   genId, genLinenFormNumber, genDeliveryNoteNumber, genBillingNumber,
   genTaxInvoiceNumber, genQuotationNumber, genChecklistNumber, todayISO,
 } from './utils'
+import * as db from './supabase-service'
 
 // ============================================================
-// Store Interface
+// Store Interface (unchanged — UI sees this)
 // ============================================================
 interface StoreContextType {
   // Auth
@@ -102,40 +103,10 @@ interface StoreContextType {
 const StoreContext = createContext<StoreContextType | null>(null)
 
 // ============================================================
-// Local Storage
+// Helper: fire-and-forget with error logging
 // ============================================================
-const STORAGE_KEY = 'flowclean_data_v2'
-
-interface StoredData {
-  customers: Customer[]
-  linenForms: LinenForm[]
-  deliveryNotes: DeliveryNote[]
-  billingStatements: BillingStatement[]
-  taxInvoices: TaxInvoice[]
-  quotations: Quotation[]
-  expenses: Expense[]
-  users: AppUser[]
-  defaultPrices: Record<string, number>
-  companyInfo: CompanyInfo
-  linenCatalog?: LinenItemDef[]
-  checklists?: ProductChecklist[]
-  initialized: boolean
-}
-
-function loadData(): StoredData | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw)
-  } catch { /* ignore */ }
-  return null
-}
-
-function saveData(data: StoredData) {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  } catch { /* ignore */ }
+function dbSave(promise: Promise<void>) {
+  promise.catch(err => console.error('[Supabase save error]', err))
 }
 
 // ============================================================
@@ -156,53 +127,80 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [linenCatalog, setLinenCatalog] = useState<LinenItemDef[]>(STANDARD_LINEN_ITEMS)
   const [checklists, setChecklists] = useState<ProductChecklist[]>([])
   const [loaded, setLoaded] = useState(false)
+  const seeded = useRef(false)
 
-  // Load from localStorage on mount
+  // ---- Load from Supabase on mount ----
   useEffect(() => {
-    const stored = loadData()
-    if (stored?.initialized) {
-      setCustomers(stored.customers)
-      // Migration: processing → washing (for old data)
-      setLinenForms(stored.linenForms.map(f => {
-        const status = f.status as string
-        return status === 'processing' ? { ...f, status: 'washing' as LinenFormStatus } : f
-      }))
-      setDeliveryNotes(stored.deliveryNotes)
-      setBillingStatements(stored.billingStatements)
-      setTaxInvoices(stored.taxInvoices || [])
-      setQuotations(stored.quotations || [])
-      setExpenses(stored.expenses)
-      setUsers(stored.users)
-      setDefaultPrices(stored.defaultPrices || DEFAULT_PRICES)
-      setCompanyInfo(stored.companyInfo || DEFAULT_COMPANY_INFO)
-      setLinenCatalog(stored.linenCatalog || STANDARD_LINEN_ITEMS)
-      setChecklists(stored.checklists || [])
-    } else {
-      setCustomers(SAMPLE_CUSTOMERS)
-      setLinenForms(SAMPLE_LINEN_FORMS)
-      setDeliveryNotes(SAMPLE_DELIVERY_NOTES)
-      setBillingStatements(SAMPLE_BILLING_STATEMENTS)
-      setExpenses(SAMPLE_EXPENSES)
-      setUsers(SAMPLE_USERS)
+    let cancelled = false
+
+    async function loadFromSupabase() {
+      try {
+        const data = await db.fetchAllData()
+
+        if (cancelled) return
+
+        // If Supabase is empty → seed with sample data
+        const isEmpty = data.customers.length === 0 && data.users.length === 0
+
+        if (isEmpty && !seeded.current) {
+          seeded.current = true
+          // Seed Supabase with sample data
+          await seedSampleData()
+          // Re-fetch after seeding
+          const fresh = await db.fetchAllData()
+          if (cancelled) return
+          applyData(fresh)
+        } else {
+          applyData(data)
+        }
+      } catch (err) {
+        console.error('[Supabase load error] Falling back to sample data', err)
+        if (cancelled) return
+        // Fallback: use sample data locally
+        setCustomers(SAMPLE_CUSTOMERS)
+        setLinenForms(SAMPLE_LINEN_FORMS)
+        setDeliveryNotes(SAMPLE_DELIVERY_NOTES)
+        setBillingStatements(SAMPLE_BILLING_STATEMENTS)
+        setExpenses(SAMPLE_EXPENSES)
+        setUsers(SAMPLE_USERS)
+      }
+
+      // Restore session
+      if (typeof window !== 'undefined') {
+        const session = sessionStorage.getItem('flowclean_user')
+        if (session) {
+          try { setCurrentUser(JSON.parse(session)) } catch { /* ignore */ }
+        }
+      }
+      if (!cancelled) setLoaded(true)
     }
-    if (typeof window !== 'undefined') {
-      const session = sessionStorage.getItem('flowclean_user')
-      if (session) {
-        try { setCurrentUser(JSON.parse(session)) } catch { /* ignore */ }
+
+    function applyData(data: Awaited<ReturnType<typeof db.fetchAllData>>) {
+      setCustomers(data.customers)
+      setLinenForms(data.linenForms)
+      setDeliveryNotes(data.deliveryNotes)
+      setBillingStatements(data.billingStatements)
+      setTaxInvoices(data.taxInvoices)
+      setQuotations(data.quotations)
+      setExpenses(data.expenses)
+      setUsers(data.users.length > 0 ? data.users : SAMPLE_USERS)
+      setCompanyInfo(data.companyInfo || DEFAULT_COMPANY_INFO)
+      setLinenCatalog(data.linenItems.length > 0 ? data.linenItems : STANDARD_LINEN_ITEMS)
+      setChecklists(data.checklists)
+
+      // Build defaultPrices from linenItems
+      if (data.linenItems.length > 0) {
+        const prices: Record<string, number> = {}
+        for (const item of data.linenItems) {
+          prices[item.code] = item.defaultPrice
+        }
+        setDefaultPrices(prices)
       }
     }
-    setLoaded(true)
-  }, [])
 
-  // Save to localStorage on changes
-  useEffect(() => {
-    if (!loaded) return
-    saveData({
-      customers, linenForms, deliveryNotes, billingStatements,
-      taxInvoices, quotations, expenses, users, defaultPrices, companyInfo,
-      linenCatalog, checklists, initialized: true,
-    })
-  }, [customers, linenForms, deliveryNotes, billingStatements, taxInvoices, quotations, expenses, users, defaultPrices, companyInfo, linenCatalog, checklists, loaded])
+    loadFromSupabase()
+    return () => { cancelled = true }
+  }, [])
 
   // ---- Auth ----
   const login = useCallback((email: string, _password: string): boolean => {
@@ -228,15 +226,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const addCustomer = useCallback((c: Omit<Customer, 'id' | 'createdAt'>): Customer => {
     const newC: Customer = { ...c, id: genId(), createdAt: todayISO() }
     setCustomers(prev => [...prev, newC])
+    dbSave(db.insertCustomer(newC))
     return newC
   }, [])
 
   const updateCustomer = useCallback((id: string, c: Partial<Customer>) => {
     setCustomers(prev => prev.map(x => x.id === id ? { ...x, ...c } : x))
+    dbSave(db.updateCustomerDB(id, c))
   }, [])
 
   const deleteCustomer = useCallback((id: string) => {
     setCustomers(prev => prev.filter(x => x.id !== id))
+    dbSave(db.deleteCustomerDB(id))
   }, [])
 
   const getCustomer = useCallback((id: string) => {
@@ -250,19 +251,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       createdBy: currentUser?.id || 'unknown', updatedAt: todayISO(),
     }
     setLinenForms(prev => [newForm, ...prev])
+    dbSave(db.insertLinenForm(newForm))
     return newForm
   }, [currentUser])
 
   const updateLinenForm = useCallback((id: string, f: Partial<LinenForm>) => {
-    setLinenForms(prev => prev.map(x => x.id === id ? { ...x, ...f, updatedAt: todayISO() } : x))
+    const updates = { ...f, updatedAt: todayISO() }
+    setLinenForms(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    dbSave(db.updateLinenFormDB(id, updates))
   }, [])
 
   const updateLinenFormStatus = useCallback((id: string, status: LinenFormStatus) => {
-    setLinenForms(prev => prev.map(x => x.id === id ? { ...x, status, updatedAt: todayISO() } : x))
+    const updates = { status, updatedAt: todayISO() }
+    setLinenForms(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    dbSave(db.updateLinenFormDB(id, updates))
   }, [])
 
   const deleteLinenForm = useCallback((id: string) => {
     setLinenForms(prev => prev.filter(x => x.id !== id))
+    dbSave(db.deleteLinenFormDB(id))
   }, [])
 
   // ---- Delivery Notes ----
@@ -272,25 +279,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       createdBy: currentUser?.id || 'unknown', updatedAt: todayISO(),
     }
     setDeliveryNotes(prev => [newDN, ...prev])
+    dbSave(db.insertDeliveryNote(newDN))
     return newDN
   }, [currentUser])
 
   const updateDeliveryNote = useCallback((id: string, d: Partial<DeliveryNote>) => {
-    setDeliveryNotes(prev => prev.map(x => x.id === id ? { ...x, ...d, updatedAt: todayISO() } : x))
+    const updates = { ...d, updatedAt: todayISO() }
+    setDeliveryNotes(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    dbSave(db.updateDeliveryNoteDB(id, updates))
   }, [])
 
   const updateDeliveryNoteStatus = useCallback((id: string, status: DeliveryNoteStatus) => {
-    setDeliveryNotes(prev => prev.map(x => x.id === id ? { ...x, status, updatedAt: todayISO() } : x))
+    const updates = { status, updatedAt: todayISO() }
+    setDeliveryNotes(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    dbSave(db.updateDeliveryNoteDB(id, updates))
   }, [])
 
   const deleteDeliveryNote = useCallback((id: string) => {
     setDeliveryNotes(prev => prev.filter(x => x.id !== id))
+    dbSave(db.deleteDeliveryNoteDB(id))
   }, [])
 
   // ---- Billing Statements ----
   const addBillingStatement = useCallback((b: Omit<BillingStatement, 'id' | 'billingNumber'>): BillingStatement => {
     const newBS: BillingStatement = { ...b, id: genId(), billingNumber: genBillingNumber() }
     setBillingStatements(prev => [newBS, ...prev])
+    dbSave(db.insertBillingStatement(newBS))
     return newBS
   }, [])
 
@@ -303,16 +317,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         paidAmount: status === 'paid' ? bs.netPayable : bs.paidAmount,
       }
     }))
+    const updates: Partial<BillingStatement> = { status }
+    if (status === 'paid') {
+      updates.paidDate = paidDate || todayISO()
+    }
+    dbSave(db.updateBillingStatementDB(id, updates))
   }, [])
 
   const deleteBillingStatement = useCallback((id: string) => {
     setBillingStatements(prev => prev.filter(x => x.id !== id))
+    dbSave(db.deleteBillingStatementDB(id))
   }, [])
 
   // ---- Tax Invoices ----
   const addTaxInvoice = useCallback((t: Omit<TaxInvoice, 'id' | 'invoiceNumber'>): TaxInvoice => {
     const newTI: TaxInvoice = { ...t, id: genId(), invoiceNumber: genTaxInvoiceNumber() }
     setTaxInvoices(prev => [newTI, ...prev])
+    dbSave(db.insertTaxInvoice(newTI))
     return newTI
   }, [])
 
@@ -320,48 +341,60 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const addQuotation = useCallback((q: Omit<Quotation, 'id' | 'quotationNumber'>): Quotation => {
     const newQ: Quotation = { ...q, id: genId(), quotationNumber: genQuotationNumber() }
     setQuotations(prev => [newQ, ...prev])
+    dbSave(db.insertQuotation(newQ))
     return newQ
   }, [])
 
   const updateQuotationStatus = useCallback((id: string, status: QuotationStatus) => {
     setQuotations(prev => prev.map(x => x.id === id ? { ...x, status } : x))
+    dbSave(db.updateQuotationDB(id, { status }))
   }, [])
 
   // ---- Expenses ----
   const addExpense = useCallback((e: Omit<Expense, 'id' | 'createdBy'>): Expense => {
     const newExp: Expense = { ...e, id: genId(), createdBy: currentUser?.id || 'unknown' }
     setExpenses(prev => [newExp, ...prev])
+    dbSave(db.insertExpense(newExp))
     return newExp
   }, [currentUser])
 
   const deleteExpense = useCallback((id: string) => {
     setExpenses(prev => prev.filter(x => x.id !== id))
+    dbSave(db.deleteExpenseDB(id))
   }, [])
 
   // ---- Users ----
   const addUser = useCallback((u: Omit<AppUser, 'id'>): AppUser => {
     const newUser: AppUser = { ...u, id: genId() }
     setUsers(prev => [...prev, newUser])
+    dbSave(db.insertUser(newUser))
     return newUser
   }, [])
 
   const updateUser = useCallback((id: string, u: Partial<AppUser>) => {
     setUsers(prev => prev.map(x => x.id === id ? { ...x, ...u } : x))
+    dbSave(db.updateUserDB(id, u))
   }, [])
 
   // ---- Settings ----
   const updateDefaultPrice = useCallback((code: string, price: number) => {
     setDefaultPrices(prev => ({ ...prev, [code]: price }))
+    dbSave(db.updateDefaultPriceDB(code, price))
   }, [])
 
   const updateCompanyInfo = useCallback((info: Partial<CompanyInfo>) => {
-    setCompanyInfo(prev => ({ ...prev, ...info }))
+    setCompanyInfo(prev => {
+      const updated = { ...prev, ...info }
+      dbSave(db.upsertCompanyInfo(updated))
+      return updated
+    })
   }, [])
 
   // ---- Linen Catalog ----
   const addLinenItem = useCallback((item: LinenItemDef) => {
     setLinenCatalog(prev => [...prev, item])
     setDefaultPrices(prev => ({ ...prev, [item.code]: item.defaultPrice }))
+    dbSave(db.insertLinenItem(item))
   }, [])
 
   const updateLinenItem = useCallback((code: string, updates: Partial<LinenItemDef>) => {
@@ -369,6 +402,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (updates.defaultPrice !== undefined) {
       setDefaultPrices(prev => ({ ...prev, [code]: updates.defaultPrice! }))
     }
+    dbSave(db.updateLinenItemDB(code, updates))
   }, [])
 
   const deleteLinenItem = useCallback((code: string) => {
@@ -378,6 +412,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       delete next[code]
       return next
     })
+    dbSave(db.deleteLinenItemDB(code))
   }, [])
 
   const getItemName = useCallback((code: string): string => {
@@ -395,19 +430,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       createdBy: currentUser?.id || 'unknown', updatedAt: todayISO(),
     }
     setChecklists(prev => [newCL, ...prev])
+    dbSave(db.insertChecklist(newCL))
     return newCL
   }, [currentUser])
 
   const updateChecklist = useCallback((id: string, c: Partial<ProductChecklist>) => {
-    setChecklists(prev => prev.map(x => x.id === id ? { ...x, ...c, updatedAt: todayISO() } : x))
+    const updates = { ...c, updatedAt: todayISO() }
+    setChecklists(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    dbSave(db.updateChecklistDB(id, updates))
   }, [])
 
   const updateChecklistStatus = useCallback((id: string, status: ChecklistStatus) => {
-    setChecklists(prev => prev.map(x => x.id === id ? { ...x, status, updatedAt: todayISO() } : x))
+    const updates = { status, updatedAt: todayISO() }
+    setChecklists(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    dbSave(db.updateChecklistDB(id, updates))
   }, [])
 
   const deleteChecklist = useCallback((id: string) => {
     setChecklists(prev => prev.filter(x => x.id !== id))
+    dbSave(db.deleteChecklistDB(id))
   }, [])
 
   // ---- Computed Helpers ----
@@ -419,9 +460,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     for (const form of forms) {
       for (const row of form.rows) {
-        const counted = row.col4_factoryCountIn
-        const packed = row.col5_factoryPackSend
-        const diff = counted - packed
+        const diff = row.col2_hotelCountIn - row.col4_factoryApproved
         if (diff > 0) {
           result[row.code] = (result[row.code] || 0) + diff
         }
@@ -436,10 +475,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const result: Record<string, number> = {}
     for (const row of form.rows) {
-      const sent = row.col1_normalSend + row.col2_claimSend
-      const counted = row.col4_factoryCountIn
-      if (counted > 0 && sent !== counted) {
-        result[row.code] = counted - sent
+      const hotelCount = row.col2_hotelCountIn
+      const factoryApproved = row.col4_factoryApproved
+      if (factoryApproved > 0 && hotelCount !== factoryApproved) {
+        result[row.code] = factoryApproved - hotelCount
       }
     }
     return result
@@ -482,4 +521,48 @@ export function useStore(): StoreContextType {
   const ctx = useContext(StoreContext)
   if (!ctx) throw new Error('useStore must be used within StoreProvider')
   return ctx
+}
+
+// ============================================================
+// Seed Sample Data to Supabase (first time only)
+// ============================================================
+async function seedSampleData() {
+  console.log('[FlowClean] Seeding sample data to Supabase...')
+
+  try {
+    // Seed in dependency order
+    await db.upsertLinenItems(STANDARD_LINEN_ITEMS)
+    await db.upsertUsers(SAMPLE_USERS)
+    await db.upsertCompanyInfo(DEFAULT_COMPANY_INFO)
+
+    // Customers
+    for (const c of SAMPLE_CUSTOMERS) {
+      await db.insertCustomer(c)
+    }
+
+    // Linen Forms
+    for (const f of SAMPLE_LINEN_FORMS) {
+      await db.insertLinenForm(f)
+    }
+
+    // Delivery Notes
+    for (const dn of SAMPLE_DELIVERY_NOTES) {
+      await db.insertDeliveryNote(dn)
+    }
+
+    // Billing Statements
+    for (const bs of SAMPLE_BILLING_STATEMENTS) {
+      await db.insertBillingStatement(bs)
+    }
+
+    // Expenses
+    for (const exp of SAMPLE_EXPENSES) {
+      await db.insertExpense(exp)
+    }
+
+    console.log('[FlowClean] Sample data seeded successfully')
+  } catch (err) {
+    console.error('[FlowClean] Seed error:', err)
+    throw err
+  }
 }

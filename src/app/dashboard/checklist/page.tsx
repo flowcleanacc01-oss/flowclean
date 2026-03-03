@@ -60,10 +60,10 @@ export default function ChecklistPage() {
     if (newType === 'qc') {
       const form = linenForms.find(f => f.id === docId)
       if (form) {
-        setNewItems(form.rows.filter(r => r.col5_factoryPackSend > 0).map(r => ({
+        setNewItems(form.rows.filter(r => r.col4_factoryApproved > 0).map(r => ({
           code: r.code,
           name: nameMap[r.code] || r.code,
-          expectedQty: r.col5_factoryPackSend,
+          expectedQty: r.col4_factoryApproved,
           actualQty: 0,
           passed: false,
           note: '',
