@@ -184,9 +184,9 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
 ]
 
 // ============================================================
-// Sample Linen Forms (5-column model)
+// Sample Linen Forms (6-column model)
 // ============================================================
-function makeRows(data: Record<string, Partial<{ co: number; c2: number; c3: number; c4: number; c5: number; note: string }>>): import('@/types').LinenFormRow[] {
+function makeRows(data: Record<string, Partial<{ co: number; c2: number; c3: number; c4: number; c5: number; c6: number; note: string }>>): import('@/types').LinenFormRow[] {
   return Object.entries(data).map(([code, d]) => ({
     code,
     col1_carryOver: d.co ?? 0,
@@ -194,76 +194,77 @@ function makeRows(data: Record<string, Partial<{ co: number; c2: number; c3: num
     col3_hotelClaimCount: d.c3 ?? 0,
     col4_factoryApproved: d.c4 ?? 0,
     col5_factoryClaimApproved: d.c5 ?? 0,
+    col6_factoryPackSend: d.c6 ?? 0,
     note: d.note ?? '',
   }))
 }
 
 export const SAMPLE_LINEN_FORMS: LinenForm[] = [
-  // Wild Orchid Villa - Day 1 (Feb 25)
+  // Wild Orchid Villa - Day 1 (Feb 25) — confirmed, sent all
   {
     id: 'lf-01', formNumber: 'LF-20260225-001', customerId: 'cust-01', date: '2026-02-25',
     status: 'confirmed',
     rows: makeRows({
-      'B/F': { c2: 30, c3: 0, c4: 30, c5: 0 },
-      'B/H': { c2: 20, c3: 0, c4: 20, c5: 0 },
-      'B/T': { c2: 50, c3: 2, c4: 50, c5: 2, note: 'เคลม 2 ผืนเปื้อนสี' },
-      'P/C': { c2: 40, c3: 0, c4: 40, c5: 0 },
-      'S/Q': { c2: 25, c3: 0, c4: 25, c5: 0 },
-      'S/K': { c2: 15, c3: 0, c4: 15, c5: 0 },
-      'D/Q': { c2: 10, c3: 0, c4: 10, c5: 0 },
-      'B/M': { c2: 20, c3: 0, c4: 20, c5: 0 },
+      'B/F': { c2: 30, c3: 0, c4: 30, c5: 0, c6: 30 },
+      'B/H': { c2: 20, c3: 0, c4: 20, c5: 0, c6: 20 },
+      'B/T': { c2: 50, c3: 2, c4: 50, c5: 2, c6: 52, note: 'เคลม 2 ผืนเปื้อนสี' },
+      'P/C': { c2: 40, c3: 0, c4: 40, c5: 0, c6: 40 },
+      'S/Q': { c2: 25, c3: 0, c4: 25, c5: 0, c6: 25 },
+      'S/K': { c2: 15, c3: 0, c4: 15, c5: 0, c6: 15 },
+      'D/Q': { c2: 10, c3: 0, c4: 10, c5: 0, c6: 10 },
+      'B/M': { c2: 20, c3: 0, c4: 20, c5: 0, c6: 20 },
     }),
     notes: '', createdBy: 'staff-01', updatedAt: '2026-02-26',
   },
-  // Wild Orchid Villa - Day 2 (Feb 26)
+  // Wild Orchid Villa - Day 2 (Feb 26) — confirmed, sent all
   {
     id: 'lf-02', formNumber: 'LF-20260226-001', customerId: 'cust-01', date: '2026-02-26',
     status: 'confirmed',
     rows: makeRows({
-      'B/F': { c2: 35, c3: 0, c4: 35, c5: 0 },
-      'B/H': { c2: 22, c3: 0, c4: 22, c5: 0 },
-      'B/T': { c2: 55, c3: 1, c4: 55, c5: 1, note: 'เคลม 1' },
-      'P/C': { c2: 38, c3: 0, c4: 38, c5: 0 },
-      'S/Q': { c2: 28, c3: 0, c4: 28, c5: 0 },
-      'S/K': { c2: 12, c3: 0, c4: 12, c5: 0 },
-      'D/Q': { c2: 8, c3: 0, c4: 8, c5: 0 },
-      'B/M': { c2: 18, c3: 0, c4: 18, c5: 0 },
+      'B/F': { c2: 35, c3: 0, c4: 35, c5: 0, c6: 35 },
+      'B/H': { c2: 22, c3: 0, c4: 22, c5: 0, c6: 22 },
+      'B/T': { c2: 55, c3: 1, c4: 55, c5: 1, c6: 56, note: 'เคลม 1' },
+      'P/C': { c2: 38, c3: 0, c4: 38, c5: 0, c6: 38 },
+      'S/Q': { c2: 28, c3: 0, c4: 28, c5: 0, c6: 28 },
+      'S/K': { c2: 12, c3: 0, c4: 12, c5: 0, c6: 12 },
+      'D/Q': { c2: 8, c3: 0, c4: 8, c5: 0, c6: 8 },
+      'B/M': { c2: 18, c3: 0, c4: 18, c5: 0, c6: 18 },
     }),
     notes: '', createdBy: 'staff-01', updatedAt: '2026-02-27',
   },
-  // Wild Orchid Villa - Day 3 (Feb 27)
+  // Wild Orchid Villa - Day 3 (Feb 27) — delivered, sent all
   {
     id: 'lf-03', formNumber: 'LF-20260227-001', customerId: 'cust-01', date: '2026-02-27',
     status: 'delivered',
     rows: makeRows({
-      'B/F': { c2: 32, c3: 0, c4: 32, c5: 0 },
-      'B/H': { c2: 25, c3: 0, c4: 25, c5: 0 },
-      'B/T': { c2: 48, c3: 0, c4: 48, c5: 0 },
-      'P/C': { c2: 42, c3: 0, c4: 42, c5: 0 },
-      'S/Q': { c2: 20, c3: 0, c4: 20, c5: 0 },
-      'S/K': { c2: 18, c3: 0, c4: 18, c5: 0 },
-      'D/Q': { c2: 12, c3: 0, c4: 12, c5: 0 },
-      'B/M': { c2: 22, c3: 0, c4: 22, c5: 0 },
+      'B/F': { c2: 32, c3: 0, c4: 32, c5: 0, c6: 32 },
+      'B/H': { c2: 25, c3: 0, c4: 25, c5: 0, c6: 25 },
+      'B/T': { c2: 48, c3: 0, c4: 48, c5: 0, c6: 48 },
+      'P/C': { c2: 42, c3: 0, c4: 42, c5: 0, c6: 42 },
+      'S/Q': { c2: 20, c3: 0, c4: 20, c5: 0, c6: 20 },
+      'S/K': { c2: 18, c3: 0, c4: 18, c5: 0, c6: 18 },
+      'D/Q': { c2: 12, c3: 0, c4: 12, c5: 0, c6: 12 },
+      'B/M': { c2: 22, c3: 0, c4: 22, c5: 0, c6: 22 },
     }),
     notes: '', createdBy: 'staff-02', updatedAt: '2026-02-28',
   },
-  // Wild Orchid Villa - Day 4 (Feb 28)
+  // Wild Orchid Villa - Day 4 (Feb 28) — packed, sent partially (B/T ค้างส่ง 5)
   {
     id: 'lf-04', formNumber: 'LF-20260228-001', customerId: 'cust-01', date: '2026-02-28',
     status: 'packed',
     rows: makeRows({
-      'B/F': { c2: 28, c3: 0, c4: 28, c5: 0 },
-      'B/H': { c2: 20, c3: 0, c4: 20, c5: 0 },
-      'B/T': { c2: 52, c3: 3, c4: 52, c5: 3, note: 'เคลม 3 - รอยด่าง' },
-      'P/C': { c2: 35, c3: 0, c4: 35, c5: 0 },
-      'S/Q': { c2: 22, c3: 0, c4: 22, c5: 0 },
-      'S/K': { c2: 10, c3: 0, c4: 10, c5: 0 },
-      'D/Q': { c2: 8, c3: 0, c4: 8, c5: 0 },
-      'B/M': { c2: 15, c3: 0, c4: 15, c5: 0 },
+      'B/F': { c2: 28, c3: 0, c4: 28, c5: 0, c6: 28 },
+      'B/H': { c2: 20, c3: 0, c4: 20, c5: 0, c6: 20 },
+      'B/T': { c2: 52, c3: 3, c4: 52, c5: 3, c6: 50, note: 'เคลม 3 - รอยด่าง / ค้างส่ง 5' },
+      'P/C': { c2: 35, c3: 0, c4: 35, c5: 0, c6: 35 },
+      'S/Q': { c2: 22, c3: 0, c4: 22, c5: 0, c6: 22 },
+      'S/K': { c2: 10, c3: 0, c4: 10, c5: 0, c6: 10 },
+      'D/Q': { c2: 8, c3: 0, c4: 8, c5: 0, c6: 8 },
+      'B/M': { c2: 15, c3: 0, c4: 15, c5: 0, c6: 15 },
     }),
     notes: '', createdBy: 'staff-01', updatedAt: '2026-03-01',
   },
-  // Wild Orchid Villa - Day 5 (Mar 1) — processing
+  // Wild Orchid Villa - Day 5 (Mar 1) — processing, col6 = 0
   {
     id: 'lf-05', formNumber: 'LF-20260301-001', customerId: 'cust-01', date: '2026-03-01',
     status: 'washing',
@@ -279,37 +280,37 @@ export const SAMPLE_LINEN_FORMS: LinenForm[] = [
     }),
     notes: '', createdBy: 'staff-01', updatedAt: '2026-03-01',
   },
-  // Villa Cha Cha Bangplumpoo - Day 1 (Feb 26)
+  // Villa Cha Cha Bangplumpoo - Day 1 (Feb 26) — confirmed, sent all
   {
     id: 'lf-06', formNumber: 'LF-20260226-002', customerId: 'cust-02', date: '2026-02-26',
     status: 'confirmed',
     rows: makeRows({
-      'B/F': { c2: 20, c3: 0, c4: 20, c5: 0 },
-      'B/H': { c2: 15, c3: 0, c4: 15, c5: 0 },
-      'B/T': { c2: 35, c3: 0, c4: 35, c5: 0 },
-      'P/C': { c2: 30, c3: 0, c4: 30, c5: 0 },
-      'S/Q': { c2: 18, c3: 0, c4: 18, c5: 0 },
-      'D/Q': { c2: 8, c3: 0, c4: 8, c5: 0 },
-      'B/M': { c2: 12, c3: 0, c4: 12, c5: 0 },
+      'B/F': { c2: 20, c3: 0, c4: 20, c5: 0, c6: 20 },
+      'B/H': { c2: 15, c3: 0, c4: 15, c5: 0, c6: 15 },
+      'B/T': { c2: 35, c3: 0, c4: 35, c5: 0, c6: 35 },
+      'P/C': { c2: 30, c3: 0, c4: 30, c5: 0, c6: 30 },
+      'S/Q': { c2: 18, c3: 0, c4: 18, c5: 0, c6: 18 },
+      'D/Q': { c2: 8, c3: 0, c4: 8, c5: 0, c6: 8 },
+      'B/M': { c2: 12, c3: 0, c4: 12, c5: 0, c6: 12 },
     }),
     notes: '', createdBy: 'staff-02', updatedAt: '2026-02-27',
   },
-  // Villa Cha Cha Bangplumpoo - Day 2 (Feb 28)
+  // Villa Cha Cha Bangplumpoo - Day 2 (Feb 28) — delivered, sent all
   {
     id: 'lf-07', formNumber: 'LF-20260228-002', customerId: 'cust-02', date: '2026-02-28',
     status: 'delivered',
     rows: makeRows({
-      'B/F': { c2: 22, c3: 0, c4: 22, c5: 0 },
-      'B/H': { c2: 18, c3: 0, c4: 18, c5: 0 },
-      'B/T': { c2: 40, c3: 1, c4: 40, c5: 1, note: 'เคลม 1 ขาด' },
-      'P/C': { c2: 28, c3: 0, c4: 28, c5: 0 },
-      'S/Q': { c2: 20, c3: 0, c4: 20, c5: 0 },
-      'D/Q': { c2: 10, c3: 0, c4: 10, c5: 0 },
-      'B/M': { c2: 15, c3: 0, c4: 15, c5: 0 },
+      'B/F': { c2: 22, c3: 0, c4: 22, c5: 0, c6: 22 },
+      'B/H': { c2: 18, c3: 0, c4: 18, c5: 0, c6: 18 },
+      'B/T': { c2: 40, c3: 1, c4: 40, c5: 1, c6: 41, note: 'เคลม 1 ขาด' },
+      'P/C': { c2: 28, c3: 0, c4: 28, c5: 0, c6: 28 },
+      'S/Q': { c2: 20, c3: 0, c4: 20, c5: 0, c6: 20 },
+      'D/Q': { c2: 10, c3: 0, c4: 10, c5: 0, c6: 10 },
+      'B/M': { c2: 15, c3: 0, c4: 15, c5: 0, c6: 15 },
     }),
     notes: '', createdBy: 'staff-01', updatedAt: '2026-03-01',
   },
-  // Villa Cha-Cha Khaosan (Mar 1) — received
+  // Villa Cha-Cha Khaosan (Mar 1) — received, col6 = 0
   {
     id: 'lf-08', formNumber: 'LF-20260301-002', customerId: 'cust-03', date: '2026-03-01',
     status: 'received',
@@ -324,7 +325,7 @@ export const SAMPLE_LINEN_FORMS: LinenForm[] = [
     }),
     notes: '', createdBy: 'staff-02', updatedAt: '2026-03-01',
   },
-  // Sawaddee House (Mar 2) — draft
+  // Sawaddee House (Mar 2) — draft, col6 = 0
   {
     id: 'lf-09', formNumber: 'LF-20260302-001', customerId: 'cust-04', date: '2026-03-02',
     status: 'draft',
@@ -339,16 +340,16 @@ export const SAMPLE_LINEN_FORMS: LinenForm[] = [
     }),
     notes: '', createdBy: 'staff-01', updatedAt: '2026-03-02',
   },
-  // บ้านวัชรา (flat-rate, Feb 27) — confirmed
+  // บ้านวัชรา (flat-rate, Feb 27) — confirmed, sent all
   {
     id: 'lf-10', formNumber: 'LF-20260227-002', customerId: 'cust-05', date: '2026-02-27',
     status: 'confirmed',
     rows: makeRows({
-      'B/T': { c2: 30, c3: 0, c4: 30, c5: 0 },
-      'B/H': { c2: 15, c3: 0, c4: 15, c5: 0 },
-      'P/C': { c2: 20, c3: 0, c4: 20, c5: 0 },
-      'S/Q': { c2: 10, c3: 0, c4: 10, c5: 0 },
-      'B/M': { c2: 8, c3: 0, c4: 8, c5: 0 },
+      'B/T': { c2: 30, c3: 0, c4: 30, c5: 0, c6: 30 },
+      'B/H': { c2: 15, c3: 0, c4: 15, c5: 0, c6: 15 },
+      'P/C': { c2: 20, c3: 0, c4: 20, c5: 0, c6: 20 },
+      'S/Q': { c2: 10, c3: 0, c4: 10, c5: 0, c6: 10 },
+      'B/M': { c2: 8, c3: 0, c4: 8, c5: 0, c6: 8 },
     }),
     notes: 'เหมาจ่าย', createdBy: 'staff-01', updatedAt: '2026-02-28',
   },

@@ -78,7 +78,7 @@ export default function ReportsPage() {
       const co = getCarryOver(c.id, '9999-12-31') // all carry-over up to far future
       const total = Object.values(co).reduce((s, v) => s + v, 0)
       return { customer: c, carryOver: co, total }
-    }).filter(r => r.total > 0)
+    }).filter(r => r.total !== 0)
   }, [customers, getCarryOver])
 
   return (

@@ -10,16 +10,18 @@ interface LinenFormGridProps {
   onChange: (rows: LinenFormRow[]) => void
   catalog: LinenItemDef[]
   carryOver?: Record<string, number>
+  formDate?: string
   readOnly?: boolean
-  editableColumns?: ('col1' | 'col2' | 'col3' | 'col4' | 'col5' | 'note')[]
+  editableColumns?: ('col1' | 'col2' | 'col3' | 'col4' | 'col5' | 'col6' | 'note')[]
 }
 
 const COL_LABELS = [
-  { key: 'col1', label: 'คงค้าง', short: 'ค้าง' },
+  { key: 'col1', label: 'ยกยอดมา', short: 'ยกมา' },
   { key: 'col2', label: 'โรงแรมนับ', short: 'รับ' },
   { key: 'col3', label: 'เคลม', short: 'เคลม' },
   { key: 'col4', label: 'โรงงาน OK', short: 'OK' },
   { key: 'col5', label: 'เคลม OK', short: 'เคลมOK' },
+  { key: 'col6', label: 'แพคส่ง', short: 'แพค' },
   { key: 'note', label: 'หมายเหตุ', short: 'Note' },
 ] as const
 
@@ -29,8 +31,9 @@ export default function LinenFormGrid({
   onChange,
   catalog,
   carryOver = {},
+  formDate,
   readOnly = false,
-  editableColumns = ['col2', 'col3', 'col4', 'col5', 'note'],
+  editableColumns = ['col2', 'col3', 'col4', 'col5', 'col6', 'note'],
 }: LinenFormGridProps) {
   const enabledItems = catalog.filter(item =>
     customer.enabledItems.includes(item.code)
@@ -45,7 +48,7 @@ export default function LinenFormGrid({
   const getRow = (code: string): LinenFormRow => {
     return localRows.find(r => r.code === code) || {
       code, col1_carryOver: 0, col2_hotelCountIn: 0, col3_hotelClaimCount: 0,
-      col4_factoryApproved: 0, col5_factoryClaimApproved: 0, note: '',
+      col4_factoryApproved: 0, col5_factoryClaimApproved: 0, col6_factoryPackSend: 0, note: '',
     }
   }
 
@@ -64,31 +67,45 @@ export default function LinenFormGrid({
 
   const isEditable = (colKey: string) => !readOnly && editableColumns.includes(colKey as typeof editableColumns[number])
 
+  // Check if there are any carry-over values (± both)
+  const hasCarryOver = Object.keys(carryOver).some(k => carryOver[k] !== 0)
+
   // Totals
   const totals = {
-    col1: 0, col2: 0, col3: 0, col4: 0, col5: 0,
+    col1: 0, col2: 0, col3: 0, col4: 0, col5: 0, col6: 0,
   }
   for (const item of enabledItems) {
     const row = getRow(item.code)
-    totals.col1 += row.col1_carryOver
+    const co = carryOver[item.code] || 0
+    totals.col1 += co
     totals.col2 += row.col2_hotelCountIn
     totals.col3 += row.col3_hotelClaimCount
     totals.col4 += row.col4_factoryApproved
     totals.col5 += row.col5_factoryClaimApproved
+    totals.col6 += (row.col6_factoryPackSend || 0)
   }
-
-  const hasCarryOver = Object.keys(carryOver).length > 0
 
   return (
     <div>
+      {/* Date display */}
+      {formDate && (
+        <div className="mb-2 text-sm text-slate-600">
+          <span className="font-medium">วันที่:</span> {formDate}
+        </div>
+      )}
+
       {/* Carry-over alert */}
       {hasCarryOver && (
         <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-          <p className="text-sm font-medium text-amber-800 mb-1">ผ้าค้างจากรอบก่อน:</p>
+          <p className="text-sm font-medium text-amber-800 mb-1">ยกยอดจากรอบก่อน:</p>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(carryOver).map(([code, qty]) => (
-              <span key={code} className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded">
-                {code} x{qty}
+            {Object.entries(carryOver).filter(([, qty]) => qty !== 0).map(([code, qty]) => (
+              <span key={code} className={cn(
+                'text-xs px-2 py-1 rounded',
+                qty < 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
+              )}>
+                {code} {qty > 0 ? '+' : ''}{qty}
+                {qty < 0 ? ' (ค้างส่ง)' : ' (ส่งเกิน)'}
               </span>
             ))}
           </div>
@@ -116,6 +133,7 @@ export default function LinenFormGrid({
           <tbody>
             {enabledItems.map((item) => {
               const row = getRow(item.code)
+              const co = carryOver[item.code] || 0
               const hotelCount = row.col2_hotelCountIn
               const factoryApproved = row.col4_factoryApproved
               const hasDiscrepancy = factoryApproved > 0 && hotelCount !== factoryApproved
@@ -124,10 +142,14 @@ export default function LinenFormGrid({
                 <tr key={item.code} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
                   <td className="px-3 py-1.5 text-slate-700">{item.name}</td>
-                  {/* Col 1 - คงค้าง (auto, read-only) */}
+                  {/* Col 1 - ยกยอดมา (auto, ± ได้) */}
                   <td className="px-1 py-1 text-center">
-                    <span className={cn('text-slate-700', (carryOver[item.code] || 0) > 0 && 'text-amber-600 font-medium')}>
-                      {carryOver[item.code] || row.col1_carryOver || '-'}
+                    <span className={cn(
+                      'text-slate-700',
+                      co < 0 && 'text-red-600 font-medium',
+                      co > 0 && 'text-emerald-600 font-medium',
+                    )}>
+                      {co !== 0 ? (co > 0 ? `+${co}` : co) : '-'}
                     </span>
                   </td>
                   {/* Col 2 - โรงแรมนับ */}
@@ -184,6 +206,18 @@ export default function LinenFormGrid({
                       <span className="text-slate-700">{row.col5_factoryClaimApproved || '-'}</span>
                     )}
                   </td>
+                  {/* Col 6 - แพคส่ง */}
+                  <td className="px-1 py-1 text-center">
+                    {isEditable('col6') ? (
+                      <input type="number" min={0}
+                        value={row.col6_factoryPackSend || ''}
+                        onChange={e => updateRow(item.code, 'col6_factoryPackSend', parseInt(e.target.value) || 0)}
+                        className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                      />
+                    ) : (
+                      <span className="text-slate-700">{row.col6_factoryPackSend || '-'}</span>
+                    )}
+                  </td>
                   {/* Note - หมายเหตุ */}
                   <td className="px-1 py-1">
                     {isEditable('note') ? (
@@ -204,11 +238,19 @@ export default function LinenFormGrid({
           <tfoot>
             <tr className="bg-slate-50 font-medium text-slate-700">
               <td className="px-3 py-2" colSpan={2}>รวม</td>
-              <td className="px-3 py-2 text-center">{totals.col1 || '-'}</td>
+              <td className="px-3 py-2 text-center">
+                <span className={cn(
+                  totals.col1 < 0 && 'text-red-600',
+                  totals.col1 > 0 && 'text-emerald-600',
+                )}>
+                  {totals.col1 !== 0 ? (totals.col1 > 0 ? `+${totals.col1}` : totals.col1) : '-'}
+                </span>
+              </td>
               <td className="px-3 py-2 text-center">{totals.col2}</td>
               <td className="px-3 py-2 text-center">{totals.col3}</td>
               <td className="px-3 py-2 text-center">{totals.col4}</td>
               <td className="px-3 py-2 text-center">{totals.col5}</td>
+              <td className="px-3 py-2 text-center">{totals.col6}</td>
               <td className="px-3 py-2"></td>
             </tr>
           </tfoot>

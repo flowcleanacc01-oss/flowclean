@@ -177,7 +177,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     function applyData(data: Awaited<ReturnType<typeof db.fetchAllData>>) {
       setCustomers(data.customers)
-      setLinenForms(data.linenForms)
+      // Normalize legacy rows: ensure col6_factoryPackSend exists (JSONB may omit it)
+      setLinenForms(data.linenForms.map(form => ({
+        ...form,
+        rows: form.rows.map(row => ({
+          ...row,
+          col6_factoryPackSend: row.col6_factoryPackSend ?? 0,
+        })),
+      })))
       setDeliveryNotes(data.deliveryNotes)
       setBillingStatements(data.billingStatements)
       setTaxInvoices(data.taxInvoices)
@@ -203,6 +210,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ---- Auth ----
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const login = useCallback((email: string, _password: string): boolean => {
     const allUsers = users.length > 0 ? users : SAMPLE_USERS
     const user = allUsers.find(u => u.email === email && u.isActive)
@@ -309,8 +317,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const updateBillingStatus = useCallback((id: string, status: BillingStatus, paidDate?: string) => {
+    let resolvedPaidAmount: number | undefined
     setBillingStatements(prev => prev.map(bs => {
       if (bs.id !== id) return bs
+      if (status === 'paid') resolvedPaidAmount = bs.netPayable
       return {
         ...bs, status,
         paidDate: status === 'paid' ? (paidDate || todayISO()) : bs.paidDate,
@@ -320,6 +330,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const updates: Partial<BillingStatement> = { status }
     if (status === 'paid') {
       updates.paidDate = paidDate || todayISO()
+      if (resolvedPaidAmount !== undefined) updates.paidAmount = resolvedPaidAmount
     }
     dbSave(db.updateBillingStatementDB(id, updates))
   }, [])
@@ -458,10 +469,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .filter(f => f.customerId === customerId && f.date < beforeDate)
       .sort((a, b) => a.date.localeCompare(b.date))
 
+    // v4: carryOver = sum(col6_packSend - col4_approved - col5_claimApproved)
+    // negative = ค้างส่ง, positive = ส่งเกิน
     for (const form of forms) {
       for (const row of form.rows) {
-        const diff = row.col2_hotelCountIn - row.col4_factoryApproved
-        if (diff > 0) {
+        const packSend = row.col6_factoryPackSend || 0
+        const approved = row.col4_factoryApproved || 0
+        const claimApproved = row.col5_factoryClaimApproved || 0
+        const diff = packSend - approved - claimApproved
+        if (diff !== 0) {
           result[row.code] = (result[row.code] || 0) + diff
         }
       }

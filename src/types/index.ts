@@ -1,6 +1,6 @@
 // ============================================================
 // FlowClean - Laundry Factory Management System
-// Types & Interfaces (v3 — 5-column model)
+// Types & Interfaces (v4 — 6-column model)
 // ============================================================
 
 // ============================================================
@@ -116,15 +116,16 @@ export interface Customer {
 }
 
 // ============================================================
-// Linen Form (ใบส่งรับผ้า) - 5 columns
+// Linen Form (ใบส่งรับผ้า) - 6 columns
 // ============================================================
 export interface LinenFormRow {
   code: string
-  col1_carryOver: number           // คงค้าง (auto, read-only)
-  col2_hotelCountIn: number        // โรงแรมนับ (จำนวนที่โรงแรมส่งมา)
-  col3_hotelClaimCount: number     // โรงแรมเคลม (จำนวนเคลม)
+  col1_carryOver: number           // ผ้ายกยอดมา (auto, ± ได้: ลบ=ค้างส่ง, บวก=ส่งเกิน)
+  col2_hotelCountIn: number        // โรงแรมนับส่งซัก
+  col3_hotelClaimCount: number     // โรงแรมนับส่งเคลม
   col4_factoryApproved: number     // โรงงาน approved (auto-fill=col2, editable)
   col5_factoryClaimApproved: number // โรงงาน approved เคลม (auto-fill=col3, editable)
+  col6_factoryPackSend: number     // จำนวนผ้าแพคส่ง
   note: string                      // หมายเหตุ
 }
 

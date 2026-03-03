@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { formatCurrency, formatNumber, cn } from '@/lib/utils'
+import { formatCurrency, formatNumber } from '@/lib/utils'
 import type { Customer, LinenForm, DeliveryNote, LinenItemDef } from '@/types'
 
 interface MonthlySummaryGridProps {
@@ -26,15 +26,21 @@ export default function MonthlySummaryGrid({ customer, month, linenForms, delive
       grid[code] = {}
     }
 
-    // Primary: use linen forms col4 (factory approved)
+    // Primary: use linen forms col6 (packed & sent) — fallback to col4 if col6 not yet filled
     const monthForms = linenForms.filter(f =>
       f.customerId === customer.id && f.date.startsWith(month)
     )
     for (const form of monthForms) {
       const day = parseInt(form.date.split('-')[2])
       for (const row of form.rows) {
-        if (grid[row.code] && row.col4_factoryApproved > 0) {
-          grid[row.code][day] = (grid[row.code][day] || 0) + row.col4_factoryApproved
+        const packSend = row.col6_factoryPackSend || 0
+        const claimApproved = row.col5_factoryClaimApproved || 0
+        // Revenue = billable qty only (exclude claim items)
+        const qty = packSend > 0
+          ? Math.max(packSend - claimApproved, 0)
+          : row.col4_factoryApproved
+        if (grid[row.code] && qty > 0) {
+          grid[row.code][day] = (grid[row.code][day] || 0) + qty
         }
       }
     }

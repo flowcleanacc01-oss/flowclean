@@ -17,7 +17,7 @@ import Link from 'next/link'
 
 export default function DashboardPage() {
   const {
-    linenForms, deliveryNotes, billingStatements,
+    linenForms, billingStatements,
     customers, getCustomer, getCarryOver,
   } = useStore()
 
@@ -32,7 +32,7 @@ export default function DashboardPage() {
     const processingCount = inProcess.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0), 0)
 
     const packed = linenForms.filter(f => f.status === 'packed')
-    const packedCount = packed.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + r.col4_factoryApproved, 0), 0)
+    const packedCount = packed.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0), 0), 0)
 
     // Total carry-over across all customers
     let totalCarryOver = 0
@@ -73,7 +73,7 @@ export default function DashboardPage() {
     { label: 'ผ้ารับเข้าวันนี้', value: formatNumber(stats.todayReceived), unit: 'ชิ้น', icon: Package, color: 'bg-blue-50 text-blue-600' },
     { label: 'กำลังซัก', value: formatNumber(stats.processingCount), unit: 'ชิ้น', icon: ClipboardList, color: 'bg-amber-50 text-amber-600' },
     { label: 'พร้อมส่ง', value: formatNumber(stats.packedCount), unit: 'ชิ้น', icon: Truck, color: 'bg-teal-50 text-teal-600' },
-    { label: 'ผ้าค้างรวม', value: formatNumber(stats.totalCarryOver), unit: 'ชิ้น', icon: AlertTriangle, color: stats.totalCarryOver > 0 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600' },
+    { label: 'ผ้าค้างรวม', value: formatNumber(stats.totalCarryOver), unit: 'ชิ้น', icon: AlertTriangle, color: stats.totalCarryOver < 0 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600' },
   ]
 
   return (

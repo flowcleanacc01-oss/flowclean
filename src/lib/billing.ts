@@ -13,6 +13,7 @@ export function aggregateDeliveryItems(
 
   for (const note of notes) {
     for (const item of note.items) {
+      if (item.isClaim) continue // Claim items are free — skip for billing
       qtyMap[item.code] = (qtyMap[item.code] || 0) + item.quantity
     }
   }

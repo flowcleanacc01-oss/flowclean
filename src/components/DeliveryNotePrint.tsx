@@ -58,10 +58,13 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
         </thead>
         <tbody>
           {note.items.map((item, idx) => (
-            <tr key={item.code}>
+            <tr key={`${item.code}-${idx}`}>
               <td className="text-center px-3 py-1.5 border border-slate-300">{idx + 1}</td>
               <td className="px-3 py-1.5 border border-slate-300 font-mono text-xs">{item.code}</td>
-              <td className="px-3 py-1.5 border border-slate-300">{itemNameMap[item.code] || item.code}</td>
+              <td className="px-3 py-1.5 border border-slate-300">
+                {itemNameMap[item.code] || item.code}
+                {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
+              </td>
               <td className="text-right px-3 py-1.5 border border-slate-300">{item.quantity}</td>
             </tr>
           ))}

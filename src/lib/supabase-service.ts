@@ -181,6 +181,7 @@ export async function fetchCompanyInfo(): Promise<CompanyInfo | null> {
   if (error) throw error
   if (!data) return null
   const result = toCamelCase<CompanyInfo & { id: number }>(data)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { id: _id, ...rest } = result as CompanyInfo & { id: number }
   return rest as CompanyInfo
 }

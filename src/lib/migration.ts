@@ -1,10 +1,10 @@
 /**
- * Migration: flowclean_data_v2 → flowclean_data_v3
+ * Migration: flowclean_data_v2 → flowclean_data_v4
  *
  * Changes:
- * - LinenFormRow: 6-column → 5-column
+ * - LinenFormRow: old 6-column → new 6-column (v4 model with carry-over ±)
  * - Customer: +customerCode, +customerType, +priceHistory
- * - DeliveryNoteItem: +isClaim
+ * - DeliveryNoteItem: +isClaim (claim=free, billable=charged)
  */
 
 import type { Customer, LinenForm, LinenFormRow, DeliveryNote, CustomerType } from '@/types'
@@ -74,6 +74,7 @@ export function migrateLinenFormRow(oldRow: V2LinenFormRow): LinenFormRow {
     col3_hotelClaimCount: oldRow.col2_claimSend,
     col4_factoryApproved: oldRow.col4_factoryCountIn,
     col5_factoryClaimApproved: oldRow.col2_claimSend, // best mapping
+    col6_factoryPackSend: oldRow.col5_factoryPackSend, // map old packSend
     note: oldRow.col6_note,
   }
 }
@@ -107,9 +108,9 @@ export function migrateDeliveryNote(oldNote: DeliveryNote & { items: V2DeliveryN
 }
 
 /**
- * Full migration of v2 data to v3
+ * Full migration of v2 data to v4
  */
-export function migrateV2ToV3(data: {
+export function migrateV2ToV4(data: {
   customers: V2Customer[]
   linenForms: (LinenForm & { rows: V2LinenFormRow[] })[]
   deliveryNotes: (DeliveryNote & { items: V2DeliveryNoteItem[] })[]

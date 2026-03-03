@@ -74,25 +74,30 @@ export default function BillingPage() {
       return createFlatRateBilling(selCustomer, selMonth)
     }
     // per-piece: aggregate delivery notes for this customer in this month
+    const alreadyBilledIds = new Set(billingStatements.flatMap(b => b.deliveryNoteIds))
     const monthNotes = deliveryNotes.filter(dn =>
       dn.customerId === selCustomerId &&
       dn.date.startsWith(selMonth) &&
-      (dn.status === 'delivered' || dn.status === 'acknowledged')
+      (dn.status === 'delivered' || dn.status === 'acknowledged') &&
+      !alreadyBilledIds.has(dn.id)
     )
     if (monthNotes.length === 0) return null
     const lineItems = aggregateDeliveryItems(monthNotes, selCustomer, linenCatalog)
     return { lineItems, ...calculateBillingTotals(lineItems) }
-  }, [selCustomer, selMonth, deliveryNotes, selCustomerId, linenCatalog])
+  }, [selCustomer, selMonth, deliveryNotes, selCustomerId, linenCatalog, billingStatements])
 
   const handleCreateBilling = () => {
     if (!selCustomer || !previewBilling) return
     const dueDate = new Date()
     dueDate.setDate(dueDate.getDate() + selCustomer.creditDays)
 
+    const alreadyBilledIds = new Set(billingStatements.flatMap(b => b.deliveryNoteIds))
     addBillingStatement({
       customerId: selCustomerId,
       deliveryNoteIds: deliveryNotes
-        .filter(dn => dn.customerId === selCustomerId && dn.date.startsWith(selMonth))
+        .filter(dn => dn.customerId === selCustomerId && dn.date.startsWith(selMonth)
+          && (dn.status === 'delivered' || dn.status === 'acknowledged')
+          && !alreadyBilledIds.has(dn.id))
         .map(dn => dn.id),
       billingMonth: selMonth,
       issueDate: todayISO(),
@@ -114,6 +119,8 @@ export default function BillingPage() {
   const handleCreateTaxInvoice = (billingId: string) => {
     const billing = billingStatements.find(b => b.id === billingId)
     if (!billing) return
+    // Prevent duplicate: check if tax invoice already exists for this billing
+    if (taxInvoices.some(ti => ti.billingStatementId === billingId)) return
     addTaxInvoice({
       billingStatementId: billingId,
       customerId: billing.customerId,

@@ -1,6 +1,5 @@
 'use client'
 
-import { formatCurrency } from '@/lib/utils'
 import type { DeliveryNote, Customer, CompanyInfo, LinenItemDef } from '@/types'
 
 interface MonthlyDeliveryReportPrintProps {

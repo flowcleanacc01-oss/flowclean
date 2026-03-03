@@ -61,6 +61,7 @@ export default function LinenFormsPage() {
         col3_hotelClaimCount: 0,
         col4_factoryApproved: 0,
         col5_factoryClaimApproved: 0,
+        col6_factoryPackSend: 0,
         note: '',
       })))
     }
@@ -272,13 +273,13 @@ export default function LinenFormsPage() {
               onChange={(rows) => updateLinenForm(detailForm.id, { rows })}
               catalog={linenCatalog}
               carryOver={detailCarryOver}
+              formDate={detailForm.date}
               readOnly={detailForm.status === 'confirmed'}
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
                 detailForm.status === 'received' ? ['col4', 'col5', 'note'] :
                 PROCESS_STATUSES.includes(detailForm.status) ? ['note'] :
-                detailForm.status === 'packed' ? ['note'] :
-                detailForm.status === 'delivered' ? ['note'] :
+                detailForm.status === 'packed' ? ['col6', 'note'] :
                 []
               }
             />

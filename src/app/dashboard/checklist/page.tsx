@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store'
 import { formatDate, cn } from '@/lib/utils'
 import {
   CHECKLIST_TYPE_CONFIG, CHECKLIST_STATUS_CONFIG,
-  type ChecklistType, type ChecklistStatus, type ChecklistItem, type ProductChecklist,
+  type ChecklistType, type ChecklistStatus, type ChecklistItem,
 } from '@/types'
 import { Plus, Search, Printer, X, ChevronRight, ClipboardCheck } from 'lucide-react'
 import Modal from '@/components/Modal'
@@ -14,7 +14,7 @@ import ChecklistPrint from '@/components/ChecklistPrint'
 export default function ChecklistPage() {
   const {
     checklists, addChecklist, updateChecklist, updateChecklistStatus, deleteChecklist,
-    linenForms, deliveryNotes, customers, getCustomer, linenCatalog, companyInfo,
+    linenForms, deliveryNotes, getCustomer, linenCatalog, companyInfo,
   } = useStore()
 
   const [search, setSearch] = useState('')

@@ -1,6 +1,7 @@
 -- ============================================================
--- FlowClean — Supabase Schema (TEXT IDs)
+-- FlowClean — Supabase Schema (TEXT IDs) — v4 (6-column model)
 -- 11 tables (dependency order)
+-- Note: linen_forms.rows is JSONB — includes col6_factoryPackSend
 -- Run this in Supabase Dashboard → SQL Editor
 -- ============================================================
 

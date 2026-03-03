@@ -44,11 +44,13 @@ export default function DeliveryPage() {
   // Forms available for delivery (packed status)
   const availableForms = useMemo(() => {
     if (!selCustomerId) return []
+    const linkedFormIds = new Set(deliveryNotes.flatMap(dn => dn.linenFormIds))
     return linenForms.filter(f =>
       f.customerId === selCustomerId &&
-      (f.status === 'packed' || f.status === 'delivered')
+      (f.status === 'packed' || f.status === 'delivered') &&
+      !linkedFormIds.has(f.id)
     )
-  }, [linenForms, selCustomerId])
+  }, [linenForms, selCustomerId, deliveryNotes])
 
   const handleCustomerSelect = (custId: string) => {
     setSelCustomerId(custId)
@@ -62,26 +64,39 @@ export default function DeliveryPage() {
       : [...selFormIds, formId]
     setSelFormIds(updated)
 
-    // Aggregate items from selected forms
-    const itemMap: Record<string, number> = {}
+    // Aggregate items from selected forms, separating billable and claim
+    // Billing formula: (col6 - col5) × price → claim items are free
+    const billableMap: Record<string, number> = {}
+    const claimMap: Record<string, number> = {}
     for (const fId of updated) {
       const form = linenForms.find(f => f.id === fId)
       if (!form) continue
       for (const row of form.rows) {
-        if (row.col4_factoryApproved > 0) {
-          itemMap[row.code] = (itemMap[row.code] || 0) + row.col4_factoryApproved
+        const packSend = row.col6_factoryPackSend || 0
+        const claimApproved = row.col5_factoryClaimApproved || 0
+        if (packSend > 0) {
+          const billable = Math.max(packSend - claimApproved, 0)
+          const claim = Math.min(claimApproved, packSend)
+          if (billable > 0) {
+            billableMap[row.code] = (billableMap[row.code] || 0) + billable
+          }
+          if (claim > 0) {
+            claimMap[row.code] = (claimMap[row.code] || 0) + claim
+          }
         }
       }
     }
-    setDeliveryItems(
-      Object.entries(itemMap)
-        .map(([code, quantity]) => ({ code, quantity, isClaim: false }))
-        .sort((a, b) => {
-          const ai = linenCatalog.findIndex(i => i.code === a.code)
-          const bi = linenCatalog.findIndex(i => i.code === b.code)
-          return ai - bi
-        })
-    )
+    const items: DeliveryNoteItem[] = [
+      ...Object.entries(billableMap).map(([code, quantity]) => ({ code, quantity, isClaim: false })),
+      ...Object.entries(claimMap).map(([code, quantity]) => ({ code, quantity, isClaim: true })),
+    ]
+    items.sort((a, b) => {
+      const ai = linenCatalog.findIndex(i => i.code === a.code)
+      const bi = linenCatalog.findIndex(i => i.code === b.code)
+      if (ai !== bi) return ai - bi
+      return (a.isClaim ? 1 : 0) - (b.isClaim ? 1 : 0)
+    })
+    setDeliveryItems(items)
   }
 
   const handleCreate = () => {
@@ -217,7 +232,7 @@ export default function DeliveryPage() {
                       onChange={() => handleFormToggle(f.id)}
                       className="rounded border-slate-300" />
                     <span className="text-sm">
-                      {f.formNumber} — {formatDate(f.date)} ({f.rows.reduce((s, r) => s + r.col4_factoryApproved, 0)} ชิ้น)
+                      {f.formNumber} — {formatDate(f.date)} ({f.rows.reduce((s, r) => s + (r.col6_factoryPackSend || 0), 0)} ชิ้น)
                     </span>
                   </label>
                 ))}
@@ -238,13 +253,16 @@ export default function DeliveryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {deliveryItems.map(item => (
-                      <tr key={item.code} className="border-t border-slate-100">
+                    {deliveryItems.map((item, idx) => (
+                      <tr key={`${item.code}-${item.isClaim}`} className="border-t border-slate-100">
                         <td className="px-3 py-1.5 font-mono text-xs">{item.code}</td>
-                        <td className="px-3 py-1.5">{itemNameMap[item.code] || item.code}</td>
+                        <td className="px-3 py-1.5">
+                          {itemNameMap[item.code] || item.code}
+                          {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
+                        </td>
                         <td className="px-3 py-1.5 text-right">
                           <input type="number" min={0} value={item.quantity}
-                            onChange={e => setDeliveryItems(prev => prev.map(di => di.code === item.code ? { ...di, quantity: parseInt(e.target.value) || 0 } : di))}
+                            onChange={e => setDeliveryItems(prev => prev.map((di, i) => i === idx ? { ...di, quantity: parseInt(e.target.value) || 0 } : di))}
                             className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                         </td>
                       </tr>
@@ -319,10 +337,13 @@ export default function DeliveryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {detailNote.items.map(item => (
-                    <tr key={item.code} className="border-t border-slate-100">
+                  {detailNote.items.map((item, idx) => (
+                    <tr key={`${item.code}-${idx}`} className="border-t border-slate-100">
                       <td className="px-3 py-1.5 font-mono text-xs">{item.code}</td>
-                      <td className="px-3 py-1.5">{itemNameMap[item.code] || item.code}</td>
+                      <td className="px-3 py-1.5">
+                        {itemNameMap[item.code] || item.code}
+                        {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
+                      </td>
                       <td className="px-3 py-1.5 text-right">{formatNumber(item.quantity)}</td>
                     </tr>
                   ))}

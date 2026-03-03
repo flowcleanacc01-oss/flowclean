@@ -76,7 +76,7 @@ export default function ChecklistPrint({ checklist, customer, company }: Checkli
               <td className="text-right px-3 py-1.5 border border-slate-300">{item.expectedQty}</td>
               <td className="text-right px-3 py-1.5 border border-slate-300 font-medium">{item.actualQty}</td>
               <td className="text-center px-3 py-1.5 border border-slate-300">
-                {item.passed ? '&#10003;' : item.actualQty > 0 ? '&#10007;' : '-'}
+                {item.passed ? '✓' : item.actualQty > 0 ? '✗' : '-'}
               </td>
               <td className="px-3 py-1.5 border border-slate-300 text-xs">{item.note || '-'}</td>
             </tr>
