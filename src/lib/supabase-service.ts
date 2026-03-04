@@ -406,6 +406,14 @@ export async function insertExpense(exp: Expense): Promise<void> {
   if (error) throw error
 }
 
+export async function updateExpenseDB(id: string, updates: Partial<Expense>): Promise<void> {
+  const { error } = await supabase
+    .from('expenses')
+    .update(toSnakeCase(updates as unknown as Record<string, unknown>))
+    .eq('id', id)
+  if (error) throw error
+}
+
 export async function deleteExpenseDB(id: string): Promise<void> {
   const { error } = await supabase
     .from('expenses')

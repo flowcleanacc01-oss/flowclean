@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { cn, formatCurrency } from '@/lib/utils'
 import type { Customer } from '@/types'
-import { Plus, Search, Building2, Phone, Mail, Edit2, Trash2, Check } from 'lucide-react'
+import { Plus, Search, Building2, Phone, Mail, Edit2, Trash2, Check, ChevronUp, ChevronDown, FileText, Users } from 'lucide-react'
 import Modal from '@/components/Modal'
 
 const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
@@ -17,11 +17,13 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
 }
 
 export default function CustomersPage() {
-  const { customers, addCustomer, updateCustomer, deleteCustomer, defaultPrices, linenCatalog } = useStore()
+  const { customers, addCustomer, updateCustomer, deleteCustomer, defaultPrices, linenCatalog, quotations } = useStore()
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_CUSTOMER)
+  const [showQuotationSelect, setShowQuotationSelect] = useState(false)
+  const [showCustomerSelect, setShowCustomerSelect] = useState(false)
 
   const filtered = useMemo(() => {
     if (!search) return customers
@@ -80,7 +82,37 @@ export default function CustomersPage() {
     })
   }
 
-  const activeItems = linenCatalog
+  const moveItem = (code: string, direction: 'up' | 'down') => {
+    const idx = form.enabledItems.indexOf(code)
+    if (idx < 0) return
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (newIdx < 0 || newIdx >= form.enabledItems.length) return
+    const arr = [...form.enabledItems]
+    ;[arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]]
+    setForm({ ...form, enabledItems: arr })
+  }
+
+  const loadFromQuotation = (quotationId: string) => {
+    const q = quotations.find(x => x.id === quotationId)
+    if (!q) return
+    const newEnabled = q.items.map(i => i.code)
+    const newPriceList = q.items.map(i => ({ code: i.code, price: i.pricePerUnit }))
+    setForm({ ...form, enabledItems: newEnabled, priceList: newPriceList })
+    setShowQuotationSelect(false)
+  }
+
+  const loadFromCustomer = (customerId: string) => {
+    const c = customers.find(x => x.id === customerId)
+    if (!c) return
+    setForm({ ...form, enabledItems: [...c.enabledItems], priceList: [...c.priceList] })
+    setShowCustomerSelect(false)
+  }
+
+  // Split items: enabled first (in enabledItems order), then unchecked
+  const enabledItemsList = form.enabledItems
+    .map(code => linenCatalog.find(i => i.code === code))
+    .filter((i): i is NonNullable<typeof i> => !!i)
+  const uncheckedItems = linenCatalog.filter(i => !form.enabledItems.includes(i.code))
 
   return (
     <div>
@@ -235,14 +267,58 @@ export default function CustomersPage() {
             )}
           </div>
 
+          {/* Load from Quotation / Customer */}
+          <div className="flex flex-wrap gap-2">
+            <div className="relative">
+              <button type="button" onClick={() => { setShowQuotationSelect(!showQuotationSelect); setShowCustomerSelect(false) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors">
+                <FileText className="w-3.5 h-3.5" />โหลดจากใบเสนอราคา
+              </button>
+              {showQuotationSelect && (
+                <div className="absolute z-20 mt-1 left-0 w-72 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {quotations.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-slate-400">ไม่มีใบเสนอราคา</div>
+                  ) : quotations.map(q => (
+                    <button key={q.id} type="button" onClick={() => loadFromQuotation(q.id)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                      <span className="font-medium">{q.quotationNumber}</span>
+                      <span className="text-slate-400 ml-2">{q.customerName}</span>
+                      <span className="text-slate-400 ml-1">({q.items.length} รายการ)</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button type="button" onClick={() => { setShowCustomerSelect(!showCustomerSelect); setShowQuotationSelect(false) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors">
+                <Users className="w-3.5 h-3.5" />โหลดจากลูกค้าอื่น
+              </button>
+              {showCustomerSelect && (
+                <div className="absolute z-20 mt-1 left-0 w-64 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {customers.filter(c => c.id !== editId && c.enabledItems.length > 0).length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-slate-400">ไม่มีลูกค้าอื่น</div>
+                  ) : customers.filter(c => c.id !== editId && c.enabledItems.length > 0).map(c => (
+                    <button key={c.id} type="button" onClick={() => loadFromCustomer(c.id)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                      <span className="font-medium">{c.name}</span>
+                      <span className="text-slate-400 ml-2">({c.enabledItems.length} รายการ)</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Enabled Items */}
           <div>
             <label className="block font-medium text-slate-700 mb-2">รายการผ้าที่โรงแรมนี้ใช้</label>
-            <div className="border border-slate-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+            <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-slate-50">
                   <tr>
                     <th className="w-10 px-3 py-2"></th>
+                    <th className="w-16 px-1 py-2"></th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600">รหัส</th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600">รายการ</th>
                     {form.billingModel === 'per_piece' && (
@@ -251,30 +327,56 @@ export default function CustomersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {activeItems.map(item => {
-                    const enabled = form.enabledItems.includes(item.code)
+                  {/* Enabled items — reorderable */}
+                  {enabledItemsList.map((item, idx) => {
                     const priceItem = form.priceList.find(p => p.code === item.code)
                     return (
-                      <tr key={item.code} className={cn('border-t border-slate-100', enabled && 'bg-blue-50/30')}>
+                      <tr key={item.code} className="border-t border-slate-100 bg-blue-50/30">
                         <td className="px-3 py-1.5 text-center">
-                          <input type="checkbox" checked={enabled} onChange={() => toggleItem(item.code)} className="rounded" />
+                          <input type="checkbox" checked onChange={() => toggleItem(item.code)} className="rounded" />
+                        </td>
+                        <td className="px-1 py-1.5 text-center">
+                          <div className="flex items-center justify-center gap-0.5">
+                            <button type="button" onClick={() => moveItem(item.code, 'up')} disabled={idx === 0}
+                              className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-default transition-colors">
+                              <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                            </button>
+                            <button type="button" onClick={() => moveItem(item.code, 'down')} disabled={idx === enabledItemsList.length - 1}
+                              className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-default transition-colors">
+                              <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                            </button>
+                          </div>
                         </td>
                         <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
                         <td className="px-3 py-1.5">{item.name}</td>
                         {form.billingModel === 'per_piece' && (
                           <td className="px-3 py-1.5 text-right">
-                            {enabled ? (
-                              <input type="number" min={0} step={0.5} value={priceItem?.price ?? 0}
-                                onChange={e => updatePrice(item.code, parseFloat(e.target.value) || 0)}
-                                className="w-20 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                            ) : (
-                              <span className="text-slate-300">-</span>
-                            )}
+                            <input type="number" min={0} step={0.5} value={priceItem?.price ?? 0}
+                              onChange={e => updatePrice(item.code, parseFloat(e.target.value) || 0)}
+                              className="w-20 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                           </td>
                         )}
                       </tr>
                     )
                   })}
+                  {/* Separator */}
+                  {enabledItemsList.length > 0 && uncheckedItems.length > 0 && (
+                    <tr><td colSpan={form.billingModel === 'per_piece' ? 5 : 4} className="border-t-2 border-slate-200"></td></tr>
+                  )}
+                  {/* Unchecked items */}
+                  {uncheckedItems.map(item => (
+                    <tr key={item.code} className="border-t border-slate-100">
+                      <td className="px-3 py-1.5 text-center">
+                        <input type="checkbox" checked={false} onChange={() => toggleItem(item.code)} className="rounded" />
+                      </td>
+                      <td className="px-1 py-1.5"></td>
+                      <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
+                      <td className="px-3 py-1.5 text-slate-400">{item.name}</td>
+                      {form.billingModel === 'per_piece' && (
+                        <td className="px-3 py-1.5 text-right"><span className="text-slate-300">-</span></td>
+                      )}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

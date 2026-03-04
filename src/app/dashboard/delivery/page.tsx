@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, cn } from '@/lib/utils'
 import { DELIVERY_STATUS_CONFIG, type DeliveryNoteStatus, type DeliveryNoteItem } from '@/types'
-import { Plus, Search, Truck, Printer } from 'lucide-react'
+import { Plus, Search, Truck, Printer, X } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 
@@ -19,6 +19,7 @@ export default function DeliveryPage() {
   const [statusFilter, setStatusFilter] = useState<DeliveryNoteStatus | 'all'>('all')
   const [showCreate, setShowCreate] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   // Create form state
   const [selCustomerId, setSelCustomerId] = useState('')
@@ -356,8 +357,10 @@ export default function DeliveryPage() {
             </div>
 
             <div className="flex justify-between pt-2">
-              <button onClick={() => { deleteDeliveryNote(detailNote.id); setShowDetail(null) }}
-                className="text-sm text-red-500 hover:text-red-700 transition-colors">ลบ</button>
+              <button onClick={() => setConfirmDeleteId(detailNote.id)}
+                className="text-sm text-red-500 hover:text-red-700 transition-colors flex items-center gap-1">
+                <X className="w-4 h-4" />ลบ
+              </button>
               <button onClick={() => setShowPrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1">
                 <Printer className="w-4 h-4" />พิมพ์
@@ -365,6 +368,19 @@ export default function DeliveryPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">ต้องการลบใบส่งของนี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setConfirmDeleteId(null)}
+              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+            <button onClick={() => { if (confirmDeleteId) { deleteDeliveryNote(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
+              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
+          </div>
+        </div>
       </Modal>
 
       {/* Print Preview Modal */}

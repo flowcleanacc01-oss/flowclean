@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { formatDate } from '@/lib/utils'
 import type { DeliveryNote, Customer, CompanyInfo, LinenItemDef } from '@/types'
 
@@ -18,11 +19,14 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
     <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-delivery">
       {/* Header */}
       <div className="flex justify-between items-start mb-6 border-b border-slate-300 pb-4">
-        <div>
-          <h1 className="text-xl font-bold text-[#1B3A5C]">{company.name}</h1>
-          <p className="text-xs text-slate-500">{company.nameEn}</p>
-          <p className="text-xs text-slate-500 mt-1">{company.address}</p>
-          <p className="text-xs text-slate-500">โทร: {company.phone}</p>
+        <div className="flex items-start gap-3">
+          <Image src="/flowclean-logo.svg" alt="FlowClean" width={48} height={48} className="mt-0.5 print:w-[48px] print:h-[48px]" />
+          <div>
+            <h1 className="text-xl font-bold text-[#1B3A5C]">{company.name}</h1>
+            <p className="text-xs text-slate-500">{company.nameEn}</p>
+            <p className="text-xs text-slate-500 mt-1">{company.address}</p>
+            <p className="text-xs text-slate-500">โทร: {company.phone}</p>
+          </div>
         </div>
         <div className="text-right">
           <h2 className="text-lg font-bold text-[#1B3A5C]">ใบส่งของชั่วคราว</h2>

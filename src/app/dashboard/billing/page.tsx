@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, cn, todayISO } from '@/lib/utils'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem } from '@/types'
@@ -26,8 +27,18 @@ export default function BillingPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(null)
   const [showPrint, setShowPrint] = useState(false)
+  const searchParams = useSearchParams()
   const [showInvoiceDetail, setShowInvoiceDetail] = useState<string | null>(null)
   const [showInvoicePrint, setShowInvoicePrint] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  // Auto-open detail from dashboard deep link
+  useEffect(() => {
+    const detailId = searchParams.get('detail')
+    if (detailId && billingStatements.some(b => b.id === detailId)) {
+      setShowDetail(detailId)
+    }
+  }, [searchParams, billingStatements])
 
   // Quotation state
   const [showCreateQU, setShowCreateQU] = useState(false)
@@ -119,8 +130,11 @@ export default function BillingPage() {
   const handleCreateTaxInvoice = (billingId: string) => {
     const billing = billingStatements.find(b => b.id === billingId)
     if (!billing) return
-    // Prevent duplicate: check if tax invoice already exists for this billing
-    if (taxInvoices.some(ti => ti.billingStatementId === billingId)) return
+    // Prevent duplicate
+    if (taxInvoices.some(ti => ti.billingStatementId === billingId)) {
+      alert('ใบกำกับภาษีของบิลนี้มีอยู่แล้ว')
+      return
+    }
     addTaxInvoice({
       billingStatementId: billingId,
       customerId: billing.customerId,
@@ -131,6 +145,8 @@ export default function BillingPage() {
       grandTotal: billing.grandTotal,
       notes: '',
     })
+    setShowDetail(null)
+    setTab('invoice')
   }
 
   const handleCreateQuotation = () => {
@@ -520,9 +536,11 @@ export default function BillingPage() {
 
             <div className="flex justify-between pt-2">
               <div className="flex gap-2">
-                <button onClick={() => { deleteBillingStatement(detailBilling.id); setShowDetail(null) }}
-                  className="text-sm text-red-500 hover:text-red-700">ลบ</button>
-                {detailBilling.status === 'sent' && (
+                <button onClick={() => setConfirmDeleteId(detailBilling.id)}
+                  className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1">
+                  <X className="w-3.5 h-3.5" />ลบ
+                </button>
+                {!taxInvoices.some(ti => ti.billingStatementId === detailBilling.id) && (
                   <button onClick={() => handleCreateTaxInvoice(detailBilling.id)}
                     className="text-sm px-3 py-1 bg-purple-50 text-purple-700 rounded hover:bg-purple-100">
                     <FileText className="w-3 h-3 inline mr-1" />สร้างใบกำกับภาษี
@@ -536,6 +554,19 @@ export default function BillingPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">ต้องการลบใบวางบิลนี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setConfirmDeleteId(null)}
+              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+            <button onClick={() => { if (confirmDeleteId) { deleteBillingStatement(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
+              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
+          </div>
+        </div>
       </Modal>
 
       {/* Billing Print Preview Modal */}

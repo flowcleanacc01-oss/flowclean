@@ -26,9 +26,10 @@ export default function MonthlySummaryGrid({ customer, month, linenForms, delive
       grid[code] = {}
     }
 
-    // Primary: use linen forms col6 (packed & sent) — fallback to col4 if col6 not yet filled
+    // Primary: use linen forms col6 (packed & sent) — only forms that reached packed/delivered/confirmed
     const monthForms = linenForms.filter(f =>
       f.customerId === customer.id && f.date.startsWith(month)
+      && ['packed', 'delivered', 'confirmed'].includes(f.status)
     )
     for (const form of monthForms) {
       const day = parseInt(form.date.split('-')[2])
@@ -38,7 +39,7 @@ export default function MonthlySummaryGrid({ customer, month, linenForms, delive
         // Revenue = billable qty only (exclude claim items)
         const qty = packSend > 0
           ? Math.max(packSend - claimApproved, 0)
-          : row.col4_factoryApproved
+          : 0
         if (grid[row.code] && qty > 0) {
           grid[row.code][day] = (grid[row.code][day] || 0) + qty
         }

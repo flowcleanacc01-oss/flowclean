@@ -67,6 +67,7 @@ interface StoreContextType {
   // Expenses
   expenses: Expense[]
   addExpense: (e: Omit<Expense, 'id' | 'createdBy'>) => Expense
+  updateExpense: (id: string, e: Partial<Expense>) => void
   deleteExpense: (id: string) => void
 
   // Users
@@ -369,6 +370,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return newExp
   }, [currentUser])
 
+  const updateExpense = useCallback((id: string, e: Partial<Expense>) => {
+    setExpenses(prev => prev.map(x => x.id === id ? { ...x, ...e } : x))
+    dbSave(db.updateExpenseDB(id, e))
+  }, [])
+
   const deleteExpense = useCallback((id: string) => {
     setExpenses(prev => prev.filter(x => x.id !== id))
     dbSave(db.deleteExpenseDB(id))
@@ -520,7 +526,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       billingStatements, addBillingStatement, updateBillingStatus, deleteBillingStatement,
       taxInvoices, addTaxInvoice,
       quotations, addQuotation, updateQuotationStatus,
-      expenses, addExpense, deleteExpense,
+      expenses, addExpense, updateExpense, deleteExpense,
       users, addUser, updateUser,
       defaultPrices, updateDefaultPrice,
       companyInfo, updateCompanyInfo,

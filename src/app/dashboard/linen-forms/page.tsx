@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, cn } from '@/lib/utils'
-import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, type LinenFormStatus, type LinenFormRow } from '@/types'
+import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasDiscrepancies } from '@/lib/discrepancy'
-import { Plus, Search, ChevronRight, AlertTriangle, X } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X } from 'lucide-react'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
 
@@ -18,8 +19,18 @@ export default function LinenFormsPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<LinenFormStatus | 'all'>('all')
   const [customerFilter, setCustomerFilter] = useState<string>('all')
+  const searchParams = useSearchParams()
   const [showCreate, setShowCreate] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  // Auto-open detail from dashboard deep link
+  useEffect(() => {
+    const detailId = searchParams.get('detail')
+    if (detailId && linenForms.some(f => f.id === detailId)) {
+      setShowDetail(detailId)
+    }
+  }, [searchParams, linenForms])
 
   // Create form state
   const [newCustomerId, setNewCustomerId] = useState('')
@@ -88,6 +99,13 @@ export default function LinenFormsPage() {
     if (!form) return
     const next = NEXT_LINEN_STATUS[form.status]
     if (next) updateLinenFormStatus(formId, next)
+  }
+
+  const handleRevertStatus = (formId: string) => {
+    const form = linenForms.find(f => f.id === formId)
+    if (!form) return
+    const prev = PREV_LINEN_STATUS[form.status]
+    if (prev) updateLinenFormStatus(formId, prev)
   }
 
   return (
@@ -184,13 +202,22 @@ export default function LinenFormsPage() {
                       {disc && <AlertTriangle className="w-4 h-4 text-orange-500 inline" />}
                     </td>
                     <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                      {nextStatus && (
-                        <button onClick={() => handleAdvanceStatus(form.id)}
-                          className="text-xs px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] rounded font-medium hover:bg-[#2bb8b8] transition-colors inline-flex items-center gap-1">
-                          {LINEN_FORM_STATUS_CONFIG[nextStatus].label}
-                          <ChevronRight className="w-3 h-3" />
-                        </button>
-                      )}
+                      <div className="inline-flex items-center gap-1">
+                        {PREV_LINEN_STATUS[form.status] && (
+                          <button onClick={() => handleRevertStatus(form.id)}
+                            className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded font-medium hover:bg-slate-200 transition-colors inline-flex items-center gap-1"
+                            title={`ย้อนกลับ → ${LINEN_FORM_STATUS_CONFIG[PREV_LINEN_STATUS[form.status]!].label}`}>
+                            <ChevronLeft className="w-3 h-3" />
+                          </button>
+                        )}
+                        {nextStatus && (
+                          <button onClick={() => handleAdvanceStatus(form.id)}
+                            className="text-xs px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] rounded font-medium hover:bg-[#2bb8b8] transition-colors inline-flex items-center gap-1">
+                            {LINEN_FORM_STATUS_CONFIG[nextStatus].label}
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -249,6 +276,19 @@ export default function LinenFormsPage() {
         </div>
       </Modal>
 
+      {/* Delete Confirmation Modal */}
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">ต้องการลบใบรับส่งผ้านี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setConfirmDeleteId(null)}
+              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+            <button onClick={() => { if (confirmDeleteId) { deleteLinenForm(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
+              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Detail Modal */}
       <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={detailForm?.formNumber || ''} size="xl">
         {detailForm && detailCustomer && (
@@ -291,11 +331,18 @@ export default function LinenFormsPage() {
             )}
 
             <div className="flex justify-between items-center pt-2">
-              <button onClick={() => { deleteLinenForm(detailForm.id); setShowDetail(null) }}
+              <button onClick={() => setConfirmDeleteId(detailForm.id)}
                 className="text-sm text-red-500 hover:text-red-700 transition-colors flex items-center gap-1">
                 <X className="w-4 h-4" />ลบ
               </button>
               <div className="flex gap-2">
+                {PREV_LINEN_STATUS[detailForm.status] && (
+                  <button onClick={() => { handleRevertStatus(detailForm.id) }}
+                    className="px-4 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
+                    <ChevronLeft className="w-4 h-4" />
+                    {LINEN_FORM_STATUS_CONFIG[PREV_LINEN_STATUS[detailForm.status]!].label}
+                  </button>
+                )}
                 {NEXT_LINEN_STATUS[detailForm.status] && (
                   <button onClick={() => { handleAdvanceStatus(detailForm.id) }}
                     className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors flex items-center gap-1">

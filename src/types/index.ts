@@ -159,6 +159,20 @@ export const NEXT_LINEN_STATUS: Record<LinenFormStatus, LinenFormStatus | null> 
   confirmed: null,
 }
 
+export const PREV_LINEN_STATUS: Record<LinenFormStatus, LinenFormStatus | null> = {
+  draft: null,
+  received: 'draft',
+  sorting: 'received',
+  washing: 'sorting',
+  drying: 'washing',
+  ironing: 'drying',
+  folding: 'ironing',
+  qc: 'folding',
+  packed: 'qc',
+  delivered: 'packed',
+  confirmed: 'delivered',
+}
+
 export const ALL_LINEN_STATUSES: LinenFormStatus[] = [
   'draft', 'received', 'sorting', 'washing', 'drying', 'ironing', 'folding', 'qc', 'packed', 'delivered', 'confirmed',
 ]

@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, todayISO } from '@/lib/utils'
-import { EXPENSE_CATEGORIES, type ExpenseCategory } from '@/types'
+import { EXPENSE_CATEGORIES, type ExpenseCategory, type Expense } from '@/types'
 import Modal from '@/components/Modal'
 import {
   Plus,
@@ -11,13 +11,16 @@ import {
   Wallet,
   Trash2,
   Calendar,
+  Pencil,
 } from 'lucide-react'
 
 export default function ExpensesPage() {
-  const { expenses, addExpense, deleteExpense } = useStore()
+  const { expenses, addExpense, updateExpense, deleteExpense } = useStore()
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     return expenses
@@ -42,7 +45,13 @@ export default function ExpensesPage() {
   }, {} as Record<string, number>)
 
   const handleDelete = (id: string) => {
-    if (confirm('ยืนยันการลบรายจ่ายนี้?')) deleteExpense(id)
+    deleteExpense(id)
+    setConfirmDeleteId(null)
+  }
+
+  const handleEdit = (exp: Expense) => {
+    setEditingExpense(exp)
+    setShowForm(true)
   }
 
   return (
@@ -54,7 +63,7 @@ export default function ExpensesPage() {
           <p className="text-slate-500 text-sm mt-0.5">บันทึกค่าใช้จ่ายต่างๆ</p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => { setEditingExpense(null); setShowForm(true) }}
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1B3A5C] text-white rounded-lg text-sm font-medium hover:bg-[#122740] transition-colors shadow-sm"
         >
           <Plus className="w-4 h-4" />
@@ -119,7 +128,7 @@ export default function ExpensesPage() {
                 <th className="text-left px-3 py-3 font-medium">รายละเอียด</th>
                 <th className="text-left px-3 py-3 font-medium">อ้างอิง</th>
                 <th className="text-right px-3 py-3 font-medium">จำนวนเงิน</th>
-                <th className="text-center px-5 py-3 font-medium">ลบ</th>
+                <th className="text-center px-5 py-3 font-medium w-20"></th>
               </tr>
             </thead>
             <tbody>
@@ -136,13 +145,23 @@ export default function ExpensesPage() {
                     <td className="px-3 py-3 text-slate-700">{exp.description}</td>
                     <td className="px-3 py-3 text-slate-400 text-xs">{exp.reference || '—'}</td>
                     <td className="px-3 py-3 text-right font-medium text-slate-700">฿{formatCurrency(exp.amount)}</td>
-                    <td className="px-5 py-3 text-center">
-                      <button
-                        onClick={() => handleDelete(exp.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <td className="px-3 py-3 text-center">
+                      <div className="inline-flex gap-1">
+                        <button
+                          onClick={() => handleEdit(exp)}
+                          className="p-1.5 text-slate-400 hover:text-blue-500 rounded hover:bg-blue-50 transition-colors"
+                          title="แก้ไข"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(exp.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 transition-colors"
+                          title="ลบ"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -158,30 +177,50 @@ export default function ExpensesPage() {
         )}
       </div>
 
-      {/* Add Expense Modal */}
+      {/* Add/Edit Expense Modal */}
       {showForm && (
-        <AddExpenseModal
+        <ExpenseFormModal
+          initial={editingExpense}
           onSave={(data) => {
-            addExpense(data)
+            if (editingExpense) {
+              updateExpense(editingExpense.id, data)
+            } else {
+              addExpense(data)
+            }
             setShowForm(false)
+            setEditingExpense(null)
           }}
-          onClose={() => setShowForm(false)}
+          onClose={() => { setShowForm(false); setEditingExpense(null) }}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">ต้องการลบรายจ่ายนี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setConfirmDeleteId(null)}
+              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+            <button onClick={() => confirmDeleteId && handleDelete(confirmDeleteId)}
+              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
 
-function AddExpenseModal({ onSave, onClose }: {
+function ExpenseFormModal({ initial, onSave, onClose }: {
+  initial: Expense | null
   onSave: (data: { date: string; category: ExpenseCategory; description: string; amount: number; reference: string }) => void
   onClose: () => void
 }) {
   const [form, setForm] = useState({
-    date: todayISO(),
-    category: 'chemicals' as ExpenseCategory,
-    description: '',
-    amount: 0,
-    reference: '',
+    date: initial?.date || todayISO(),
+    category: (initial?.category || 'chemicals') as ExpenseCategory,
+    description: initial?.description || '',
+    amount: initial?.amount || 0,
+    reference: initial?.reference || '',
   })
 
   const handleSave = () => {
@@ -191,7 +230,7 @@ function AddExpenseModal({ onSave, onClose }: {
   }
 
   return (
-    <Modal open onClose={onClose} title="เพิ่มรายจ่าย">
+    <Modal open onClose={onClose} title={initial ? 'แก้ไขรายจ่าย' : 'เพิ่มรายจ่าย'}>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -251,7 +290,9 @@ function AddExpenseModal({ onSave, onClose }: {
         </div>
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-          <button onClick={handleSave} className="px-6 py-2 bg-[#1B3A5C] text-white text-sm font-medium rounded-lg hover:bg-[#122740] transition-colors">บันทึก</button>
+          <button onClick={handleSave} className="px-6 py-2 bg-[#1B3A5C] text-white text-sm font-medium rounded-lg hover:bg-[#122740] transition-colors">
+            {initial ? 'บันทึกการแก้ไข' : 'บันทึก'}
+          </button>
         </div>
       </div>
     </Modal>

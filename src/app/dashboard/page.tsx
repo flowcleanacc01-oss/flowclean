@@ -178,7 +178,7 @@ export default function DashboardPage() {
               </h3>
               <div className="space-y-2">
                 {discrepancyForms.map(form => (
-                  <Link key={form.id} href="/dashboard/linen-forms"
+                  <Link key={form.id} href={`/dashboard/linen-forms?detail=${form.id}`}
                     className="block text-xs bg-orange-50 rounded-lg px-3 py-2 hover:bg-orange-100 transition-colors">
                     <span className="font-mono text-orange-600">{form.formNumber}</span>
                     <span className="text-slate-500 ml-2">{getCustomer(form.customerId)?.name}</span>
@@ -197,7 +197,7 @@ export default function DashboardPage() {
               </h3>
               <div className="space-y-2">
                 {overdueBilling.map(b => (
-                  <Link key={b.id} href="/dashboard/billing"
+                  <Link key={b.id} href={`/dashboard/billing?detail=${b.id}`}
                     className="block text-xs bg-red-50 rounded-lg px-3 py-2 hover:bg-red-100 transition-colors">
                     <span className="font-mono text-red-600">{b.billingNumber}</span>
                     <span className="text-slate-500 ml-2">{formatCurrency(b.netPayable)}</span>

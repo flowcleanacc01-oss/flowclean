@@ -38,7 +38,7 @@ export default function ReportsPage() {
   // Revenue by customer
   const revenueByCustomer = useMemo(() => {
     const map: Record<string, number> = {}
-    for (const bs of billingStatements.filter(b => b.billingMonth.startsWith(selMonth.substring(0, 4)))) {
+    for (const bs of billingStatements.filter(b => b.billingMonth === selMonth)) {
       map[bs.customerId] = (map[bs.customerId] || 0) + bs.subtotal
     }
     return Object.entries(map)

@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import type { TaxInvoice, Customer, CompanyInfo } from '@/types'
 
@@ -18,6 +19,9 @@ export default function TaxInvoicePrint({ invoice, customer, company, withholdin
     <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-tax-invoice">
       {/* Header */}
       <div className="text-center mb-6 border-b-2 border-[#1B3A5C] pb-4">
+        <div className="flex justify-center mb-2">
+          <Image src="/flowclean-logo.svg" alt="FlowClean" width={48} height={48} className="print:w-[48px] print:h-[48px]" />
+        </div>
         <h1 className="text-xl font-bold text-[#1B3A5C]">{company.name}</h1>
         <p className="text-xs text-slate-500">{company.nameEn}</p>
         <p className="text-xs text-slate-500 mt-1">{company.address}</p>

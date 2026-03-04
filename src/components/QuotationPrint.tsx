@@ -9,8 +9,6 @@ interface QuotationPrintProps {
 }
 
 export default function QuotationPrint({ quotation, company }: QuotationPrintProps) {
-  const subtotal = quotation.items.reduce((s, item) => s + item.pricePerUnit, 0)
-
   return (
     <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-quotation">
       {/* Header */}
@@ -68,7 +66,7 @@ export default function QuotationPrint({ quotation, company }: QuotationPrintPro
 
       {/* Summary */}
       <div className="text-xs text-slate-600 mb-2">
-        <p>รวม {quotation.items.length} รายการ | ราคารวม {formatCurrency(subtotal)} บาท/รอบ (ยังไม่รวม VAT)</p>
+        <p>รวม {quotation.items.length} รายการ (ราคาต่อหน่วย ยังไม่รวม VAT 7%)</p>
       </div>
 
       {/* Conditions */}

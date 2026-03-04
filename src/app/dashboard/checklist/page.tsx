@@ -22,6 +22,7 @@ export default function ChecklistPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(null)
   const [showPrint, setShowPrint] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   // Create form state
   const [newType, setNewType] = useState<ChecklistType>('qc')
@@ -430,7 +431,7 @@ export default function ChecklistPage() {
             )}
 
             <div className="flex justify-between items-center pt-2">
-              <button onClick={() => { deleteChecklist(detailCL.id); setShowDetail(null) }}
+              <button onClick={() => setConfirmDeleteId(detailCL.id)}
                 className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1">
                 <X className="w-4 h-4" />ลบ
               </button>
@@ -449,6 +450,19 @@ export default function ChecklistPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">ต้องการลบใบเช็คสินค้านี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setConfirmDeleteId(null)}
+              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+            <button onClick={() => { if (confirmDeleteId) { deleteChecklist(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
+              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
+          </div>
+        </div>
       </Modal>
 
       {/* Print Modal */}
