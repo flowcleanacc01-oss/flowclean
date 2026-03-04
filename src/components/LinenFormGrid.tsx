@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import type { LinenFormRow, Customer, LinenItemDef } from '@/types'
-import { cn } from '@/lib/utils'
+import { cn, sanitizeNumber } from '@/lib/utils'
 
 interface LinenFormGridProps {
   customer: Customer
@@ -157,7 +157,7 @@ export default function LinenFormGrid({
                     {isEditable('col2') ? (
                       <input type="number" min={0}
                         value={row.col2_hotelCountIn || ''}
-                        onChange={e => updateRow(item.code, 'col2_hotelCountIn', parseInt(e.target.value) || 0)}
+                        onChange={e => updateRow(item.code, 'col2_hotelCountIn', sanitizeNumber(e.target.value, 99999))}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
                     ) : (
@@ -169,7 +169,7 @@ export default function LinenFormGrid({
                     {isEditable('col3') ? (
                       <input type="number" min={0}
                         value={row.col3_hotelClaimCount || ''}
-                        onChange={e => updateRow(item.code, 'col3_hotelClaimCount', parseInt(e.target.value) || 0)}
+                        onChange={e => updateRow(item.code, 'col3_hotelClaimCount', sanitizeNumber(e.target.value, 99999))}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
                     ) : (
@@ -181,7 +181,7 @@ export default function LinenFormGrid({
                     {isEditable('col4') ? (
                       <input type="number" min={0}
                         value={row.col4_factoryApproved || ''}
-                        onChange={e => updateRow(item.code, 'col4_factoryApproved', parseInt(e.target.value) || 0)}
+                        onChange={e => updateRow(item.code, 'col4_factoryApproved', sanitizeNumber(e.target.value, 99999))}
                         className={cn(
                           'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
                           hasDiscrepancy ? 'border-orange-400 bg-orange-50' : 'border-slate-200'
@@ -199,7 +199,7 @@ export default function LinenFormGrid({
                     {isEditable('col5') ? (
                       <input type="number" min={0}
                         value={row.col5_factoryClaimApproved || ''}
-                        onChange={e => updateRow(item.code, 'col5_factoryClaimApproved', parseInt(e.target.value) || 0)}
+                        onChange={e => updateRow(item.code, 'col5_factoryClaimApproved', sanitizeNumber(e.target.value, 99999))}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
                     ) : (
@@ -211,7 +211,7 @@ export default function LinenFormGrid({
                     {isEditable('col6') ? (
                       <input type="number" min={0}
                         value={row.col6_factoryPackSend || ''}
-                        onChange={e => updateRow(item.code, 'col6_factoryPackSend', parseInt(e.target.value) || 0)}
+                        onChange={e => updateRow(item.code, 'col6_factoryPackSend', sanitizeNumber(e.target.value, 99999))}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
                     ) : (

@@ -339,14 +339,36 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategory, { label: string; icon: 
 }
 
 // ============================================================
-// App User (เก็บไว้เหมือนเดิม)
+// App User
 // ============================================================
 export interface AppUser {
   id: string
   name: string
   email: string
+  passwordHash: string
   role: 'admin' | 'staff'
   isActive: boolean
+}
+
+// ============================================================
+// Audit Log
+// ============================================================
+export type AuditAction = 'create' | 'update' | 'delete' | 'login' | 'login_fail' | 'logout'
+
+export type AuditEntityType =
+  | 'customer' | 'linen_form' | 'delivery_note' | 'billing' | 'tax_invoice'
+  | 'quotation' | 'expense' | 'checklist' | 'user' | 'company' | 'linen_item' | 'session'
+
+export interface AuditLog {
+  id: string
+  userId: string
+  userName: string
+  action: AuditAction
+  entityType: AuditEntityType
+  entityId: string
+  entityLabel: string
+  details: string
+  createdAt: string
 }
 
 // ============================================================

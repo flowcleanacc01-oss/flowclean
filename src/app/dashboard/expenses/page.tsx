@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatDate, todayISO } from '@/lib/utils'
+import { formatCurrency, formatDate, todayISO, sanitizeNumber } from '@/lib/utils'
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type Expense } from '@/types'
 import Modal from '@/components/Modal'
 import {
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 
 export default function ExpensesPage() {
-  const { expenses, addExpense, updateExpense, deleteExpense } = useStore()
+  const { currentUser, expenses, addExpense, updateExpense, deleteExpense } = useStore()
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
@@ -43,6 +43,14 @@ export default function ExpensesPage() {
     acc[e.category] += e.amount
     return acc
   }, {} as Record<string, number>)
+
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="text-center py-20">
+        <p className="text-slate-400">เฉพาะ Admin เท่านั้น</p>
+      </div>
+    )
+  }
 
   const handleDelete = (id: string) => {
     deleteExpense(id)
@@ -271,7 +279,7 @@ function ExpenseFormModal({ initial, onSave, onClose }: {
             <input
               type="number"
               value={form.amount || ''}
-              onChange={e => setForm(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
+              onChange={e => setForm(prev => ({ ...prev, amount: sanitizeNumber(e.target.value) }))}
               min="0"
               step="0.01"
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]"

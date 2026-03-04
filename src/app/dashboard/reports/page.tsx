@@ -12,15 +12,21 @@ import Modal from '@/components/Modal'
 type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'carryover' | 'delivery' | 'stock'
 
 export default function ReportsPage() {
-  const { linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo } = useStore()
+  const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo } = useStore()
   const [tab, setTab] = useState<TabKey>('monthly')
   const [showDeliveryPrint, setShowDeliveryPrint] = useState(false)
   const [showStockPrint, setShowStockPrint] = useState(false)
-  const [selCustomerId, setSelCustomerId] = useState(customers[0]?.id || '')
+  const [selCustomerIdRaw, setSelCustomerId] = useState(customers[0]?.id || '')
   const [selMonth, setSelMonth] = useState(() => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
+
+  const activeCustomers = customers.filter(c => c.isActive)
+  // Derive effective customer ID — fallback to first active if selection is invalid
+  const selCustomerId = activeCustomers.some(c => c.id === selCustomerIdRaw)
+    ? selCustomerIdRaw
+    : (activeCustomers[0]?.id || '')
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'monthly', label: 'สรุปรายเดือน' },
@@ -80,6 +86,14 @@ export default function ReportsPage() {
       return { customer: c, carryOver: co, total }
     }).filter(r => r.total !== 0)
   }, [customers, getCarryOver])
+
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="text-center py-20">
+        <p className="text-slate-400">เฉพาะ Admin เท่านั้น</p>
+      </div>
+    )
+  }
 
   return (
     <div>

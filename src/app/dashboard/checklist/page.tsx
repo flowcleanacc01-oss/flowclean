@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { formatDate, cn } from '@/lib/utils'
+import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import {
   CHECKLIST_TYPE_CONFIG, CHECKLIST_STATUS_CONFIG,
   type ChecklistType, type ChecklistStatus, type ChecklistItem,
@@ -27,7 +27,7 @@ export default function ChecklistPage() {
   // Create form state
   const [newType, setNewType] = useState<ChecklistType>('qc')
   const [newLinkedId, setNewLinkedId] = useState('')
-  const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0])
+  const [newDate, setNewDate] = useState(todayISO())
   const [newInspector, setNewInspector] = useState('')
   const [newNotes, setNewNotes] = useState('')
   const [newItems, setNewItems] = useState<ChecklistItem[]>([])
@@ -106,7 +106,7 @@ export default function ChecklistPage() {
   const handleCreateOpen = () => {
     setNewType('qc')
     setNewLinkedId('')
-    setNewDate(new Date().toISOString().split('T')[0])
+    setNewDate(todayISO())
     setNewInspector('')
     setNewNotes('')
     setNewItems([])
@@ -290,7 +290,7 @@ export default function ChecklistPage() {
                   </thead>
                   <tbody>
                     {newItems.map((item, idx) => (
-                      <tr key={item.code} className="border-t border-slate-100">
+                      <tr key={`${item.code}-${idx}`} className="border-t border-slate-100">
                         <td className="px-3 py-1 font-mono text-xs text-slate-500">{item.code}</td>
                         <td className="px-3 py-1 text-slate-700">{item.name}</td>
                         <td className="px-3 py-1 text-right text-slate-600">{item.expectedQty}</td>
@@ -298,7 +298,7 @@ export default function ChecklistPage() {
                           <input type="number" min={0}
                             value={item.actualQty || ''}
                             onChange={e => {
-                              const val = parseInt(e.target.value) || 0
+                              const val = sanitizeNumber(e.target.value, 99999)
                               const updated = [...newItems]
                               updated[idx] = { ...item, actualQty: val, passed: val === item.expectedQty }
                               setNewItems(updated)
@@ -382,7 +382,7 @@ export default function ChecklistPage() {
                 </thead>
                 <tbody>
                   {detailCL.items.map((item, idx) => (
-                    <tr key={item.code} className={cn('border-t border-slate-100', !item.passed && item.actualQty > 0 && 'bg-red-50')}>
+                    <tr key={`${item.code}-${idx}`} className={cn('border-t border-slate-100', !item.passed && item.actualQty > 0 && 'bg-red-50')}>
                       <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
                       <td className="px-3 py-1.5 text-slate-700">{item.name}</td>
                       <td className="px-3 py-1.5 text-right">{item.expectedQty}</td>
@@ -390,7 +390,7 @@ export default function ChecklistPage() {
                         {detailCL.status === 'draft' ? (
                           <input type="number" min={0} value={item.actualQty || ''}
                             onChange={e => {
-                              const val = parseInt(e.target.value) || 0
+                              const val = sanitizeNumber(e.target.value, 99999)
                               const updatedItems = [...detailCL.items]
                               updatedItems[idx] = { ...item, actualQty: val, passed: val === item.expectedQty }
                               updateChecklist(detailCL.id, { items: updatedItems })

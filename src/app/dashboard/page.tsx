@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { formatNumber, formatCurrency, formatDateShort, cn } from '@/lib/utils'
+import { formatNumber, formatCurrency, formatDateShort, cn, todayISO } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, ALL_LINEN_STATUSES, PROCESS_STATUSES, type LinenFormStatus } from '@/types'
 import { hasDiscrepancies } from '@/lib/discrepancy'
 import {
@@ -21,7 +21,7 @@ export default function DashboardPage() {
     customers, getCustomer, getCarryOver,
   } = useStore()
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayISO()
 
   // Stats
   const stats = useMemo(() => {

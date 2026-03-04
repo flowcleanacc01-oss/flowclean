@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import type {
   Customer, LinenForm, DeliveryNote, BillingStatement, TaxInvoice,
   Quotation, Expense, AppUser, CompanyInfo, LinenItemDef, ProductChecklist,
+  AuditLog,
 } from '@/types'
 
 // ============================================================
@@ -60,6 +61,13 @@ const FIELD_MAP: Record<string, string> = {
   bankName: 'bank_name',
   bankAccountName: 'bank_account_name',
   bankAccountNumber: 'bank_account_number',
+  passwordHash: 'password_hash',
+  // Audit log fields
+  userId: 'user_id',
+  userName: 'user_name',
+  entityType: 'entity_type',
+  entityId: 'entity_id',
+  entityLabel: 'entity_label',
 }
 
 // Reverse map: snake_case → camelCase
@@ -166,6 +174,59 @@ export async function updateUserDB(id: string, updates: Partial<AppUser>): Promi
     .update(toSnakeCase(updates as unknown as Record<string, unknown>))
     .eq('id', id)
   if (error) throw error
+}
+
+export async function fetchUserByEmail(email: string): Promise<(AppUser & { passwordHash: string }) | null> {
+  const { data, error } = await supabase
+    .from('app_users')
+    .select('*')
+    .eq('email', email)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return toCamelCase<AppUser & { passwordHash: string }>(data)
+}
+
+export async function updatePasswordHash(userId: string, hash: string): Promise<void> {
+  const { error } = await supabase
+    .from('app_users')
+    .update({ password_hash: hash })
+    .eq('id', userId)
+  if (error) throw error
+}
+
+// ============================================================
+// Audit Logs
+// ============================================================
+
+export async function insertAuditLog(log: AuditLog): Promise<void> {
+  const { error } = await supabase
+    .from('audit_logs')
+    .insert(toSnakeCase(log as unknown as Record<string, unknown>))
+  if (error) console.error('[Audit log error]', error)
+}
+
+export interface FetchAuditLogsOptions {
+  limit?: number
+  offset?: number
+  entityType?: string
+  userId?: string
+}
+
+export async function fetchAuditLogs(options: FetchAuditLogsOptions = {}): Promise<AuditLog[]> {
+  let query = supabase
+    .from('audit_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (options.entityType) query = query.eq('entity_type', options.entityType)
+  if (options.userId) query = query.eq('user_id', options.userId)
+  if (options.limit) query = query.limit(options.limit)
+  if (options.offset) query = query.range(options.offset, options.offset + (options.limit || 50) - 1)
+
+  const { data, error } = await query
+  if (error) throw error
+  return toCamelCaseArray<AuditLog>(data || [])
 }
 
 // ============================================================
@@ -468,6 +529,36 @@ export async function updateDefaultPriceDB(code: string, price: number): Promise
     .update({ default_price: price })
     .eq('code', code)
   if (error) throw error
+}
+
+// ============================================================
+// Reset: Truncate all tables (reverse dependency order)
+// ============================================================
+
+// Tables with their PK column for delete-all (reverse dependency order)
+// Tables in dependency order (children first) with PK info
+// pkType: 'text' uses .neq(pk, '__never__'), 'int' uses .neq(pk, -1)
+const ALL_TABLES: { table: string; pk: string; pkType: 'text' | 'int' }[] = [
+  { table: 'audit_logs', pk: 'id', pkType: 'text' },
+  { table: 'product_checklists', pk: 'id', pkType: 'text' },
+  { table: 'tax_invoices', pk: 'id', pkType: 'text' },
+  { table: 'billing_statements', pk: 'id', pkType: 'text' },
+  { table: 'delivery_notes', pk: 'id', pkType: 'text' },
+  { table: 'linen_forms', pk: 'id', pkType: 'text' },
+  { table: 'quotations', pk: 'id', pkType: 'text' },
+  { table: 'expenses', pk: 'id', pkType: 'text' },
+  { table: 'customers', pk: 'id', pkType: 'text' },
+  { table: 'company_info', pk: 'id', pkType: 'int' },
+  { table: 'app_users', pk: 'id', pkType: 'text' },
+  { table: 'linen_items', pk: 'code', pkType: 'text' },
+]
+
+export async function truncateAllTables(): Promise<void> {
+  for (const { table, pk, pkType } of ALL_TABLES) {
+    const sentinel = pkType === 'int' ? -1 : '__never__'
+    const { error } = await supabase.from(table).delete().neq(pk, sentinel)
+    if (error) console.error(`[truncate] ${table}:`, error)
+  }
 }
 
 // ============================================================

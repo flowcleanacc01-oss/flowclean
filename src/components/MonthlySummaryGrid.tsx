@@ -46,15 +46,17 @@ export default function MonthlySummaryGrid({ customer, month, linenForms, delive
       }
     }
 
-    // Fallback: delivery notes
+    // Fallback: delivery notes (only for days with no linen form data)
     const monthNotes = deliveryNotes.filter(dn =>
       dn.customerId === customer.id && dn.date.startsWith(month)
     )
     for (const dn of monthNotes) {
       const day = parseInt(dn.date.split('-')[2])
       for (const item of dn.items) {
+        // Skip claim items — they're not revenue
+        if (item.isClaim) continue
         if (grid[item.code] && !grid[item.code][day]) {
-          grid[item.code][day] = item.quantity
+          grid[item.code][day] = (grid[item.code][day] || 0) + item.quantity
         }
       }
     }

@@ -1,11 +1,12 @@
 -- ============================================================
--- FlowClean — Supabase Schema (TEXT IDs) — v4 (6-column model)
--- 11 tables (dependency order)
+-- FlowClean — Supabase Schema (TEXT IDs) — v5 (auth + audit log)
+-- 12 tables (dependency order)
 -- Note: linen_forms.rows is JSONB — includes col6_factoryPackSend
 -- Run this in Supabase Dashboard → SQL Editor
 -- ============================================================
 
 -- Drop old tables (if exists) in reverse dependency order
+DROP TABLE IF EXISTS audit_logs CASCADE;
 DROP TABLE IF EXISTS product_checklists CASCADE;
 DROP TABLE IF EXISTS tax_invoices CASCADE;
 DROP TABLE IF EXISTS billing_statements CASCADE;
@@ -40,6 +41,7 @@ CREATE TABLE app_users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT NOT NULL,
+  password_hash TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL DEFAULT 'staff' CHECK (role IN ('admin', 'staff')),
   is_active BOOLEAN NOT NULL DEFAULT true
 );
@@ -91,7 +93,7 @@ CREATE TABLE customers (
 -- ============================================================
 CREATE TABLE linen_forms (
   id TEXT PRIMARY KEY,
-  form_number TEXT NOT NULL DEFAULT '',
+  form_number TEXT NOT NULL DEFAULT '' UNIQUE,
   customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   date TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'draft',
@@ -106,7 +108,7 @@ CREATE TABLE linen_forms (
 -- ============================================================
 CREATE TABLE delivery_notes (
   id TEXT PRIMARY KEY,
-  note_number TEXT NOT NULL DEFAULT '',
+  note_number TEXT NOT NULL DEFAULT '' UNIQUE,
   customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   linen_form_ids TEXT[] NOT NULL DEFAULT '{}',
   date TEXT NOT NULL DEFAULT '',
@@ -125,7 +127,7 @@ CREATE TABLE delivery_notes (
 -- ============================================================
 CREATE TABLE billing_statements (
   id TEXT PRIMARY KEY,
-  billing_number TEXT NOT NULL DEFAULT '',
+  billing_number TEXT NOT NULL DEFAULT '' UNIQUE,
   customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   delivery_note_ids TEXT[] NOT NULL DEFAULT '{}',
   billing_month TEXT NOT NULL DEFAULT '',
@@ -148,7 +150,7 @@ CREATE TABLE billing_statements (
 -- ============================================================
 CREATE TABLE tax_invoices (
   id TEXT PRIMARY KEY,
-  invoice_number TEXT NOT NULL DEFAULT '',
+  invoice_number TEXT NOT NULL DEFAULT '' UNIQUE,
   billing_statement_id TEXT NOT NULL REFERENCES billing_statements(id) ON DELETE CASCADE,
   customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   issue_date TEXT NOT NULL DEFAULT '',
@@ -164,7 +166,7 @@ CREATE TABLE tax_invoices (
 -- ============================================================
 CREATE TABLE quotations (
   id TEXT PRIMARY KEY,
-  quotation_number TEXT NOT NULL DEFAULT '',
+  quotation_number TEXT NOT NULL DEFAULT '' UNIQUE,
   customer_name TEXT NOT NULL DEFAULT '',
   customer_contact TEXT NOT NULL DEFAULT '',
   date TEXT NOT NULL DEFAULT '',
@@ -180,7 +182,7 @@ CREATE TABLE quotations (
 -- ============================================================
 CREATE TABLE product_checklists (
   id TEXT PRIMARY KEY,
-  checklist_number TEXT NOT NULL DEFAULT '',
+  checklist_number TEXT NOT NULL DEFAULT '' UNIQUE,
   type TEXT NOT NULL DEFAULT 'qc' CHECK (type IN ('qc', 'loading')),
   customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   linked_document_id TEXT NOT NULL DEFAULT '',
@@ -208,7 +210,30 @@ CREATE TABLE expenses (
 );
 
 -- ============================================================
+-- 12. Audit Logs
+-- ============================================================
+CREATE TABLE audit_logs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL DEFAULT '',
+  user_name TEXT NOT NULL DEFAULT '',
+  action TEXT NOT NULL DEFAULT '',
+  entity_type TEXT NOT NULL DEFAULT '',
+  entity_id TEXT NOT NULL DEFAULT '',
+  entity_label TEXT NOT NULL DEFAULT '',
+  details TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_audit_logs_created_at ON audit_logs (created_at DESC);
+CREATE INDEX idx_audit_logs_entity ON audit_logs (entity_type, entity_id);
+CREATE INDEX idx_audit_logs_user ON audit_logs (user_id);
+
+-- ============================================================
 -- RLS: Enable but allow all (no auth yet)
+-- ⚠️ TODO BEFORE PRODUCTION: Replace "Allow all" policies with
+-- proper auth-based policies using auth.uid() + role checks.
+-- Current open policies allow anon read/write to ALL tables.
+-- Must implement Gmail OAuth → Supabase Auth first.
 -- ============================================================
 ALTER TABLE linen_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
@@ -221,6 +246,7 @@ ALTER TABLE tax_invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quotations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_checklists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow all for anon" ON linen_items FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for anon" ON app_users FOR ALL USING (true) WITH CHECK (true);
@@ -233,3 +259,4 @@ CREATE POLICY "Allow all for anon" ON tax_invoices FOR ALL USING (true) WITH CHE
 CREATE POLICY "Allow all for anon" ON quotations FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for anon" ON product_checklists FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for anon" ON expenses FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for anon" ON audit_logs FOR ALL USING (true) WITH CHECK (true);

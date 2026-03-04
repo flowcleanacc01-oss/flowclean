@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { formatDate, formatNumber, cn } from '@/lib/utils'
+import { formatDate, formatNumber, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { DELIVERY_STATUS_CONFIG, type DeliveryNoteStatus, type DeliveryNoteItem } from '@/types'
 import { Plus, Search, Truck, Printer, X } from 'lucide-react'
 import Modal from '@/components/Modal'
@@ -105,7 +105,7 @@ export default function DeliveryPage() {
     addDeliveryNote({
       customerId: selCustomerId,
       linenFormIds: selFormIds,
-      date: new Date().toISOString().split('T')[0],
+      date: todayISO(),
       items: deliveryItems,
       driverName,
       vehiclePlate,
@@ -263,7 +263,7 @@ export default function DeliveryPage() {
                         </td>
                         <td className="px-3 py-1.5 text-right">
                           <input type="number" min={0} value={item.quantity}
-                            onChange={e => setDeliveryItems(prev => prev.map((di, i) => i === idx ? { ...di, quantity: parseInt(e.target.value) || 0 } : di))}
+                            onChange={e => setDeliveryItems(prev => prev.map((di, i) => i === idx ? { ...di, quantity: sanitizeNumber(e.target.value, 99999) } : di))}
                             className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                         </td>
                       </tr>

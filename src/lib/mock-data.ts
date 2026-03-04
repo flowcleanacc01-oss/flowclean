@@ -447,10 +447,14 @@ export const SAMPLE_EXPENSES: Expense[] = [
 ]
 
 // ============================================================
-// Sample Users
+// Sample Users (pre-computed bcrypt hashes)
+// Admin: flowclean2026 | Staff: staff1234
 // ============================================================
+const ADMIN_HASH = '$2b$10$DRKyFc.v2JhxskVNf5eaaehJPof8oyD.xmcqjbLIOkAljhEdeaI9a'
+const STAFF_HASH = '$2b$10$I5Uieknqc20uLCkJ0fYd..mCifIRPpMeZPeqpd6fM8UodwbWIx6eC'
+
 export const SAMPLE_USERS: AppUser[] = [
-  { id: 'admin', name: 'ติ๊ด (Admin)', email: 'flowcleanwash@gmail.com', role: 'admin', isActive: true },
-  { id: 'staff-01', name: 'สมชาย', email: 'somchai@flowclean.com', role: 'staff', isActive: true },
-  { id: 'staff-02', name: 'สมหญิง', email: 'somying@flowclean.com', role: 'staff', isActive: true },
+  { id: 'admin', name: 'ติ๊ด (Admin)', email: 'flowcleanwash@gmail.com', passwordHash: ADMIN_HASH, role: 'admin', isActive: true },
+  { id: 'staff-01', name: 'สมชาย', email: 'somchai@flowclean.com', passwordHash: STAFF_HASH, role: 'staff', isActive: true },
+  { id: 'staff-02', name: 'สมหญิง', email: 'somying@flowclean.com', passwordHash: STAFF_HASH, role: 'staff', isActive: true },
 ]

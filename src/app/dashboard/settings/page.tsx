@@ -1,21 +1,47 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
-import { cn } from '@/lib/utils'
-import { LINEN_CATEGORIES, type LinenCategory, type LinenItemDef } from '@/types'
-import { Plus, Trash2, RotateCcw, Edit2, Check, X } from 'lucide-react'
+import { cn, sanitizeNumber, formatDate } from '@/lib/utils'
+import { validatePassword } from '@/lib/auth'
+import { fetchAuditLogs } from '@/lib/supabase-service'
+import { LINEN_CATEGORIES, type LinenCategory, type LinenItemDef, type AuditLog } from '@/types'
+import { Plus, Trash2, RotateCcw, Edit2, Check, X, KeyRound } from 'lucide-react'
 
-type TabKey = 'items' | 'users' | 'company' | 'documents'
+type TabKey = 'items' | 'users' | 'company' | 'documents' | 'auditlog'
 
 const EMPTY_NEW_ITEM: LinenItemDef = {
   code: '', name: '', nameEn: '', category: 'other', unit: 'ชิ้น', defaultPrice: 0, sortOrder: 0,
 }
 
+const ACTION_LABELS: Record<string, string> = {
+  create: 'สร้าง',
+  update: 'แก้ไข',
+  delete: 'ลบ',
+  login: 'เข้าสู่ระบบ',
+  login_fail: 'เข้าสู่ระบบล้มเหลว',
+  logout: 'ออกจากระบบ',
+}
+
+const ENTITY_LABELS: Record<string, string> = {
+  customer: 'ลูกค้า',
+  linen_form: 'ใบรับส่งผ้า',
+  delivery_note: 'ใบส่งของ',
+  billing: 'ใบวางบิล',
+  tax_invoice: 'ใบกำกับภาษี',
+  quotation: 'ใบเสนอราคา',
+  expense: 'ค่าใช้จ่าย',
+  checklist: 'ใบเช็คสินค้า',
+  user: 'ผู้ใช้',
+  company: 'บริษัท',
+  linen_item: 'รายการผ้า',
+  session: 'เซสชัน',
+}
+
 export default function SettingsPage() {
   const {
     currentUser, defaultPrices, updateDefaultPrice,
-    users, addUser, updateUser,
+    users, addUser, updateUser, resetPassword,
     companyInfo, updateCompanyInfo,
     linenCatalog, addLinenItem, updateLinenItem, deleteLinenItem,
   } = useStore()
@@ -25,7 +51,9 @@ export default function SettingsPage() {
   // New user form
   const [newName, setNewName] = useState('')
   const [newEmail, setNewEmail] = useState('')
+  const [newPassword, setNewPassword] = useState('')
   const [newRole, setNewRole] = useState<'admin' | 'staff'>('staff')
+  const [addUserError, setAddUserError] = useState('')
 
   // New item form
   const [showAddItem, setShowAddItem] = useState(false)
@@ -34,6 +62,26 @@ export default function SettingsPage() {
   // Inline editing
   const [editingCode, setEditingCode] = useState<string | null>(null)
   const [editItem, setEditItem] = useState<Partial<LinenItemDef>>({})
+
+  // Reset password
+  const [resetUserId, setResetUserId] = useState<string | null>(null)
+  const [resetPw, setResetPw] = useState('')
+  const [resetError, setResetError] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+
+  // Audit logs
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+
+  useEffect(() => {
+    if (tab === 'auditlog') {
+      setAuditLoading(true)
+      fetchAuditLogs({ limit: 100 })
+        .then(setAuditLogs)
+        .catch(err => console.error('[Audit fetch error]', err))
+        .finally(() => setAuditLoading(false))
+    }
+  }, [tab])
 
   if (currentUser?.role !== 'admin') {
     return (
@@ -48,20 +96,49 @@ export default function SettingsPage() {
     { key: 'users', label: 'ผู้ใช้' },
     { key: 'company', label: 'บริษัท' },
     { key: 'documents', label: 'เอกสาร' },
+    { key: 'auditlog', label: 'บันทึกการใช้งาน' },
   ]
 
-  const handleAddUser = () => {
-    if (!newName || !newEmail) return
-    addUser({ name: newName, email: newEmail, role: newRole, isActive: true })
+  const handleAddUser = async () => {
+    setAddUserError('')
+    if (!newName || !newEmail) { setAddUserError('กรุณากรอกชื่อและอีเมล'); return }
+    const pwError = validatePassword(newPassword)
+    if (pwError) { setAddUserError(pwError); return }
+    await addUser({ name: newName, email: newEmail, passwordHash: '', role: newRole, isActive: true }, newPassword)
     setNewName('')
     setNewEmail('')
+    setNewPassword('')
     setNewRole('staff')
   }
 
-  const handleResetData = () => {
-    if (confirm('ล้างข้อมูลทั้งหมดและใช้ข้อมูลตัวอย่าง?')) {
-      localStorage.removeItem('flowclean_data_v2')
+  const handleResetPassword = async () => {
+    if (!resetUserId) return
+    setResetError('')
+    const pwError = validatePassword(resetPw)
+    if (pwError) { setResetError(pwError); return }
+    setResetLoading(true)
+    try {
+      await resetPassword(resetUserId, resetPw)
+      setResetUserId(null)
+      setResetPw('')
+    } catch (err) {
+      console.error('[Reset password error]', err)
+      setResetError('เกิดข้อผิดพลาด')
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
+  const handleResetData = async () => {
+    if (!confirm('ล้างข้อมูลทั้งหมดและใช้ข้อมูลตัวอย่าง?')) return
+    if (!confirm('ยืนยันอีกครั้ง — ข้อมูลทั้งหมดจะถูกลบ!')) return
+    try {
+      const { truncateAllTables } = await import('@/lib/supabase-service')
+      await truncateAllTables()
       window.location.reload()
+    } catch (err) {
+      console.error('[Reset error]', err)
+      alert('เกิดข้อผิดพลาดในการรีเซ็ตข้อมูล')
     }
   }
 
@@ -102,10 +179,10 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-slate-200">
+      <div className="flex gap-1 mb-6 border-b border-slate-200 overflow-x-auto">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={cn('px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+            className={cn('px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap',
               tab === t.key ? 'border-[#1B3A5C] text-[#1B3A5C]' : 'border-transparent text-slate-500 hover:text-slate-700')}>
             {t.label}
           </button>
@@ -151,7 +228,7 @@ export default function SettingsPage() {
                     placeholder="หน่วย"
                     className="px-2 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                   <input type="number" min={0} step={0.5} value={newItem.defaultPrice}
-                    onChange={e => setNewItem({ ...newItem, defaultPrice: parseFloat(e.target.value) || 0 })}
+                    onChange={e => setNewItem({ ...newItem, defaultPrice: sanitizeNumber(e.target.value) })}
                     placeholder="ราคา"
                     className="px-2 py-1.5 border border-slate-200 rounded text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                 </div>
@@ -219,7 +296,7 @@ export default function SettingsPage() {
                     <td className="px-4 py-2 text-right">
                       <input type="number" min={0} step={0.5}
                         value={defaultPrices[item.code] ?? item.defaultPrice}
-                        onChange={e => updateDefaultPrice(item.code, parseFloat(e.target.value) || 0)}
+                        onChange={e => updateDefaultPrice(item.code, sanitizeNumber(e.target.value))}
                         className="w-20 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                     </td>
                     <td className="px-4 py-2 text-right">
@@ -266,7 +343,7 @@ export default function SettingsPage() {
                   <th className="text-left px-4 py-3 font-medium text-slate-600">อีเมล</th>
                   <th className="text-center px-4 py-3 font-medium text-slate-600">บทบาท</th>
                   <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600 w-20"></th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-600 w-28"></th>
                 </tr>
               </thead>
               <tbody>
@@ -288,18 +365,51 @@ export default function SettingsPage() {
                       </button>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {u.id !== currentUser?.id && (
-                        <button onClick={() => updateUser(u.id, { isActive: false })}
-                          className="text-slate-400 hover:text-red-500">
-                          <Trash2 className="w-4 h-4" />
+                      <div className="flex gap-1 justify-end">
+                        <button onClick={() => { setResetUserId(u.id); setResetPw(''); setResetError('') }}
+                          title="รีเซ็ตรหัสผ่าน"
+                          className="text-slate-400 hover:text-amber-600 p-1">
+                          <KeyRound className="w-4 h-4" />
                         </button>
-                      )}
+                        {u.id !== currentUser?.id && (
+                          <button onClick={() => updateUser(u.id, { isActive: false })}
+                            className="text-slate-400 hover:text-red-500 p-1">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {/* Reset Password Modal */}
+          {resetUserId && (
+            <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
+              <h3 className="font-medium text-amber-800 mb-3">
+                รีเซ็ตรหัสผ่าน: {users.find(u => u.id === resetUserId)?.name}
+              </h3>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-48">
+                  <label className="block text-xs text-amber-700 mb-1">รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)</label>
+                  <input type="password" value={resetPw} onChange={e => setResetPw(e.target.value)}
+                    placeholder="รหัสผ่านใหม่"
+                    className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:ring-1 focus:ring-amber-400 focus:outline-none" />
+                </div>
+                <button onClick={handleResetPassword} disabled={resetLoading}
+                  className="px-4 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors">
+                  {resetLoading ? 'กำลังรีเซ็ต...' : 'รีเซ็ต'}
+                </button>
+                <button onClick={() => setResetUserId(null)}
+                  className="px-4 py-2 text-slate-600 text-sm hover:bg-slate-100 rounded-lg transition-colors">
+                  ยกเลิก
+                </button>
+              </div>
+              {resetError && <p className="text-red-600 text-sm mt-2">{resetError}</p>}
+            </div>
+          )}
 
           {/* Add User */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -309,16 +419,19 @@ export default function SettingsPage() {
                 className="flex-1 min-w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="อีเมล"
                 className="flex-1 min-w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="รหัสผ่าน (6+ ตัว)"
+                className="flex-1 min-w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               <select value={newRole} onChange={e => setNewRole(e.target.value as 'admin' | 'staff')}
                 className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
                 <option value="staff">Staff</option>
                 <option value="admin">Admin</option>
               </select>
-              <button onClick={handleAddUser} disabled={!newName || !newEmail}
+              <button onClick={handleAddUser} disabled={!newName || !newEmail || !newPassword}
                 className="px-4 py-2 bg-[#1B3A5C] text-white text-sm rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors flex items-center gap-1">
                 <Plus className="w-4 h-4" />เพิ่ม
               </button>
             </div>
+            {addUserError && <p className="text-red-600 text-sm mt-2">{addUserError}</p>}
           </div>
         </div>
       )}
@@ -380,27 +493,27 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div className="bg-slate-50 rounded-lg p-3">
                 <p className="font-mono text-slate-600">ใบส่งรับผ้า</p>
-                <p className="text-xs text-slate-400">LF-YYYYMMDD-XXX</p>
+                <p className="text-xs text-slate-400">LF-YYYYMMDD-XXXXX</p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3">
                 <p className="font-mono text-slate-600">ใบส่งของ</p>
-                <p className="text-xs text-slate-400">SD-YYYYMMDD-XXX</p>
+                <p className="text-xs text-slate-400">SD-YYYYMMDD-XXXXX</p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3">
                 <p className="font-mono text-slate-600">ใบวางบิล</p>
-                <p className="text-xs text-slate-400">WB-YYYYMM-XXX</p>
+                <p className="text-xs text-slate-400">WB-YYYYMM-XXXXX</p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3">
                 <p className="font-mono text-slate-600">ใบกำกับภาษี</p>
-                <p className="text-xs text-slate-400">IV-YYYYMM-XXX</p>
+                <p className="text-xs text-slate-400">IV-YYYYMM-XXXXX</p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3">
                 <p className="font-mono text-slate-600">ใบเสนอราคา</p>
-                <p className="text-xs text-slate-400">QU-YYYYMM-XXX</p>
+                <p className="text-xs text-slate-400">QU-YYYYMM-XXXXX</p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3">
                 <p className="font-mono text-slate-600">ใบเช็คสินค้า</p>
-                <p className="text-xs text-slate-400">CK-YYYYMMDD-XXX</p>
+                <p className="text-xs text-slate-400">CK-YYYYMMDD-XXXXX</p>
               </div>
             </div>
           </div>
@@ -416,6 +529,94 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Audit Log Tab */}
+      {tab === 'auditlog' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-slate-700">บันทึกการใช้งาน</h3>
+                <p className="text-xs text-slate-400 mt-0.5">ประวัติการเข้าใช้และแก้ไขข้อมูลทั้งหมด</p>
+              </div>
+              <button
+                onClick={() => {
+                  setAuditLoading(true)
+                  fetchAuditLogs({ limit: 100 })
+                    .then(setAuditLogs)
+                    .catch(err => console.error('[Audit refresh error]', err))
+                    .finally(() => setAuditLoading(false))
+                }}
+                className="text-xs px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1">
+                <RotateCcw className="w-3.5 h-3.5" />รีเฟรช
+              </button>
+            </div>
+
+            {auditLoading ? (
+              <div className="p-8 text-center text-slate-400">
+                <div className="w-6 h-6 border-2 border-slate-300 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                กำลังโหลด...
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <div className="p-8 text-center text-slate-400">ยังไม่มีบันทึก</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="text-left px-4 py-2 font-medium text-slate-600 whitespace-nowrap">เวลา</th>
+                      <th className="text-left px-4 py-2 font-medium text-slate-600 whitespace-nowrap">ผู้ใช้</th>
+                      <th className="text-left px-4 py-2 font-medium text-slate-600 whitespace-nowrap">การกระทำ</th>
+                      <th className="text-left px-4 py-2 font-medium text-slate-600 whitespace-nowrap">ประเภท</th>
+                      <th className="text-left px-4 py-2 font-medium text-slate-600">รายละเอียด</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs.map(log => (
+                      <tr key={log.id} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="px-4 py-2 text-xs text-slate-500 whitespace-nowrap">
+                          {formatAuditTime(log.createdAt)}
+                        </td>
+                        <td className="px-4 py-2 text-slate-700 whitespace-nowrap">{log.userName}</td>
+                        <td className="px-4 py-2 whitespace-nowrap">
+                          <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
+                            log.action === 'login' ? 'bg-emerald-100 text-emerald-700' :
+                            log.action === 'login_fail' ? 'bg-red-100 text-red-700' :
+                            log.action === 'logout' ? 'bg-slate-100 text-slate-600' :
+                            log.action === 'create' ? 'bg-blue-100 text-blue-700' :
+                            log.action === 'update' ? 'bg-amber-100 text-amber-700' :
+                            log.action === 'delete' ? 'bg-red-100 text-red-700' :
+                            'bg-slate-100 text-slate-600')}>
+                            {ACTION_LABELS[log.action] || log.action}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-xs text-slate-500 whitespace-nowrap">
+                          {ENTITY_LABELS[log.entityType] || log.entityType}
+                        </td>
+                        <td className="px-4 py-2 text-slate-600 text-xs">
+                          {log.entityLabel}
+                          {log.details && <span className="text-slate-400 ml-1">— {log.details}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
+}
+
+function formatAuditTime(isoStr: string): string {
+  try {
+    const d = new Date(isoStr)
+    const date = formatDate(isoStr.split('T')[0])
+    const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+    return `${date} ${time}`
+  } catch {
+    return isoStr
+  }
 }

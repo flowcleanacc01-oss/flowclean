@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatDate, cn, todayISO } from '@/lib/utils'
+import { formatCurrency, formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
+import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem } from '@/types'
 import { aggregateDeliveryItems, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { Plus, Search, FileText, Printer, X, ChevronRight } from 'lucide-react'
@@ -25,20 +26,12 @@ export default function BillingPage() {
   const [tab, setTab] = useState<TabKey>('billing')
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
-  const [showDetail, setShowDetail] = useState<string | null>(null)
-  const [showPrint, setShowPrint] = useState(false)
   const searchParams = useSearchParams()
+  const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
+  const [showPrint, setShowPrint] = useState(false)
   const [showInvoiceDetail, setShowInvoiceDetail] = useState<string | null>(null)
   const [showInvoicePrint, setShowInvoicePrint] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-
-  // Auto-open detail from dashboard deep link
-  useEffect(() => {
-    const detailId = searchParams.get('detail')
-    if (detailId && billingStatements.some(b => b.id === detailId)) {
-      setShowDetail(detailId)
-    }
-  }, [searchParams, billingStatements])
 
   // Quotation state
   const [showCreateQU, setShowCreateQU] = useState(false)
@@ -79,9 +72,16 @@ export default function BillingPage() {
 
   // Preview for billing creation
   const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
+  // Check if flat-rate bill already exists for this customer+month
+  const flatRateBillExists = useMemo(() => {
+    if (!selCustomer || selCustomer.billingModel !== 'monthly_flat') return false
+    return billingStatements.some(b => b.customerId === selCustomerId && b.billingMonth === selMonth)
+  }, [selCustomer, selCustomerId, selMonth, billingStatements])
+
   const previewBilling = useMemo(() => {
     if (!selCustomer) return null
     if (selCustomer.billingModel === 'monthly_flat') {
+      if (flatRateBillExists) return null
       return createFlatRateBilling(selCustomer, selMonth)
     }
     // per-piece: aggregate delivery notes for this customer in this month
@@ -95,7 +95,7 @@ export default function BillingPage() {
     if (monthNotes.length === 0) return null
     const lineItems = aggregateDeliveryItems(monthNotes, selCustomer, linenCatalog)
     return { lineItems, ...calculateBillingTotals(lineItems) }
-  }, [selCustomer, selMonth, deliveryNotes, selCustomerId, linenCatalog, billingStatements])
+  }, [selCustomer, selMonth, deliveryNotes, selCustomerId, linenCatalog, billingStatements, flatRateBillExists])
 
   const handleCreateBilling = () => {
     if (!selCustomer || !previewBilling) return
@@ -112,7 +112,7 @@ export default function BillingPage() {
         .map(dn => dn.id),
       billingMonth: selMonth,
       issueDate: todayISO(),
-      dueDate: dueDate.toISOString().split('T')[0],
+      dueDate: format(dueDate, 'yyyy-MM-dd'),
       lineItems: previewBilling.lineItems,
       subtotal: previewBilling.subtotal,
       vat: previewBilling.vat,
@@ -157,7 +157,7 @@ export default function BillingPage() {
       customerName: quCustomerName,
       customerContact: quCustomerContact,
       date: quDate,
-      validUntil: validDate.toISOString().split('T')[0],
+      validUntil: format(validDate, 'yyyy-MM-dd'),
       items: quItems.filter(i => i.pricePerUnit > 0),
       conditions: quConditions,
       status: 'draft',
@@ -467,7 +467,9 @@ export default function BillingPage() {
 
           {selCustomerId && !previewBilling && (
             <div className="text-center py-8 text-slate-400 text-sm">
-              ไม่พบใบส่งของในเดือนนี้
+              {flatRateBillExists
+                ? 'ลูกค้านี้มีใบวางบิลเดือนนี้แล้ว (เหมาจ่าย)'
+                : 'ไม่พบใบส่งของในเดือนนี้'}
             </div>
           )}
 
@@ -691,7 +693,7 @@ export default function BillingPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">ใช้ได้ (วัน)</label>
-              <input type="number" min={1} value={quValidDays} onChange={e => setQuValidDays(parseInt(e.target.value) || 30)}
+              <input type="number" min={1} value={quValidDays} onChange={e => setQuValidDays(sanitizeNumber(e.target.value, 365) || 30)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
           </div>
@@ -718,7 +720,7 @@ export default function BillingPage() {
                           value={item.pricePerUnit || ''}
                           onChange={e => {
                             const updated = [...quItems]
-                            updated[idx] = { ...item, pricePerUnit: parseFloat(e.target.value) || 0 }
+                            updated[idx] = { ...item, pricePerUnit: sanitizeNumber(e.target.value) }
                             setQuItems(updated)
                           }}
                           className="w-24 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />

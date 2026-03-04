@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatDate, cn } from '@/lib/utils'
+import { formatDate, cn, todayISO } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasDiscrepancies } from '@/lib/discrepancy'
 import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X } from 'lucide-react'
@@ -21,20 +21,12 @@ export default function LinenFormsPage() {
   const [customerFilter, setCustomerFilter] = useState<string>('all')
   const searchParams = useSearchParams()
   const [showCreate, setShowCreate] = useState(false)
-  const [showDetail, setShowDetail] = useState<string | null>(null)
+  const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-
-  // Auto-open detail from dashboard deep link
-  useEffect(() => {
-    const detailId = searchParams.get('detail')
-    if (detailId && linenForms.some(f => f.id === detailId)) {
-      setShowDetail(detailId)
-    }
-  }, [searchParams, linenForms])
 
   // Create form state
   const [newCustomerId, setNewCustomerId] = useState('')
-  const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0])
+  const [newDate, setNewDate] = useState(todayISO())
   const [newRows, setNewRows] = useState<LinenFormRow[]>([])
   const [newNotes, setNewNotes] = useState('')
 
@@ -54,9 +46,24 @@ export default function LinenFormsPage() {
   const statuses: (LinenFormStatus | 'all')[] = ['all', ...ALL_LINEN_STATUSES]
 
   const handleCreateOpen = () => {
-    setNewCustomerId(customers[0]?.id || '')
-    setNewDate(new Date().toISOString().split('T')[0])
-    setNewRows([])
+    const firstCustomer = customers.filter(c => c.isActive)[0]
+    setNewCustomerId(firstCustomer?.id || '')
+    setNewDate(todayISO())
+    // Init rows from first customer's enabled items
+    if (firstCustomer) {
+      setNewRows(firstCustomer.enabledItems.map(code => ({
+        code,
+        col1_carryOver: 0,
+        col2_hotelCountIn: 0,
+        col3_hotelClaimCount: 0,
+        col4_factoryApproved: 0,
+        col5_factoryClaimApproved: 0,
+        col6_factoryPackSend: 0,
+        note: '',
+      })))
+    } else {
+      setNewRows([])
+    }
     setNewNotes('')
     setShowCreate(true)
   }
@@ -79,7 +86,7 @@ export default function LinenFormsPage() {
   }
 
   const handleCreate = () => {
-    if (!newCustomerId) return
+    if (!newCustomerId || newRows.length === 0) return
     addLinenForm({
       customerId: newCustomerId,
       date: newDate,
@@ -268,7 +275,7 @@ export default function LinenFormsPage() {
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setShowCreate(false)}
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={handleCreate} disabled={!newCustomerId}
+            <button onClick={handleCreate} disabled={!newCustomerId || newRows.length === 0}
               className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
               บันทึก
             </button>

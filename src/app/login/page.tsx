@@ -18,17 +18,19 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setLoading(true)
-
-    await new Promise(r => setTimeout(r, 500))
 
     if (!email) {
       setError('กรุณากรอกอีเมล')
-      setLoading(false)
+      return
+    }
+    if (!password) {
+      setError('กรุณากรอกรหัสผ่าน')
       return
     }
 
-    const ok = login(email, password)
+    setLoading(true)
+
+    const ok = await login(email, password)
     if (ok) {
       router.push('/dashboard')
     } else {
@@ -111,17 +113,17 @@ export default function LoginPage() {
 
           <div className="mt-6 pt-5 border-t border-slate-100">
             <p className="text-xs text-slate-400 text-center">
-              Demo: ใช้อีเมลใดก็ได้เพื่อเข้าสู่ระบบ
+              ใช้อีเมลและรหัสผ่านที่ลงทะเบียนในระบบ
             </p>
             <div className="flex flex-wrap gap-2 justify-center mt-3">
               <button
-                onClick={() => { setEmail('flowcleanwash@gmail.com'); setPassword('admin') }}
+                onClick={() => { setEmail('flowcleanwash@gmail.com'); setPassword('flowclean2026') }}
                 className="text-xs px-3 py-1 bg-[#e8eef5] text-[#1B3A5C] rounded-full hover:bg-[#d0dae8] transition-colors"
               >
                 Admin (ติ๊ด)
               </button>
               <button
-                onClick={() => { setEmail('somchai@flowclean.com'); setPassword('staff') }}
+                onClick={() => { setEmail('somchai@flowclean.com'); setPassword('staff1234') }}
                 className="text-xs px-3 py-1 bg-[#d5f7f7] text-[#2bb8b8] rounded-full hover:bg-[#b8f0f0] transition-colors"
               >
                 Staff (สมชาย)

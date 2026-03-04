@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency, sanitizeNumber } from '@/lib/utils'
 import type { Customer } from '@/types'
 import { Plus, Search, Building2, Phone, Mail, Edit2, Trash2, Check, ChevronUp, ChevronDown, FileText, Users } from 'lucide-react'
 import Modal from '@/components/Modal'
@@ -17,7 +17,15 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
 }
 
 export default function CustomersPage() {
-  const { customers, addCustomer, updateCustomer, deleteCustomer, defaultPrices, linenCatalog, quotations } = useStore()
+  const { customers, addCustomer, updateCustomer, deleteCustomer, defaultPrices, linenCatalog, quotations, linenForms, deliveryNotes, billingStatements, checklists, taxInvoices } = useStore()
+
+  const hasDocuments = (custId: string) => {
+    return linenForms.some(f => f.customerId === custId)
+      || deliveryNotes.some(d => d.customerId === custId)
+      || billingStatements.some(b => b.customerId === custId)
+      || checklists.some(c => c.customerId === custId)
+      || taxInvoices.some(t => t.customerId === custId)
+  }
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -173,7 +181,13 @@ export default function CustomersPage() {
                 className="flex-1 text-xs py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors flex items-center justify-center gap-1">
                 <Edit2 className="w-3 h-3" />แก้ไข
               </button>
-              <button onClick={() => { if (confirm('ลบลูกค้านี้?')) deleteCustomer(c.id) }}
+              <button onClick={() => {
+                  if (hasDocuments(c.id)) {
+                    alert('ไม่สามารถลบได้ — ลูกค้านี้มีเอกสารที่เกี่ยวข้อง (ใบส่งรับผ้า/ใบส่งของ/ใบวางบิล/ใบเช็ค/ใบกำกับภาษี)\nปิดใช้งานแทน (แก้ไข → isActive = false)')
+                    return
+                  }
+                  if (confirm('ลบลูกค้านี้?')) deleteCustomer(c.id)
+                }}
                 className="text-xs py-1.5 px-3 text-red-500 hover:bg-red-50 rounded transition-colors">
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -217,7 +231,7 @@ export default function CustomersPage() {
             </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">เครดิต (วัน)</label>
-              <input type="number" value={form.creditDays} onChange={e => setForm({ ...form, creditDays: parseInt(e.target.value) || 30 })}
+              <input type="number" value={form.creditDays} onChange={e => setForm({ ...form, creditDays: sanitizeNumber(e.target.value, 365) || 30 })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
           </div>
@@ -261,7 +275,7 @@ export default function CustomersPage() {
               <div>
                 <label className="block text-sm text-slate-600 mb-1">ค่าเหมารายเดือน (บาท)</label>
                 <input type="number" value={form.monthlyFlatRate}
-                  onChange={e => setForm({ ...form, monthlyFlatRate: parseFloat(e.target.value) || 0 })}
+                  onChange={e => setForm({ ...form, monthlyFlatRate: sanitizeNumber(e.target.value) })}
                   className="w-48 px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               </div>
             )}
@@ -352,7 +366,7 @@ export default function CustomersPage() {
                         {form.billingModel === 'per_piece' && (
                           <td className="px-3 py-1.5 text-right">
                             <input type="number" min={0} step={0.5} value={priceItem?.price ?? 0}
-                              onChange={e => updatePrice(item.code, parseFloat(e.target.value) || 0)}
+                              onChange={e => updatePrice(item.code, sanitizeNumber(e.target.value))}
                               className="w-20 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                           </td>
                         )}

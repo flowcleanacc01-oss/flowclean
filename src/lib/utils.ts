@@ -11,48 +11,39 @@ export function genId(): string {
 }
 
 // ============================================================
-// Document Number Generators
+// Document Number Generators — timestamp-based to avoid collision
 // ============================================================
+let _seqCounter = 0
+
+function nextSeq(): string {
+  // Use last 3 digits of timestamp + counter for uniqueness
+  const ts = Date.now() % 1000
+  _seqCounter = (_seqCounter + 1) % 100
+  return String(ts).padStart(3, '0') + String(_seqCounter).padStart(2, '0')
+}
+
 export function genLinenFormNumber(): string {
-  const now = new Date()
-  const dateStr = format(now, 'yyyyMMdd')
-  const seq = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')
-  return `LF-${dateStr}-${seq}`
+  return `LF-${format(new Date(), 'yyyyMMdd')}-${nextSeq()}`
 }
 
 export function genDeliveryNoteNumber(): string {
-  const now = new Date()
-  const dateStr = format(now, 'yyyyMMdd')
-  const seq = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')
-  return `SD-${dateStr}-${seq}`
+  return `SD-${format(new Date(), 'yyyyMMdd')}-${nextSeq()}`
 }
 
 export function genBillingNumber(): string {
-  const now = new Date()
-  const monthStr = format(now, 'yyyyMM')
-  const seq = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')
-  return `WB-${monthStr}-${seq}`
+  return `WB-${format(new Date(), 'yyyyMM')}-${nextSeq()}`
 }
 
 export function genTaxInvoiceNumber(): string {
-  const now = new Date()
-  const monthStr = format(now, 'yyyyMM')
-  const seq = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')
-  return `IV-${monthStr}-${seq}`
+  return `IV-${format(new Date(), 'yyyyMM')}-${nextSeq()}`
 }
 
 export function genQuotationNumber(): string {
-  const now = new Date()
-  const monthStr = format(now, 'yyyyMM')
-  const seq = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')
-  return `QU-${monthStr}-${seq}`
+  return `QU-${format(new Date(), 'yyyyMM')}-${nextSeq()}`
 }
 
 export function genChecklistNumber(): string {
-  const now = new Date()
-  const dateStr = format(now, 'yyyyMMdd')
-  const seq = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')
-  return `CK-${dateStr}-${seq}`
+  return `CK-${format(new Date(), 'yyyyMMdd')}-${nextSeq()}`
 }
 
 // ============================================================
@@ -103,4 +94,13 @@ export function getAgingBucket(daysPast: number): string {
   if (daysPast <= 60) return '31-60 วัน'
   if (daysPast <= 90) return '61-90 วัน'
   return 'มากกว่า 90 วัน'
+}
+
+/**
+ * Sanitize numeric input: finite, non-negative, clamped to max.
+ */
+export function sanitizeNumber(value: string | number, max = 9_999_999): number {
+  const n = typeof value === 'string' ? parseFloat(value) : value
+  if (!Number.isFinite(n) || n < 0) return 0
+  return Math.min(n, max)
 }
