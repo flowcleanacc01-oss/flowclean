@@ -6,6 +6,7 @@ import '@fontsource/sarabun/600.css'
 import '@fontsource/sarabun/700.css'
 import './globals.css'
 import { StoreProvider } from '@/lib/store'
+import { ToastProvider } from '@/components/Toast'
 
 export const metadata: Metadata = {
   title: 'FlowClean - ระบบบริหารโรงซักรีด',
@@ -16,9 +17,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="th">
       <body>
-        <StoreProvider>
-          {children}
-        </StoreProvider>
+        <ToastProvider>
+          <StoreProvider>
+            {children}
+          </StoreProvider>
+        </ToastProvider>
       </body>
     </html>
   )

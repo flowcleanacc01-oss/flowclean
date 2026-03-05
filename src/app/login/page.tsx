@@ -115,20 +115,22 @@ export default function LoginPage() {
             <p className="text-xs text-slate-400 text-center">
               ใช้อีเมลและรหัสผ่านที่ลงทะเบียนในระบบ
             </p>
-            <div className="flex flex-wrap gap-2 justify-center mt-3">
-              <button
-                onClick={() => { setEmail('flowcleanwash@gmail.com'); setPassword('flowclean2026') }}
-                className="text-xs px-3 py-1 bg-[#e8eef5] text-[#1B3A5C] rounded-full hover:bg-[#d0dae8] transition-colors"
-              >
-                Admin (ติ๊ด)
-              </button>
-              <button
-                onClick={() => { setEmail('somchai@flowclean.com'); setPassword('staff1234') }}
-                className="text-xs px-3 py-1 bg-[#d5f7f7] text-[#2bb8b8] rounded-full hover:bg-[#b8f0f0] transition-colors"
-              >
-                Staff (สมชาย)
-              </button>
-            </div>
+            {process.env.NODE_ENV === 'development' && (
+              <div className="flex flex-wrap gap-2 justify-center mt-3">
+                <button
+                  onClick={() => { setEmail('flowcleanwash@gmail.com'); setPassword('flowclean2026') }}
+                  className="text-xs px-3 py-1 bg-[#e8eef5] text-[#1B3A5C] rounded-full hover:bg-[#d0dae8] transition-colors"
+                >
+                  Admin (ติ๊ด)
+                </button>
+                <button
+                  onClick={() => { setEmail('somchai@flowclean.com'); setPassword('staff1234') }}
+                  className="text-xs px-3 py-1 bg-[#d5f7f7] text-[#2bb8b8] rounded-full hover:bg-[#b8f0f0] transition-colors"
+                >
+                  Staff (สมชาย)
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

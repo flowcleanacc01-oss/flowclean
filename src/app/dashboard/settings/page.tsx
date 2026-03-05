@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useStore } from '@/lib/store'
 import { cn, sanitizeNumber, formatDate } from '@/lib/utils'
 import { validatePassword } from '@/lib/auth'
@@ -68,6 +68,36 @@ export default function SettingsPage() {
   const [resetPw, setResetPw] = useState('')
   const [resetError, setResetError] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
+
+  // Company info local draft (debounced save)
+  const [companyDraft, setCompanyDraft] = useState(companyInfo)
+  const companyDirty = useRef(false)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => { setCompanyDraft(companyInfo) }, [companyInfo])
+
+  const handleCompanyChange = useCallback((field: string, value: string) => {
+    setCompanyDraft(prev => ({ ...prev, [field]: value }))
+    companyDirty.current = true
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      setCompanyDraft(latest => {
+        if (companyDirty.current) {
+          updateCompanyInfo(latest)
+          companyDirty.current = false
+        }
+        return latest
+      })
+    }, 1500)
+  }, [updateCompanyInfo])
+
+  const handleCompanySaveNow = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    if (companyDirty.current) {
+      updateCompanyInfo(companyDraft)
+      companyDirty.current = false
+    }
+  }, [companyDraft, updateCompanyInfo])
 
   // Audit logs
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
@@ -439,46 +469,52 @@ export default function SettingsPage() {
       {/* Company Tab */}
       {tab === 'company' && (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
-          <h3 className="font-medium text-slate-700 mb-2">ข้อมูลบริษัท (สำหรับใบกำกับภาษี)</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-medium text-slate-700">ข้อมูลบริษัท (สำหรับใบกำกับภาษี)</h3>
+            <button onClick={handleCompanySaveNow}
+              className="px-4 py-1.5 bg-[#1B3A5C] text-white text-sm rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
+              <Check className="w-3.5 h-3.5" />บันทึก
+            </button>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
               <label className="block font-medium text-slate-600 mb-1">ชื่อบริษัท (ไทย)</label>
-              <input value={companyInfo.name} onChange={e => updateCompanyInfo({ name: e.target.value })}
+              <input value={companyDraft.name} onChange={e => handleCompanyChange('name', e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">ชื่อบริษัท (EN)</label>
-              <input value={companyInfo.nameEn} onChange={e => updateCompanyInfo({ nameEn: e.target.value })}
+              <input value={companyDraft.nameEn} onChange={e => handleCompanyChange('nameEn', e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <div className="sm:col-span-2">
               <label className="block font-medium text-slate-600 mb-1">ที่อยู่</label>
-              <textarea value={companyInfo.address} onChange={e => updateCompanyInfo({ address: e.target.value })} rows={2}
+              <textarea value={companyDraft.address} onChange={e => handleCompanyChange('address', e.target.value)} rows={2}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">เลขผู้เสียภาษี</label>
-              <input value={companyInfo.taxId} onChange={e => updateCompanyInfo({ taxId: e.target.value })}
+              <input value={companyDraft.taxId} onChange={e => handleCompanyChange('taxId', e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">โทรศัพท์</label>
-              <input value={companyInfo.phone} onChange={e => updateCompanyInfo({ phone: e.target.value })}
+              <input value={companyDraft.phone} onChange={e => handleCompanyChange('phone', e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">ธนาคาร</label>
-              <input value={companyInfo.bankName} onChange={e => updateCompanyInfo({ bankName: e.target.value })}
+              <input value={companyDraft.bankName} onChange={e => handleCompanyChange('bankName', e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">ชื่อบัญชี</label>
-              <input value={companyInfo.bankAccountName} onChange={e => updateCompanyInfo({ bankAccountName: e.target.value })}
+              <input value={companyDraft.bankAccountName} onChange={e => handleCompanyChange('bankAccountName', e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">เลขบัญชี</label>
-              <input value={companyInfo.bankAccountNumber} onChange={e => updateCompanyInfo({ bankAccountNumber: e.target.value })}
+              <input value={companyDraft.bankAccountNumber} onChange={e => handleCompanyChange('bankAccountNumber', e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
           </div>
@@ -518,15 +554,17 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Reset */}
-          <div className="bg-white rounded-xl border border-red-200 p-6">
-            <h3 className="font-medium text-red-700 mb-2">ล้างข้อมูล</h3>
-            <p className="text-sm text-slate-500 mb-3">ล้างข้อมูลทั้งหมดและกลับไปใช้ข้อมูลตัวอย่าง</p>
-            <button onClick={handleResetData}
-              className="px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm flex items-center gap-1">
-              <RotateCcw className="w-4 h-4" />รีเซ็ตข้อมูล
-            </button>
-          </div>
+          {/* Reset — dev only */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="bg-white rounded-xl border border-red-200 p-6">
+              <h3 className="font-medium text-red-700 mb-2">ล้างข้อมูล (dev only)</h3>
+              <p className="text-sm text-slate-500 mb-3">ล้างข้อมูลทั้งหมดและกลับไปใช้ข้อมูลตัวอย่าง</p>
+              <button onClick={handleResetData}
+                className="px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm flex items-center gap-1">
+                <RotateCcw className="w-4 h-4" />รีเซ็ตข้อมูล
+              </button>
+            </div>
+          )}
         </div>
       )}
 

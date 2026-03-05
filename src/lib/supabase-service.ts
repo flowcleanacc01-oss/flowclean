@@ -6,6 +6,29 @@ import type {
 } from '@/types'
 
 // ============================================================
+// Server-side DB write proxy (uses service_role key)
+// Reads use anon supabase client directly (RLS allows SELECT)
+// Writes go through /api/db (RLS blocks anon writes)
+// ============================================================
+async function dbWrite(params: {
+  table: string
+  operation: 'insert' | 'update' | 'delete' | 'upsert'
+  data?: Record<string, unknown> | Record<string, unknown>[]
+  match?: { column: string; value: string | number }
+  onConflict?: string
+}): Promise<void> {
+  const res = await fetch('/api/db', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `DB write failed: ${res.status}`)
+  }
+}
+
+// ============================================================
 // Case Conversion: camelCase ↔ snake_case
 // ============================================================
 
@@ -112,33 +135,19 @@ export async function fetchLinenItems(): Promise<LinenItemDef[]> {
 
 export async function upsertLinenItems(items: LinenItemDef[]): Promise<void> {
   const rows = items.map(i => toSnakeCase(i as unknown as Record<string, unknown>))
-  const { error } = await supabase
-    .from('linen_items')
-    .upsert(rows, { onConflict: 'code' })
-  if (error) throw error
+  await dbWrite({ table: 'linen_items', operation: 'upsert', data: rows, onConflict: 'code' })
 }
 
 export async function insertLinenItem(item: LinenItemDef): Promise<void> {
-  const { error } = await supabase
-    .from('linen_items')
-    .insert(toSnakeCase(item as unknown as Record<string, unknown>))
-  if (error) throw error
+  await dbWrite({ table: 'linen_items', operation: 'insert', data: toSnakeCase(item as unknown as Record<string, unknown>) })
 }
 
 export async function updateLinenItemDB(code: string, updates: Partial<LinenItemDef>): Promise<void> {
-  const { error } = await supabase
-    .from('linen_items')
-    .update(toSnakeCase(updates as unknown as Record<string, unknown>))
-    .eq('code', code)
-  if (error) throw error
+  await dbWrite({ table: 'linen_items', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'code', value: code } })
 }
 
 export async function deleteLinenItemDB(code: string): Promise<void> {
-  const { error } = await supabase
-    .from('linen_items')
-    .delete()
-    .eq('code', code)
-  if (error) throw error
+  await dbWrite({ table: 'linen_items', operation: 'delete', match: { column: 'code', value: code } })
 }
 
 // ============================================================
@@ -155,25 +164,15 @@ export async function fetchUsers(): Promise<AppUser[]> {
 
 export async function upsertUsers(users: AppUser[]): Promise<void> {
   const rows = users.map(u => toSnakeCase(u as unknown as Record<string, unknown>))
-  const { error } = await supabase
-    .from('app_users')
-    .upsert(rows, { onConflict: 'id' })
-  if (error) throw error
+  await dbWrite({ table: 'app_users', operation: 'upsert', data: rows, onConflict: 'id' })
 }
 
 export async function insertUser(user: AppUser): Promise<void> {
-  const { error } = await supabase
-    .from('app_users')
-    .insert(toSnakeCase(user as unknown as Record<string, unknown>))
-  if (error) throw error
+  await dbWrite({ table: 'app_users', operation: 'insert', data: toSnakeCase(user as unknown as Record<string, unknown>) })
 }
 
 export async function updateUserDB(id: string, updates: Partial<AppUser>): Promise<void> {
-  const { error } = await supabase
-    .from('app_users')
-    .update(toSnakeCase(updates as unknown as Record<string, unknown>))
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'app_users', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
 }
 
 export async function fetchUserByEmail(email: string): Promise<(AppUser & { passwordHash: string }) | null> {
@@ -188,11 +187,7 @@ export async function fetchUserByEmail(email: string): Promise<(AppUser & { pass
 }
 
 export async function updatePasswordHash(userId: string, hash: string): Promise<void> {
-  const { error } = await supabase
-    .from('app_users')
-    .update({ password_hash: hash })
-    .eq('id', userId)
-  if (error) throw error
+  await dbWrite({ table: 'app_users', operation: 'update', data: { password_hash: hash }, match: { column: 'id', value: userId } })
 }
 
 // ============================================================
@@ -200,10 +195,11 @@ export async function updatePasswordHash(userId: string, hash: string): Promise<
 // ============================================================
 
 export async function insertAuditLog(log: AuditLog): Promise<void> {
-  const { error } = await supabase
-    .from('audit_logs')
-    .insert(toSnakeCase(log as unknown as Record<string, unknown>))
-  if (error) console.error('[Audit log error]', error)
+  try {
+    await dbWrite({ table: 'audit_logs', operation: 'insert', data: toSnakeCase(log as unknown as Record<string, unknown>) })
+  } catch (err) {
+    console.error('[Audit log error]', err)
+  }
 }
 
 export interface FetchAuditLogsOptions {
@@ -249,10 +245,7 @@ export async function fetchCompanyInfo(): Promise<CompanyInfo | null> {
 
 export async function upsertCompanyInfo(info: CompanyInfo): Promise<void> {
   const row = { ...toSnakeCase(info as unknown as Record<string, unknown>), id: 1 }
-  const { error } = await supabase
-    .from('company_info')
-    .upsert(row, { onConflict: 'id' })
-  if (error) throw error
+  await dbWrite({ table: 'company_info', operation: 'upsert', data: row, onConflict: 'id' })
 }
 
 // ============================================================
@@ -269,26 +262,15 @@ export async function fetchCustomers(): Promise<Customer[]> {
 }
 
 export async function insertCustomer(customer: Customer): Promise<void> {
-  const { error } = await supabase
-    .from('customers')
-    .insert(toSnakeCase(customer as unknown as Record<string, unknown>))
-  if (error) throw error
+  await dbWrite({ table: 'customers', operation: 'insert', data: toSnakeCase(customer as unknown as Record<string, unknown>) })
 }
 
 export async function updateCustomerDB(id: string, updates: Partial<Customer>): Promise<void> {
-  const { error } = await supabase
-    .from('customers')
-    .update(toSnakeCase(updates as unknown as Record<string, unknown>))
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'customers', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
 }
 
 export async function deleteCustomerDB(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('customers')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'customers', operation: 'delete', match: { column: 'id', value: id } })
 }
 
 // ============================================================
@@ -305,26 +287,15 @@ export async function fetchLinenForms(): Promise<LinenForm[]> {
 }
 
 export async function insertLinenForm(form: LinenForm): Promise<void> {
-  const { error } = await supabase
-    .from('linen_forms')
-    .insert(toSnakeCase(form as unknown as Record<string, unknown>))
-  if (error) throw error
+  await dbWrite({ table: 'linen_forms', operation: 'insert', data: toSnakeCase(form as unknown as Record<string, unknown>) })
 }
 
 export async function updateLinenFormDB(id: string, updates: Partial<LinenForm>): Promise<void> {
-  const { error } = await supabase
-    .from('linen_forms')
-    .update(toSnakeCase(updates as unknown as Record<string, unknown>))
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'linen_forms', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
 }
 
 export async function deleteLinenFormDB(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('linen_forms')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'linen_forms', operation: 'delete', match: { column: 'id', value: id } })
 }
 
 // ============================================================
@@ -341,26 +312,15 @@ export async function fetchDeliveryNotes(): Promise<DeliveryNote[]> {
 }
 
 export async function insertDeliveryNote(note: DeliveryNote): Promise<void> {
-  const { error } = await supabase
-    .from('delivery_notes')
-    .insert(toSnakeCase(note as unknown as Record<string, unknown>))
-  if (error) throw error
+  await dbWrite({ table: 'delivery_notes', operation: 'insert', data: toSnakeCase(note as unknown as Record<string, unknown>) })
 }
 
 export async function updateDeliveryNoteDB(id: string, updates: Partial<DeliveryNote>): Promise<void> {
-  const { error } = await supabase
-    .from('delivery_notes')
-    .update(toSnakeCase(updates as unknown as Record<string, unknown>))
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'delivery_notes', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
 }
 
 export async function deleteDeliveryNoteDB(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('delivery_notes')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'delivery_notes', operation: 'delete', match: { column: 'id', value: id } })
 }
 
 // ============================================================
@@ -377,26 +337,15 @@ export async function fetchBillingStatements(): Promise<BillingStatement[]> {
 }
 
 export async function insertBillingStatement(bs: BillingStatement): Promise<void> {
-  const { error } = await supabase
-    .from('billing_statements')
-    .insert(toSnakeCase(bs as unknown as Record<string, unknown>))
-  if (error) throw error
+  await dbWrite({ table: 'billing_statements', operation: 'insert', data: toSnakeCase(bs as unknown as Record<string, unknown>) })
 }
 
 export async function updateBillingStatementDB(id: string, updates: Partial<BillingStatement>): Promise<void> {
-  const { error } = await supabase
-    .from('billing_statements')
-    .update(toSnakeCase(updates as unknown as Record<string, unknown>))
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'billing_statements', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
 }
 
 export async function deleteBillingStatementDB(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('billing_statements')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'billing_statements', operation: 'delete', match: { column: 'id', value: id } })
 }
 
 // ============================================================
@@ -413,10 +362,7 @@ export async function fetchTaxInvoices(): Promise<TaxInvoice[]> {
 }
 
 export async function insertTaxInvoice(ti: TaxInvoice): Promise<void> {
-  const { error } = await supabase
-    .from('tax_invoices')
-    .insert(toSnakeCase(ti as unknown as Record<string, unknown>))
-  if (error) throw error
+  await dbWrite({ table: 'tax_invoices', operation: 'insert', data: toSnakeCase(ti as unknown as Record<string, unknown>) })
 }
 
 // ============================================================
@@ -433,18 +379,11 @@ export async function fetchQuotations(): Promise<Quotation[]> {
 }
 
 export async function insertQuotation(q: Quotation): Promise<void> {
-  const { error } = await supabase
-    .from('quotations')
-    .insert(toSnakeCase(q as unknown as Record<string, unknown>))
-  if (error) throw error
+  await dbWrite({ table: 'quotations', operation: 'insert', data: toSnakeCase(q as unknown as Record<string, unknown>) })
 }
 
 export async function updateQuotationDB(id: string, updates: Partial<Quotation>): Promise<void> {
-  const { error } = await supabase
-    .from('quotations')
-    .update(toSnakeCase(updates as unknown as Record<string, unknown>))
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'quotations', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
 }
 
 // ============================================================
@@ -461,26 +400,15 @@ export async function fetchExpenses(): Promise<Expense[]> {
 }
 
 export async function insertExpense(exp: Expense): Promise<void> {
-  const { error } = await supabase
-    .from('expenses')
-    .insert(toSnakeCase(exp as unknown as Record<string, unknown>))
-  if (error) throw error
+  await dbWrite({ table: 'expenses', operation: 'insert', data: toSnakeCase(exp as unknown as Record<string, unknown>) })
 }
 
 export async function updateExpenseDB(id: string, updates: Partial<Expense>): Promise<void> {
-  const { error } = await supabase
-    .from('expenses')
-    .update(toSnakeCase(updates as unknown as Record<string, unknown>))
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'expenses', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
 }
 
 export async function deleteExpenseDB(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('expenses')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'expenses', operation: 'delete', match: { column: 'id', value: id } })
 }
 
 // ============================================================
@@ -497,26 +425,15 @@ export async function fetchChecklists(): Promise<ProductChecklist[]> {
 }
 
 export async function insertChecklist(cl: ProductChecklist): Promise<void> {
-  const { error } = await supabase
-    .from('product_checklists')
-    .insert(toSnakeCase(cl as unknown as Record<string, unknown>))
-  if (error) throw error
+  await dbWrite({ table: 'product_checklists', operation: 'insert', data: toSnakeCase(cl as unknown as Record<string, unknown>) })
 }
 
 export async function updateChecklistDB(id: string, updates: Partial<ProductChecklist>): Promise<void> {
-  const { error } = await supabase
-    .from('product_checklists')
-    .update(toSnakeCase(updates as unknown as Record<string, unknown>))
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'product_checklists', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
 }
 
 export async function deleteChecklistDB(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('product_checklists')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
+  await dbWrite({ table: 'product_checklists', operation: 'delete', match: { column: 'id', value: id } })
 }
 
 // ============================================================
@@ -524,11 +441,7 @@ export async function deleteChecklistDB(id: string): Promise<void> {
 // ============================================================
 
 export async function updateDefaultPriceDB(code: string, price: number): Promise<void> {
-  const { error } = await supabase
-    .from('linen_items')
-    .update({ default_price: price })
-    .eq('code', code)
-  if (error) throw error
+  await dbWrite({ table: 'linen_items', operation: 'update', data: { default_price: price }, match: { column: 'code', value: code } })
 }
 
 // ============================================================
@@ -554,10 +467,11 @@ const ALL_TABLES: { table: string; pk: string; pkType: 'text' | 'int' }[] = [
 ]
 
 export async function truncateAllTables(): Promise<void> {
-  for (const { table, pk, pkType } of ALL_TABLES) {
-    const sentinel = pkType === 'int' ? -1 : '__never__'
-    const { error } = await supabase.from(table).delete().neq(pk, sentinel)
-    if (error) console.error(`[truncate] ${table}:`, error)
+  // Use a dedicated server endpoint for bulk delete (service_role required)
+  const res = await fetch('/api/db/truncate', { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || 'Truncate failed')
   }
 }
 

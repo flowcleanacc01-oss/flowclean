@@ -108,10 +108,16 @@ const StoreContext = createContext<StoreContextType | null>(null)
 
 // ============================================================
 // Helper: fire-and-forget with error logging + optional rollback
+// Dispatches a custom event for Toast to pick up
 // ============================================================
 function dbSave(promise: Promise<void>, onError?: () => void) {
   promise.catch(err => {
-    console.error('[Supabase save error]', err)
+    console.error('[DB save error]', err)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('flowclean:db-error', {
+        detail: 'บันทึกข้อมูลไม่สำเร็จ กรุณาลองอีกครั้ง',
+      }))
+    }
     if (onError) onError()
   })
 }
@@ -196,15 +202,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           applyData(data)
         }
       } catch (err) {
-        console.error('[Supabase load error] Falling back to sample data', err)
+        console.error('[Supabase load error]', err)
         if (cancelled) return
-        // Fallback: use sample data locally
-        setCustomers(SAMPLE_CUSTOMERS)
-        setLinenForms(SAMPLE_LINEN_FORMS)
-        setDeliveryNotes(SAMPLE_DELIVERY_NOTES)
-        setBillingStatements(SAMPLE_BILLING_STATEMENTS)
-        setExpenses(SAMPLE_EXPENSES)
-        setUsers(SAMPLE_USERS.map(stripHash))
+        // Fallback to sample data only in development
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[FlowClean] DEV fallback: using sample data')
+          setCustomers(SAMPLE_CUSTOMERS)
+          setLinenForms(SAMPLE_LINEN_FORMS)
+          setDeliveryNotes(SAMPLE_DELIVERY_NOTES)
+          setBillingStatements(SAMPLE_BILLING_STATEMENTS)
+          setExpenses(SAMPLE_EXPENSES)
+          setUsers(SAMPLE_USERS.map(stripHash))
+        }
       }
 
       // Restore session (8-hour expiry)
@@ -286,15 +295,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return true
     } catch (err) {
       console.error('[Login error]', err)
-      // Fallback: try local sample users
-      const localUser = SAMPLE_USERS.find(u => u.email === email && u.isActive)
-      if (localUser) {
-        const valid = await verifyPassword(password, localUser.passwordHash)
-        if (valid) {
-          const safeUser = stripHash(localUser)
-          setCurrentUser(safeUser)
-          createSession(localUser)
-          return true
+      // Fallback to sample users only in development
+      if (process.env.NODE_ENV === 'development') {
+        const localUser = SAMPLE_USERS.find(u => u.email === email && u.isActive)
+        if (localUser) {
+          const valid = await verifyPassword(password, localUser.passwordHash)
+          if (valid) {
+            const safeUser = stripHash(localUser)
+            setCurrentUser(safeUser)
+            createSession(localUser)
+            return true
+          }
         }
       }
       return false
