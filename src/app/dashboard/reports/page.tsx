@@ -3,7 +3,8 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatNumber, cn } from '@/lib/utils'
-import { Printer } from 'lucide-react'
+import { Printer, ExternalLink } from 'lucide-react'
+import Link from 'next/link'
 import MonthlySummaryGrid from '@/components/MonthlySummaryGrid'
 import MonthlyDeliveryReportPrint from '@/components/MonthlyDeliveryReportPrint'
 import MonthlyStockReportPrint from '@/components/MonthlyStockReportPrint'
@@ -44,14 +45,16 @@ export default function ReportsPage() {
   // Revenue by customer
   const revenueByCustomer = useMemo(() => {
     const map: Record<string, number> = {}
-    for (const bs of billingStatements.filter(b => b.billingMonth === selMonth)) {
+    let bills = billingStatements.filter(b => b.billingMonth === selMonth)
+    if (selCustomerId) bills = bills.filter(b => b.customerId === selCustomerId)
+    for (const bs of bills) {
       map[bs.customerId] = (map[bs.customerId] || 0) + bs.subtotal
     }
     return Object.entries(map)
       .map(([id, amount]) => ({ customer: getCustomer(id), amount }))
       .filter(r => r.customer)
       .sort((a, b) => b.amount - a.amount)
-  }, [billingStatements, selMonth, getCustomer])
+  }, [billingStatements, selMonth, selCustomerId, getCustomer])
 
   // Item usage
   const itemUsage = useMemo(() => {
@@ -80,12 +83,14 @@ export default function ReportsPage() {
 
   // Carry-over per customer
   const carryOverReport = useMemo(() => {
-    return customers.filter(c => c.isActive).map(c => {
-      const co = getCarryOver(c.id, '9999-12-31') // all carry-over up to far future
+    let list = customers.filter(c => c.isActive)
+    if (selCustomerId) list = list.filter(c => c.id === selCustomerId)
+    return list.map(c => {
+      const co = getCarryOver(c.id, '9999-12-31')
       const total = Object.values(co).reduce((s, v) => s + v, 0)
       return { customer: c, carryOver: co, total }
     }).filter(r => r.total !== 0)
-  }, [customers, getCarryOver])
+  }, [customers, selCustomerId, getCarryOver])
 
   if (currentUser?.role !== 'admin') {
     return (
@@ -115,13 +120,25 @@ export default function ReportsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
-        {(tab === 'monthly' || tab === 'delivery' || tab === 'stock') && (
-          <select value={selCustomerId} onChange={e => setSelCustomerId(e.target.value)}
-            className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
-            {customers.filter(c => c.isActive).map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+        {(tab === 'monthly' || tab === 'delivery' || tab === 'stock' || tab === 'revenue' || tab === 'carryover') && (
+          <div className="flex items-center gap-2">
+            <select value={selCustomerId} onChange={e => setSelCustomerId(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+              {tab === 'revenue' || tab === 'carryover'
+                ? <option value="">ทุกลูกค้า</option>
+                : null
+              }
+              {customers.filter(c => c.isActive).map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {selCustomerId && (
+              <Link href={`/dashboard/customers/${selCustomerId}`}
+                className="text-xs text-[#3DD8D8] hover:underline flex items-center gap-0.5 shrink-0">
+                <ExternalLink className="w-3 h-3" />ดูรายละเอียด
+              </Link>
+            )}
+          </div>
         )}
         <input type="month" value={selMonth} onChange={e => setSelMonth(e.target.value)}
           className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
@@ -155,7 +172,7 @@ export default function ReportsPage() {
           <div className="space-y-2">
             {revenueByCustomer.map(r => (
               <div key={r.customer!.id} className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="text-sm text-slate-700">{r.customer!.name}</span>
+                <Link href={`/dashboard/customers/${r.customer!.id}`} className="text-sm text-slate-700 hover:text-[#1B3A5C] hover:underline">{r.customer!.name}</Link>
                 <span className="text-sm font-medium text-slate-800">{formatCurrency(r.amount)}</span>
               </div>
             ))}
@@ -179,8 +196,10 @@ export default function ReportsPage() {
                 const bills = billingStatements.filter(b => b.customerId === c.id)
                 const total = bills.reduce((s, b) => s + b.subtotal, 0)
                 return (
-                  <tr key={c.id} className="border-b border-slate-100">
-                    <td className="px-4 py-3 font-medium text-slate-800">{c.name}</td>
+                  <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <Link href={`/dashboard/customers/${c.id}`} className="font-medium text-slate-800 hover:text-[#1B3A5C] hover:underline">{c.name}</Link>
+                    </td>
                     <td className="px-4 py-3 text-right">{formatCurrency(total)}</td>
                     <td className="px-4 py-3 text-center">{bills.length}</td>
                   </tr>
@@ -255,8 +274,10 @@ export default function ReportsPage() {
               {carryOverReport.length === 0 ? (
                 <tr><td colSpan={3} className="text-center py-8 text-slate-400">ไม่มีผ้าค้าง</td></tr>
               ) : carryOverReport.map(r => (
-                <tr key={r.customer.id} className="border-b border-slate-100">
-                  <td className="px-4 py-3 font-medium text-slate-800">{r.customer.name}</td>
+                <tr key={r.customer.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <td className="px-4 py-3">
+                    <Link href={`/dashboard/customers/${r.customer.id}`} className="font-medium text-slate-800 hover:text-[#1B3A5C] hover:underline">{r.customer.name}</Link>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {Object.entries(r.carryOver).map(([code, qty]) => (

@@ -4,7 +4,8 @@ import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { cn, formatCurrency, sanitizeNumber } from '@/lib/utils'
 import type { Customer } from '@/types'
-import { Plus, Search, Building2, Phone, Mail, Edit2, Trash2, Check, ChevronUp, ChevronDown, FileText, Users } from 'lucide-react'
+import { Plus, Search, Building2, Phone, Mail, Edit2, Trash2, Check, ChevronUp, ChevronDown, FileText, Users, Eye } from 'lucide-react'
+import Link from 'next/link'
 import Modal from '@/components/Modal'
 
 const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
@@ -158,7 +159,7 @@ export default function CustomersPage() {
                   <Building2 className="w-5 h-5 text-[#1B3A5C]" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-slate-800 leading-tight">{c.name}</h3>
+                  <Link href={`/dashboard/customers/${c.id}`} className="font-semibold text-slate-800 leading-tight hover:text-[#1B3A5C] hover:underline">{c.name}</Link>
                   <p className="text-xs text-slate-400">{c.nameEn}</p>
                 </div>
               </div>
@@ -177,6 +178,10 @@ export default function CustomersPage() {
             </div>
 
             <div className="flex gap-2">
+              <Link href={`/dashboard/customers/${c.id}`}
+                className="flex-1 text-xs py-1.5 bg-[#e8eef5] text-[#1B3A5C] rounded hover:bg-[#d0dae8] transition-colors flex items-center justify-center gap-1">
+                <Eye className="w-3 h-3" />รายละเอียด
+              </Link>
               <button onClick={() => handleEdit(c)}
                 className="flex-1 text-xs py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors flex items-center justify-center gap-1">
                 <Edit2 className="w-3 h-3" />แก้ไข
