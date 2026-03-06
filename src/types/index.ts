@@ -132,9 +132,9 @@ export interface LinenFormRow {
 export type LinenFormStatus = 'draft' | 'received' | 'sorting' | 'washing' | 'drying' | 'ironing' | 'folding' | 'qc' | 'packed' | 'delivered' | 'confirmed'
 
 export const LINEN_FORM_STATUS_CONFIG: Record<LinenFormStatus, { label: string; color: string; bgColor: string; dotColor: string }> = {
-  draft: { label: 'แบบร่าง', color: 'text-gray-700', bgColor: 'bg-gray-100', dotColor: 'bg-gray-400' },
-  received: { label: 'รับผ้า', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
-  sorting: { label: 'คัดแยก', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
+  draft: { label: 'ลูกค้านับ', color: 'text-gray-700', bgColor: 'bg-gray-100', dotColor: 'bg-gray-400' },
+  received: { label: 'รอโรงซักนับ', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
+  sorting: { label: 'โรงซักนับแล้ว', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
   washing: { label: 'ซัก', color: 'text-blue-700', bgColor: 'bg-blue-50', dotColor: 'bg-blue-500' },
   drying: { label: 'อบ', color: 'text-sky-700', bgColor: 'bg-sky-50', dotColor: 'bg-sky-500' },
   ironing: { label: 'รีด', color: 'text-violet-700', bgColor: 'bg-violet-50', dotColor: 'bg-violet-500' },
