@@ -19,10 +19,10 @@ const COL_LABELS = [
   { key: 'col1', label: 'ยกยอดมา', short: 'ยกมา' },
   { key: 'col2', label: 'โรงแรมนับ', short: 'รับ' },
   { key: 'col3', label: 'เคลม', short: 'เคลม' },
-  { key: 'col4', label: 'โรงงาน OK', short: 'OK' },
   { key: 'col5', label: 'เคลม OK', short: 'เคลมOK' },
   { key: 'col6', label: 'แพคส่ง', short: 'แพค' },
   { key: 'note', label: 'หมายเหตุ', short: 'Note' },
+  { key: 'col4', label: 'ซักแล้วกลับ', short: 'กลับ' },
 ] as const
 
 export default function LinenFormGrid({
@@ -176,24 +176,6 @@ export default function LinenFormGrid({
                       <span className="text-slate-700">{row.col3_hotelClaimCount || '-'}</span>
                     )}
                   </td>
-                  {/* Col 4 - โรงงาน approved */}
-                  <td className={cn('px-1 py-1 text-center', hasDiscrepancy && 'bg-orange-50')}>
-                    {isEditable('col4') ? (
-                      <input type="number" min={0}
-                        value={row.col4_factoryApproved || ''}
-                        onChange={e => updateRow(item.code, 'col4_factoryApproved', sanitizeNumber(e.target.value, 99999))}
-                        className={cn(
-                          'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
-                          hasDiscrepancy ? 'border-orange-400 bg-orange-50' : 'border-slate-200'
-                        )}
-                      />
-                    ) : (
-                      <span className={cn('text-slate-700', hasDiscrepancy && 'text-orange-600 font-medium')}>
-                        {row.col4_factoryApproved || '-'}
-                        {hasDiscrepancy && ' ⚠'}
-                      </span>
-                    )}
-                  </td>
                   {/* Col 5 - เคลม approved */}
                   <td className="px-1 py-1 text-center">
                     {isEditable('col5') ? (
@@ -231,6 +213,24 @@ export default function LinenFormGrid({
                       <span className="text-slate-500 text-xs">{row.note || '-'}</span>
                     )}
                   </td>
+                  {/* Col 4 - ซักแล้วกลับ */}
+                  <td className={cn('px-1 py-1 text-center', hasDiscrepancy && 'bg-orange-50')}>
+                    {isEditable('col4') ? (
+                      <input type="number" min={0}
+                        value={row.col4_factoryApproved || ''}
+                        onChange={e => updateRow(item.code, 'col4_factoryApproved', sanitizeNumber(e.target.value, 99999))}
+                        className={cn(
+                          'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
+                          hasDiscrepancy ? 'border-orange-400 bg-orange-50' : 'border-slate-200'
+                        )}
+                      />
+                    ) : (
+                      <span className={cn('text-slate-700', hasDiscrepancy && 'text-orange-600 font-medium')}>
+                        {row.col4_factoryApproved || '-'}
+                        {hasDiscrepancy && ' ⚠'}
+                      </span>
+                    )}
+                  </td>
                 </tr>
               )
             })}
@@ -248,10 +248,10 @@ export default function LinenFormGrid({
               </td>
               <td className="px-3 py-2 text-center">{totals.col2}</td>
               <td className="px-3 py-2 text-center">{totals.col3}</td>
-              <td className="px-3 py-2 text-center">{totals.col4}</td>
               <td className="px-3 py-2 text-center">{totals.col5}</td>
               <td className="px-3 py-2 text-center">{totals.col6}</td>
               <td className="px-3 py-2"></td>
+              <td className="px-3 py-2 text-center">{totals.col4}</td>
             </tr>
           </tfoot>
         </table>
