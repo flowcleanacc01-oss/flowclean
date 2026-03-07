@@ -17,12 +17,13 @@ interface LinenFormGridProps {
 
 const COL_LABELS = [
   { key: 'col1', label: 'ยกยอดมา', short: 'ยกมา' },
-  { key: 'col2', label: 'โรงแรมนับ', short: 'รับ' },
+  { key: 'col2', label: 'ลูกค้านับส่ง', short: 'นับส่ง' },
   { key: 'col3', label: 'เคลม', short: 'เคลม' },
-  { key: 'col5', label: 'เคลม OK', short: 'เคลมOK' },
-  { key: 'col6', label: 'แพคส่ง', short: 'แพค' },
+  { key: 'col5', label: 'โรงซักนับเข้า', short: 'นับเข้า' },
+  { key: 'col6', label: 'โรงซักแพคส่ง', short: 'แพคส่ง' },
+  { key: 'calc', label: 'ค้าง/คืน', short: 'ค้าง/คืน' },
   { key: 'note', label: 'หมายเหตุ', short: 'Note' },
-  { key: 'col4', label: 'ซักแล้วกลับ', short: 'กลับ' },
+  { key: 'col4', label: 'ลูกค้านับกลับ', short: 'นับกลับ' },
 ] as const
 
 export default function LinenFormGrid({
@@ -152,7 +153,7 @@ export default function LinenFormGrid({
                       {co !== 0 ? (co > 0 ? `+${co}` : co) : '-'}
                     </span>
                   </td>
-                  {/* Col 2 - โรงแรมนับ */}
+                  {/* Col 2 - ลูกค้านับส่ง */}
                   <td className="px-1 py-1 text-center">
                     {isEditable('col2') ? (
                       <input type="number" min={0}
@@ -188,7 +189,7 @@ export default function LinenFormGrid({
                       <span className="text-slate-700">{row.col5_factoryClaimApproved || '-'}</span>
                     )}
                   </td>
-                  {/* Col 6 - แพคส่ง */}
+                  {/* Col 6 - โรงซักแพคส่ง */}
                   <td className="px-1 py-1 text-center">
                     {isEditable('col6') ? (
                       <input type="number" min={0}
@@ -199,6 +200,20 @@ export default function LinenFormGrid({
                     ) : (
                       <span className="text-slate-700">{row.col6_factoryPackSend || '-'}</span>
                     )}
+                  </td>
+                  {/* Calculated - ค้าง(-)/คืน(+) = col3 - col4 */}
+                  <td className="px-1 py-1 text-center">
+                    {(() => {
+                      const val = row.col3_hotelClaimCount - row.col4_factoryApproved
+                      if (val === 0) return <span className="text-slate-400">-</span>
+                      return (
+                        <span className={cn(
+                          val < 0 ? 'text-red-600 font-medium' : 'text-emerald-600 font-medium'
+                        )}>
+                          {val > 0 ? `+${val}` : val}
+                        </span>
+                      )
+                    })()}
                   </td>
                   {/* Note - หมายเหตุ */}
                   <td className="px-1 py-1">
@@ -213,7 +228,7 @@ export default function LinenFormGrid({
                       <span className="text-slate-500 text-xs">{row.note || '-'}</span>
                     )}
                   </td>
-                  {/* Col 4 - ซักแล้วกลับ */}
+                  {/* Col 4 - ลูกค้านับกลับ */}
                   <td className={cn('px-1 py-1 text-center', hasDiscrepancy && 'bg-orange-50')}>
                     {isEditable('col4') ? (
                       <input type="number" min={0}
@@ -250,6 +265,19 @@ export default function LinenFormGrid({
               <td className="px-3 py-2 text-center">{totals.col3}</td>
               <td className="px-3 py-2 text-center">{totals.col5}</td>
               <td className="px-3 py-2 text-center">{totals.col6}</td>
+              <td className="px-3 py-2 text-center">
+                {(() => {
+                  const val = totals.col3 - totals.col4
+                  if (val === 0) return '-'
+                  return (
+                    <span className={cn(
+                      val < 0 ? 'text-red-600' : 'text-emerald-600'
+                    )}>
+                      {val > 0 ? `+${val}` : val}
+                    </span>
+                  )
+                })()}
+              </td>
               <td className="px-3 py-2"></td>
               <td className="px-3 py-2 text-center">{totals.col4}</td>
             </tr>

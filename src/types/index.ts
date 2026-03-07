@@ -121,11 +121,11 @@ export interface Customer {
 export interface LinenFormRow {
   code: string
   col1_carryOver: number           // ผ้ายกยอดมา (auto, ± ได้: ลบ=ค้างส่ง, บวก=ส่งเกิน)
-  col2_hotelCountIn: number        // โรงแรมนับส่งซัก
+  col2_hotelCountIn: number        // ลูกค้านับส่ง
   col3_hotelClaimCount: number     // โรงแรมนับส่งเคลม
   col4_factoryApproved: number     // โรงงาน approved (auto-fill=col2, editable)
-  col5_factoryClaimApproved: number // โรงงาน approved เคลม (auto-fill=col3, editable)
-  col6_factoryPackSend: number     // จำนวนผ้าแพคส่ง
+  col5_factoryClaimApproved: number // โรงซักนับเข้า (auto-fill=col3, editable)
+  col6_factoryPackSend: number     // โรงซักแพคส่ง
   note: string                      // หมายเหตุ
 }
 

@@ -15,12 +15,12 @@ interface StockRow {
   code: string
   name: string
   carryOver: number       // ยกมา (± ได้: ลบ=ค้างส่ง, บวก=ส่งเกิน)
-  col2HotelCount: number  // โรงแรมนับ
+  col2HotelCount: number  // ลูกค้านับส่ง
   col3Claim: number       // เคลม
   totalReceived: number   // รวมรับ = col2 + col3
   col4Approved: number    // โรงงาน OK
-  col5ClaimApproved: number // เคลม OK
-  col6PackSend: number    // แพคส่ง
+  col5ClaimApproved: number // โรงซักนับเข้า
+  col6PackSend: number    // โรงซักแพคส่ง
   needToReturn: number    // ยอดต้องคืน = col4 + col5 - carryOver
   stock: number           // สต้อก = needToReturn - col6
   note: string            // หมายเหตุ
@@ -137,12 +137,12 @@ export default function MonthlyStockReportPrint({
               <th className="border border-slate-400 px-2 py-2 text-left w-14">รหัส</th>
               <th className="border border-slate-400 px-2 py-2 text-left min-w-24">รายการ</th>
               <th className="border border-slate-400 px-2 py-2 text-center bg-amber-50 w-16">ยกมา<br />(±)</th>
-              <th className="border border-slate-400 px-2 py-2 text-center w-16">โรงแรม<br />นับ</th>
+              <th className="border border-slate-400 px-2 py-2 text-center w-16">ลูกค้า<br />นับส่ง</th>
               <th className="border border-slate-400 px-2 py-2 text-center w-16">เคลม</th>
               <th className="border border-slate-400 px-2 py-2 text-center bg-blue-50 font-bold w-16">รวมรับ</th>
               <th className="border border-slate-400 px-2 py-2 text-center w-16">โรงงาน<br />OK</th>
-              <th className="border border-slate-400 px-2 py-2 text-center w-16">เคลม<br />OK</th>
-              <th className="border border-slate-400 px-2 py-2 text-center bg-teal-50 font-bold w-16">แพคส่ง</th>
+              <th className="border border-slate-400 px-2 py-2 text-center w-16">โรงซัก<br />นับเข้า</th>
+              <th className="border border-slate-400 px-2 py-2 text-center bg-teal-50 font-bold w-16">โรงซัก<br />แพคส่ง</th>
               <th className="border border-slate-400 px-2 py-2 text-center bg-indigo-50 w-16">ต้องคืน</th>
               <th className="border border-slate-400 px-2 py-2 text-center bg-red-50 font-bold w-16">สต้อก</th>
               <th className="border border-slate-400 px-2 py-2 text-left min-w-20">หมายเหตุ</th>
@@ -218,7 +218,7 @@ export default function MonthlyStockReportPrint({
           <p className="font-bold text-emerald-700">{totals.col4Approved} ชิ้น</p>
         </div>
         <div className="bg-teal-50 rounded p-2">
-          <p className="text-slate-500">แพคส่ง</p>
+          <p className="text-slate-500">โรงซักแพคส่ง</p>
           <p className="font-bold text-teal-700">{totals.col6PackSend} ชิ้น</p>
         </div>
         <div className={`rounded p-2 ${totals.stock > 0 ? 'bg-red-50' : 'bg-emerald-50'}`}>

@@ -1,7 +1,7 @@
 import type { LinenForm } from '@/types'
 
 /**
- * ตรวจ discrepancy: col2 (โรงแรมนับ) vs col4 (โรงงาน approved)
+ * ตรวจ discrepancy: col2 (ลูกค้านับส่ง) vs col4 (ลูกค้านับกลับ)
  * Returns map of code → difference (positive = factory approved more, negative = less)
  * Only items where col4 > 0 and there's a mismatch
  */
