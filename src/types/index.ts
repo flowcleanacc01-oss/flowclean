@@ -132,8 +132,8 @@ export interface LinenFormRow {
 export type LinenFormStatus = 'draft' | 'received' | 'sorting' | 'washing' | 'drying' | 'ironing' | 'folding' | 'qc' | 'packed' | 'delivered' | 'confirmed'
 
 export const LINEN_FORM_STATUS_CONFIG: Record<LinenFormStatus, { label: string; color: string; bgColor: string; dotColor: string }> = {
-  draft: { label: 'ลูกค้านับ', color: 'text-gray-700', bgColor: 'bg-gray-100', dotColor: 'bg-gray-400' },
-  received: { label: 'รอโรงซักนับ', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
+  draft: { label: 'ลูกค้านับส่งแล้ว', color: 'text-gray-700', bgColor: 'bg-gray-100', dotColor: 'bg-gray-400' },
+  received: { label: 'ขนส่งนับแล้ว', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
   sorting: { label: 'โรงซักนับแล้ว', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
   washing: { label: 'ซักแล้ว', color: 'text-blue-700', bgColor: 'bg-blue-50', dotColor: 'bg-blue-500' },
   drying: { label: 'อบแล้ว', color: 'text-sky-700', bgColor: 'bg-sky-50', dotColor: 'bg-sky-500' },
