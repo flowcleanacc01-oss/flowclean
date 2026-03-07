@@ -23,7 +23,11 @@ export default function BillingPage() {
     deliveryNotes, customers, getCustomer, companyInfo, linenCatalog,
   } = useStore()
 
-  const [tab, setTab] = useState<TabKey>('billing')
+  const [tab, setTab] = useState<TabKey>(() => {
+    const t = searchParams.get('tab')
+    if (t === 'invoice' || t === 'quotation') return t
+    return 'billing'
+  })
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const searchParams = useSearchParams()

@@ -9,6 +9,8 @@ import {
   ClipboardList,
   Truck,
   FileText,
+  FileCheck,
+  Receipt,
   BarChart3,
   Wallet,
   Settings,
@@ -16,6 +18,7 @@ import {
   ChevronLeft,
   Menu,
   ClipboardCheck,
+  Package,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useState } from 'react'
@@ -23,11 +26,13 @@ import Image from 'next/image'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'แดชบอร์ด', icon: LayoutDashboard },
-  { href: '/dashboard/linen-forms', label: 'ใบส่งรับผ้า', icon: ClipboardList },
-  { href: '/dashboard/delivery', label: 'ใบส่งของ', icon: Truck },
-  { href: '/dashboard/checklist', label: 'เช็คสินค้า', icon: ClipboardCheck },
-  { href: '/dashboard/customers', label: 'ลูกค้า (โรงแรม)', icon: Building2 },
-  { href: '/dashboard/billing', label: 'วางบิล / ใบเสร็จ', icon: FileText },
+  { href: '/dashboard/checklist', label: 'สินค้า', icon: Package },
+  { href: '/dashboard/customers', label: 'ลูกค้า', icon: Building2 },
+  { href: '/dashboard/billing?tab=quotation', label: 'ใบเสนอราคา (QT)', icon: FileText },
+  { href: '/dashboard/linen-forms', label: 'ใบส่งรับผ้า (LF)', icon: ClipboardList },
+  { href: '/dashboard/delivery', label: 'ใบส่งของชั่วคราว (SD)', icon: Truck },
+  { href: '/dashboard/billing?tab=billing', label: 'ใบวางบิล (WB)', icon: FileCheck },
+  { href: '/dashboard/billing?tab=invoice', label: 'ใบกำกับภาษี/ใบเสร็จ (IV)', icon: Receipt },
   { href: '/dashboard/reports', label: 'รายงาน', icon: BarChart3, adminOnly: true },
   { href: '/dashboard/expenses', label: 'รายจ่าย', icon: Wallet, adminOnly: true },
   { href: '/dashboard/settings', label: 'ตั้งค่า', icon: Settings, adminOnly: true },
@@ -41,7 +46,17 @@ export default function Sidebar() {
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
-    return pathname.startsWith(href)
+    const [path, qs] = href.split('?')
+    if (!pathname.startsWith(path)) return false
+    if (!qs) return true
+    // For billing tabs, match query param
+    const params = new URLSearchParams(qs)
+    const tab = params.get('tab')
+    if (tab) {
+      const currentTab = new URLSearchParams(window.location.search).get('tab')
+      return currentTab === tab || (!currentTab && tab === 'billing')
+    }
+    return true
   }
 
   const sidebarContent = (
