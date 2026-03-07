@@ -277,7 +277,7 @@ export default function LinenFormsPage() {
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
             <button onClick={handleCreate} disabled={!newCustomerId || newRows.length === 0}
               className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
-              บันทึก
+              ลูกค้านับส่งแล้ว
             </button>
           </div>
         </div>
