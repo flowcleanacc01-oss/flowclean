@@ -342,7 +342,7 @@ export default function LinenFormsPage() {
                 className="text-sm text-red-500 hover:text-red-700 transition-colors flex items-center gap-1">
                 <X className="w-4 h-4" />ลบ
               </button>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 {PREV_LINEN_STATUS[detailForm.status] && (
                   <button onClick={() => { handleRevertStatus(detailForm.id) }}
                     className="px-4 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
@@ -350,6 +350,13 @@ export default function LinenFormsPage() {
                     {LINEN_FORM_STATUS_CONFIG[PREV_LINEN_STATUS[detailForm.status]!].label}
                   </button>
                 )}
+                <span className={cn(
+                  'px-3 py-1.5 rounded-full text-xs font-medium',
+                  LINEN_FORM_STATUS_CONFIG[detailForm.status].bgColor,
+                  LINEN_FORM_STATUS_CONFIG[detailForm.status].color
+                )}>
+                  {LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
+                </span>
                 {NEXT_LINEN_STATUS[detailForm.status] && (
                   <button onClick={() => { handleAdvanceStatus(detailForm.id) }}
                     className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors flex items-center gap-1">
