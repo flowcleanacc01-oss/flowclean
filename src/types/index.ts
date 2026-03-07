@@ -142,7 +142,7 @@ export const LINEN_FORM_STATUS_CONFIG: Record<LinenFormStatus, { label: string; 
   qc: { label: 'QC แล้ว', color: 'text-pink-700', bgColor: 'bg-pink-50', dotColor: 'bg-pink-500' },
   packed: { label: 'แพคแล้ว', color: 'text-indigo-700', bgColor: 'bg-indigo-50', dotColor: 'bg-indigo-500' },
   delivered: { label: 'ส่งแล้ว', color: 'text-teal-700', bgColor: 'bg-teal-50', dotColor: 'bg-teal-500' },
-  confirmed: { label: 'ยืนยัน', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
+  confirmed: { label: 'ลูกค้านับกลับแล้ว', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
 }
 
 export const NEXT_LINEN_STATUS: Record<LinenFormStatus, LinenFormStatus | null> = {
