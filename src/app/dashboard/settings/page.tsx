@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { cn, sanitizeNumber, formatDate } from '@/lib/utils'
 import { validatePassword } from '@/lib/auth'
@@ -46,7 +47,17 @@ export default function SettingsPage() {
     linenCatalog, addLinenItem, updateLinenItem, deleteLinenItem,
   } = useStore()
 
-  const [tab, setTab] = useState<TabKey>('items')
+  const searchParams = useSearchParams()
+  const [tab, setTab] = useState<TabKey>(() => {
+    const t = searchParams.get('tab')
+    if (t === 'items' || t === 'users' || t === 'company' || t === 'documents' || t === 'auditlog') return t
+    return 'items'
+  })
+
+  useEffect(() => {
+    const t = searchParams.get('tab')
+    if (t === 'items' || t === 'users' || t === 'company' || t === 'documents' || t === 'auditlog') setTab(t)
+  }, [searchParams])
 
   // New user form
   const [newName, setNewName] = useState('')

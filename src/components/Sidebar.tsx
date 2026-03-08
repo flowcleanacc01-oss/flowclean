@@ -25,7 +25,7 @@ import Image from 'next/image'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'แดชบอร์ด', icon: LayoutDashboard },
-  { href: '/dashboard/checklist', label: 'สินค้า', icon: Package },
+  { href: '/dashboard/settings?tab=items', label: 'รายการผ้า', icon: Package },
   { href: '/dashboard/customers', label: 'ลูกค้า', icon: Building2 },
   { href: '/dashboard/billing?tab=quotation', label: 'ใบเสนอราคา (QT)', icon: FileText },
   { href: '/dashboard/linen-forms', label: 'ใบส่งรับผ้า (LF)', icon: ClipboardList },
@@ -54,7 +54,7 @@ export default function Sidebar() {
     const tab = params.get('tab')
     if (tab) {
       const currentTab = currentSearchParams.get('tab')
-      return currentTab === tab || (!currentTab && tab === 'billing')
+      return currentTab === tab || (!currentTab && (tab === 'billing' || tab === 'items'))
     }
     return true
   }
