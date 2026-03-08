@@ -129,31 +129,33 @@ export interface LinenFormRow {
   note: string                      // หมายเหตุ
 }
 
-export type LinenFormStatus = 'draft' | 'received' | 'sorting' | 'washing' | 'drying' | 'ironing' | 'folding' | 'qc' | 'packed' | 'delivered' | 'confirmed'
+export type LinenFormStatus = 'draft' | 'received' | 'sorting' | 'washing' | 'packed' | 'delivered' | 'confirmed'
 
 export const LINEN_FORM_STATUS_CONFIG: Record<LinenFormStatus, { label: string; color: string; bgColor: string; dotColor: string }> = {
   draft: { label: 'ลูกค้านับส่งแล้ว', color: 'text-gray-700', bgColor: 'bg-gray-100', dotColor: 'bg-gray-400' },
   received: { label: 'ขนส่งนับแล้ว', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
   sorting: { label: 'โรงซักนับแล้ว', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
-  washing: { label: 'ซักแล้ว', color: 'text-blue-700', bgColor: 'bg-blue-50', dotColor: 'bg-blue-500' },
-  drying: { label: 'อบแล้ว', color: 'text-sky-700', bgColor: 'bg-sky-50', dotColor: 'bg-sky-500' },
-  ironing: { label: 'รีดแล้ว', color: 'text-violet-700', bgColor: 'bg-violet-50', dotColor: 'bg-violet-500' },
-  folding: { label: 'พับแล้ว', color: 'text-purple-700', bgColor: 'bg-purple-50', dotColor: 'bg-purple-500' },
-  qc: { label: 'QC แล้ว', color: 'text-pink-700', bgColor: 'bg-pink-50', dotColor: 'bg-pink-500' },
-  packed: { label: 'แพคแล้ว', color: 'text-indigo-700', bgColor: 'bg-indigo-50', dotColor: 'bg-indigo-500' },
-  delivered: { label: 'ส่งแล้ว', color: 'text-teal-700', bgColor: 'bg-teal-50', dotColor: 'bg-teal-500' },
-  confirmed: { label: 'ลูกค้านับกลับแล้ว', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
+  washing: { label: 'ซักอบเสร็จ', color: 'text-blue-700', bgColor: 'bg-blue-50', dotColor: 'bg-blue-500' },
+  packed: { label: 'นับแพคแล้ว', color: 'text-indigo-700', bgColor: 'bg-indigo-50', dotColor: 'bg-indigo-500' },
+  delivered: { label: 'นับถุงแล้ว', color: 'text-teal-700', bgColor: 'bg-teal-50', dotColor: 'bg-teal-500' },
+  confirmed: { label: 'ลูกค้านับกลับ', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
 }
+
+// 4 แผนก — checkbox อิสระ (ไม่บังคับเรียง, ข้ามได้)
+export type DepartmentKey = 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'
+
+export const DEPARTMENT_CONFIG: { key: DepartmentKey; label: string; color: string; bgColor: string; dotColor: string }[] = [
+  { key: 'deptDrying', label: 'ผ้าเรียบเสร็จ', color: 'text-sky-700', bgColor: 'bg-sky-50', dotColor: 'bg-sky-500' },
+  { key: 'deptIroning', label: 'ปลอกหมอนเสร็จ', color: 'text-violet-700', bgColor: 'bg-violet-50', dotColor: 'bg-violet-500' },
+  { key: 'deptFolding', label: 'ผ้าขนเสร็จ', color: 'text-purple-700', bgColor: 'bg-purple-50', dotColor: 'bg-purple-500' },
+  { key: 'deptQc', label: 'สปาเสร็จ', color: 'text-pink-700', bgColor: 'bg-pink-50', dotColor: 'bg-pink-500' },
+]
 
 export const NEXT_LINEN_STATUS: Record<LinenFormStatus, LinenFormStatus | null> = {
   draft: 'received',
   received: 'sorting',
   sorting: 'washing',
-  washing: 'drying',
-  drying: 'ironing',
-  ironing: 'folding',
-  folding: 'qc',
-  qc: 'packed',
+  washing: 'packed',
   packed: 'delivered',
   delivered: 'confirmed',
   confirmed: null,
@@ -164,21 +166,25 @@ export const PREV_LINEN_STATUS: Record<LinenFormStatus, LinenFormStatus | null> 
   received: 'draft',
   sorting: 'received',
   washing: 'sorting',
-  drying: 'washing',
-  ironing: 'drying',
-  folding: 'ironing',
-  qc: 'folding',
-  packed: 'qc',
+  packed: 'washing',
   delivered: 'packed',
   confirmed: 'delivered',
 }
 
 export const ALL_LINEN_STATUSES: LinenFormStatus[] = [
-  'draft', 'received', 'sorting', 'washing', 'drying', 'ironing', 'folding', 'qc', 'packed', 'delivered', 'confirmed',
+  'draft', 'received', 'sorting', 'washing', 'packed', 'delivered', 'confirmed',
 ]
 
-// สถานะที่อยู่ในกระบวนการซัก (sorting-qc) — แก้ได้แค่หมายเหตุ
-export const PROCESS_STATUSES: LinenFormStatus[] = ['sorting', 'washing', 'drying', 'ironing', 'folding', 'qc']
+// สถานะที่อยู่ในกระบวนการซัก — แก้ได้แค่หมายเหตุ
+export const PROCESS_STATUSES: LinenFormStatus[] = ['sorting', 'washing']
+
+// Map สถานะเก่า (11 ขั้น) → สถานะใหม่ (7 ขั้น) สำหรับข้อมูลเก่าใน Supabase
+export const LEGACY_STATUS_MAP: Record<string, LinenFormStatus> = {
+  drying: 'washing',
+  ironing: 'packed',
+  folding: 'packed',
+  qc: 'packed',
+}
 
 export interface LinenForm {
   id: string
@@ -190,6 +196,11 @@ export interface LinenForm {
   notes: string
   createdBy: string
   updatedAt: string
+  // 4 แผนก — checkbox อิสระ
+  deptDrying: boolean
+  deptIroning: boolean
+  deptFolding: boolean
+  deptQc: boolean
 }
 
 // ============================================================

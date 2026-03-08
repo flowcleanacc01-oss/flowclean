@@ -85,6 +85,11 @@ const FIELD_MAP: Record<string, string> = {
   bankAccountName: 'bank_account_name',
   bankAccountNumber: 'bank_account_number',
   passwordHash: 'password_hash',
+  // Department checkboxes
+  deptDrying: 'dept_drying',
+  deptIroning: 'dept_ironing',
+  deptFolding: 'dept_folding',
+  deptQc: 'dept_qc',
   // Audit log fields
   userId: 'user_id',
   userName: 'user_name',
@@ -447,24 +452,6 @@ export async function updateDefaultPriceDB(code: string, price: number): Promise
 // ============================================================
 // Reset: Truncate all tables (reverse dependency order)
 // ============================================================
-
-// Tables with their PK column for delete-all (reverse dependency order)
-// Tables in dependency order (children first) with PK info
-// pkType: 'text' uses .neq(pk, '__never__'), 'int' uses .neq(pk, -1)
-const ALL_TABLES: { table: string; pk: string; pkType: 'text' | 'int' }[] = [
-  { table: 'audit_logs', pk: 'id', pkType: 'text' },
-  { table: 'product_checklists', pk: 'id', pkType: 'text' },
-  { table: 'tax_invoices', pk: 'id', pkType: 'text' },
-  { table: 'billing_statements', pk: 'id', pkType: 'text' },
-  { table: 'delivery_notes', pk: 'id', pkType: 'text' },
-  { table: 'linen_forms', pk: 'id', pkType: 'text' },
-  { table: 'quotations', pk: 'id', pkType: 'text' },
-  { table: 'expenses', pk: 'id', pkType: 'text' },
-  { table: 'customers', pk: 'id', pkType: 'text' },
-  { table: 'company_info', pk: 'id', pkType: 'int' },
-  { table: 'app_users', pk: 'id', pkType: 'text' },
-  { table: 'linen_items', pk: 'code', pkType: 'text' },
-]
 
 export async function truncateAllTables(): Promise<void> {
   // Use a dedicated server endpoint for bulk delete (service_role required)

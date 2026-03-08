@@ -38,7 +38,7 @@ export default function ChecklistPage() {
   const availableDocs = useMemo(() => {
     if (newType === 'qc') {
       return linenForms
-        .filter(f => ['qc', 'packed', 'delivered', 'confirmed'].includes(f.status))
+        .filter(f => ['packed', 'delivered', 'confirmed'].includes(f.status))
         .map(f => ({
           id: f.id,
           number: f.formNumber,

@@ -8,8 +8,8 @@ import { describe, it, expect } from 'vitest'
 import { aggregateDeliveryItems, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { calculateDiscrepancies, hasDiscrepancies } from '@/lib/discrepancy'
 import type {
-  Customer, LinenForm, LinenFormRow, DeliveryNote, DeliveryNoteItem,
-  BillingStatement, TaxInvoice, LinenItemDef, BillingLineItem,
+  Customer, LinenForm, LinenFormRow, DeliveryNote,
+  TaxInvoice, LinenItemDef, BillingLineItem,
 } from '@/types'
 
 // ============================================================

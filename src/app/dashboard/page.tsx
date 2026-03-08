@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatNumber, formatCurrency, formatDateShort, cn, todayISO } from '@/lib/utils'
-import { LINEN_FORM_STATUS_CONFIG, ALL_LINEN_STATUSES, PROCESS_STATUSES, type LinenFormStatus } from '@/types'
+import { LINEN_FORM_STATUS_CONFIG, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus } from '@/types'
 import { hasDiscrepancies } from '@/lib/discrepancy'
 import {
   Package,
@@ -49,6 +49,16 @@ export default function DashboardPage() {
     const counts = Object.fromEntries(ALL_LINEN_STATUSES.map(s => [s, 0])) as Record<LinenFormStatus, number>
     linenForms.forEach(f => { counts[f.status]++ })
     return counts
+  }, [linenForms])
+
+  // Department checkbox counts (forms ที่ซักอบเสร็จแล้วแต่ยังไม่แพค)
+  const deptCounts = useMemo(() => {
+    const active = linenForms.filter(f => f.status === 'washing')
+    return DEPARTMENT_CONFIG.map(d => ({
+      ...d,
+      done: active.filter(f => f[d.key]).length,
+      total: active.length,
+    }))
   }, [linenForms])
 
   // Discrepancy alerts
@@ -103,7 +113,7 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Pipeline */}
+      {/* Pipeline — 7 สถานะหลัก */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
         <h2 className="text-sm font-semibold text-slate-700 mb-4">สถานะใบส่งรับผ้า</h2>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
@@ -121,6 +131,21 @@ export default function DashboardPage() {
           })}
         </div>
       </div>
+
+      {/* Department checkboxes summary — 4 แผนก */}
+      {deptCounts.some(d => d.total > 0) && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">สถานะแผนก (ซักอบเสร็จ {deptCounts[0]?.total || 0} ใบ)</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {deptCounts.map(d => (
+              <div key={d.key} className={cn('flex items-center gap-2 px-3 py-2.5 rounded-lg', d.bgColor)}>
+                <span className={cn('text-lg font-bold', d.color)}>{d.done}/{d.total}</span>
+                <span className="text-xs text-slate-600">{d.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Forms */}

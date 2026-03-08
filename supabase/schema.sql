@@ -100,7 +100,11 @@ CREATE TABLE linen_forms (
   rows JSONB NOT NULL DEFAULT '[]',
   notes TEXT NOT NULL DEFAULT '',
   created_by TEXT NOT NULL DEFAULT '',
-  updated_at TEXT NOT NULL DEFAULT ''
+  updated_at TEXT NOT NULL DEFAULT '',
+  dept_drying BOOLEAN NOT NULL DEFAULT false,
+  dept_ironing BOOLEAN NOT NULL DEFAULT false,
+  dept_folding BOOLEAN NOT NULL DEFAULT false,
+  dept_qc BOOLEAN NOT NULL DEFAULT false
 );
 
 -- ============================================================

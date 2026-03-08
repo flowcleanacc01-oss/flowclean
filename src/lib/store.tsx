@@ -8,7 +8,7 @@ import type {
   ProductChecklist, ChecklistStatus,
   AuditAction, AuditEntityType, AuditLog,
 } from '@/types'
-import { STANDARD_LINEN_ITEMS } from '@/types'
+import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP } from '@/types'
 import {
   SAMPLE_CUSTOMERS, SAMPLE_LINEN_FORMS, SAMPLE_DELIVERY_NOTES,
   SAMPLE_BILLING_STATEMENTS, SAMPLE_EXPENSES, SAMPLE_USERS,
@@ -39,7 +39,7 @@ interface StoreContextType {
 
   // Linen Forms
   linenForms: LinenForm[]
-  addLinenForm: (f: Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt'>) => LinenForm
+  addLinenForm: (f: Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'> & Partial<Pick<LinenForm, 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>>) => LinenForm
   updateLinenForm: (id: string, f: Partial<LinenForm>) => void
   updateLinenFormStatus: (id: string, status: LinenFormStatus) => void
   deleteLinenForm: (id: string) => void
@@ -234,9 +234,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     function applyData(data: Awaited<ReturnType<typeof db.fetchAllData>>) {
       setCustomers(data.customers)
-      // Normalize legacy rows: ensure col6_factoryPackSend exists (JSONB may omit it)
+      // Normalize legacy data: map old statuses + ensure fields exist
       setLinenForms(data.linenForms.map(form => ({
         ...form,
+        status: (LEGACY_STATUS_MAP[form.status] || form.status) as LinenFormStatus,
+        deptDrying: form.deptDrying ?? false,
+        deptIroning: form.deptIroning ?? false,
+        deptFolding: form.deptFolding ?? false,
+        deptQc: form.deptQc ?? false,
         rows: form.rows.map(row => ({
           ...row,
           col6_factoryPackSend: row.col6_factoryPackSend ?? 0,
@@ -352,8 +357,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [customers])
 
   // ---- Linen Forms ----
-  const addLinenForm = useCallback((f: Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt'>): LinenForm => {
+  const addLinenForm = useCallback((f: Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'> & Partial<Pick<LinenForm, 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>>): LinenForm => {
     const newForm: LinenForm = {
+      deptDrying: false, deptIroning: false, deptFolding: false, deptQc: false,
       ...f, id: genId(), formNumber: genLinenFormNumber(),
       createdBy: currentUserRef.current?.id || 'unknown', updatedAt: todayISO(),
     }

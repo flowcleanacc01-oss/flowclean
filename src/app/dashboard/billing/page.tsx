@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
@@ -23,6 +23,7 @@ export default function BillingPage() {
     deliveryNotes, customers, getCustomer, companyInfo, linenCatalog,
   } = useStore()
 
+  const searchParams = useSearchParams()
   const [tab, setTab] = useState<TabKey>(() => {
     const t = searchParams.get('tab')
     if (t === 'invoice' || t === 'quotation') return t
@@ -30,8 +31,14 @@ export default function BillingPage() {
   })
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
-  const searchParams = useSearchParams()
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
+
+  // Sync tab when URL query param changes (e.g. clicking different billing menu items)
+  useEffect(() => {
+    const t = searchParams.get('tab')
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (t === 'billing' || t === 'invoice' || t === 'quotation') setTab(t)
+  }, [searchParams])
   const [showPrint, setShowPrint] = useState(false)
   const [showInvoiceDetail, setShowInvoiceDetail] = useState<string | null>(null)
   const [showInvoicePrint, setShowInvoicePrint] = useState(false)

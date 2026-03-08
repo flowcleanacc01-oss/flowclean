@@ -199,7 +199,7 @@ function makeRows(data: Record<string, Partial<{ co: number; c2: number; c3: num
   }))
 }
 
-export const SAMPLE_LINEN_FORMS: LinenForm[] = [
+const _SAMPLE_LINEN_FORMS: Omit<LinenForm, 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>[] = [
   // Wild Orchid Villa - Day 1 (Feb 25) — confirmed, sent all
   {
     id: 'lf-01', formNumber: 'LF-20260225-001', customerId: 'cust-01', date: '2026-02-25',
@@ -354,6 +354,10 @@ export const SAMPLE_LINEN_FORMS: LinenForm[] = [
     notes: 'เหมาจ่าย', createdBy: 'staff-01', updatedAt: '2026-02-28',
   },
 ]
+
+export const SAMPLE_LINEN_FORMS: LinenForm[] = _SAMPLE_LINEN_FORMS.map(f => ({
+  ...f, deptDrying: false, deptIroning: false, deptFolding: false, deptQc: false,
+}))
 
 // ============================================================
 // Sample Delivery Notes

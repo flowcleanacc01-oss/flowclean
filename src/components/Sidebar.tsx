@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -17,7 +17,6 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
-  ClipboardCheck,
   Package,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
@@ -40,6 +39,7 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const currentSearchParams = useSearchParams()
   const { currentUser, logout } = useStore()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -53,7 +53,7 @@ export default function Sidebar() {
     const params = new URLSearchParams(qs)
     const tab = params.get('tab')
     if (tab) {
-      const currentTab = new URLSearchParams(window.location.search).get('tab')
+      const currentTab = currentSearchParams.get('tab')
       return currentTab === tab || (!currentTab && tab === 'billing')
     }
     return true

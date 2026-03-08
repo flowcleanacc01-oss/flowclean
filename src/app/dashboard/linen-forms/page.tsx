@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO } from '@/lib/utils'
-import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, type LinenFormStatus, type LinenFormRow } from '@/types'
+import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasDiscrepancies } from '@/lib/discrepancy'
 import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X } from 'lucide-react'
 import Modal from '@/components/Modal'
@@ -189,7 +189,7 @@ export default function LinenFormsPage() {
                 const customer = getCustomer(form.customerId)
                 const totalPieces = form.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
                 const disc = hasDiscrepancies(form)
-                const cfg = LINEN_FORM_STATUS_CONFIG[form.status]
+                const cfg = LINEN_FORM_STATUS_CONFIG[form.status] || LINEN_FORM_STATUS_CONFIG.draft
                 const nextStatus = NEXT_LINEN_STATUS[form.status]
 
                 return (
@@ -334,6 +334,37 @@ export default function LinenFormsPage() {
             {detailForm.notes && (
               <div className="text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">
                 <strong>หมายเหตุ:</strong> {detailForm.notes}
+              </div>
+            )}
+
+            {/* Department checkboxes — แสดงเมื่อสถานะ >= ซักอบเสร็จ */}
+            {['washing', 'packed', 'delivered', 'confirmed'].includes(detailForm.status) && (
+              <div className="bg-slate-50 rounded-lg px-4 py-3">
+                <p className="text-xs font-medium text-slate-500 mb-2">สถานะแผนก (ติ๊กได้อิสระ)</p>
+                <div className="flex flex-wrap gap-3">
+                  {DEPARTMENT_CONFIG.map(dept => {
+                    const checked = detailForm[dept.key] ?? false
+                    const isReadOnly = detailForm.status === 'confirmed'
+                    return (
+                      <label key={dept.key} className={cn(
+                        'flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm cursor-pointer transition-all',
+                        checked ? `${dept.bgColor} ${dept.color} border-current` : 'bg-white border-slate-200 text-slate-500',
+                        isReadOnly && 'cursor-default opacity-70'
+                      )}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            if (!isReadOnly) updateLinenForm(detailForm.id, { [dept.key]: !checked })
+                          }}
+                          disabled={isReadOnly}
+                          className="w-4 h-4 rounded accent-current"
+                        />
+                        {dept.label}
+                      </label>
+                    )
+                  })}
+                </div>
               </div>
             )}
 
