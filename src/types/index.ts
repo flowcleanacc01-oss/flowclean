@@ -196,6 +196,9 @@ export interface LinenForm {
   notes: string
   createdBy: string
   updatedAt: string
+  // จำนวนถุง
+  bagsSentCount: number   // จำนวนถุงกระสอบส่งซัก (กรอกตอน draft)
+  bagsPackCount: number   // จำนวนถุงแพคส่ง (กรอกตอน delivered)
   // 4 แผนก — checkbox อิสระ
   deptDrying: boolean
   deptIroning: boolean

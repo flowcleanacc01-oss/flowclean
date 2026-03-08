@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatDate, cn, todayISO } from '@/lib/utils'
+import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasDiscrepancies } from '@/lib/discrepancy'
 import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X } from 'lucide-react'
@@ -29,6 +29,7 @@ export default function LinenFormsPage() {
   const [newDate, setNewDate] = useState(todayISO())
   const [newRows, setNewRows] = useState<LinenFormRow[]>([])
   const [newNotes, setNewNotes] = useState('')
+  const [newBagsSent, setNewBagsSent] = useState(0)
 
   const filtered = useMemo(() => {
     return linenForms.filter(f => {
@@ -65,6 +66,7 @@ export default function LinenFormsPage() {
       setNewRows([])
     }
     setNewNotes('')
+    setNewBagsSent(0)
     setShowCreate(true)
   }
 
@@ -93,6 +95,7 @@ export default function LinenFormsPage() {
       status: 'draft',
       rows: newRows,
       notes: newNotes,
+      bagsSentCount: newBagsSent,
     })
     setShowCreate(false)
   }
@@ -256,14 +259,24 @@ export default function LinenFormsPage() {
           </div>
 
           {newCustomerId && getCustomer(newCustomerId) && (
-            <LinenFormGrid
-              customer={getCustomer(newCustomerId)!}
-              rows={newRows}
-              onChange={setNewRows}
-              catalog={linenCatalog}
-              carryOver={getCarryOver(newCustomerId, newDate)}
-              editableColumns={['col2', 'col3', 'note']}
-            />
+            <>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                <label className="block text-sm font-medium text-amber-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
+                <input type="number" min={0}
+                  value={newBagsSent || ''}
+                  onChange={e => setNewBagsSent(sanitizeNumber(e.target.value, 9999))}
+                  className="w-32 px-3 py-2 border border-amber-300 rounded-lg text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                  placeholder="0" />
+              </div>
+              <LinenFormGrid
+                customer={getCustomer(newCustomerId)!}
+                rows={newRows}
+                onChange={setNewRows}
+                catalog={linenCatalog}
+                carryOver={getCarryOver(newCustomerId, newDate)}
+                editableColumns={['col2', 'col3', 'note']}
+              />
+            </>
           )}
 
           <div>
@@ -312,6 +325,34 @@ export default function LinenFormsPage() {
                   {LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
                 </span>
               </div>
+            </div>
+
+            {/* จำนวนถุง */}
+            <div className="flex flex-wrap gap-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                <label className="block text-xs font-medium text-amber-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
+                {detailForm.status === 'draft' ? (
+                  <input type="number" min={0}
+                    value={detailForm.bagsSentCount || ''}
+                    onChange={e => updateLinenForm(detailForm.id, { bagsSentCount: sanitizeNumber(e.target.value, 9999) })}
+                    className="w-28 px-3 py-1.5 border border-amber-300 rounded text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                ) : (
+                  <span className="text-sm font-medium text-amber-900">{detailForm.bagsSentCount || '-'}</span>
+                )}
+              </div>
+              {['delivered', 'confirmed'].includes(detailForm.status) && (
+                <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-3">
+                  <label className="block text-xs font-medium text-teal-800 mb-1">จำนวนถุงแพคส่ง</label>
+                  {detailForm.status === 'delivered' ? (
+                    <input type="number" min={0}
+                      value={detailForm.bagsPackCount || ''}
+                      onChange={e => updateLinenForm(detailForm.id, { bagsPackCount: sanitizeNumber(e.target.value, 9999) })}
+                      className="w-28 px-3 py-1.5 border border-teal-300 rounded text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  ) : (
+                    <span className="text-sm font-medium text-teal-900">{detailForm.bagsPackCount || '-'}</span>
+                  )}
+                </div>
+              )}
             </div>
 
             <LinenFormGrid

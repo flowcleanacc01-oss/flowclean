@@ -10,11 +10,12 @@ import {
 import { Plus, Search, Printer, X, ChevronRight, ClipboardCheck } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ChecklistPrint from '@/components/ChecklistPrint'
+import BlankChecklistPrint from '@/components/BlankChecklistPrint'
 
 export default function ChecklistPage() {
   const {
     checklists, addChecklist, updateChecklist, updateChecklistStatus, deleteChecklist,
-    linenForms, deliveryNotes, getCustomer, linenCatalog, companyInfo,
+    linenForms, deliveryNotes, customers, getCustomer, linenCatalog, companyInfo,
   } = useStore()
 
   const [search, setSearch] = useState('')
@@ -23,6 +24,8 @@ export default function ChecklistPage() {
   const [showDetail, setShowDetail] = useState<string | null>(null)
   const [showPrint, setShowPrint] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [showBlankPrint, setShowBlankPrint] = useState(false)
+  const [blankCustomerId, setBlankCustomerId] = useState('')
 
   // Create form state
   const [newType, setNewType] = useState<ChecklistType>('qc')
@@ -148,10 +151,16 @@ export default function ChecklistPage() {
           <h1 className="text-2xl font-bold text-slate-800">เช็คสินค้า</h1>
           <p className="text-sm text-slate-500 mt-0.5">ใบเช็คคุณภาพ (QC) และขึ้นรถ (Loading)</p>
         </div>
-        <button onClick={handleCreateOpen}
-          className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
-          <Plus className="w-4 h-4" />สร้างใบเช็ค
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => { setBlankCustomerId(''); setShowBlankPrint(true) }}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium">
+            <Printer className="w-4 h-4" />พิมพ์ใบเช็คของ
+          </button>
+          <button onClick={handleCreateOpen}
+            className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
+            <Plus className="w-4 h-4" />สร้างใบเช็ค
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -478,6 +487,43 @@ export default function ChecklistPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Blank Checklist Print Modal */}
+      <Modal open={showBlankPrint} onClose={() => setShowBlankPrint(false)} title="พิมพ์ใบเช็คของ" size="xl">
+        <div className="space-y-4">
+          {!blankCustomerId ? (
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-2">เลือกลูกค้า</label>
+              <div className="grid gap-2">
+                {customers.filter(c => c.isActive).map(c => (
+                  <button key={c.id} onClick={() => setBlankCustomerId(c.id)}
+                    className="text-left px-4 py-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                    <span className="font-medium text-slate-800">{c.name}</span>
+                    <span className="text-xs text-slate-500 ml-2">({c.enabledItems.length} รายการ)</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="flex justify-between items-center mb-4 no-print">
+                <button onClick={() => setBlankCustomerId('')}
+                  className="text-sm text-slate-500 hover:text-slate-700">← เลือกลูกค้าอื่น</button>
+                <button onClick={() => window.print()}
+                  className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
+                  <Printer className="w-4 h-4" />พิมพ์
+                </button>
+              </div>
+              {(() => {
+                const cust = getCustomer(blankCustomerId)
+                if (!cust) return null
+                const items = linenCatalog.filter(i => cust.enabledItems.includes(i.code))
+                return <BlankChecklistPrint customer={cust} company={companyInfo} items={items} date={todayISO()} />
+              })()}
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   )

@@ -39,7 +39,7 @@ interface StoreContextType {
 
   // Linen Forms
   linenForms: LinenForm[]
-  addLinenForm: (f: Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'> & Partial<Pick<LinenForm, 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>>) => LinenForm
+  addLinenForm: (f: Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt' | 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'> & Partial<Pick<LinenForm, 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>>) => LinenForm
   updateLinenForm: (id: string, f: Partial<LinenForm>) => void
   updateLinenFormStatus: (id: string, status: LinenFormStatus) => void
   deleteLinenForm: (id: string) => void
@@ -238,6 +238,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setLinenForms(data.linenForms.map(form => ({
         ...form,
         status: (LEGACY_STATUS_MAP[form.status] || form.status) as LinenFormStatus,
+        bagsSentCount: form.bagsSentCount ?? 0,
+        bagsPackCount: form.bagsPackCount ?? 0,
         deptDrying: form.deptDrying ?? false,
         deptIroning: form.deptIroning ?? false,
         deptFolding: form.deptFolding ?? false,
@@ -357,8 +359,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [customers])
 
   // ---- Linen Forms ----
-  const addLinenForm = useCallback((f: Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'> & Partial<Pick<LinenForm, 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>>): LinenForm => {
+  const addLinenForm = useCallback((f: Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt' | 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'> & Partial<Pick<LinenForm, 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>>): LinenForm => {
     const newForm: LinenForm = {
+      bagsSentCount: 0, bagsPackCount: 0,
       deptDrying: false, deptIroning: false, deptFolding: false, deptQc: false,
       ...f, id: genId(), formNumber: genLinenFormNumber(),
       createdBy: currentUserRef.current?.id || 'unknown', updatedAt: todayISO(),

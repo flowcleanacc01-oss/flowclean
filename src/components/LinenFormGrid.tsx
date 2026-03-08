@@ -201,10 +201,10 @@ export default function LinenFormGrid({
                       <span className="text-slate-700">{row.col6_factoryPackSend || '-'}</span>
                     )}
                   </td>
-                  {/* Calculated - ค้าง(-)/คืน(+) = col3 - col4 */}
+                  {/* Calculated - ค้าง(-)/คืน(+) = แพคส่ง - นับเข้า */}
                   <td className="px-1 py-1 text-center">
                     {(() => {
-                      const val = row.col3_hotelClaimCount - row.col4_factoryApproved
+                      const val = (row.col6_factoryPackSend || 0) - row.col5_factoryClaimApproved
                       if (val === 0) return <span className="text-slate-400">-</span>
                       return (
                         <span className={cn(
@@ -267,7 +267,7 @@ export default function LinenFormGrid({
               <td className="px-3 py-2 text-center">{totals.col6}</td>
               <td className="px-3 py-2 text-center">
                 {(() => {
-                  const val = totals.col3 - totals.col4
+                  const val = totals.col6 - totals.col5
                   if (val === 0) return '-'
                   return (
                     <span className={cn(

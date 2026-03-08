@@ -85,6 +85,9 @@ const FIELD_MAP: Record<string, string> = {
   bankAccountName: 'bank_account_name',
   bankAccountNumber: 'bank_account_number',
   passwordHash: 'password_hash',
+  // Bag counts
+  bagsSentCount: 'bags_sent_count',
+  bagsPackCount: 'bags_pack_count',
   // Department checkboxes
   deptDrying: 'dept_drying',
   deptIroning: 'dept_ironing',
