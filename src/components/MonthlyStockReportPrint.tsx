@@ -76,8 +76,8 @@ export default function MonthlyStockReportPrint({
     }
 
     const totalReceived = col2 + col3
-    // ยอดต้องคืน = approved + claimApproved - carryOver
-    const needToReturn = col4 + col5 - co
+    // ยอดต้องคืน = โรงซักนับเข้า - ยกยอดมา (ตรงกับ core logic)
+    const needToReturn = col5 - co
     // สต้อก = ยอดต้องคืน - แพคส่ง
     const stock = needToReturn - col6
 

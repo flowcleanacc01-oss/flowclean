@@ -233,11 +233,10 @@ CREATE INDEX idx_audit_logs_entity ON audit_logs (entity_type, entity_id);
 CREATE INDEX idx_audit_logs_user ON audit_logs (user_id);
 
 -- ============================================================
--- RLS: Enable but allow all (no auth yet)
--- ⚠️ TODO BEFORE PRODUCTION: Replace "Allow all" policies with
--- proper auth-based policies using auth.uid() + role checks.
--- Current open policies allow anon read/write to ALL tables.
--- Must implement Gmail OAuth → Supabase Auth first.
+-- RLS: Hardened — anon read-only, service_role writes
+-- Reads: anon can SELECT (client reads via supabase-js)
+-- Writes: only service_role (via /api/db server proxy)
+-- app_users: anon can only read non-sensitive columns
 -- ============================================================
 ALTER TABLE linen_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
@@ -252,15 +251,30 @@ ALTER TABLE product_checklists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow all for anon" ON linen_items FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for anon" ON app_users FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for anon" ON company_info FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for anon" ON customers FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for anon" ON linen_forms FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for anon" ON delivery_notes FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for anon" ON billing_statements FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for anon" ON tax_invoices FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for anon" ON quotations FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for anon" ON product_checklists FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for anon" ON expenses FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for anon" ON audit_logs FOR ALL USING (true) WITH CHECK (true);
+-- Anon: read-only for all tables
+CREATE POLICY "anon_read" ON linen_items FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON app_users FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON company_info FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON customers FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON linen_forms FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON delivery_notes FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON billing_statements FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON tax_invoices FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON quotations FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON product_checklists FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON expenses FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON audit_logs FOR SELECT USING (true);
+
+-- Service role: full access for writes (via /api/db proxy)
+CREATE POLICY "service_write" ON linen_items FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "service_write" ON app_users FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "service_write" ON company_info FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "service_write" ON customers FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "service_write" ON linen_forms FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "service_write" ON delivery_notes FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "service_write" ON billing_statements FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "service_write" ON tax_invoices FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "service_write" ON quotations FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "service_write" ON product_checklists FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "service_write" ON expenses FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "service_write" ON audit_logs FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');

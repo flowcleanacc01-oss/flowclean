@@ -17,9 +17,12 @@ async function dbWrite(params: {
   match?: { column: string; value: string | number }
   onConflict?: string
 }): Promise<void> {
+  // Get session user ID for auth header
+  const sessionStr = typeof window !== 'undefined' ? sessionStorage.getItem('fc_session') : null
+  const sessionUser = sessionStr ? JSON.parse(sessionStr)?.id || '' : ''
   const res = await fetch('/api/db', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-fc-session': sessionUser },
     body: JSON.stringify(params),
   })
   if (!res.ok) {
@@ -195,7 +198,7 @@ export async function deleteLinenItemDB(code: string): Promise<void> {
 export async function fetchUsers(): Promise<AppUser[]> {
   const { data, error } = await supabase
     .from('app_users')
-    .select('*')
+    .select('id, name, email, role, is_active, created_at')
   if (error) throw error
   return toCamelCaseArray<AppUser>(data || [])
 }
@@ -500,11 +503,7 @@ export async function truncateAllTables(): Promise<void> {
 // ============================================================
 
 export async function fetchAllData() {
-  const [
-    customers, linenForms, deliveryNotes, billingStatements,
-    taxInvoices, quotations, expenses, users, companyInfo,
-    linenItems, checklists, linenCategories,
-  ] = await Promise.all([
+  const results = await Promise.allSettled([
     fetchCustomers(),
     fetchLinenForms(),
     fetchDeliveryNotes(),
@@ -518,6 +517,28 @@ export async function fetchAllData() {
     fetchChecklists(),
     fetchLinenCategories(),
   ])
+
+  const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
+    r.status === 'fulfilled' ? r.value : (console.error('[fetchAllData] partial fail:', r.reason), fallback)
+
+  const [
+    customers, linenForms, deliveryNotes, billingStatements,
+    taxInvoices, quotations, expenses, users, companyInfo,
+    linenItems, checklists, linenCategories,
+  ] = [
+    val(results[0], [] as Customer[]),
+    val(results[1], [] as LinenForm[]),
+    val(results[2], [] as DeliveryNote[]),
+    val(results[3], [] as BillingStatement[]),
+    val(results[4], [] as TaxInvoice[]),
+    val(results[5], [] as Quotation[]),
+    val(results[6], [] as Expense[]),
+    val(results[7], [] as AppUser[]),
+    val(results[8], null as CompanyInfo | null),
+    val(results[9], [] as LinenItemDef[]),
+    val(results[10], [] as ProductChecklist[]),
+    val(results[11], [] as LinenCategoryDef[]),
+  ]
 
   return {
     customers,

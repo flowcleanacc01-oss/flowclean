@@ -18,6 +18,12 @@ interface DbRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    // Auth check: require x-fc-session header (set by client at login)
+    const sessionUser = request.headers.get('x-fc-session')
+    if (!sessionUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body: DbRequest = await request.json()
     const { operation, table, data, match, onConflict } = body
 

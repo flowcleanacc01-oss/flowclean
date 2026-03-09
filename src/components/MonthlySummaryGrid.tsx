@@ -35,11 +35,8 @@ export default function MonthlySummaryGrid({ customer, month, linenForms, delive
       const day = parseInt(form.date.split('-')[2])
       for (const row of form.rows) {
         const packSend = row.col6_factoryPackSend || 0
-        const claimApproved = row.col5_factoryClaimApproved || 0
-        // Revenue = billable qty only (exclude claim items)
-        const qty = packSend > 0
-          ? Math.max(packSend - claimApproved, 0)
-          : 0
+        // Billing qty = all packed items (col6) — ตรงกับ core logic / test
+        const qty = packSend
         if (grid[row.code] && qty > 0) {
           grid[row.code][day] = (grid[row.code][day] || 0) + qty
         }

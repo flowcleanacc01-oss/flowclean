@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const isDev = process.env.NODE_ENV === 'development'
@@ -19,9 +19,14 @@ const ALL_TABLES: { table: string; pk: string; pkType: 'text' | 'int' }[] = [
   { table: 'linen_items', pk: 'code', pkType: 'text' },
 ]
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   if (!isDev) {
     return NextResponse.json({ error: 'Truncate is disabled in production' }, { status: 403 })
+  }
+
+  const sessionUser = request.headers.get('x-fc-session')
+  if (!sessionUser) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {

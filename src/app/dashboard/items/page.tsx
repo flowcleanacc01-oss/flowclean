@@ -14,6 +14,13 @@ const EMPTY_NEW_ITEM: LinenItemDef = {
   code: '', name: '', nameEn: '', category: 'other', unit: 'ชิ้น', defaultPrice: 0, sortOrder: 0,
 }
 
+function SortIcon({ col, sortCol, sortDir }: { col: string; sortCol: string; sortDir: 'asc' | 'desc' }) {
+  if (sortCol !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300 ml-1" />
+  return sortDir === 'asc'
+    ? <ChevronUp className="w-3 h-3 text-[#1B3A5C] ml-1" />
+    : <ChevronDown className="w-3 h-3 text-[#1B3A5C] ml-1" />
+}
+
 export default function ItemsPage() {
   const {
     currentUser, defaultPrices, updateDefaultPrice,
@@ -84,13 +91,6 @@ export default function ItemsPage() {
       setSortCol(col)
       setSortDir('asc')
     }
-  }
-
-  const SortIcon = ({ col }: { col: SortColumn }) => {
-    if (sortCol !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300 ml-1" />
-    return sortDir === 'asc'
-      ? <ChevronUp className="w-3 h-3 text-[#1B3A5C] ml-1" />
-      : <ChevronDown className="w-3 h-3 text-[#1B3A5C] ml-1" />
   }
 
   // ---- Item handlers ----
@@ -285,22 +285,22 @@ export default function ItemsPage() {
                   <tr className="bg-slate-50">
                     <th className="w-10 px-2 py-2"></th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600 cursor-pointer select-none" onClick={() => handleSort('code')}>
-                      <span className="flex items-center">รหัส<SortIcon col="code" /></span>
+                      <span className="flex items-center">รหัส<SortIcon col="code" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600 cursor-pointer select-none" onClick={() => handleSort('name')}>
-                      <span className="flex items-center">ชื่อ (ไทย)<SortIcon col="name" /></span>
+                      <span className="flex items-center">ชื่อ (ไทย)<SortIcon col="name" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600 cursor-pointer select-none" onClick={() => handleSort('nameEn')}>
-                      <span className="flex items-center">ชื่อ (EN)<SortIcon col="nameEn" /></span>
+                      <span className="flex items-center">ชื่อ (EN)<SortIcon col="nameEn" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600 cursor-pointer select-none" onClick={() => handleSort('category')}>
-                      <span className="flex items-center">หมวด<SortIcon col="category" /></span>
+                      <span className="flex items-center">หมวด<SortIcon col="category" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600 cursor-pointer select-none" onClick={() => handleSort('unit')}>
-                      <span className="flex items-center">หน่วย<SortIcon col="unit" /></span>
+                      <span className="flex items-center">หน่วย<SortIcon col="unit" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
                     <th className="text-right px-4 py-2 font-medium text-slate-600 w-28 cursor-pointer select-none" onClick={() => handleSort('defaultPrice')}>
-                      <span className="flex items-center justify-end">ราคา default<SortIcon col="defaultPrice" /></span>
+                      <span className="flex items-center justify-end">ราคา default<SortIcon col="defaultPrice" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
                     <th className="text-right px-4 py-2 font-medium text-slate-600 w-20"></th>
                   </tr>
