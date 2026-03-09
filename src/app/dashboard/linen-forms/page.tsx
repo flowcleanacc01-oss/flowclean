@@ -342,23 +342,25 @@ export default function LinenFormsPage() {
               </div>
             </div>
 
-            {/* จำนวนถุง */}
+            {/* จำนวนถุง — แสดงตามสถานะ */}
             <div className="flex flex-wrap gap-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                <label className="block text-xs font-medium text-amber-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
-                {['draft', 'received', 'sorting'].includes(detailForm.status) ? (
-                  <input type="number" min={0}
-                    value={detailForm.bagsSentCount || ''}
-                    onChange={e => updateLinenForm(detailForm.id, { bagsSentCount: sanitizeNumber(e.target.value, 9999) })}
-                    className="w-28 px-3 py-1.5 border border-amber-300 rounded text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                ) : (
-                  <span className="text-sm font-medium text-amber-900">{detailForm.bagsSentCount || '-'}</span>
-                )}
-              </div>
-              {['delivered', 'confirmed'].includes(detailForm.status) && (
+              {['draft', 'received', 'sorting', 'washing'].includes(detailForm.status) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                  <label className="block text-xs font-medium text-amber-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
+                  {['draft', 'received', 'sorting'].includes(detailForm.status) ? (
+                    <input type="number" min={0}
+                      value={detailForm.bagsSentCount || ''}
+                      onChange={e => updateLinenForm(detailForm.id, { bagsSentCount: sanitizeNumber(e.target.value, 9999) })}
+                      className="w-28 px-3 py-1.5 border border-amber-300 rounded text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  ) : (
+                    <span className="text-sm font-medium text-amber-900">{detailForm.bagsSentCount || '-'}</span>
+                  )}
+                </div>
+              )}
+              {['packed', 'delivered', 'confirmed'].includes(detailForm.status) && (
                 <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-3">
                   <label className="block text-xs font-medium text-teal-800 mb-1">จำนวนถุงแพคส่ง</label>
-                  {['delivered', 'confirmed'].includes(detailForm.status) ? (
+                  {['packed', 'delivered'].includes(detailForm.status) ? (
                     <input type="number" min={0}
                       value={detailForm.bagsPackCount || ''}
                       onChange={e => updateLinenForm(detailForm.id, { bagsPackCount: sanitizeNumber(e.target.value, 9999) })}
