@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   Menu,
   Package,
+  BookOpen,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useState } from 'react'
@@ -35,6 +36,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/reports', label: 'รายงาน', icon: BarChart3, adminOnly: true },
   { href: '/dashboard/expenses', label: 'รายจ่าย', icon: Wallet, adminOnly: true },
   { href: '/dashboard/settings', label: 'ตั้งค่า', icon: Settings, adminOnly: true },
+  { href: '/dashboard/guide', label: 'คู่มือการใช้งาน', icon: BookOpen },
 ]
 
 export default function Sidebar() {

@@ -16,14 +16,14 @@ interface LinenFormGridProps {
 }
 
 const COL_LABELS = [
-  { key: 'col1', label: 'ยกยอดมา', short: 'ยกมา' },
-  { key: 'col2', label: 'ลูกค้านับส่ง', short: 'นับส่ง' },
-  { key: 'col3', label: 'เคลม', short: 'เคลม' },
-  { key: 'col5', label: 'โรงซักนับเข้า', short: 'นับเข้า' },
-  { key: 'col6', label: 'โรงซักแพคส่ง', short: 'แพคส่ง' },
-  { key: 'calc', label: 'ค้าง/คืน', short: 'ค้าง/คืน' },
-  { key: 'note', label: 'หมายเหตุ', short: 'Note' },
-  { key: 'col4', label: 'ลูกค้านับกลับ', short: 'นับกลับ' },
+  { key: 'col1', label: 'ยกยอดมา', short: 'ยกมา', tip: 'ยอดค้างจากรอบก่อน: ลบ=ค้างส่ง, บวก=ส่งเกิน (คำนวณอัตโนมัติ)' },
+  { key: 'col2', label: 'ลูกค้านับส่ง', short: 'นับส่ง', tip: 'จำนวนผ้าที่ลูกค้า (โรงแรม) นับส่งมาซัก' },
+  { key: 'col3', label: 'เคลม', short: 'เคลม', tip: 'จำนวนผ้าที่ลูกค้าแจ้งเคลม (ชำรุด/เสียหาย)' },
+  { key: 'col5', label: 'โรงซักนับเข้า', short: 'นับเข้า', tip: 'จำนวนผ้าที่โรงซักนับรับเข้าจริง' },
+  { key: 'col6', label: 'โรงซักแพคส่ง', short: 'แพคส่ง', tip: 'จำนวนผ้าที่โรงซักแพคส่งกลับลูกค้า' },
+  { key: 'calc', label: 'ค้าง/คืน', short: 'ค้าง/คืน', tip: 'แพคส่ง - นับเข้า: ลบ(แดง)=ค้างส่ง, บวก(เขียว)=คืนเกิน' },
+  { key: 'note', label: 'หมายเหตุ', short: 'Note', tip: 'บันทึกเพิ่มเติม เช่น ผ้าชำรุด สีตก' },
+  { key: 'col4', label: 'ลูกค้านับกลับ', short: 'นับกลับ', tip: 'จำนวนผ้าที่ลูกค้านับรับกลับ (⚠ ถ้าไม่ตรงกับแพคส่ง)' },
 ] as const
 
 export default function LinenFormGrid({
@@ -123,8 +123,8 @@ export default function LinenFormGrid({
               {COL_LABELS.map(col => {
                 const editable = isEditable(col.key)
                 return (
-                  <th key={col.key} className={cn(
-                    'px-3 py-2 font-medium text-center',
+                  <th key={col.key} title={col.tip} className={cn(
+                    'px-3 py-2 font-medium text-center cursor-help',
                     col.key === 'note' ? 'w-32 text-left' : 'w-20',
                     editable
                       ? 'text-[#1B3A5C] bg-teal-50/70 border-b-2 border-[#3DD8D8]'
