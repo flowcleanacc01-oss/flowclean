@@ -17,9 +17,9 @@ async function dbWrite(params: {
   match?: { column: string; value: string | number }
   onConflict?: string
 }): Promise<void> {
-  // Get session user ID for auth header
-  const sessionStr = typeof window !== 'undefined' ? sessionStorage.getItem('fc_session') : null
-  const sessionUser = sessionStr ? JSON.parse(sessionStr)?.id || '' : ''
+  // Get session user ID for auth header (must match auth.ts SESSION_KEY)
+  const sessionStr = typeof window !== 'undefined' ? sessionStorage.getItem('flowclean_session') : null
+  const sessionUser = sessionStr ? JSON.parse(sessionStr)?.userId || '' : ''
   const res = await fetch('/api/db', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-fc-session': sessionUser },
@@ -491,10 +491,10 @@ export async function updateDefaultPriceDB(code: string, price: number): Promise
 
 export async function truncateAllTables(): Promise<void> {
   // Use a dedicated server endpoint for bulk delete (service_role required)
-  const session = typeof window !== 'undefined' ? sessionStorage.getItem('fc_session') : null
+  const sessionStr = typeof window !== 'undefined' ? sessionStorage.getItem('flowclean_session') : null
   const headers: Record<string, string> = {}
-  if (session) {
-    try { headers['x-fc-session'] = JSON.parse(session).userId } catch { /* ignore */ }
+  if (sessionStr) {
+    try { headers['x-fc-session'] = JSON.parse(sessionStr).userId } catch { /* ignore */ }
   }
   const res = await fetch('/api/db/truncate', { method: 'POST', headers })
   if (!res.ok) {
