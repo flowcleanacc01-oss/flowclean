@@ -6,16 +6,28 @@
 // ============================================================
 // Standard 21+3 Linen Items
 // ============================================================
-export type LinenCategory = 'towel' | 'bedsheet' | 'duvet_cover' | 'duvet_insert' | 'mattress_pad' | 'other'
+export type LinenCategory = string
 
-export const LINEN_CATEGORIES: Record<LinenCategory, string> = {
-  towel: 'ผ้าขนหนู',
-  bedsheet: 'ผ้าปูที่นอน',
-  duvet_cover: 'ปลอกดูเว่',
-  duvet_insert: 'ไส้ดูเว่',
-  mattress_pad: 'รองกันเปื้อน',
-  other: 'อื่นๆ',
+export interface LinenCategoryDef {
+  key: string
+  label: string
+  sortOrder: number
 }
+
+// Default categories (seed data — ใช้เมื่อยังไม่มีข้อมูลจาก Supabase)
+export const DEFAULT_LINEN_CATEGORIES: LinenCategoryDef[] = [
+  { key: 'towel', label: 'ผ้าขนหนู', sortOrder: 1 },
+  { key: 'bedsheet', label: 'ผ้าปูที่นอน', sortOrder: 2 },
+  { key: 'duvet_cover', label: 'ปลอกดูเว่', sortOrder: 3 },
+  { key: 'duvet_insert', label: 'ไส้ดูเว่', sortOrder: 4 },
+  { key: 'mattress_pad', label: 'รองกันเปื้อน', sortOrder: 5 },
+  { key: 'other', label: 'อื่นๆ', sortOrder: 6 },
+]
+
+// Backward-compat lookup (used by legacy code)
+export const LINEN_CATEGORIES: Record<string, string> = Object.fromEntries(
+  DEFAULT_LINEN_CATEGORIES.map(c => [c.key, c.label])
+)
 
 export interface LinenItemDef {
   code: string
@@ -371,7 +383,7 @@ export type AuditAction = 'create' | 'update' | 'delete' | 'login' | 'login_fail
 
 export type AuditEntityType =
   | 'customer' | 'linen_form' | 'delivery_note' | 'billing' | 'tax_invoice'
-  | 'quotation' | 'expense' | 'checklist' | 'user' | 'company' | 'linen_item' | 'session'
+  | 'quotation' | 'expense' | 'checklist' | 'user' | 'company' | 'linen_item' | 'linen_category' | 'session'
 
 export interface AuditLog {
   id: string

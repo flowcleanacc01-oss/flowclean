@@ -4,11 +4,11 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, ty
 import type {
   Customer, LinenForm, LinenFormStatus, DeliveryNote, DeliveryNoteStatus,
   BillingStatement, BillingStatus, TaxInvoice, Quotation, QuotationStatus,
-  Expense, AppUser, CompanyInfo, LinenItemDef,
+  Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
   ProductChecklist, ChecklistStatus,
   AuditAction, AuditEntityType, AuditLog,
 } from '@/types'
-import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP } from '@/types'
+import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES } from '@/types'
 import {
   SAMPLE_CUSTOMERS, SAMPLE_LINEN_FORMS, SAMPLE_DELIVERY_NOTES,
   SAMPLE_BILLING_STATEMENTS, SAMPLE_EXPENSES, SAMPLE_USERS,
@@ -92,6 +92,13 @@ interface StoreContextType {
   getItemName: (code: string) => string
   getItemNameMap: () => Record<string, string>
 
+  // Linen Categories
+  linenCategories: LinenCategoryDef[]
+  addCategory: (cat: LinenCategoryDef) => void
+  updateCategory: (key: string, updates: Partial<LinenCategoryDef>) => void
+  deleteCategory: (key: string) => void
+  getCategoryLabel: (key: string) => string
+
   // Checklists
   checklists: ProductChecklist[]
   addChecklist: (c: Omit<ProductChecklist, 'id' | 'checklistNumber' | 'createdBy' | 'updatedAt'>) => ProductChecklist
@@ -145,6 +152,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [defaultPrices, setDefaultPrices] = useState<Record<string, number>>(DEFAULT_PRICES)
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(DEFAULT_COMPANY_INFO)
   const [linenCatalog, setLinenCatalog] = useState<LinenItemDef[]>(STANDARD_LINEN_ITEMS)
+  const [linenCategories, setLinenCategories] = useState<LinenCategoryDef[]>(DEFAULT_LINEN_CATEGORIES)
   const [checklists, setChecklists] = useState<ProductChecklist[]>([])
   const [loaded, setLoaded] = useState(false)
   const seeded = useRef(false)
@@ -259,6 +267,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setUsers(loadedUsers.map(stripHash))
       setCompanyInfo(data.companyInfo || DEFAULT_COMPANY_INFO)
       setLinenCatalog(data.linenItems.length > 0 ? data.linenItems : STANDARD_LINEN_ITEMS)
+      setLinenCategories(data.linenCategories.length > 0 ? data.linenCategories : DEFAULT_LINEN_CATEGORIES)
       setChecklists(data.checklists)
 
       // Build defaultPrices from linenItems
@@ -654,6 +663,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return Object.fromEntries(linenCatalog.map(i => [i.code, i.name]))
   }, [linenCatalog])
 
+  // ---- Linen Categories ----
+  const addCategory = useCallback((cat: LinenCategoryDef) => {
+    setLinenCategories(prev => [...prev, cat])
+    dbSave(db.insertLinenCategory(cat), () => {
+      setLinenCategories(prev => prev.filter(c => c.key !== cat.key))
+    })
+    logAudit('create', 'linen_category', cat.key, cat.label)
+  }, [logAudit])
+
+  const updateCategory = useCallback((key: string, updates: Partial<LinenCategoryDef>) => {
+    setLinenCategories(prev => prev.map(c => c.key === key ? { ...c, ...updates } : c))
+    dbSave(db.updateLinenCategoryDB(key, updates))
+    logAudit('update', 'linen_category', key, updates.label || key)
+  }, [logAudit])
+
+  const deleteCategory = useCallback((key: string) => {
+    setLinenCategories(prev => {
+      const old = prev.find(c => c.key === key)
+      logAudit('delete', 'linen_category', key, old?.label || key)
+      return prev.filter(c => c.key !== key)
+    })
+    dbSave(db.deleteLinenCategoryDB(key))
+  }, [logAudit])
+
+  const getCategoryLabel = useCallback((key: string): string => {
+    return linenCategories.find(c => c.key === key)?.label || key
+  }, [linenCategories])
+
   // ---- Checklists ----
   const addChecklist = useCallback((c: Omit<ProductChecklist, 'id' | 'checklistNumber' | 'createdBy' | 'updatedAt'>): ProductChecklist => {
     const newCL: ProductChecklist = {
@@ -766,6 +803,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       defaultPrices, updateDefaultPrice,
       companyInfo, updateCompanyInfo,
       linenCatalog, addLinenItem, updateLinenItem, deleteLinenItem, getItemName, getItemNameMap,
+      linenCategories, addCategory, updateCategory, deleteCategory, getCategoryLabel,
       checklists, addChecklist, updateChecklist, updateChecklistStatus, deleteChecklist,
       getCarryOver, getDiscrepancies,
     }}>
@@ -788,6 +826,7 @@ async function seedSampleData() {
 
   try {
     // Seed in dependency order
+    await db.upsertLinenCategories(DEFAULT_LINEN_CATEGORIES)
     await db.upsertLinenItems(STANDARD_LINEN_ITEMS)
     await db.upsertUsers(SAMPLE_USERS)
     await db.upsertCompanyInfo(DEFAULT_COMPANY_INFO)

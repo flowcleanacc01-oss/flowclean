@@ -15,6 +15,7 @@ const ALL_TABLES: { table: string; pk: string; pkType: 'text' | 'int' }[] = [
   { table: 'customers', pk: 'id', pkType: 'text' },
   { table: 'company_info', pk: 'id', pkType: 'int' },
   { table: 'app_users', pk: 'id', pkType: 'text' },
+  { table: 'linen_categories', pk: 'key', pkType: 'text' },
   { table: 'linen_items', pk: 'code', pkType: 'text' },
 ]
 

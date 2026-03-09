@@ -3,17 +3,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { cn, sanitizeNumber, formatDate } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { validatePassword } from '@/lib/auth'
 import { fetchAuditLogs } from '@/lib/supabase-service'
-import { LINEN_CATEGORIES, type LinenCategory, type LinenItemDef, type AuditLog } from '@/types'
-import { Plus, Trash2, RotateCcw, Edit2, Check, X, KeyRound } from 'lucide-react'
+import type { AuditLog } from '@/types'
+import { Plus, Trash2, RotateCcw, Check, KeyRound } from 'lucide-react'
 
-type TabKey = 'items' | 'users' | 'company' | 'documents' | 'auditlog'
-
-const EMPTY_NEW_ITEM: LinenItemDef = {
-  code: '', name: '', nameEn: '', category: 'other', unit: 'ชิ้น', defaultPrice: 0, sortOrder: 0,
-}
+type TabKey = 'users' | 'company' | 'documents' | 'auditlog'
 
 const ACTION_LABELS: Record<string, string> = {
   create: 'สร้าง',
@@ -41,22 +37,21 @@ const ENTITY_LABELS: Record<string, string> = {
 
 export default function SettingsPage() {
   const {
-    currentUser, defaultPrices, updateDefaultPrice,
+    currentUser,
     users, addUser, updateUser, resetPassword,
     companyInfo, updateCompanyInfo,
-    linenCatalog, addLinenItem, updateLinenItem, deleteLinenItem,
   } = useStore()
 
   const searchParams = useSearchParams()
   const [tab, setTab] = useState<TabKey>(() => {
     const t = searchParams.get('tab')
-    if (t === 'items' || t === 'users' || t === 'company' || t === 'documents' || t === 'auditlog') return t
-    return 'items'
+    if (t === 'users' || t === 'company' || t === 'documents' || t === 'auditlog') return t
+    return 'users'
   })
 
   useEffect(() => {
     const t = searchParams.get('tab')
-    if (t === 'items' || t === 'users' || t === 'company' || t === 'documents' || t === 'auditlog') setTab(t)
+    if (t === 'users' || t === 'company' || t === 'documents' || t === 'auditlog') setTab(t)
   }, [searchParams])
 
   // New user form
@@ -65,14 +60,6 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [newRole, setNewRole] = useState<'admin' | 'staff'>('staff')
   const [addUserError, setAddUserError] = useState('')
-
-  // New item form
-  const [showAddItem, setShowAddItem] = useState(false)
-  const [newItem, setNewItem] = useState<LinenItemDef>(EMPTY_NEW_ITEM)
-
-  // Inline editing
-  const [editingCode, setEditingCode] = useState<string | null>(null)
-  const [editItem, setEditItem] = useState<Partial<LinenItemDef>>({})
 
   // Reset password
   const [resetUserId, setResetUserId] = useState<string | null>(null)
@@ -133,7 +120,6 @@ export default function SettingsPage() {
   }
 
   const tabs: { key: TabKey; label: string }[] = [
-    { key: 'items', label: 'รายการผ้า' },
     { key: 'users', label: 'ผู้ใช้' },
     { key: 'company', label: 'บริษัท' },
     { key: 'documents', label: 'เอกสาร' },
@@ -183,35 +169,6 @@ export default function SettingsPage() {
     }
   }
 
-  const handleAddItem = () => {
-    if (!newItem.code || !newItem.name) return
-    if (linenCatalog.some(i => i.code === newItem.code)) {
-      alert('รหัสนี้มีอยู่แล้ว')
-      return
-    }
-    const maxOrder = linenCatalog.reduce((max, i) => Math.max(max, i.sortOrder), 0)
-    addLinenItem({ ...newItem, sortOrder: maxOrder + 1 })
-    setNewItem(EMPTY_NEW_ITEM)
-    setShowAddItem(false)
-  }
-
-  const handleStartEdit = (item: LinenItemDef) => {
-    setEditingCode(item.code)
-    setEditItem({ name: item.name, nameEn: item.nameEn, category: item.category, unit: item.unit })
-  }
-
-  const handleSaveEdit = (code: string) => {
-    updateLinenItem(code, editItem)
-    setEditingCode(null)
-    setEditItem({})
-  }
-
-  const handleDeleteItem = (code: string, name: string) => {
-    if (confirm(`ลบรายการ "${name}" (${code})?\nรายการที่ถูกใช้ในฟอร์มเดิมจะยังอยู่ แต่จะไม่แสดงในรายการเลือกใหม่`)) {
-      deleteLinenItem(code)
-    }
-  }
-
   return (
     <div>
       <div className="mb-6">
@@ -229,149 +186,6 @@ export default function SettingsPage() {
           </button>
         ))}
       </div>
-
-      {/* Items Tab */}
-      {tab === 'items' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-slate-700">รายการผ้า ({linenCatalog.length} รายการ)</h3>
-                <p className="text-xs text-slate-400 mt-0.5">เพิ่ม/แก้ไข/ลบรายการผ้า และตั้งราคา default</p>
-              </div>
-              <button onClick={() => { setShowAddItem(true); setNewItem(EMPTY_NEW_ITEM) }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-[#1B3A5C] text-white text-xs rounded-lg hover:bg-[#122740] transition-colors">
-                <Plus className="w-3.5 h-3.5" />เพิ่มรายการ
-              </button>
-            </div>
-
-            {/* Add Item Inline Form */}
-            {showAddItem && (
-              <div className="px-4 py-3 bg-blue-50 border-b border-blue-200">
-                <p className="text-sm font-medium text-blue-800 mb-2">เพิ่มรายการใหม่</p>
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-sm">
-                  <input value={newItem.code} onChange={e => setNewItem({ ...newItem, code: e.target.value.toUpperCase() })}
-                    placeholder="รหัส (เช่น T/C)" maxLength={5}
-                    className="px-2 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                  <input value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })}
-                    placeholder="ชื่อ (ไทย)"
-                    className="px-2 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                  <input value={newItem.nameEn} onChange={e => setNewItem({ ...newItem, nameEn: e.target.value })}
-                    placeholder="ชื่อ (EN)"
-                    className="px-2 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                  <select value={newItem.category} onChange={e => setNewItem({ ...newItem, category: e.target.value as LinenCategory })}
-                    className="px-2 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
-                    {Object.entries(LINEN_CATEGORIES).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
-                    ))}
-                  </select>
-                  <input value={newItem.unit} onChange={e => setNewItem({ ...newItem, unit: e.target.value })}
-                    placeholder="หน่วย"
-                    className="px-2 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                  <input type="number" min={0} step={0.5} value={newItem.defaultPrice}
-                    onChange={e => setNewItem({ ...newItem, defaultPrice: sanitizeNumber(e.target.value) })}
-                    placeholder="ราคา"
-                    className="px-2 py-1.5 border border-slate-200 rounded text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <button onClick={handleAddItem} disabled={!newItem.code || !newItem.name}
-                    className="px-3 py-1.5 bg-[#1B3A5C] text-white text-xs rounded hover:bg-[#122740] disabled:opacity-50 transition-colors flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5" />บันทึก
-                  </button>
-                  <button onClick={() => setShowAddItem(false)}
-                    className="px-3 py-1.5 text-slate-600 text-xs hover:bg-slate-100 rounded transition-colors flex items-center gap-1">
-                    <X className="w-3.5 h-3.5" />ยกเลิก
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50">
-                  <th className="text-left px-4 py-2 font-medium text-slate-600">รหัส</th>
-                  <th className="text-left px-4 py-2 font-medium text-slate-600">ชื่อ (ไทย)</th>
-                  <th className="text-left px-4 py-2 font-medium text-slate-600">ชื่อ (EN)</th>
-                  <th className="text-left px-4 py-2 font-medium text-slate-600">หมวด</th>
-                  <th className="text-left px-4 py-2 font-medium text-slate-600">หน่วย</th>
-                  <th className="text-right px-4 py-2 font-medium text-slate-600 w-28">ราคา default</th>
-                  <th className="text-right px-4 py-2 font-medium text-slate-600 w-20"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {linenCatalog.map(item => (
-                  <tr key={item.code} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-2 font-mono text-xs text-slate-500">{item.code}</td>
-                    <td className="px-4 py-2 text-slate-700">
-                      {editingCode === item.code ? (
-                        <input value={editItem.name ?? item.name}
-                          onChange={e => setEditItem({ ...editItem, name: e.target.value })}
-                          className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                      ) : item.name}
-                    </td>
-                    <td className="px-4 py-2 text-slate-500 text-xs">
-                      {editingCode === item.code ? (
-                        <input value={editItem.nameEn ?? item.nameEn}
-                          onChange={e => setEditItem({ ...editItem, nameEn: e.target.value })}
-                          className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                      ) : item.nameEn}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-slate-400">
-                      {editingCode === item.code ? (
-                        <select value={editItem.category ?? item.category}
-                          onChange={e => setEditItem({ ...editItem, category: e.target.value as LinenCategory })}
-                          className="px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
-                          {Object.entries(LINEN_CATEGORIES).map(([key, label]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
-                        </select>
-                      ) : LINEN_CATEGORIES[item.category]}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-slate-400">
-                      {editingCode === item.code ? (
-                        <input value={editItem.unit ?? item.unit}
-                          onChange={e => setEditItem({ ...editItem, unit: e.target.value })}
-                          className="w-16 px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                      ) : item.unit}
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <input type="number" min={0} step={0.5}
-                        value={defaultPrices[item.code] ?? item.defaultPrice}
-                        onChange={e => updateDefaultPrice(item.code, sanitizeNumber(e.target.value))}
-                        className="w-20 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      {editingCode === item.code ? (
-                        <div className="flex gap-1 justify-end">
-                          <button onClick={() => handleSaveEdit(item.code)}
-                            className="text-emerald-600 hover:text-emerald-800 p-1">
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => { setEditingCode(null); setEditItem({}) }}
-                            className="text-slate-400 hover:text-slate-600 p-1">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-1 justify-end">
-                          <button onClick={() => handleStartEdit(item)}
-                            className="text-slate-400 hover:text-blue-600 p-1">
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleDeleteItem(item.code, item.name)}
-                            className="text-slate-400 hover:text-red-500 p-1">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* Users Tab */}
       {tab === 'users' && (

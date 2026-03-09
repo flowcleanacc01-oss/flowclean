@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const ALLOWED_TABLES = new Set([
-  'linen_items', 'app_users', 'company_info', 'customers',
+  'linen_items', 'linen_categories', 'app_users', 'company_info', 'customers',
   'linen_forms', 'delivery_notes', 'billing_statements',
   'tax_invoices', 'quotations', 'product_checklists',
   'expenses', 'audit_logs',

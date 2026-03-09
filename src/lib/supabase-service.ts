@@ -1,8 +1,8 @@
 import { supabase } from './supabase'
 import type {
   Customer, LinenForm, DeliveryNote, BillingStatement, TaxInvoice,
-  Quotation, Expense, AppUser, CompanyInfo, LinenItemDef, ProductChecklist,
-  AuditLog,
+  Quotation, Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
+  ProductChecklist, AuditLog,
 } from '@/types'
 
 // ============================================================
@@ -126,6 +126,36 @@ function toCamelCase<T>(obj: Record<string, unknown>): T {
 
 function toCamelCaseArray<T>(rows: Record<string, unknown>[]): T[] {
   return rows.map(row => toCamelCase<T>(row))
+}
+
+// ============================================================
+// Linen Categories (Dynamic)
+// ============================================================
+
+export async function fetchLinenCategories(): Promise<LinenCategoryDef[]> {
+  const { data, error } = await supabase
+    .from('linen_categories')
+    .select('*')
+    .order('sort_order')
+  if (error) throw error
+  return toCamelCaseArray<LinenCategoryDef>(data || [])
+}
+
+export async function upsertLinenCategories(cats: LinenCategoryDef[]): Promise<void> {
+  const rows = cats.map(c => toSnakeCase(c as unknown as Record<string, unknown>))
+  await dbWrite({ table: 'linen_categories', operation: 'upsert', data: rows, onConflict: 'key' })
+}
+
+export async function insertLinenCategory(cat: LinenCategoryDef): Promise<void> {
+  await dbWrite({ table: 'linen_categories', operation: 'insert', data: toSnakeCase(cat as unknown as Record<string, unknown>) })
+}
+
+export async function updateLinenCategoryDB(key: string, updates: Partial<LinenCategoryDef>): Promise<void> {
+  await dbWrite({ table: 'linen_categories', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'key', value: key } })
+}
+
+export async function deleteLinenCategoryDB(key: string): Promise<void> {
+  await dbWrite({ table: 'linen_categories', operation: 'delete', match: { column: 'key', value: key } })
 }
 
 // ============================================================
@@ -473,7 +503,7 @@ export async function fetchAllData() {
   const [
     customers, linenForms, deliveryNotes, billingStatements,
     taxInvoices, quotations, expenses, users, companyInfo,
-    linenItems, checklists,
+    linenItems, checklists, linenCategories,
   ] = await Promise.all([
     fetchCustomers(),
     fetchLinenForms(),
@@ -486,6 +516,7 @@ export async function fetchAllData() {
     fetchCompanyInfo(),
     fetchLinenItems(),
     fetchChecklists(),
+    fetchLinenCategories(),
   ])
 
   return {
@@ -500,5 +531,6 @@ export async function fetchAllData() {
     companyInfo,
     linenItems,
     checklists,
+    linenCategories,
   }
 }
