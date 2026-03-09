@@ -223,7 +223,7 @@ export default function LinenFormsPage() {
                         {nextStatus && (
                           <button onClick={() => handleAdvanceStatus(form.id)}
                             className="text-xs px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] rounded font-medium hover:bg-[#2bb8b8] transition-colors inline-flex items-center gap-1">
-                            {LINEN_FORM_STATUS_CONFIG[nextStatus].label}
+                            {LINEN_FORM_STATUS_CONFIG[form.status].label}
                             <ChevronRight className="w-3 h-3" />
                           </button>
                         )}
@@ -240,16 +240,11 @@ export default function LinenFormsPage() {
       {/* Create Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="รับผ้าเข้าใหม่" size="xl">
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <span className={cn(
-              'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium',
-              LINEN_FORM_STATUS_CONFIG.draft.bgColor,
-              LINEN_FORM_STATUS_CONFIG.draft.color
-            )}>
-              <span className={cn('w-1.5 h-1.5 rounded-full', LINEN_FORM_STATUS_CONFIG.draft.dotColor)} />
-              สถานะ: {LINEN_FORM_STATUS_CONFIG.draft.label}
-            </span>
-            <span className="text-xs text-slate-400">บันทึกแล้วจะเข้าสถานะนี้ทันที</span>
+          <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2.5 text-sm text-teal-700">
+            <span className="font-medium">สิ่งที่ทำ: {LINEN_FORM_STATUS_CONFIG.draft.todoLabel}</span>
+            <span className="mx-2">|</span>
+            กรอก: ลูกค้านับส่ง, เคลม, หมายเหตุ
+            <span className="ml-2 text-xs text-teal-500">(บันทึกแล้วจะเข้าสถานะ &quot;{LINEN_FORM_STATUS_CONFIG.draft.label}&quot;)</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -278,10 +273,6 @@ export default function LinenFormsPage() {
                   onChange={e => setNewBagsSent(sanitizeNumber(e.target.value, 9999))}
                   className="w-32 px-3 py-2 border border-amber-300 rounded-lg text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                   placeholder="0" />
-              </div>
-              <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2.5 text-sm text-teal-700">
-                กรอก: ลูกค้านับส่ง, เคลม, หมายเหตุ
-                <span className="ml-2 opacity-60">(ช่องที่กรอกได้จะไฮไลท์สีฟ้า)</span>
               </div>
               <LinenFormGrid
                 customer={getCustomer(newCustomerId)!}
@@ -372,13 +363,15 @@ export default function LinenFormsPage() {
               )}
             </div>
 
-            {/* Status guide — บอกว่าสถานะนี้กรอกช่องไหน */}
+            {/* Status guide — สิ่งที่ทำ + ช่องที่กรอกได้ */}
             <div className={cn(
               'rounded-lg px-4 py-2.5 text-sm border',
               ['packed', 'confirmed'].includes(detailForm.status)
                 ? 'bg-slate-50 border-slate-200 text-slate-500'
                 : 'bg-teal-50 border-teal-200 text-teal-700'
             )}>
+              <span className="font-medium">สิ่งที่ทำ: {LINEN_FORM_STATUS_CONFIG[detailForm.status].todoLabel}</span>
+              <span className="mx-2">|</span>
               {{
                 draft: 'กรอก: ลูกค้านับส่ง, เคลม, หมายเหตุ',
                 received: 'กรอก: โรงซักนับเข้า, ลูกค้านับกลับ, หมายเหตุ',
@@ -386,9 +379,8 @@ export default function LinenFormsPage() {
                 washing: 'กรอก: โรงซักแพคส่ง, หมายเหตุ',
                 packed: 'ดูข้อมูลเท่านั้น',
                 delivered: 'กรอก: ลูกค้านับกลับ',
-                confirmed: 'ยืนยันแล้ว — ดูข้อมูลเท่านั้น',
+                confirmed: 'ดูข้อมูลเท่านั้น',
               }[detailForm.status]}
-              <span className="ml-2 opacity-60">(ช่องที่กรอกได้จะไฮไลท์สีฟ้า)</span>
             </div>
 
             <LinenFormGrid
@@ -445,33 +437,57 @@ export default function LinenFormsPage() {
               </div>
             )}
 
-            <div className="flex justify-between items-center pt-2">
-              <button onClick={() => setConfirmDeleteId(detailForm.id)}
-                className="text-sm text-red-500 hover:text-red-700 transition-colors flex items-center gap-1">
-                <X className="w-4 h-4" />ลบ
-              </button>
-              <div className="flex gap-2 items-center">
-                {PREV_LINEN_STATUS[detailForm.status] && (
-                  <button onClick={() => { handleRevertStatus(detailForm.id) }}
-                    className="px-4 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
-                    <ChevronLeft className="w-4 h-4" />
-                    {LINEN_FORM_STATUS_CONFIG[PREV_LINEN_STATUS[detailForm.status]!].label}
-                  </button>
-                )}
-                <span className={cn(
-                  'px-3 py-1.5 rounded-full text-xs font-medium',
-                  LINEN_FORM_STATUS_CONFIG[detailForm.status].bgColor,
-                  LINEN_FORM_STATUS_CONFIG[detailForm.status].color
-                )}>
-                  {LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
-                </span>
-                {NEXT_LINEN_STATUS[detailForm.status] && (
-                  <button onClick={() => { handleAdvanceStatus(detailForm.id) }}
-                    className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors flex items-center gap-1">
-                    {LINEN_FORM_STATUS_CONFIG[NEXT_LINEN_STATUS[detailForm.status]!].label}
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                )}
+            {/* Action buttons: [< prev todo] — current todo — [current label >] */}
+            <div className="border-t border-slate-200 pt-4 mt-2">
+              <div className="flex items-center justify-between gap-2">
+                {/* Delete */}
+                <button onClick={() => setConfirmDeleteId(detailForm.id)}
+                  className="text-sm text-red-500 hover:text-red-700 transition-colors flex items-center gap-1 flex-shrink-0">
+                  <X className="w-4 h-4" />ลบ
+                </button>
+
+                {/* Prev / Todo / Next */}
+                <div className="flex items-center gap-2">
+                  {/* Previous action button */}
+                  {PREV_LINEN_STATUS[detailForm.status] ? (
+                    <button onClick={() => handleRevertStatus(detailForm.id)}
+                      className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
+                      <ChevronLeft className="w-4 h-4" />
+                      {LINEN_FORM_STATUS_CONFIG[PREV_LINEN_STATUS[detailForm.status]!].todoLabel}
+                    </button>
+                  ) : (
+                    <button onClick={() => setShowDetail(null)}
+                      className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors">
+                      ยกเลิก
+                    </button>
+                  )}
+
+                  {/* Current todo badge */}
+                  <span className={cn(
+                    'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap',
+                    LINEN_FORM_STATUS_CONFIG[detailForm.status].bgColor,
+                    LINEN_FORM_STATUS_CONFIG[detailForm.status].color
+                  )}>
+                    {LINEN_FORM_STATUS_CONFIG[detailForm.status].todoLabel}
+                  </span>
+
+                  {/* Next action button */}
+                  {NEXT_LINEN_STATUS[detailForm.status] ? (
+                    <button onClick={() => handleAdvanceStatus(detailForm.id)}
+                      className="px-3 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors flex items-center gap-1">
+                      {LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <span className={cn(
+                      'px-3 py-2 rounded-lg text-sm font-medium',
+                      LINEN_FORM_STATUS_CONFIG[detailForm.status].bgColor,
+                      LINEN_FORM_STATUS_CONFIG[detailForm.status].color
+                    )}>
+                      {LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -143,14 +143,14 @@ export interface LinenFormRow {
 
 export type LinenFormStatus = 'draft' | 'received' | 'sorting' | 'washing' | 'packed' | 'delivered' | 'confirmed'
 
-export const LINEN_FORM_STATUS_CONFIG: Record<LinenFormStatus, { label: string; color: string; bgColor: string; dotColor: string }> = {
-  draft: { label: 'ลูกค้านับส่งแล้ว', color: 'text-gray-700', bgColor: 'bg-gray-100', dotColor: 'bg-gray-400' },
-  received: { label: 'ขนส่งนับแล้ว', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
-  sorting: { label: 'โรงซักนับแล้ว', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
-  washing: { label: 'ซักอบเสร็จ', color: 'text-blue-700', bgColor: 'bg-blue-50', dotColor: 'bg-blue-500' },
-  packed: { label: 'นับแพคแล้ว', color: 'text-indigo-700', bgColor: 'bg-indigo-50', dotColor: 'bg-indigo-500' },
-  delivered: { label: 'นับถุงแล้ว', color: 'text-teal-700', bgColor: 'bg-teal-50', dotColor: 'bg-teal-500' },
-  confirmed: { label: 'ลูกค้านับกลับแล้ว', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
+export const LINEN_FORM_STATUS_CONFIG: Record<LinenFormStatus, { label: string; todoLabel: string; color: string; bgColor: string; dotColor: string }> = {
+  draft: { label: 'ลูกค้านับส่งแล้ว', todoLabel: 'ลูกค้านับส่ง', color: 'text-gray-700', bgColor: 'bg-gray-100', dotColor: 'bg-gray-400' },
+  received: { label: 'ขนส่งนับแล้ว', todoLabel: 'ขนส่งนับ', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
+  sorting: { label: 'โรงซักนับเข้าแล้ว', todoLabel: 'โรงซักนับเข้า', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
+  washing: { label: 'ซักอบเสร็จ', todoLabel: 'กำลังซักอบ', color: 'text-blue-700', bgColor: 'bg-blue-50', dotColor: 'bg-blue-500' },
+  packed: { label: 'นับแพคแล้ว', todoLabel: 'นับแพคส่ง', color: 'text-indigo-700', bgColor: 'bg-indigo-50', dotColor: 'bg-indigo-500' },
+  delivered: { label: 'นับถุงแล้ว', todoLabel: 'นับถุงแพค', color: 'text-teal-700', bgColor: 'bg-teal-50', dotColor: 'bg-teal-500' },
+  confirmed: { label: 'ลูกค้านับกลับแล้ว', todoLabel: 'ลูกค้านับกลับ', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
 }
 
 // 4 แผนก — checkbox อิสระ (ไม่บังคับเรียง, ข้ามได้)

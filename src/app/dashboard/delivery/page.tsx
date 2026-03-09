@@ -210,21 +210,27 @@ export default function DeliveryPage() {
             </select>
           </div>
 
-          {selCustomerId && availableForms.length > 0 && (
+          {selCustomerId && (
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">เลือกใบส่งรับผ้า (ที่แพคแล้ว)</label>
-              <div className="space-y-2">
-                {availableForms.map(f => (
-                  <label key={f.id} className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={selFormIds.includes(f.id)}
-                      onChange={() => handleFormToggle(f.id)}
-                      className="rounded border-slate-300" />
-                    <span className="text-sm">
-                      {f.formNumber} — {formatDate(f.date)} ({f.rows.reduce((s, r) => s + (r.col6_factoryPackSend || 0), 0)} ชิ้น)
-                    </span>
-                  </label>
-                ))}
-              </div>
+              {availableForms.length > 0 ? (
+                <div className="space-y-2">
+                  {availableForms.map(f => (
+                    <label key={f.id} className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={selFormIds.includes(f.id)}
+                        onChange={() => handleFormToggle(f.id)}
+                        className="rounded border-slate-300" />
+                      <span className="text-sm">
+                        {f.formNumber} — {formatDate(f.date)} ({f.rows.reduce((s, r) => s + (r.col6_factoryPackSend || 0), 0)} ชิ้น)
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700">
+                  ไม่มีใบส่งรับผ้าที่สถานะ &quot;นับแพคแล้ว&quot; — ต้องเลื่อนสถานะใบส่งรับผ้าให้ถึง &quot;นับแพคแล้ว&quot; ก่อนจึงจะสร้างใบส่งของได้
+                </div>
+              )}
             </div>
           )}
 
