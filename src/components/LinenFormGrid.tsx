@@ -135,9 +135,12 @@ export default function LinenFormGrid({
             {enabledItems.map((item) => {
               const row = getRow(item.code)
               const co = carryOver[item.code] || 0
-              const hotelCount = row.col2_hotelCountIn
-              const factoryApproved = row.col4_factoryApproved
-              const hasDiscrepancy = factoryApproved > 0 && hotelCount !== factoryApproved
+              // Discrepancy 1: นับเข้า (col5) ≠ นับส่ง + เคลม (col2 + col3)
+              const expectedCountIn = row.col2_hotelCountIn + row.col3_hotelClaimCount
+              const hasCountInDisc = row.col5_factoryClaimApproved > 0 && row.col5_factoryClaimApproved !== expectedCountIn
+              // Discrepancy 2: นับกลับ (col4) ≠ แพคส่ง (col6)
+              const packSend = row.col6_factoryPackSend || 0
+              const hasCountBackDisc = row.col4_factoryApproved > 0 && row.col4_factoryApproved !== packSend
 
               return (
                 <tr key={item.code} className="border-b border-slate-100 hover:bg-slate-50">
@@ -177,16 +180,22 @@ export default function LinenFormGrid({
                       <span className="text-slate-700">{row.col3_hotelClaimCount || '-'}</span>
                     )}
                   </td>
-                  {/* Col 5 - เคลม approved */}
-                  <td className="px-1 py-1 text-center">
+                  {/* Col 5 - โรงซักนับเข้า (⚠ ถ้า ≠ นับส่ง+เคลม) */}
+                  <td className={cn('px-1 py-1 text-center', hasCountInDisc && 'bg-orange-50')}>
                     {isEditable('col5') ? (
                       <input type="number" min={0}
                         value={row.col5_factoryClaimApproved || ''}
                         onChange={e => updateRow(item.code, 'col5_factoryClaimApproved', sanitizeNumber(e.target.value, 99999))}
-                        className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                        className={cn(
+                          'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
+                          hasCountInDisc ? 'border-orange-400 bg-orange-50' : 'border-slate-200'
+                        )}
                       />
                     ) : (
-                      <span className="text-slate-700">{row.col5_factoryClaimApproved || '-'}</span>
+                      <span className={cn('text-slate-700', hasCountInDisc && 'text-orange-600 font-medium')}>
+                        {row.col5_factoryClaimApproved || '-'}
+                        {hasCountInDisc && ' ⚠'}
+                      </span>
                     )}
                   </td>
                   {/* Col 6 - โรงซักแพคส่ง */}
@@ -228,21 +237,21 @@ export default function LinenFormGrid({
                       <span className="text-slate-500 text-xs">{row.note || '-'}</span>
                     )}
                   </td>
-                  {/* Col 4 - ลูกค้านับกลับ */}
-                  <td className={cn('px-1 py-1 text-center', hasDiscrepancy && 'bg-orange-50')}>
+                  {/* Col 4 - ลูกค้านับกลับ (⚠ ถ้า ≠ แพคส่ง) */}
+                  <td className={cn('px-1 py-1 text-center', hasCountBackDisc && 'bg-orange-50')}>
                     {isEditable('col4') ? (
                       <input type="number" min={0}
                         value={row.col4_factoryApproved || ''}
                         onChange={e => updateRow(item.code, 'col4_factoryApproved', sanitizeNumber(e.target.value, 99999))}
                         className={cn(
                           'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
-                          hasDiscrepancy ? 'border-orange-400 bg-orange-50' : 'border-slate-200'
+                          hasCountBackDisc ? 'border-orange-400 bg-orange-50' : 'border-slate-200'
                         )}
                       />
                     ) : (
-                      <span className={cn('text-slate-700', hasDiscrepancy && 'text-orange-600 font-medium')}>
+                      <span className={cn('text-slate-700', hasCountBackDisc && 'text-orange-600 font-medium')}>
                         {row.col4_factoryApproved || '-'}
-                        {hasDiscrepancy && ' ⚠'}
+                        {hasCountBackDisc && ' ⚠'}
                       </span>
                     )}
                   </td>

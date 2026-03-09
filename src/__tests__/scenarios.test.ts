@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { aggregateDeliveryItems, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
-import { calculateDiscrepancies, hasDiscrepancies } from '@/lib/discrepancy'
+import { calculateCountInDiscrepancies, calculateCountBackDiscrepancies, hasDiscrepancies } from '@/lib/discrepancy'
 import type {
   Customer, LinenForm, LinenFormRow, DeliveryNote,
   TaxInvoice, LinenItemDef, BillingLineItem,
@@ -41,9 +41,9 @@ function makeRow(code: string, overrides: Partial<LinenFormRow> = {}): LinenForm
 
 /**
  * Simulate carry-over calculation (same logic as store.getCarryOver)
- * Returns: Record<code, carryOverValue>
- * Negative = factory owes hotel (not sent back yet)
- * Positive = factory sent extra
+ * ยกยอดมา = สะสม ค้าง/คืน = sum(col6_แพคส่ง - col5_นับเข้า)
+ * Negative = ค้างส่ง (factory owes hotel)
+ * Positive = ส่งเกิน (factory sent extra)
  */
 function calculateCarryOver(forms: LinenForm[], customerId: string, beforeDate: string): Record<string, number> {
   const result: Record<string, number> = {}
@@ -54,9 +54,8 @@ function calculateCarryOver(forms: LinenForm[], customerId: string, beforeDate: 
   for (const form of filtered) {
     for (const row of form.rows) {
       const packSend = row.col6_factoryPackSend || 0
-      const approved = row.col4_factoryApproved || 0
-      const claimApproved = row.col5_factoryClaimApproved || 0
-      const diff = packSend - approved - claimApproved
+      const countIn = row.col5_factoryClaimApproved || 0
+      const diff = packSend - countIn
       if (diff !== 0) {
         result[row.code] = (result[row.code] || 0) + diff
       }
@@ -69,9 +68,11 @@ function calculateCarryOver(forms: LinenForm[], customerId: string, beforeDate: 
  * Calculate derived values from a linen form row (same as UI logic)
  */
 function calcRowDerived(row: LinenFormRow) {
-  const mustReturn = row.col4_factoryApproved + row.col5_factoryClaimApproved - row.col1_carryOver
+  // ยอดต้องคืน = factory counted in, adjusted for carry-over
+  const mustReturn = row.col5_factoryClaimApproved - row.col1_carryOver
   const stock = mustReturn - row.col6_factoryPackSend
-  const billingQty = row.col6_factoryPackSend - row.col5_factoryClaimApproved
+  // Billing = all packed items (col6)
+  const billingQty = row.col6_factoryPackSend
   return { mustReturn, stock, billingQty }
 }
 
@@ -131,19 +132,18 @@ describe('S1: Happy Path — Per-Piece Billing', () => {
     expect(form1.rows[1].col2_hotelCountIn).toBe(100) // B/H
   })
 
-  it('Step 2: Factory receives & approves (col4 = col2, no discrepancy)', () => {
-    // Factory auto-fills col4 = col2, then manually adjusts if needed
-    const received: LinenForm = {
+  it('Step 2: Factory counts in (col5 = col2 + col3, no discrepancy)', () => {
+    // Factory counts items in = hotel send + claim
+    const sorting: LinenForm = {
       ...form1,
-      status: 'received',
+      status: 'sorting',
       rows: form1.rows.map(r => ({
         ...r,
-        col4_factoryApproved: r.col2_hotelCountIn, // exact match
-        col5_factoryClaimApproved: r.col3_hotelClaimCount,
+        col5_factoryClaimApproved: r.col2_hotelCountIn + r.col3_hotelClaimCount,
       })),
     }
 
-    expect(hasDiscrepancies(received)).toBe(false)
+    expect(hasDiscrepancies(sorting)).toBe(false)
   })
 
   it('Step 3: Factory packs & sends back (col6)', () => {
@@ -151,19 +151,19 @@ describe('S1: Happy Path — Per-Piece Billing', () => {
       ...form1,
       status: 'packed',
       rows: [
-        makeRow('B/T', { col2_hotelCountIn: 200, col4_factoryApproved: 200, col6_factoryPackSend: 200 }),
-        makeRow('B/H', { col2_hotelCountIn: 100, col4_factoryApproved: 100, col6_factoryPackSend: 100 }),
-        makeRow('P/C', { col2_hotelCountIn: 80, col4_factoryApproved: 80, col6_factoryPackSend: 80 }),
-        makeRow('S/K', { col2_hotelCountIn: 60, col4_factoryApproved: 60, col6_factoryPackSend: 60 }),
+        makeRow('B/T', { col2_hotelCountIn: 200, col5_factoryClaimApproved: 200, col6_factoryPackSend: 200, col4_factoryApproved: 200 }),
+        makeRow('B/H', { col2_hotelCountIn: 100, col5_factoryClaimApproved: 100, col6_factoryPackSend: 100, col4_factoryApproved: 100 }),
+        makeRow('P/C', { col2_hotelCountIn: 80, col5_factoryClaimApproved: 80, col6_factoryPackSend: 80, col4_factoryApproved: 80 }),
+        makeRow('S/K', { col2_hotelCountIn: 60, col5_factoryClaimApproved: 60, col6_factoryPackSend: 60, col4_factoryApproved: 60 }),
       ],
     }
 
     // Verify derived values
     for (const row of packed.rows) {
       const { mustReturn, stock, billingQty } = calcRowDerived(row)
-      expect(mustReturn).toBe(row.col4_factoryApproved) // no carryOver, no claim
+      expect(mustReturn).toBe(row.col5_factoryClaimApproved) // countIn - carryOver(0)
       expect(stock).toBe(0) // sent everything
-      expect(billingQty).toBe(row.col6_factoryPackSend) // no claim deduction
+      expect(billingQty).toBe(row.col6_factoryPackSend) // all packed items billable
     }
   })
 
@@ -389,20 +389,20 @@ describe('S3: Claim Items — Free, Not Billed', () => {
     expect(lineItems.find(i => i.code === 'P/C')).toBeUndefined()
   })
 
-  it('linen form row: billing qty = col6 - col5 (pack send minus claim)', () => {
+  it('linen form row: billing qty = col6 (all packed items billable)', () => {
     // Hotel sends 100 B/T + 5 B/T claim
-    // Factory approves all, packs 105 total (100 normal + 5 claim replacement)
+    // Factory counts in 105 total (col5 = 105)
+    // Factory packs 105 total (col6 = 105)
     const row = makeRow('B/T', {
       col2_hotelCountIn: 100,
       col3_hotelClaimCount: 5,
-      col4_factoryApproved: 100,
-      col5_factoryClaimApproved: 5,
-      col6_factoryPackSend: 105,
+      col5_factoryClaimApproved: 105, // factory counted in 105 total
+      col6_factoryPackSend: 105,      // packed all 105
     })
 
     const { billingQty } = calcRowDerived(row)
-    // billingQty = col6 - col5 = 105 - 5 = 100 (claim not charged)
-    expect(billingQty).toBe(100)
+    // billingQty = col6 = 105 (all packed items are billable)
+    expect(billingQty).toBe(105)
   })
 })
 
@@ -412,7 +412,7 @@ describe('S3: Claim Items — Free, Not Billed', () => {
 describe('S4: Carry-Over — Multi-Day Accumulation', () => {
   const customerId = 'cust-hotel-d'
 
-  it('Day 1: factory sends less than approved → negative carry-over (owes hotel)', () => {
+  it('Day 1: factory sends less than received → negative carry-over (owes hotel)', () => {
     const day1Form: LinenForm = {
       id: 'lf-d1',
       formNumber: 'LF-20260301-001',
@@ -424,23 +424,21 @@ describe('S4: Carry-Over — Multi-Day Accumulation', () => {
       updatedAt: '2026-03-01',
       rows: [
         makeRow('B/T', {
-          col1_carryOver: 0,
           col2_hotelCountIn: 100,
-          col4_factoryApproved: 100,
-          col6_factoryPackSend: 90, // sent only 90 of 100 approved
+          col5_factoryClaimApproved: 100, // factory counted in 100
+          col6_factoryPackSend: 90,       // sent only 90
         }),
         makeRow('P/C', {
-          col1_carryOver: 0,
           col2_hotelCountIn: 50,
-          col4_factoryApproved: 50,
+          col5_factoryClaimApproved: 50,
           col6_factoryPackSend: 50, // sent all
         }),
       ],
     }
 
-    // Carry-over for Day 2 = col6 - col4 - col5
-    // B/T: 90 - 100 - 0 = -10 (owes 10)
-    // P/C: 50 - 50 - 0 = 0
+    // Carry-over for Day 2 = col6 - col5 (แพคส่ง - นับเข้า)
+    // B/T: 90 - 100 = -10 (owes 10)
+    // P/C: 50 - 50 = 0
     const carryOver = calculateCarryOver([day1Form], customerId, '2026-03-02')
     expect(carryOver['B/T']).toBe(-10)
     expect(carryOver['P/C']).toBeUndefined() // 0 diff, not stored
@@ -458,8 +456,8 @@ describe('S4: Carry-Over — Multi-Day Accumulation', () => {
       updatedAt: '2026-03-01',
       rows: [
         makeRow('B/T', {
-          col4_factoryApproved: 100,
-          col6_factoryPackSend: 90, // -10
+          col5_factoryClaimApproved: 100, // counted in 100
+          col6_factoryPackSend: 90,       // sent 90 → -10
         }),
       ],
     }
@@ -475,10 +473,9 @@ describe('S4: Carry-Over — Multi-Day Accumulation', () => {
       updatedAt: '2026-03-02',
       rows: [
         makeRow('B/T', {
-          col1_carryOver: -10, // carried from day 1
-          col2_hotelCountIn: 80,
-          col4_factoryApproved: 80,
-          col6_factoryPackSend: 95, // sent 95 (80 approved + 15 extra to cover deficit)
+          col1_carryOver: -10,
+          col5_factoryClaimApproved: 80,  // counted in 80
+          col6_factoryPackSend: 95,       // sent 95 → +15
         }),
       ],
     }
@@ -491,7 +488,7 @@ describe('S4: Carry-Over — Multi-Day Accumulation', () => {
     expect(carryOver['B/T']).toBe(5)
   })
 
-  it('carry-over with claims', () => {
+  it('factory counts in 105, packs 100 → carry-over = -5', () => {
     const form: LinenForm = {
       id: 'lf-d3',
       formNumber: 'LF-20260303-001',
@@ -503,14 +500,13 @@ describe('S4: Carry-Over — Multi-Day Accumulation', () => {
       updatedAt: '2026-03-03',
       rows: [
         makeRow('B/T', {
-          col4_factoryApproved: 100,
-          col5_factoryClaimApproved: 5,
-          col6_factoryPackSend: 100, // sent 100 total (95 normal + 5 claim replacement)
+          col5_factoryClaimApproved: 105, // counted in 105
+          col6_factoryPackSend: 100,      // sent 100
         }),
       ],
     }
 
-    // carryOver = col6 - col4 - col5 = 100 - 100 - 5 = -5
+    // carryOver = col6 - col5 = 100 - 105 = -5 (owes 5)
     const carryOver = calculateCarryOver([form], customerId, '2026-03-04')
     expect(carryOver['B/T']).toBe(-5)
   })
@@ -520,22 +516,22 @@ describe('S4: Carry-Over — Multi-Day Accumulation', () => {
       {
         id: 'lf-e1', formNumber: 'LF-20260301-001', customerId,
         date: '2026-03-01', status: 'delivered', notes: '', createdBy: 'user-1', updatedAt: '2026-03-01',
-        rows: [makeRow('B/T', { col4_factoryApproved: 50, col6_factoryPackSend: 40 })],
+        rows: [makeRow('B/T', { col5_factoryClaimApproved: 50, col6_factoryPackSend: 40 })],
       },
       {
         id: 'lf-e2', formNumber: 'LF-20260305-001', customerId,
         date: '2026-03-05', status: 'delivered', notes: '', createdBy: 'user-1', updatedAt: '2026-03-05',
-        rows: [makeRow('B/T', { col4_factoryApproved: 30, col6_factoryPackSend: 35 })],
+        rows: [makeRow('B/T', { col5_factoryClaimApproved: 30, col6_factoryPackSend: 35 })],
       },
     ]
 
-    // Before March 3 — only Day 1 form
+    // Before March 3 — only Day 1 form: 40 - 50 = -10
     const co1 = calculateCarryOver(forms, customerId, '2026-03-03')
-    expect(co1['B/T']).toBe(-10) // 40 - 50
+    expect(co1['B/T']).toBe(-10)
 
-    // Before March 6 — both forms
+    // Before March 6 — both forms: -10 + (35-30) = -5
     const co2 = calculateCarryOver(forms, customerId, '2026-03-06')
-    expect(co2['B/T']).toBe(-5) // (-10) + (35-30=5) = -5
+    expect(co2['B/T']).toBe(-5)
   })
 
   it('carry-over isolates by customer', () => {
@@ -543,12 +539,12 @@ describe('S4: Carry-Over — Multi-Day Accumulation', () => {
       {
         id: 'lf-f1', formNumber: 'LF-20260301-001', customerId: 'cust-A',
         date: '2026-03-01', status: 'delivered', notes: '', createdBy: 'user-1', updatedAt: '2026-03-01',
-        rows: [makeRow('B/T', { col4_factoryApproved: 50, col6_factoryPackSend: 40 })],
+        rows: [makeRow('B/T', { col5_factoryClaimApproved: 50, col6_factoryPackSend: 40 })],
       },
       {
         id: 'lf-f2', formNumber: 'LF-20260301-002', customerId: 'cust-B',
         date: '2026-03-01', status: 'delivered', notes: '', createdBy: 'user-1', updatedAt: '2026-03-01',
-        rows: [makeRow('B/T', { col4_factoryApproved: 30, col6_factoryPackSend: 35 })],
+        rows: [makeRow('B/T', { col5_factoryClaimApproved: 30, col6_factoryPackSend: 35 })],
       },
     ]
 
@@ -561,51 +557,67 @@ describe('S4: Carry-Over — Multi-Day Accumulation', () => {
 })
 
 // ============================================================
-// S5: Discrepancy Detection
+// S5: Discrepancy Detection (2 types)
 // ============================================================
-describe('S5: Discrepancy — Hotel vs Factory Count', () => {
-  it('detects hotel counted more than factory approved (missing items)', () => {
+describe('S5: Discrepancy Detection', () => {
+  it('Type 1: factory count-in (col5) less than hotel send + claim (col2+col3)', () => {
     const form: LinenForm = {
       id: 'lf-disc-1', formNumber: 'LF-20260310-001', customerId: 'cust-1',
-      date: '2026-03-10', status: 'received', notes: '', createdBy: 'user-1', updatedAt: '2026-03-10',
+      date: '2026-03-10', status: 'sorting', notes: '', createdBy: 'user-1', updatedAt: '2026-03-10',
       rows: [
-        makeRow('B/T', { col2_hotelCountIn: 100, col4_factoryApproved: 95 }),
-        makeRow('B/H', { col2_hotelCountIn: 50, col4_factoryApproved: 50 }),
-        makeRow('P/C', { col2_hotelCountIn: 30, col4_factoryApproved: 28 }),
+        makeRow('B/T', { col2_hotelCountIn: 100, col3_hotelClaimCount: 5, col5_factoryClaimApproved: 100 }),
+        makeRow('B/H', { col2_hotelCountIn: 50, col3_hotelClaimCount: 0, col5_factoryClaimApproved: 50 }),
+        makeRow('P/C', { col2_hotelCountIn: 30, col3_hotelClaimCount: 0, col5_factoryClaimApproved: 28 }),
       ],
     }
 
     expect(hasDiscrepancies(form)).toBe(true)
 
-    const disc = calculateDiscrepancies(form)
-    expect(disc['B/T']).toBe(-5) // factory received 5 less
+    const disc = calculateCountInDiscrepancies(form)
+    expect(disc['B/T']).toBe(-5)      // 100 - (100+5) = -5
     expect(disc['B/H']).toBeUndefined() // match
-    expect(disc['P/C']).toBe(-2) // factory received 2 less
+    expect(disc['P/C']).toBe(-2)       // 28 - 30 = -2
   })
 
-  it('no discrepancy when factory has not counted yet (col4=0)', () => {
+  it('no discrepancy when factory has not counted yet (col5=0)', () => {
     const form: LinenForm = {
       id: 'lf-disc-2', formNumber: 'LF-20260310-002', customerId: 'cust-1',
       date: '2026-03-10', status: 'draft', notes: '', createdBy: 'user-1', updatedAt: '2026-03-10',
       rows: [
-        makeRow('B/T', { col2_hotelCountIn: 100, col4_factoryApproved: 0 }),
+        makeRow('B/T', { col2_hotelCountIn: 100, col5_factoryClaimApproved: 0 }),
       ],
     }
 
     expect(hasDiscrepancies(form)).toBe(false)
   })
 
-  it('factory counted MORE than hotel (rare but possible)', () => {
+  it('Type 1: factory counted MORE than hotel sent (positive diff)', () => {
     const form: LinenForm = {
       id: 'lf-disc-3', formNumber: 'LF-20260310-003', customerId: 'cust-1',
-      date: '2026-03-10', status: 'received', notes: '', createdBy: 'user-1', updatedAt: '2026-03-10',
+      date: '2026-03-10', status: 'sorting', notes: '', createdBy: 'user-1', updatedAt: '2026-03-10',
       rows: [
-        makeRow('B/T', { col2_hotelCountIn: 50, col4_factoryApproved: 55 }),
+        makeRow('B/T', { col2_hotelCountIn: 50, col3_hotelClaimCount: 0, col5_factoryClaimApproved: 55 }),
       ],
     }
 
-    const disc = calculateDiscrepancies(form)
-    expect(disc['B/T']).toBe(5) // factory found 5 extra
+    const disc = calculateCountInDiscrepancies(form)
+    expect(disc['B/T']).toBe(5) // 55 - 50 = 5
+  })
+
+  it('Type 2: customer count-back (col4) differs from pack send (col6)', () => {
+    const form: LinenForm = {
+      id: 'lf-disc-4', formNumber: 'LF-20260310-004', customerId: 'cust-1',
+      date: '2026-03-10', status: 'confirmed', notes: '', createdBy: 'user-1', updatedAt: '2026-03-10',
+      rows: [
+        makeRow('B/T', { col6_factoryPackSend: 100, col4_factoryApproved: 95 }),
+        makeRow('B/H', { col6_factoryPackSend: 50, col4_factoryApproved: 50 }),
+      ],
+    }
+
+    expect(hasDiscrepancies(form)).toBe(true)
+    const disc = calculateCountBackDiscrepancies(form)
+    expect(disc['B/T']).toBe(-5)       // 95 - 100 = -5
+    expect(disc['B/H']).toBeUndefined() // match
   })
 })
 
@@ -786,7 +798,8 @@ describe('S7: Edge Cases', () => {
     }
 
     expect(hasDiscrepancies(form)).toBe(false)
-    expect(calculateDiscrepancies(form)).toEqual({})
+    expect(calculateCountInDiscrepancies(form)).toEqual({})
+    expect(calculateCountBackDiscrepancies(form)).toEqual({})
   })
 
   it('billing formula: netPayable = grandTotal - withholdingTax (identity check)', () => {
@@ -819,47 +832,45 @@ describe('S7: Edge Cases', () => {
 
   it('mustReturn & stock derived values with negative carry-over', () => {
     // Factory owes 10 from yesterday (carry-over = -10)
-    // Hotel sends 80 today, factory approves 80, packs 95 (80 + 15 to cover deficit)
+    // Hotel sends 80 today, factory counts in 80, packs 95 (80 + 15 to cover deficit)
     const row = makeRow('B/T', {
       col1_carryOver: -10,
       col2_hotelCountIn: 80,
-      col4_factoryApproved: 80,
-      col5_factoryClaimApproved: 0,
+      col5_factoryClaimApproved: 80, // factory counted in 80
       col6_factoryPackSend: 95,
     })
 
     const { mustReturn, stock, billingQty } = calcRowDerived(row)
 
-    // mustReturn = col4 + col5 - col1 = 80 + 0 - (-10) = 90
+    // mustReturn = col5 - col1 = 80 - (-10) = 90
     expect(mustReturn).toBe(90)
 
     // stock = mustReturn - col6 = 90 - 95 = -5 (sent more than needed)
     expect(stock).toBe(-5)
 
-    // billingQty = col6 - col5 = 95 - 0 = 95
+    // billingQty = col6 = 95
     expect(billingQty).toBe(95)
   })
 
   it('mustReturn & stock with positive carry-over (excess from before)', () => {
     // Factory sent 5 extra yesterday (carry-over = +5)
-    // Hotel sends 80 today, factory approves 80, packs 75
+    // Hotel sends 80 today, factory counts in 80, packs 75
     const row = makeRow('B/T', {
       col1_carryOver: 5,
       col2_hotelCountIn: 80,
-      col4_factoryApproved: 80,
-      col5_factoryClaimApproved: 0,
+      col5_factoryClaimApproved: 80, // factory counted in 80
       col6_factoryPackSend: 75,
     })
 
     const { mustReturn, stock, billingQty } = calcRowDerived(row)
 
-    // mustReturn = col4 + col5 - col1 = 80 + 0 - 5 = 75
+    // mustReturn = col5 - col1 = 80 - 5 = 75
     expect(mustReturn).toBe(75)
 
     // stock = mustReturn - col6 = 75 - 75 = 0 (exact)
     expect(stock).toBe(0)
 
-    // billingQty = col6 - col5 = 75 - 0 = 75
+    // billingQty = col6 = 75
     expect(billingQty).toBe(75)
   })
 })
@@ -888,9 +899,9 @@ describe('S8: Full Lifecycle — Realistic 3-Day Operation', () => {
     id: 'lf-life-1', formNumber: 'LF-20260301-001', customerId,
     date: '2026-03-01', status: 'delivered', notes: '', createdBy: 'user-1', updatedAt: '2026-03-01',
     rows: [
-      makeRow('B/T', { col2_hotelCountIn: 100, col4_factoryApproved: 100, col6_factoryPackSend: 90 }),
-      makeRow('B/H', { col2_hotelCountIn: 50, col4_factoryApproved: 50, col6_factoryPackSend: 50 }),
-      makeRow('P/C', { col2_hotelCountIn: 30, col4_factoryApproved: 30, col6_factoryPackSend: 30 }),
+      makeRow('B/T', { col2_hotelCountIn: 100, col5_factoryClaimApproved: 100, col6_factoryPackSend: 90 }),
+      makeRow('B/H', { col2_hotelCountIn: 50, col5_factoryClaimApproved: 50, col6_factoryPackSend: 50 }),
+      makeRow('P/C', { col2_hotelCountIn: 30, col5_factoryClaimApproved: 30, col6_factoryPackSend: 30 }),
     ],
   }
 
@@ -902,16 +913,15 @@ describe('S8: Full Lifecycle — Realistic 3-Day Operation', () => {
       makeRow('B/T', {
         col1_carryOver: -10, // from Day 1: 90-100=-10
         col2_hotelCountIn: 80,
-        col4_factoryApproved: 80,
+        col5_factoryClaimApproved: 80, // factory counted in 80
         col6_factoryPackSend: 95, // sending 15 extra to cover deficit
       }),
-      makeRow('B/H', { col2_hotelCountIn: 40, col4_factoryApproved: 40, col6_factoryPackSend: 40 }),
+      makeRow('B/H', { col2_hotelCountIn: 40, col5_factoryClaimApproved: 40, col6_factoryPackSend: 40 }),
       makeRow('P/C', {
         col2_hotelCountIn: 25,
         col3_hotelClaimCount: 3,
-        col4_factoryApproved: 25,
-        col5_factoryClaimApproved: 3,
-        col6_factoryPackSend: 28, // 25 normal + 3 claim replacement
+        col5_factoryClaimApproved: 28, // counted in 25+3=28 total
+        col6_factoryPackSend: 28, // packed all 28
       }),
     ],
   }
@@ -924,11 +934,11 @@ describe('S8: Full Lifecycle — Realistic 3-Day Operation', () => {
       makeRow('B/T', {
         col1_carryOver: 5, // Day1(-10) + Day2(95-80=15) = 5
         col2_hotelCountIn: 90,
-        col4_factoryApproved: 90,
+        col5_factoryClaimApproved: 90, // factory counted in 90
         col6_factoryPackSend: 85, // send 85 (need only 90-5=85 to balance)
       }),
-      makeRow('B/H', { col2_hotelCountIn: 45, col4_factoryApproved: 45, col6_factoryPackSend: 45 }),
-      makeRow('P/C', { col2_hotelCountIn: 35, col4_factoryApproved: 35, col6_factoryPackSend: 35 }),
+      makeRow('B/H', { col2_hotelCountIn: 45, col5_factoryClaimApproved: 45, col6_factoryPackSend: 45 }),
+      makeRow('P/C', { col2_hotelCountIn: 35, col5_factoryClaimApproved: 35, col6_factoryPackSend: 35 }),
     ],
   }
 
@@ -944,7 +954,7 @@ describe('S8: Full Lifecycle — Realistic 3-Day Operation', () => {
     // After Day 2 (before Day 3):
     const co2 = calculateCarryOver(allForms, customerId, '2026-03-03')
     expect(co2['B/T']).toBe(5)    // -10 + (95-80) = -10+15 = 5
-    // P/C Day2: col6(28) - col4(25) - col5(3) = 0 — claim replacement included in pack
+    // P/C Day2: col6(28) - col5(28) = 0 — claim items included in count-in
     expect(co2['P/C']).toBeUndefined() // 0 + 0 = 0, not stored
 
     // After Day 3 (before Day 4):

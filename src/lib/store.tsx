@@ -704,14 +704,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .filter(f => f.customerId === customerId && f.date < beforeDate)
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    // v4: carryOver = sum(col6_packSend - col4_approved - col5_claimApproved)
+    // ยกยอดมา = สะสม ค้าง/คืน = sum(col6_แพคส่ง - col5_นับเข้า)
     // negative = ค้างส่ง, positive = ส่งเกิน
     for (const form of forms) {
       for (const row of form.rows) {
         const packSend = row.col6_factoryPackSend || 0
-        const approved = row.col4_factoryApproved || 0
-        const claimApproved = row.col5_factoryClaimApproved || 0
-        const diff = packSend - approved - claimApproved
+        const countIn = row.col5_factoryClaimApproved || 0
+        const diff = packSend - countIn
         if (diff !== 0) {
           result[row.code] = (result[row.code] || 0) + diff
         }
@@ -726,10 +725,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const result: Record<string, number> = {}
     for (const row of form.rows) {
-      const hotelCount = row.col2_hotelCountIn
-      const factoryApproved = row.col4_factoryApproved
-      if (factoryApproved > 0 && hotelCount !== factoryApproved) {
-        result[row.code] = factoryApproved - hotelCount
+      // Discrepancy 1: นับเข้า (col5) ≠ นับส่ง + เคลม (col2 + col3)
+      const expected = row.col2_hotelCountIn + row.col3_hotelClaimCount
+      const countIn = row.col5_factoryClaimApproved
+      if (countIn > 0 && countIn !== expected) {
+        result[row.code] = countIn - expected
+      }
+      // Discrepancy 2: นับกลับ (col4) ≠ แพคส่ง (col6)
+      const packSend = row.col6_factoryPackSend || 0
+      const countBack = row.col4_factoryApproved
+      if (countBack > 0 && countBack !== packSend) {
+        result[row.code] = (result[row.code] || 0) + (countBack - packSend)
       }
     }
     return result

@@ -65,37 +65,24 @@ export default function DeliveryPage() {
       : [...selFormIds, formId]
     setSelFormIds(updated)
 
-    // Aggregate items from selected forms, separating billable and claim
-    // Billing formula: (col6 - col5) × price → claim items are free
-    const billableMap: Record<string, number> = {}
-    const claimMap: Record<string, number> = {}
+    // Billing = Col5 (UI: แพคส่ง) = code col6_factoryPackSend ทั้งหมด
+    const qtyMap: Record<string, number> = {}
     for (const fId of updated) {
       const form = linenForms.find(f => f.id === fId)
       if (!form) continue
       for (const row of form.rows) {
         const packSend = row.col6_factoryPackSend || 0
-        const claimApproved = row.col5_factoryClaimApproved || 0
         if (packSend > 0) {
-          const billable = Math.max(packSend - claimApproved, 0)
-          const claim = Math.min(claimApproved, packSend)
-          if (billable > 0) {
-            billableMap[row.code] = (billableMap[row.code] || 0) + billable
-          }
-          if (claim > 0) {
-            claimMap[row.code] = (claimMap[row.code] || 0) + claim
-          }
+          qtyMap[row.code] = (qtyMap[row.code] || 0) + packSend
         }
       }
     }
-    const items: DeliveryNoteItem[] = [
-      ...Object.entries(billableMap).map(([code, quantity]) => ({ code, quantity, isClaim: false })),
-      ...Object.entries(claimMap).map(([code, quantity]) => ({ code, quantity, isClaim: true })),
-    ]
+    const items: DeliveryNoteItem[] = Object.entries(qtyMap)
+      .map(([code, quantity]) => ({ code, quantity, isClaim: false }))
     items.sort((a, b) => {
       const ai = linenCatalog.findIndex(i => i.code === a.code)
       const bi = linenCatalog.findIndex(i => i.code === b.code)
-      if (ai !== bi) return ai - bi
-      return (a.isClaim ? 1 : 0) - (b.isClaim ? 1 : 0)
+      return ai - bi
     })
     setDeliveryItems(items)
   }

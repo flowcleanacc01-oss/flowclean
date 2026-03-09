@@ -331,7 +331,7 @@ export default function LinenFormsPage() {
             <div className="flex flex-wrap gap-4">
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                 <label className="block text-xs font-medium text-amber-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
-                {detailForm.status === 'draft' ? (
+                {['draft', 'received', 'sorting'].includes(detailForm.status) ? (
                   <input type="number" min={0}
                     value={detailForm.bagsSentCount || ''}
                     onChange={e => updateLinenForm(detailForm.id, { bagsSentCount: sanitizeNumber(e.target.value, 9999) })}
@@ -343,7 +343,7 @@ export default function LinenFormsPage() {
               {['delivered', 'confirmed'].includes(detailForm.status) && (
                 <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-3">
                   <label className="block text-xs font-medium text-teal-800 mb-1">จำนวนถุงแพคส่ง</label>
-                  {detailForm.status === 'delivered' ? (
+                  {['delivered', 'confirmed'].includes(detailForm.status) ? (
                     <input type="number" min={0}
                       value={detailForm.bagsPackCount || ''}
                       onChange={e => updateLinenForm(detailForm.id, { bagsPackCount: sanitizeNumber(e.target.value, 9999) })}
@@ -362,13 +362,14 @@ export default function LinenFormsPage() {
               catalog={linenCatalog}
               carryOver={detailCarryOver}
               formDate={detailForm.date}
-              readOnly={detailForm.status === 'confirmed'}
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
-                detailForm.status === 'received' ? ['col4', 'col5', 'note'] :
-                PROCESS_STATUSES.includes(detailForm.status) ? ['note'] :
-                detailForm.status === 'washing' ? ['col6', 'note'] :
-                detailForm.status === 'delivered' ? ['col4'] :
+                detailForm.status === 'received' ? ['col2', 'col3', 'note'] :
+                detailForm.status === 'sorting' ? ['col5', 'note'] :
+                detailForm.status === 'washing' ? ['note'] :
+                detailForm.status === 'packed' ? ['col6', 'note'] :
+                detailForm.status === 'delivered' ? ['col6'] :
+                detailForm.status === 'confirmed' ? ['col4', 'col6', 'note'] :
                 []
               }
             />

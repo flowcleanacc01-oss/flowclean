@@ -1,25 +1,43 @@
 import type { LinenForm } from '@/types'
 
 /**
- * ตรวจ discrepancy: col2 (ลูกค้านับส่ง) vs col4 (ลูกค้านับกลับ)
- * Returns map of code → difference (positive = factory approved more, negative = less)
- * Only items where col4 > 0 and there's a mismatch
+ * Discrepancy Type 1: โรงซักนับเข้า ≠ (ลูกค้านับส่ง + เคลม)
+ * col5 (นับเข้า) vs col2 + col3 (นับส่ง + เคลม)
+ * แสดง ⚠ ที่ Col4 (UI: โรงซักนับเข้า)
  */
-export function calculateDiscrepancies(form: LinenForm): Record<string, number> {
+export function calculateCountInDiscrepancies(form: LinenForm): Record<string, number> {
   const result: Record<string, number> = {}
   for (const row of form.rows) {
-    const hotelCount = row.col2_hotelCountIn
-    const factoryApproved = row.col4_factoryApproved
-    if (factoryApproved > 0 && hotelCount !== factoryApproved) {
-      result[row.code] = factoryApproved - hotelCount
+    const expected = row.col2_hotelCountIn + row.col3_hotelClaimCount
+    const actual = row.col5_factoryClaimApproved
+    if (actual > 0 && actual !== expected) {
+      result[row.code] = actual - expected
     }
   }
   return result
 }
 
 /**
- * Check if a form has any discrepancies
+ * Discrepancy Type 2: ลูกค้านับกลับ ≠ โรงซักแพคส่ง
+ * col4 (นับกลับ) vs col6 (แพคส่ง)
+ * แสดง ⚠ ที่ Col8 (UI: ลูกค้านับกลับ)
+ */
+export function calculateCountBackDiscrepancies(form: LinenForm): Record<string, number> {
+  const result: Record<string, number> = {}
+  for (const row of form.rows) {
+    const packSend = row.col6_factoryPackSend || 0
+    const countBack = row.col4_factoryApproved
+    if (countBack > 0 && countBack !== packSend) {
+      result[row.code] = countBack - packSend
+    }
+  }
+  return result
+}
+
+/**
+ * Check if a form has any discrepancies (either type)
  */
 export function hasDiscrepancies(form: LinenForm): boolean {
-  return Object.keys(calculateDiscrepancies(form)).length > 0
+  return Object.keys(calculateCountInDiscrepancies(form)).length > 0 ||
+    Object.keys(calculateCountBackDiscrepancies(form)).length > 0
 }
