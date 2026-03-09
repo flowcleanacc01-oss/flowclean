@@ -30,10 +30,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const failed: string[] = []
     for (const { table, pk, pkType } of ALL_TABLES) {
       const sentinel = pkType === 'int' ? -1 : '__never__'
       const { error } = await supabaseAdmin.from(table).delete().neq(pk, sentinel)
-      if (error) console.error(`[truncate] ${table}:`, error)
+      if (error) {
+        console.error(`[truncate] ${table}:`, error)
+        failed.push(table)
+      }
+    }
+    if (failed.length > 0) {
+      return NextResponse.json({ error: `Failed to truncate: ${failed.join(', ')}`, failed }, { status: 500 })
     }
     return NextResponse.json({ ok: true })
   } catch (err) {

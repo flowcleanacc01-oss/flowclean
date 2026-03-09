@@ -491,7 +491,12 @@ export async function updateDefaultPriceDB(code: string, price: number): Promise
 
 export async function truncateAllTables(): Promise<void> {
   // Use a dedicated server endpoint for bulk delete (service_role required)
-  const res = await fetch('/api/db/truncate', { method: 'POST' })
+  const session = typeof window !== 'undefined' ? sessionStorage.getItem('fc_session') : null
+  const headers: Record<string, string> = {}
+  if (session) {
+    try { headers['x-fc-session'] = JSON.parse(session).userId } catch { /* ignore */ }
+  }
+  const res = await fetch('/api/db/truncate', { method: 'POST', headers })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || 'Truncate failed')

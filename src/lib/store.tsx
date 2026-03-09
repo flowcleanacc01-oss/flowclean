@@ -195,10 +195,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         if (cancelled) return
 
-        // If Supabase is empty → seed with sample data
+        // If Supabase is empty → seed with sample data (DEV only)
         const isEmpty = data.customers.length === 0 && data.users.length === 0
 
-        if (isEmpty && !seeded.current) {
+        if (isEmpty && !seeded.current && process.env.NODE_ENV === 'development') {
           seeded.current = true
           // Seed Supabase with sample data
           await seedSampleData()

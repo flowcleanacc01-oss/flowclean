@@ -1,6 +1,6 @@
 -- ============================================================
--- FlowClean — Supabase Schema (TEXT IDs) — v5 (auth + audit log)
--- 12 tables (dependency order)
+-- FlowClean — Supabase Schema (TEXT IDs) — v6 (complete)
+-- 13 tables (dependency order)
 -- Note: linen_forms.rows is JSONB — includes col6_factoryPackSend
 -- Run this in Supabase Dashboard → SQL Editor
 -- ============================================================
@@ -18,11 +18,21 @@ DROP TABLE IF EXISTS customers CASCADE;
 DROP TABLE IF EXISTS company_info CASCADE;
 DROP TABLE IF EXISTS app_users CASCADE;
 DROP TABLE IF EXISTS linen_items CASCADE;
+DROP TABLE IF EXISTS linen_categories CASCADE;
 
 -- Drop old policies (safe — CASCADE above handles this)
 
 -- ============================================================
--- 1. Linen Items (catalog reference)
+-- 1. Linen Categories
+-- ============================================================
+CREATE TABLE linen_categories (
+  key TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+-- ============================================================
+-- 2. Linen Items (catalog reference)
 -- ============================================================
 CREATE TABLE linen_items (
   code TEXT PRIMARY KEY,
@@ -101,6 +111,8 @@ CREATE TABLE linen_forms (
   notes TEXT NOT NULL DEFAULT '',
   created_by TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL DEFAULT '',
+  bags_sent_count INTEGER NOT NULL DEFAULT 0,
+  bags_pack_count INTEGER NOT NULL DEFAULT 0,
   dept_drying BOOLEAN NOT NULL DEFAULT false,
   dept_ironing BOOLEAN NOT NULL DEFAULT false,
   dept_folding BOOLEAN NOT NULL DEFAULT false,
@@ -238,6 +250,7 @@ CREATE INDEX idx_audit_logs_user ON audit_logs (user_id);
 -- Writes: only service_role (via /api/db server proxy)
 -- app_users: anon can only read non-sensitive columns
 -- ============================================================
+ALTER TABLE linen_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE linen_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE company_info ENABLE ROW LEVEL SECURITY;
@@ -252,6 +265,7 @@ ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Anon: read-only for all tables
+CREATE POLICY "anon_read" ON linen_categories FOR SELECT USING (true);
 CREATE POLICY "anon_read" ON linen_items FOR SELECT USING (true);
 CREATE POLICY "anon_read" ON app_users FOR SELECT USING (true);
 CREATE POLICY "anon_read" ON company_info FOR SELECT USING (true);
@@ -266,6 +280,7 @@ CREATE POLICY "anon_read" ON expenses FOR SELECT USING (true);
 CREATE POLICY "anon_read" ON audit_logs FOR SELECT USING (true);
 
 -- Service role: full access for writes (via /api/db proxy)
+CREATE POLICY "service_write" ON linen_categories FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY "service_write" ON linen_items FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY "service_write" ON app_users FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY "service_write" ON company_info FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
