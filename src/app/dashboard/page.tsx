@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store'
 import { formatNumber, formatCurrency, formatDateShort, cn, todayISO } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus } from '@/types'
 import { hasDiscrepancies } from '@/lib/discrepancy'
+import Link from 'next/link'
 import {
   Package,
   Truck,
@@ -13,7 +14,6 @@ import {
   ClipboardList,
   ArrowRight,
 } from 'lucide-react'
-import Link from 'next/link'
 
 export default function DashboardPage() {
   const {
@@ -121,10 +121,11 @@ export default function DashboardPage() {
             const cfg = LINEN_FORM_STATUS_CONFIG[status]
             return (
               <div key={status} className="flex items-center gap-1.5">
-                <div className={cn('flex flex-col items-center px-3 py-2.5 rounded-lg min-w-16', cfg.bgColor)}>
+                <Link href={`/dashboard/linen-forms?status=${status}`}
+                  className={cn('flex flex-col items-center px-3 py-2.5 rounded-lg min-w-16 transition-all hover:ring-2 hover:ring-[#3DD8D8] hover:shadow-sm cursor-pointer', cfg.bgColor)}>
                   <span className={cn('text-lg font-bold', cfg.color)}>{pipeline[status]}</span>
                   <span className="text-[10px] text-slate-600 whitespace-nowrap">{cfg.label}</span>
-                </div>
+                </Link>
                 {i < ALL_LINEN_STATUSES.length - 1 && <ArrowRight className="w-3 h-3 text-slate-300 flex-shrink-0" />}
               </div>
             )

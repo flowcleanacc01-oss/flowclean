@@ -16,10 +16,13 @@ export default function LinenFormsPage() {
     customers, getCustomer, getCarryOver, linenCatalog,
   } = useStore()
 
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<LinenFormStatus | 'all'>('all')
-  const [customerFilter, setCustomerFilter] = useState<string>('all')
   const searchParams = useSearchParams()
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<LinenFormStatus | 'all'>(() => {
+    const s = searchParams.get('status')
+    return s && ALL_LINEN_STATUSES.includes(s as LinenFormStatus) ? s as LinenFormStatus : 'all'
+  })
+  const [customerFilter, setCustomerFilter] = useState<string>('all')
   const [showCreate, setShowCreate] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
