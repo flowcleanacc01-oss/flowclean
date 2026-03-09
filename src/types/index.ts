@@ -138,7 +138,7 @@ export const LINEN_FORM_STATUS_CONFIG: Record<LinenFormStatus, { label: string; 
   washing: { label: 'ซักอบเสร็จ', color: 'text-blue-700', bgColor: 'bg-blue-50', dotColor: 'bg-blue-500' },
   packed: { label: 'นับแพคแล้ว', color: 'text-indigo-700', bgColor: 'bg-indigo-50', dotColor: 'bg-indigo-500' },
   delivered: { label: 'นับถุงแล้ว', color: 'text-teal-700', bgColor: 'bg-teal-50', dotColor: 'bg-teal-500' },
-  confirmed: { label: 'ลูกค้านับกลับ', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
+  confirmed: { label: 'ลูกค้านับกลับแล้ว', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
 }
 
 // 4 แผนก — checkbox อิสระ (ไม่บังคับเรียง, ข้ามได้)
@@ -176,7 +176,7 @@ export const ALL_LINEN_STATUSES: LinenFormStatus[] = [
 ]
 
 // สถานะที่อยู่ในกระบวนการซัก — แก้ได้แค่หมายเหตุ
-export const PROCESS_STATUSES: LinenFormStatus[] = ['sorting', 'washing']
+export const PROCESS_STATUSES: LinenFormStatus[] = ['sorting']
 
 // Map สถานะเก่า (11 ขั้น) → สถานะใหม่ (7 ขั้น) สำหรับข้อมูลเก่าใน Supabase
 export const LEGACY_STATUS_MAP: Record<string, LinenFormStatus> = {

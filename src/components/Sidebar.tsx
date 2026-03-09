@@ -64,7 +64,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="px-5 py-5 flex items-center gap-3">
         <div className="w-9 h-9 flex items-center justify-center flex-shrink-0">
-          <Image src="/flowclean-logo.svg" alt="FlowClean" width={36} height={36} />
+          <Image src="/flowclean-logo.png" alt="FlowClean" width={36} height={36} />
         </div>
         {!collapsed && (
           <div className="overflow-hidden">

@@ -48,7 +48,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-4">
-            <Image src="/flowclean-logo.svg" alt="FlowClean" width={64} height={64} priority />
+            <Image src="/flowclean-logo.png" alt="FlowClean" width={64} height={64} priority />
           </div>
           <h1 className="text-3xl font-bold text-[#1B3A5C] tracking-tight">FlowClean</h1>
           <p className="text-slate-500 mt-1">ระบบบริหารโรงซักรีด</p>

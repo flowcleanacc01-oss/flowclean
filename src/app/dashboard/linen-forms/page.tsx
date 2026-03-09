@@ -367,7 +367,8 @@ export default function LinenFormsPage() {
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
                 detailForm.status === 'received' ? ['col4', 'col5', 'note'] :
                 PROCESS_STATUSES.includes(detailForm.status) ? ['note'] :
-                detailForm.status === 'packed' ? ['col6', 'note'] :
+                detailForm.status === 'washing' ? ['col6', 'note'] :
+                detailForm.status === 'delivered' ? ['col4'] :
                 []
               }
             />
