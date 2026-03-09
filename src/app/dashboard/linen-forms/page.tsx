@@ -240,6 +240,17 @@ export default function LinenFormsPage() {
       {/* Create Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="รับผ้าเข้าใหม่" size="xl">
         <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium',
+              LINEN_FORM_STATUS_CONFIG.draft.bgColor,
+              LINEN_FORM_STATUS_CONFIG.draft.color
+            )}>
+              <span className={cn('w-1.5 h-1.5 rounded-full', LINEN_FORM_STATUS_CONFIG.draft.dotColor)} />
+              สถานะ: {LINEN_FORM_STATUS_CONFIG.draft.label}
+            </span>
+            <span className="text-xs text-slate-400">บันทึกแล้วจะเข้าสถานะนี้ทันที</span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">โรงแรม</label>
@@ -268,6 +279,10 @@ export default function LinenFormsPage() {
                   className="w-32 px-3 py-2 border border-amber-300 rounded-lg text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                   placeholder="0" />
               </div>
+              <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2.5 text-sm text-teal-700">
+                กรอก: ลูกค้านับส่ง, เคลม, หมายเหตุ
+                <span className="ml-2 opacity-60">(ช่องที่กรอกได้จะไฮไลท์สีฟ้า)</span>
+              </div>
               <LinenFormGrid
                 customer={getCustomer(newCustomerId)!}
                 rows={newRows}
@@ -290,7 +305,7 @@ export default function LinenFormsPage() {
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
             <button onClick={handleCreate} disabled={!newCustomerId || newRows.length === 0}
               className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
-              ลูกค้านับส่งแล้ว
+              บันทึก
             </button>
           </div>
         </div>
@@ -355,6 +370,25 @@ export default function LinenFormsPage() {
               )}
             </div>
 
+            {/* Status guide — บอกว่าสถานะนี้กรอกช่องไหน */}
+            <div className={cn(
+              'rounded-lg px-4 py-2.5 text-sm border',
+              ['packed', 'confirmed'].includes(detailForm.status)
+                ? 'bg-slate-50 border-slate-200 text-slate-500'
+                : 'bg-teal-50 border-teal-200 text-teal-700'
+            )}>
+              {{
+                draft: 'กรอก: ลูกค้านับส่ง, เคลม, หมายเหตุ',
+                received: 'กรอก: โรงซักนับเข้า, ลูกค้านับกลับ, หมายเหตุ',
+                sorting: 'แก้ได้เฉพาะหมายเหตุ',
+                washing: 'กรอก: โรงซักแพคส่ง, หมายเหตุ',
+                packed: 'ดูข้อมูลเท่านั้น',
+                delivered: 'กรอก: ลูกค้านับกลับ',
+                confirmed: 'ยืนยันแล้ว — ดูข้อมูลเท่านั้น',
+              }[detailForm.status]}
+              <span className="ml-2 opacity-60">(ช่องที่กรอกได้จะไฮไลท์สีฟ้า)</span>
+            </div>
+
             <LinenFormGrid
               customer={detailCustomer}
               rows={detailForm.rows}
@@ -364,12 +398,10 @@ export default function LinenFormsPage() {
               formDate={detailForm.date}
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
-                detailForm.status === 'received' ? ['col2', 'col3', 'note'] :
-                detailForm.status === 'sorting' ? ['col5', 'note'] :
-                detailForm.status === 'washing' ? ['note'] :
-                detailForm.status === 'packed' ? ['col6', 'note'] :
-                detailForm.status === 'delivered' ? ['col6'] :
-                detailForm.status === 'confirmed' ? ['col4', 'col6', 'note'] :
+                detailForm.status === 'received' ? ['col4', 'col5', 'note'] :
+                PROCESS_STATUSES.includes(detailForm.status) ? ['note'] :
+                detailForm.status === 'washing' ? ['col6', 'note'] :
+                detailForm.status === 'delivered' ? ['col4'] :
                 []
               }
             />

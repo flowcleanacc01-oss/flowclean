@@ -120,15 +120,21 @@ export default function LinenFormGrid({
             <tr className="bg-slate-50 border-b border-slate-200">
               <th className="text-left px-3 py-2 font-medium text-slate-600 w-16">รหัส</th>
               <th className="text-left px-3 py-2 font-medium text-slate-600 w-32">รายการ</th>
-              {COL_LABELS.map(col => (
-                <th key={col.key} className={cn(
-                  'px-3 py-2 font-medium text-slate-600 text-center',
-                  col.key === 'note' ? 'w-32 text-left' : 'w-20'
-                )}>
-                  <span className="hidden sm:inline">{col.label}</span>
-                  <span className="sm:hidden">{col.short}</span>
-                </th>
-              ))}
+              {COL_LABELS.map(col => {
+                const editable = isEditable(col.key)
+                return (
+                  <th key={col.key} className={cn(
+                    'px-3 py-2 font-medium text-center',
+                    col.key === 'note' ? 'w-32 text-left' : 'w-20',
+                    editable
+                      ? 'text-[#1B3A5C] bg-teal-50/70 border-b-2 border-[#3DD8D8]'
+                      : 'text-slate-600'
+                  )}>
+                    <span className="hidden sm:inline">{col.label}</span>
+                    <span className="sm:hidden">{col.short}</span>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
