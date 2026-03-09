@@ -35,8 +35,8 @@ const NAV_ITEMS = [
   { href: '/dashboard/billing?tab=invoice', label: 'ใบกำกับภาษี/ใบเสร็จ (IV)', icon: Receipt },
   { href: '/dashboard/reports', label: 'รายงาน', icon: BarChart3, adminOnly: true },
   { href: '/dashboard/expenses', label: 'รายจ่าย', icon: Wallet, adminOnly: true },
+  { href: '/dashboard/guide', label: 'คู่มือการใช้งาน', icon: BookOpen, separator: true },
   { href: '/dashboard/settings', label: 'ตั้งค่า', icon: Settings, adminOnly: true },
-  { href: '/dashboard/guide', label: 'คู่มือการใช้งาน', icon: BookOpen },
 ]
 
 export default function Sidebar() {
@@ -81,22 +81,26 @@ export default function Sidebar() {
         {NAV_ITEMS.map(item => {
           const active = isActive(item.href)
           const Icon = item.icon
-          if (item.adminOnly && currentUser?.role === 'staff') return null
+          if ('adminOnly' in item && item.adminOnly && currentUser?.role === 'staff') return null
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setMobileOpen(false)}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
-                active
-                  ? 'bg-[#1B3A5C] text-[#3DD8D8] shadow-md shadow-slate-900/30'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+            <div key={item.href}>
+              {'separator' in item && item.separator && (
+                <div className="border-t border-slate-700 my-2" />
               )}
-            >
-              <Icon className={cn('w-5 h-5 flex-shrink-0', active ? 'text-[#3DD8D8]' : 'text-slate-500')} />
-              {!collapsed && <span>{item.label}</span>}
-            </Link>
+              <Link
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
+                  active
+                    ? 'bg-[#1B3A5C] text-[#3DD8D8] shadow-md shadow-slate-900/30'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                )}
+              >
+                <Icon className={cn('w-5 h-5 flex-shrink-0', active ? 'text-[#3DD8D8]' : 'text-slate-500')} />
+                {!collapsed && <span>{item.label}</span>}
+              </Link>
+            </div>
           )
         })}
       </nav>

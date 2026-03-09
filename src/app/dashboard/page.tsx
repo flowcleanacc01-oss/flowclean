@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   ClipboardList,
   ArrowRight,
+  BookOpen,
 } from 'lucide-react'
 
 export default function DashboardPage() {
@@ -232,6 +233,21 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+
+          {/* Guide */}
+          <Link href="/dashboard/guide"
+            className="block bg-gradient-to-br from-[#1B3A5C] to-[#122740] rounded-xl p-4 text-white hover:shadow-lg transition-shadow">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">คู่มือการใช้งาน</p>
+                <p className="text-xs text-slate-300 mt-0.5">ขั้นตอน สถานะ คอลัมน์ สูตรบิล</p>
+              </div>
+              <ArrowRight className="w-4 h-4 ml-auto text-slate-400" />
+            </div>
+          </Link>
 
           {/* Quick Actions */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
