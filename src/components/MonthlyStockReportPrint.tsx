@@ -18,11 +18,10 @@ interface StockRow {
   col2HotelCount: number  // ลูกค้านับส่ง
   col3Claim: number       // เคลม
   totalReceived: number   // รวมรับ = col2 + col3
-  col4Approved: number    // โรงงาน OK
   col5ClaimApproved: number // โรงซักนับเข้า
   col6PackSend: number    // โรงซักแพคส่ง
-  needToReturn: number    // ยอดต้องคืน = col4 + col5 - carryOver
-  stock: number           // สต้อก = needToReturn - col6
+  needToReturn: number    // ยอดต้องคืน = โรงซักนับเข้า - ยกยอด
+  stock: number           // สต้อก = ต้องคืน - แพคส่ง
   note: string            // หมายเหตุ
 }
 
@@ -60,7 +59,7 @@ export default function MonthlyStockReportPrint({
   const rows: StockRow[] = items.map(item => {
     const co = carryOver[item.code] || 0
 
-    let col2 = 0, col3 = 0, col4 = 0, col5 = 0, col6 = 0
+    let col2 = 0, col3 = 0, col5 = 0, col6 = 0
     const notes: string[] = []
 
     for (const form of forms) {
@@ -68,7 +67,6 @@ export default function MonthlyStockReportPrint({
       if (row) {
         col2 += row.col2_hotelCountIn
         col3 += row.col3_hotelClaimCount
-        col4 += row.col4_factoryApproved
         col5 += row.col5_factoryClaimApproved
         col6 += row.col6_factoryPackSend || 0
         if (row.note) notes.push(row.note)
@@ -88,7 +86,6 @@ export default function MonthlyStockReportPrint({
       col2HotelCount: col2,
       col3Claim: col3,
       totalReceived,
-      col4Approved: col4,
       col5ClaimApproved: col5,
       col6PackSend: col6,
       needToReturn,
@@ -103,14 +100,13 @@ export default function MonthlyStockReportPrint({
     col2HotelCount: acc.col2HotelCount + r.col2HotelCount,
     col3Claim: acc.col3Claim + r.col3Claim,
     totalReceived: acc.totalReceived + r.totalReceived,
-    col4Approved: acc.col4Approved + r.col4Approved,
     col5ClaimApproved: acc.col5ClaimApproved + r.col5ClaimApproved,
     col6PackSend: acc.col6PackSend + r.col6PackSend,
     needToReturn: acc.needToReturn + r.needToReturn,
     stock: acc.stock + r.stock,
   }), {
     carryOver: 0, col2HotelCount: 0, col3Claim: 0, totalReceived: 0,
-    col4Approved: 0, col5ClaimApproved: 0, col6PackSend: 0, needToReturn: 0, stock: 0,
+    col5ClaimApproved: 0, col6PackSend: 0, needToReturn: 0, stock: 0,
   })
 
   // Month label
@@ -140,7 +136,6 @@ export default function MonthlyStockReportPrint({
               <th className="border border-slate-400 px-2 py-2 text-center w-16">ลูกค้า<br />นับส่ง</th>
               <th className="border border-slate-400 px-2 py-2 text-center w-16">เคลม</th>
               <th className="border border-slate-400 px-2 py-2 text-center bg-blue-50 font-bold w-16">รวมรับ</th>
-              <th className="border border-slate-400 px-2 py-2 text-center w-16">โรงงาน<br />OK</th>
               <th className="border border-slate-400 px-2 py-2 text-center w-16">โรงซัก<br />นับเข้า</th>
               <th className="border border-slate-400 px-2 py-2 text-center bg-teal-50 font-bold w-16">โรงซัก<br />แพคส่ง</th>
               <th className="border border-slate-400 px-2 py-2 text-center bg-indigo-50 w-16">ต้องคืน</th>
@@ -151,7 +146,7 @@ export default function MonthlyStockReportPrint({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={13} className="border border-slate-400 px-4 py-8 text-center text-slate-400">
+                <td colSpan={12} className="border border-slate-400 px-4 py-8 text-center text-slate-400">
                   ไม่มีข้อมูลสต็อกในเดือนนี้
                 </td>
               </tr>
@@ -168,7 +163,6 @@ export default function MonthlyStockReportPrint({
                 <td className="border border-slate-400 px-2 py-1.5 text-center font-bold bg-blue-50">
                   {row.totalReceived || '-'}
                 </td>
-                <td className="border border-slate-400 px-2 py-1.5 text-center">{row.col4Approved || '-'}</td>
                 <td className="border border-slate-400 px-2 py-1.5 text-center">{row.col5ClaimApproved || '-'}</td>
                 <td className="border border-slate-400 px-2 py-1.5 text-center font-bold bg-teal-50">
                   {row.col6PackSend || '-'}
@@ -192,7 +186,6 @@ export default function MonthlyStockReportPrint({
               <td className="border border-slate-400 px-2 py-2 text-center">{totals.col2HotelCount || '-'}</td>
               <td className="border border-slate-400 px-2 py-2 text-center">{totals.col3Claim || '-'}</td>
               <td className="border border-slate-400 px-2 py-2 text-center text-[#1B3A5C]">{totals.totalReceived || '-'}</td>
-              <td className="border border-slate-400 px-2 py-2 text-center">{totals.col4Approved || '-'}</td>
               <td className="border border-slate-400 px-2 py-2 text-center">{totals.col5ClaimApproved || '-'}</td>
               <td className="border border-slate-400 px-2 py-2 text-center text-teal-700">{totals.col6PackSend || '-'}</td>
               <td className="border border-slate-400 px-2 py-2 text-center">{totals.needToReturn || '-'}</td>
@@ -204,7 +197,7 @@ export default function MonthlyStockReportPrint({
       </div>
 
       {/* Summary */}
-      <div className="mt-4 grid grid-cols-5 gap-3 text-[11px]">
+      <div className="mt-4 grid grid-cols-4 gap-3 text-[11px]">
         <div className="bg-slate-50 rounded p-2">
           <p className="text-slate-500">ใบรับส่งผ้า</p>
           <p className="font-bold text-slate-800">{forms.length} ใบ</p>
@@ -212,10 +205,6 @@ export default function MonthlyStockReportPrint({
         <div className="bg-blue-50 rounded p-2">
           <p className="text-slate-500">รวมรับทั้งเดือน</p>
           <p className="font-bold text-[#1B3A5C]">{totals.totalReceived} ชิ้น</p>
-        </div>
-        <div className="bg-emerald-50 rounded p-2">
-          <p className="text-slate-500">โรงงาน OK</p>
-          <p className="font-bold text-emerald-700">{totals.col4Approved} ชิ้น</p>
         </div>
         <div className="bg-teal-50 rounded p-2">
           <p className="text-slate-500">โรงซักแพคส่ง</p>
