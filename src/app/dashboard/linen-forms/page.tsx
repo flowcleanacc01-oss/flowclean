@@ -111,7 +111,16 @@ export default function LinenFormsPage() {
     const form = linenForms.find(f => f.id === formId)
     if (!form) return
     const next = NEXT_LINEN_STATUS[form.status]
-    if (next) updateLinenFormStatus(formId, next)
+    if (!next) return
+    // Auto-default col4 (ลูกค้านับผ้ากลับ) from col6 (แพคส่ง) when entering delivered
+    if (next === 'delivered') {
+      const updatedRows = form.rows.map(row => ({
+        ...row,
+        col4_factoryApproved: row.col4_factoryApproved || (row.col6_factoryPackSend || 0),
+      }))
+      updateLinenForm(formId, { rows: updatedRows })
+    }
+    updateLinenFormStatus(formId, next)
   }
 
   const handleRevertStatus = (formId: string) => {
@@ -132,7 +141,7 @@ export default function LinenFormsPage() {
         <button onClick={handleCreateOpen}
           className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
           <Plus className="w-4 h-4" />
-          รับผ้าเข้าใหม่
+          สร้างใบส่งรับผ้าใหม่
         </button>
       </div>
 
@@ -241,12 +250,12 @@ export default function LinenFormsPage() {
       </div>
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="รับผ้าเข้าใหม่" size="xl">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งรับผ้าใหม่ (Create New LF)" size="xl">
         <div className="space-y-4">
           <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2.5 text-sm text-teal-700">
             <span className="font-medium">สิ่งที่ทำ: {LINEN_FORM_STATUS_CONFIG.draft.todoLabel}</span>
             <span className="mx-2">|</span>
-            กรอก: ลูกค้านับส่ง, เคลม, หมายเหตุ
+            กรอก: ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ
             <span className="ml-2 text-xs text-teal-500">(บันทึกแล้วจะเข้าสถานะ &quot;{LINEN_FORM_STATUS_CONFIG.draft.label}&quot;)</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -294,12 +303,18 @@ export default function LinenFormsPage() {
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200">
             <button onClick={() => setShowCreate(false)}
-              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+              className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
+              <ChevronLeft className="w-4 h-4" />ยกเลิก
+            </button>
+            <span className={cn('px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap', LINEN_FORM_STATUS_CONFIG.draft.bgColor, LINEN_FORM_STATUS_CONFIG.draft.color)}>
+              {LINEN_FORM_STATUS_CONFIG.draft.todoLabel}
+            </span>
             <button onClick={handleCreate} disabled={!newCustomerId || newRows.length === 0}
-              className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
-              บันทึก
+              className="px-3 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 font-medium transition-colors flex items-center gap-1">
+              {LINEN_FORM_STATUS_CONFIG.draft.label}
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -376,12 +391,12 @@ export default function LinenFormsPage() {
               <span className="font-medium">สิ่งที่ทำ: {LINEN_FORM_STATUS_CONFIG[detailForm.status].todoLabel}</span>
               <span className="mx-2">|</span>
               {{
-                draft: 'กรอก: ลูกค้านับส่ง, เคลม, หมายเหตุ',
-                received: 'กรอก: โรงซักนับเข้า, ลูกค้านับกลับ, หมายเหตุ',
+                draft: 'กรอก: ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ',
+                received: 'กรอก: โรงซักนับเข้า, เคลมOK, หมายเหตุ',
                 sorting: 'แก้ได้เฉพาะหมายเหตุ',
                 washing: 'กรอก: โรงซักแพคส่ง, หมายเหตุ',
                 packed: 'ดูข้อมูลเท่านั้น',
-                delivered: 'กรอก: ลูกค้านับกลับ',
+                delivered: 'กรอก: ลูกค้านับผ้ากลับ',
                 confirmed: 'ดูข้อมูลเท่านั้น',
               }[detailForm.status]}
             </div>
@@ -456,7 +471,7 @@ export default function LinenFormsPage() {
                     <button onClick={() => handleRevertStatus(detailForm.id)}
                       className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
                       <ChevronLeft className="w-4 h-4" />
-                      {LINEN_FORM_STATUS_CONFIG[PREV_LINEN_STATUS[detailForm.status]!].todoLabel}
+                      {LINEN_FORM_STATUS_CONFIG[detailForm.status].prevLabel}
                     </button>
                   ) : (
                     <button onClick={() => setShowDetail(null)}

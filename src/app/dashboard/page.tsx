@@ -255,7 +255,7 @@ export default function DashboardPage() {
             <div className="space-y-2">
               <Link href="/dashboard/linen-forms"
                 className="flex items-center gap-2 text-sm text-slate-600 hover:text-[#1B3A5C] transition-colors py-1">
-                <ClipboardList className="w-4 h-4" />รับผ้าเข้าใหม่
+                <ClipboardList className="w-4 h-4" />สร้างใบส่งรับผ้าใหม่
               </Link>
               <Link href="/dashboard/delivery"
                 className="flex items-center gap-2 text-sm text-slate-600 hover:text-[#1B3A5C] transition-colors py-1">

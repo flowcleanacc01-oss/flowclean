@@ -228,7 +228,7 @@ export default function DeliveryPage() {
                 </div>
               ) : (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700">
-                  ไม่มีใบส่งรับผ้าที่สถานะ &quot;นับแพคแล้ว&quot; — ต้องเลื่อนสถานะใบส่งรับผ้าให้ถึง &quot;นับแพคแล้ว&quot; ก่อนจึงจะสร้างใบส่งของได้
+                  ไม่มีใบส่งรับผ้าที่สถานะ &quot;นับผ้าแพคส่งแล้ว&quot; — ต้องเลื่อนสถานะใบส่งรับผ้าให้ถึง &quot;นับผ้าแพคส่งแล้ว&quot; ก่อนจึงจะสร้างใบส่งของได้
                 </div>
               )}
             </div>

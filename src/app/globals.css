@@ -31,10 +31,52 @@ body {
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/* Print styles */
+/* Print styles — proper A4 output for mobile and desktop */
 @media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  /* Hide non-print elements */
   .no-print { display: none !important; }
-  body { background: white; }
+  body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Hide sidebar and main layout chrome */
+  aside { display: none !important; }
+  nav { display: none !important; }
+
+  /* Reset modal: make it fill the page, remove visual chrome */
+  .fixed.inset-0 {
+    position: absolute !important;
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0 !important;
+  }
+  /* Remove modal backdrop */
+  .fixed.inset-0.bg-black\/40 { display: none !important; }
+  /* Modal card: remove shadow, border, max-height, make full-width */
+  .fixed.inset-0 > .relative {
+    position: static !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+  }
+  /* Modal header: hide */
+  .fixed.inset-0 > .relative > .flex.items-center.justify-between {
+    display: none !important;
+  }
+  /* Modal body: remove max-height/overflow */
+  .fixed.inset-0 > .relative > .max-h-\[70vh\] {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  /* Dashboard layout: remove padding/margin for print */
+  main { padding: 0 !important; margin: 0 !important; }
 }
 
 /* Custom animations */
