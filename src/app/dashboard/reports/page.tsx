@@ -299,7 +299,7 @@ export default function ReportsPage() {
 
       {/* Monthly Delivery Report Tab */}
       {tab === 'delivery' && selCustomer && (
-        <div>
+        <div className="no-print">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold text-slate-800">
               รายงานส่งสินค้า — {selCustomer.name} ({selMonth})
@@ -323,7 +323,7 @@ export default function ReportsPage() {
 
       {/* Monthly Stock Report Tab */}
       {tab === 'stock' && selCustomer && (
-        <div>
+        <div className="no-print">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold text-slate-800">
               สต็อกรายเดือน — {selCustomer.name} ({selMonth})
