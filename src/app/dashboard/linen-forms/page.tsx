@@ -106,6 +106,7 @@ export default function LinenFormsPage() {
   const detailForm = showDetail ? linenForms.find(f => f.id === showDetail) : null
   const detailCustomer = detailForm ? getCustomer(detailForm.customerId) : null
   const detailCarryOver = detailForm ? getCarryOver(detailForm.customerId, detailForm.date) : {}
+  const nextDetailStatus = detailForm ? NEXT_LINEN_STATUS[detailForm.status] : null
 
   const handleAdvanceStatus = (formId: string) => {
     const form = linenForms.find(f => f.id === formId)
@@ -235,7 +236,7 @@ export default function LinenFormsPage() {
                         {nextStatus && (
                           <button onClick={() => handleAdvanceStatus(form.id)}
                             className="text-xs px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] rounded font-medium hover:bg-[#2bb8b8] transition-colors inline-flex items-center gap-1">
-                            {LINEN_FORM_STATUS_CONFIG[form.status].label}
+                            {LINEN_FORM_STATUS_CONFIG[nextStatus].label}
                             <ChevronRight className="w-3 h-3" />
                           </button>
                         )}
@@ -320,19 +321,6 @@ export default function LinenFormsPage() {
         </div>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">ต้องการลบใบรับส่งผ้านี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
-          <div className="flex justify-end gap-3">
-            <button onClick={() => setConfirmDeleteId(null)}
-              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={() => { if (confirmDeleteId) { deleteLinenForm(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
-              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
-          </div>
-        </div>
-      </Modal>
-
       {/* Detail Modal */}
       <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={detailForm?.formNumber || ''} size="xl">
         {detailForm && detailCustomer && (
@@ -388,7 +376,7 @@ export default function LinenFormsPage() {
                 ? 'bg-slate-50 border-slate-200 text-slate-500'
                 : 'bg-teal-50 border-teal-200 text-teal-700'
             )}>
-              <span className="font-medium">สิ่งที่ทำ: {LINEN_FORM_STATUS_CONFIG[detailForm.status].todoLabel}</span>
+              <span className="font-medium">สิ่งที่ทำ: {nextDetailStatus ? LINEN_FORM_STATUS_CONFIG[nextDetailStatus].todoLabel : LINEN_FORM_STATUS_CONFIG[detailForm.status].label}</span>
               <span className="mx-2">|</span>
               {{
                 draft: 'กรอก: ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ',
@@ -483,17 +471,17 @@ export default function LinenFormsPage() {
                   {/* Current todo badge */}
                   <span className={cn(
                     'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap',
-                    LINEN_FORM_STATUS_CONFIG[detailForm.status].bgColor,
-                    LINEN_FORM_STATUS_CONFIG[detailForm.status].color
+                    (nextDetailStatus ? LINEN_FORM_STATUS_CONFIG[nextDetailStatus] : LINEN_FORM_STATUS_CONFIG[detailForm.status]).bgColor,
+                    (nextDetailStatus ? LINEN_FORM_STATUS_CONFIG[nextDetailStatus] : LINEN_FORM_STATUS_CONFIG[detailForm.status]).color
                   )}>
-                    {LINEN_FORM_STATUS_CONFIG[detailForm.status].todoLabel}
+                    {nextDetailStatus ? LINEN_FORM_STATUS_CONFIG[nextDetailStatus].todoLabel : LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
                   </span>
 
                   {/* Next action button */}
                   {NEXT_LINEN_STATUS[detailForm.status] ? (
                     <button onClick={() => handleAdvanceStatus(detailForm.id)}
                       className="px-3 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors flex items-center gap-1">
-                      {LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
+                      {LINEN_FORM_STATUS_CONFIG[NEXT_LINEN_STATUS[detailForm.status]!].label}
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   ) : (
@@ -510,6 +498,19 @@ export default function LinenFormsPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Delete Confirmation Modal — ต้องอยู่หลัง Detail Modal เพื่อให้แสดงด้านหน้า */}
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">ต้องการลบใบรับส่งผ้านี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setConfirmDeleteId(null)}
+              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+            <button onClick={() => { if (confirmDeleteId) { deleteLinenForm(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
+              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
+          </div>
+        </div>
       </Modal>
     </div>
   )
