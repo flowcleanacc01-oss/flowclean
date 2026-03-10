@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasDiscrepancies } from '@/lib/discrepancy'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check } from 'lucide-react'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
 
@@ -443,54 +443,88 @@ export default function LinenFormsPage() {
               </div>
             )}
 
-            {/* Action buttons: [< prev todo] — current todo — [current label >] */}
-            <div className="border-t border-slate-200 pt-4 mt-2">
-              <div className="flex items-center justify-between gap-2">
-                {/* Delete */}
+            {/* Progress stepper + Action buttons */}
+            <div className="border-t border-slate-200 pt-4 mt-2 space-y-3">
+              {/* Step progress bar */}
+              {(() => {
+                const currentIdx = ALL_LINEN_STATUSES.indexOf(detailForm.status)
+                return (
+                  <div className="flex items-center gap-0.5 px-1">
+                    {ALL_LINEN_STATUSES.map((s, i) => {
+                      const isDone = i < currentIdx
+                      const isCurrent = i === currentIdx
+                      return (
+                        <Fragment key={s}>
+                          <div title={LINEN_FORM_STATUS_CONFIG[s].label} className="flex-shrink-0">
+                            <div className={cn(
+                              'w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold',
+                              isCurrent
+                                ? 'bg-[#1B3A5C] text-white ring-2 ring-[#3DD8D8] ring-offset-1'
+                                : isDone
+                                  ? 'bg-[#3DD8D8] text-white'
+                                  : 'bg-slate-100 text-slate-400',
+                            )}>
+                              {isDone ? <Check className="w-3 h-3" /> : i + 1}
+                            </div>
+                          </div>
+                          {i < 6 && (
+                            <div className={cn(
+                              'flex-1 h-0.5 rounded-full',
+                              i < currentIdx ? 'bg-[#3DD8D8]' : 'bg-slate-100'
+                            )} />
+                          )}
+                        </Fragment>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+
+              {/* Current status label + step count */}
+              <div className="flex items-center justify-center gap-2">
+                <span className={cn(
+                  'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium',
+                  LINEN_FORM_STATUS_CONFIG[detailForm.status].bgColor,
+                  LINEN_FORM_STATUS_CONFIG[detailForm.status].color
+                )}>
+                  <span className={cn('w-1.5 h-1.5 rounded-full', LINEN_FORM_STATUS_CONFIG[detailForm.status].dotColor)} />
+                  {LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
+                </span>
+                <span className="text-xs text-slate-400">ขั้นตอน {ALL_LINEN_STATUSES.indexOf(detailForm.status) + 1}/7</span>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-between">
                 <button onClick={() => setConfirmDeleteId(detailForm.id)}
-                  className="text-sm text-red-500 hover:text-red-700 transition-colors flex items-center gap-1 flex-shrink-0">
-                  <X className="w-4 h-4" />ลบ
+                  className="text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1">
+                  <X className="w-3.5 h-3.5" />ลบ
                 </button>
 
-                {/* Prev / Todo / Next */}
                 <div className="flex items-center gap-2">
-                  {/* Previous action button */}
                   {PREV_LINEN_STATUS[detailForm.status] ? (
                     <button onClick={() => handleRevertStatus(detailForm.id)}
                       className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
                       <ChevronLeft className="w-4 h-4" />
-                      {LINEN_FORM_STATUS_CONFIG[detailForm.status].prevLabel}
+                      <span className="hidden sm:inline">{LINEN_FORM_STATUS_CONFIG[detailForm.status].prevLabel}</span>
+                      <span className="sm:hidden">ย้อน</span>
                     </button>
                   ) : (
                     <button onClick={() => setShowDetail(null)}
                       className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors">
-                      ยกเลิก
+                      ปิด
                     </button>
                   )}
 
-                  {/* Current todo badge */}
-                  <span className={cn(
-                    'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap',
-                    (nextDetailStatus ? LINEN_FORM_STATUS_CONFIG[nextDetailStatus] : LINEN_FORM_STATUS_CONFIG[detailForm.status]).bgColor,
-                    (nextDetailStatus ? LINEN_FORM_STATUS_CONFIG[nextDetailStatus] : LINEN_FORM_STATUS_CONFIG[detailForm.status]).color
-                  )}>
-                    {nextDetailStatus ? LINEN_FORM_STATUS_CONFIG[nextDetailStatus].todoLabel : LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
-                  </span>
-
-                  {/* Next action button */}
                   {NEXT_LINEN_STATUS[detailForm.status] ? (
                     <button onClick={() => handleAdvanceStatus(detailForm.id)}
-                      className="px-3 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors flex items-center gap-1">
+                      className="px-4 py-2.5 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
                       {LINEN_FORM_STATUS_CONFIG[NEXT_LINEN_STATUS[detailForm.status]!].label}
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   ) : (
-                    <span className={cn(
-                      'px-3 py-2 rounded-lg text-sm font-medium',
-                      LINEN_FORM_STATUS_CONFIG[detailForm.status].bgColor,
-                      LINEN_FORM_STATUS_CONFIG[detailForm.status].color
-                    )}>
-                      {LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
+                    <span className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1.5">
+                      <Check className="w-4 h-4" />
+                      เสร็จสมบูรณ์
                     </span>
                   )}
                 </div>
