@@ -17,6 +17,8 @@ export default function ReportsPage() {
   const [tab, setTab] = useState<TabKey>('monthly')
   const [showDeliveryPrint, setShowDeliveryPrint] = useState(false)
   const [showStockPrint, setShowStockPrint] = useState(false)
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('landscape')
+  const [printMargin, setPrintMargin] = useState<'normal' | 'narrow'>('narrow')
   const [selCustomerIdRaw, setSelCustomerId] = useState(customers[0]?.id || '')
   const [selMonth, setSelMonth] = useState(() => {
     const d = new Date()
@@ -302,7 +304,7 @@ export default function ReportsPage() {
             <h3 className="font-semibold text-slate-800">
               รายงานส่งสินค้า — {selCustomer.name} ({selMonth})
             </h3>
-            <button onClick={() => setShowDeliveryPrint(true)}
+            <button onClick={() => { setPrintOrientation('landscape'); setPrintMargin('narrow'); setShowDeliveryPrint(true) }}
               className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
               <Printer className="w-4 h-4" />พิมพ์
             </button>
@@ -326,7 +328,7 @@ export default function ReportsPage() {
             <h3 className="font-semibold text-slate-800">
               สต็อกรายเดือน — {selCustomer.name} ({selMonth})
             </h3>
-            <button onClick={() => setShowStockPrint(true)}
+            <button onClick={() => { setPrintOrientation('landscape'); setPrintMargin('narrow'); setShowStockPrint(true) }}
               className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
               <Printer className="w-4 h-4" />พิมพ์
             </button>
@@ -348,6 +350,43 @@ export default function ReportsPage() {
       <Modal open={showDeliveryPrint} onClose={() => setShowDeliveryPrint(false)} title="พิมพ์รายงานส่งสินค้า" size="full">
         {selCustomer && (
           <div>
+            {/* Dynamic @page override */}
+            <style>{`@media print { @page { size: A4 ${printOrientation}; margin: ${printMargin === 'narrow' ? '5mm' : '10mm'}; } }`}</style>
+
+            {/* Print options */}
+            <div className="no-print flex flex-wrap items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">แนวกระดาษ:</span>
+                <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
+                  <button onClick={() => setPrintOrientation('portrait')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printOrientation === 'portrait' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    แนวตั้ง
+                  </button>
+                  <button onClick={() => setPrintOrientation('landscape')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printOrientation === 'landscape' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    แนวนอน
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">ขอบกระดาษ:</span>
+                <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
+                  <button onClick={() => setPrintMargin('normal')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printMargin === 'normal' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    ปกติ (10mm)
+                  </button>
+                  <button onClick={() => setPrintMargin('narrow')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printMargin === 'narrow' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    แคบ (5mm)
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <MonthlyDeliveryReportPrint
               customer={selCustomer}
               month={selMonth}
@@ -369,6 +408,43 @@ export default function ReportsPage() {
       <Modal open={showStockPrint} onClose={() => setShowStockPrint(false)} title="พิมพ์สต็อกรายเดือน" size="full">
         {selCustomer && (
           <div>
+            {/* Dynamic @page override */}
+            <style>{`@media print { @page { size: A4 ${printOrientation}; margin: ${printMargin === 'narrow' ? '5mm' : '10mm'}; } }`}</style>
+
+            {/* Print options */}
+            <div className="no-print flex flex-wrap items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">แนวกระดาษ:</span>
+                <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
+                  <button onClick={() => setPrintOrientation('portrait')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printOrientation === 'portrait' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    แนวตั้ง
+                  </button>
+                  <button onClick={() => setPrintOrientation('landscape')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printOrientation === 'landscape' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    แนวนอน
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">ขอบกระดาษ:</span>
+                <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
+                  <button onClick={() => setPrintMargin('normal')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printMargin === 'normal' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    ปกติ (10mm)
+                  </button>
+                  <button onClick={() => setPrintMargin('narrow')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printMargin === 'narrow' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    แคบ (5mm)
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <MonthlyStockReportPrint
               customer={selCustomer}
               month={selMonth}
