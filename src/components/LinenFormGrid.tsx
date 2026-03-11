@@ -68,13 +68,7 @@ export default function LinenFormGrid({
     onChange(updated)
   }
 
-  // Dynamic col4 label: เคลมOK before delivered, ลูกค้านับผ้ากลับ at delivered+
-  const effectiveLabels = COL_LABELS.map(col => {
-    if (col.key === 'col4' && formStatus && !['delivered', 'confirmed'].includes(formStatus)) {
-      return { key: col.key, label: 'เคลมOK' as string, short: 'เคลมOK' as string, tip: 'จำนวนผ้าเคลมที่โรงซักรับอนุมัติ' as string }
-    }
-    return col
-  })
+  const effectiveLabels = COL_LABELS
 
   const isEditable = (colKey: string) => !readOnly && editableColumns.includes(colKey as typeof editableColumns[number])
 

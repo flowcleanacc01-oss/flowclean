@@ -447,7 +447,7 @@ export default function LinenFormsPage() {
               <span className="mx-2">|</span>
               {{
                 draft: 'กรอก: ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ',
-                received: 'กรอก: โรงซักนับเข้า, เคลมOK, หมายเหตุ',
+                received: 'กรอก: โรงซักนับเข้า, หมายเหตุ',
                 sorting: 'แก้ได้เฉพาะหมายเหตุ',
                 washing: 'กรอก: โรงซักแพคส่ง, หมายเหตุ',
                 packed: 'ดูข้อมูลเท่านั้น',
@@ -466,7 +466,7 @@ export default function LinenFormsPage() {
               formStatus={detailForm.status}
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
-                detailForm.status === 'received' ? ['col4', 'col5', 'note'] :
+                detailForm.status === 'received' ? ['col5', 'note'] :
                 PROCESS_STATUSES.includes(detailForm.status) ? ['note'] :
                 detailForm.status === 'washing' ? ['col6', 'note'] :
                 detailForm.status === 'delivered' ? ['col4'] :
