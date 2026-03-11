@@ -488,7 +488,7 @@ export default function ChecklistPage() {
       </Modal>
 
       {/* Print Modal */}
-      <Modal open={showPrint && !!detailCL} onClose={() => setShowPrint(false)} title="พิมพ์ใบเช็คสินค้า" size="xl">
+      <Modal open={showPrint && !!detailCL} onClose={() => setShowPrint(false)} title="พิมพ์ใบเช็คสินค้า" size="xl" className="print-target">
         {detailCL && detailCustomer && (
           <div>
             <ChecklistPrint checklist={detailCL} customer={detailCustomer} company={companyInfo} />
@@ -503,7 +503,7 @@ export default function ChecklistPage() {
       </Modal>
 
       {/* Blank Checklist Print Modal */}
-      <Modal open={showBlankPrint} onClose={() => setShowBlankPrint(false)} title="พิมพ์ใบเช็คของ" size="xl">
+      <Modal open={showBlankPrint} onClose={() => setShowBlankPrint(false)} title="พิมพ์ใบเช็คของ" size="xl" className="print-target">
         <div className="space-y-4">
           {!blankCustomerId ? (
             <div>

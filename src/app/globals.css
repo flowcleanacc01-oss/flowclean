@@ -55,6 +55,8 @@ body {
   }
   /* Remove modal backdrop */
   .fixed.inset-0.bg-black\/40 { display: none !important; }
+  /* Hide all modals except print target */
+  .fixed.inset-0.z-50:not(.print-target) { display: none !important; }
   /* Modal card: remove shadow, border, max-height, make full-width */
   .fixed.inset-0 > .relative {
     position: static !important;

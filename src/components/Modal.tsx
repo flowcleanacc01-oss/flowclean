@@ -10,6 +10,7 @@ interface ModalProps {
   title: string
   children: ReactNode
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+  className?: string
 }
 
 const SIZE_MAP = {
@@ -20,7 +21,7 @@ const SIZE_MAP = {
   full: 'max-w-7xl',
 }
 
-export default function Modal({ open, onClose, title, children, size = 'md' }: ModalProps) {
+export default function Modal({ open, onClose, title, children, size = 'md', className }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: M
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4 animate-fadeIn">
+    <div className={cn("fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4 animate-fadeIn", className)}>
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
       <div ref={ref} className={cn('relative bg-white rounded-2xl shadow-xl w-full animate-slideIn', SIZE_MAP[size])}>
         {/* Header */}

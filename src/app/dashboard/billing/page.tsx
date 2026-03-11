@@ -656,7 +656,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* Billing Print Preview Modal */}
-      <Modal open={showPrint && !!detailBilling} onClose={() => setShowPrint(false)} title="พิมพ์ใบวางบิล" size="xl">
+      <Modal open={showPrint && !!detailBilling} onClose={() => setShowPrint(false)} title="พิมพ์ใบวางบิล" size="xl" className="print-target">
         {detailBilling && detailCustomer && (
           <div>
             <BillingPrint billing={detailBilling} customer={detailCustomer} company={companyInfo} />
@@ -727,7 +727,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* Invoice Print Preview Modal */}
-      <Modal open={showInvoicePrint && !!detailInvoice} onClose={() => setShowInvoicePrint(false)} title="พิมพ์ใบกำกับภาษี/ใบเสร็จรับเงิน" size="xl">
+      <Modal open={showInvoicePrint && !!detailInvoice} onClose={() => setShowInvoicePrint(false)} title="พิมพ์ใบกำกับภาษี/ใบเสร็จรับเงิน" size="xl" className="print-target">
         {detailInvoice && detailInvoiceCustomer && (
           <div>
             <TaxInvoicePrint
@@ -914,7 +914,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* Quotation Print Preview Modal */}
-      <Modal open={showQuPrint && !!detailQuotation} onClose={() => setShowQuPrint(false)} title="พิมพ์ใบเสนอราคา" size="xl">
+      <Modal open={showQuPrint && !!detailQuotation} onClose={() => setShowQuPrint(false)} title="พิมพ์ใบเสนอราคา" size="xl" className="print-target">
         {detailQuotation && (
           <div>
             <QuotationPrint quotation={detailQuotation} company={companyInfo} />

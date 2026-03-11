@@ -417,7 +417,7 @@ export default function DeliveryPage() {
       </Modal>
 
       {/* Print Preview Modal */}
-      <Modal open={showPrint && !!detailNote} onClose={() => setShowPrint(false)} title="พิมพ์ใบส่งของ" size="xl">
+      <Modal open={showPrint && !!detailNote} onClose={() => setShowPrint(false)} title="พิมพ์ใบส่งของ" size="xl" className="print-target">
         {detailNote && detailCustomer && (
           <div>
             <DeliveryNotePrint note={detailNote} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} />
