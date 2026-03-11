@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatNumber } from '@/lib/utils'
 import type { DeliveryNote, Customer, CompanyInfo, LinenItemDef } from '@/types'
 
 interface DeliveryNotePrintProps {
@@ -13,10 +13,13 @@ interface DeliveryNotePrintProps {
 
 export default function DeliveryNotePrint({ note, customer, company, catalog }: DeliveryNotePrintProps) {
   const itemNameMap = Object.fromEntries(catalog.map(i => [i.code, i.name]))
+  const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
   const totalItems = note.items.reduce((s, i) => s + i.quantity, 0)
+  const isPer = customer.billingModel === 'per_piece'
+  const totalAmount = isPer ? note.items.reduce((s, i) => s + i.quantity * (priceMap[i.code] || 0), 0) : 0
 
   return (
-    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-delivery">
+    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none print:max-w-none print:w-full print:mx-0" id="print-delivery">
       {/* Header */}
       <div className="flex justify-between items-start mb-6 border-b border-slate-300 pb-4">
         <div className="flex items-start gap-3">
@@ -54,27 +57,37 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
       <table className="w-full text-sm border border-slate-300">
         <thead>
           <tr className="bg-slate-100">
-            <th className="text-center px-3 py-2 border border-slate-300 w-12">ลำดับ</th>
-            <th className="text-left px-3 py-2 border border-slate-300 w-16">รหัส</th>
+            <th className="text-center px-3 py-2 border border-slate-300 w-10">ลำดับ</th>
+            <th className="text-left px-3 py-2 border border-slate-300 w-14">รหัส</th>
             <th className="text-left px-3 py-2 border border-slate-300">รายการ</th>
-            <th className="text-right px-3 py-2 border border-slate-300 w-20">จำนวน</th>
+            <th className="text-right px-3 py-2 border border-slate-300 w-16">จำนวน</th>
+            {isPer && <th className="text-right px-3 py-2 border border-slate-300 w-20">ราคา/หน่วย</th>}
+            {isPer && <th className="text-right px-3 py-2 border border-slate-300 w-24">มูลค่า</th>}
           </tr>
         </thead>
         <tbody>
-          {note.items.map((item, idx) => (
-            <tr key={`${item.code}-${idx}`}>
-              <td className="text-center px-3 py-1.5 border border-slate-300">{idx + 1}</td>
-              <td className="px-3 py-1.5 border border-slate-300 font-mono text-xs">{item.code}</td>
-              <td className="px-3 py-1.5 border border-slate-300">
-                {itemNameMap[item.code] || item.code}
-                {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
-              </td>
-              <td className="text-right px-3 py-1.5 border border-slate-300">{item.quantity}</td>
-            </tr>
-          ))}
+          {note.items.map((item, idx) => {
+            const price = priceMap[item.code] || 0
+            const amount = item.quantity * price
+            return (
+              <tr key={`${item.code}-${idx}`}>
+                <td className="text-center px-3 py-1.5 border border-slate-300">{idx + 1}</td>
+                <td className="px-3 py-1.5 border border-slate-300 font-mono text-xs">{item.code}</td>
+                <td className="px-3 py-1.5 border border-slate-300">
+                  {itemNameMap[item.code] || item.code}
+                  {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
+                </td>
+                <td className="text-right px-3 py-1.5 border border-slate-300">{formatNumber(item.quantity)}</td>
+                {isPer && <td className="text-right px-3 py-1.5 border border-slate-300">{formatNumber(price)}</td>}
+                {isPer && <td className="text-right px-3 py-1.5 border border-slate-300">{formatNumber(amount)}</td>}
+              </tr>
+            )
+          })}
           <tr className="bg-slate-50 font-medium">
-            <td colSpan={3} className="text-right px-3 py-2 border border-slate-300">รวมทั้งหมด</td>
-            <td className="text-right px-3 py-2 border border-slate-300">{totalItems}</td>
+            <td colSpan={isPer ? 3 : 3} className="text-right px-3 py-2 border border-slate-300">รวมทั้งหมด</td>
+            <td className="text-right px-3 py-2 border border-slate-300">{formatNumber(totalItems)}</td>
+            {isPer && <td className="border border-slate-300"></td>}
+            {isPer && <td className="text-right px-3 py-2 border border-slate-300 font-bold">{formatNumber(totalAmount)}</td>}
           </tr>
         </tbody>
       </table>

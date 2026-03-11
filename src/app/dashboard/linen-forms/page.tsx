@@ -6,7 +6,8 @@ import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Share2 } from 'lucide-react'
+import html2canvas from 'html2canvas-pro'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
 import DateFilter from '@/components/DateFilter'
@@ -36,9 +37,25 @@ export default function LinenFormsPage() {
   const [sortKey, setSortKey] = useState('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
+  const [exporting, setExporting] = useState(false)
+
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
+  }
+
+  const handleExportImage = async () => {
+    const el = document.getElementById('linen-form-detail')
+    if (!el) return
+    setExporting(true)
+    try {
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+      const link = document.createElement('a')
+      link.download = `${detailForm?.formNumber || 'linen-form'}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    } catch { /* ignore */ }
+    setExporting(false)
   }
 
   // Create form state
@@ -393,6 +410,7 @@ export default function LinenFormsPage() {
       <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={detailForm?.formNumber || ''} size="xl">
         {detailForm && detailCustomer && (
           <div className="space-y-4">
+            <div id="linen-form-detail" className="space-y-4 bg-white p-2">
             <div className="flex flex-wrap gap-4 text-sm">
               <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.name}</strong></div>
               <div><span className="text-slate-500">วันที่:</span> {formatDate(detailForm.date)}</div>
@@ -512,6 +530,8 @@ export default function LinenFormsPage() {
               </div>
             )}
 
+            </div>{/* end #linen-form-detail */}
+
             {/* Progress stepper + Action buttons */}
             <div className="border-t border-slate-200 pt-4 mt-2 space-y-3">
               {/* Step progress bar */}
@@ -564,10 +584,18 @@ export default function LinenFormsPage() {
 
               {/* Action buttons */}
               <div className="flex items-center justify-between">
-                <button onClick={() => setConfirmDeleteId(detailForm.id)}
-                  className="text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1">
-                  <X className="w-3.5 h-3.5" />ลบ
-                </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setConfirmDeleteId(detailForm.id)}
+                    className="text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1">
+                    <X className="w-3.5 h-3.5" />ลบ
+                  </button>
+                  {['sorting', 'washing', 'packed', 'delivered', 'confirmed'].includes(detailForm.status) && (
+                    <button onClick={handleExportImage} disabled={exporting}
+                      className="text-xs text-slate-400 hover:text-[#1B3A5C] transition-colors flex items-center gap-1 disabled:opacity-50">
+                      <Share2 className="w-3.5 h-3.5" />{exporting ? 'กำลังสร้าง...' : 'ส่งออกรูป'}
+                    </button>
+                  )}
+                </div>
 
                 {isLockedByDN ? (
                   <span className="px-4 py-2 text-sm bg-blue-50 text-blue-700 rounded-lg border border-blue-200">

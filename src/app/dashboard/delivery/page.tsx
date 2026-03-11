@@ -361,33 +361,49 @@ export default function DeliveryPage() {
               </div>
             </div>
 
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">รหัส</th>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">รายการ</th>
-                    <th className="text-right px-3 py-2 font-medium text-slate-600">จำนวน</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detailNote.items.map((item, idx) => (
-                    <tr key={`${item.code}-${idx}`} className="border-t border-slate-100">
-                      <td className="px-3 py-1.5 font-mono text-xs">{item.code}</td>
-                      <td className="px-3 py-1.5">
-                        {itemNameMap[item.code] || item.code}
-                        {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
-                      </td>
-                      <td className="px-3 py-1.5 text-right">{formatNumber(item.quantity)}</td>
-                    </tr>
-                  ))}
-                  <tr className="bg-slate-50 font-medium">
-                    <td className="px-3 py-2" colSpan={2}>รวม</td>
-                    <td className="px-3 py-2 text-right">{formatNumber(detailNote.items.reduce((s, i) => s + i.quantity, 0))}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            {(() => {
+              const isPer = detailCustomer.billingModel === 'per_piece'
+              const priceMap = Object.fromEntries(detailCustomer.priceList.map(p => [p.code, p.price]))
+              const totalAmt = isPer ? detailNote.items.reduce((s, i) => s + i.quantity * (priceMap[i.code] || 0), 0) : 0
+              return (
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="text-left px-3 py-2 font-medium text-slate-600">รหัส</th>
+                        <th className="text-left px-3 py-2 font-medium text-slate-600">รายการ</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">จำนวน</th>
+                        {isPer && <th className="text-right px-3 py-2 font-medium text-slate-600">ราคา</th>}
+                        {isPer && <th className="text-right px-3 py-2 font-medium text-slate-600">มูลค่า</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailNote.items.map((item, idx) => {
+                        const price = priceMap[item.code] || 0
+                        return (
+                          <tr key={`${item.code}-${idx}`} className="border-t border-slate-100">
+                            <td className="px-3 py-1.5 font-mono text-xs">{item.code}</td>
+                            <td className="px-3 py-1.5">
+                              {itemNameMap[item.code] || item.code}
+                              {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
+                            </td>
+                            <td className="px-3 py-1.5 text-right">{formatNumber(item.quantity)}</td>
+                            {isPer && <td className="px-3 py-1.5 text-right">{formatNumber(price)}</td>}
+                            {isPer && <td className="px-3 py-1.5 text-right">{formatNumber(item.quantity * price)}</td>}
+                          </tr>
+                        )
+                      })}
+                      <tr className="bg-slate-50 font-medium">
+                        <td className="px-3 py-2" colSpan={2}>รวม</td>
+                        <td className="px-3 py-2 text-right">{formatNumber(detailNote.items.reduce((s, i) => s + i.quantity, 0))}</td>
+                        {isPer && <td className="px-3 py-2"></td>}
+                        {isPer && <td className="px-3 py-2 text-right font-bold text-[#1B3A5C]">{formatNumber(totalAmt)}</td>}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })()}
 
             <div className="flex justify-between pt-2">
               <button onClick={() => setConfirmDeleteId(detailNote.id)}
