@@ -19,17 +19,20 @@ export default function ReportsPage() {
   const [showStockPrint, setShowStockPrint] = useState(false)
   const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('landscape')
   const [printMargin, setPrintMargin] = useState<'normal' | 'narrow'>('narrow')
-  const [selCustomerIdRaw, setSelCustomerId] = useState(customers[0]?.id || '')
+  const [selCustomerIdRaw, setSelCustomerId] = useState('')
   const [selMonth, setSelMonth] = useState(() => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
 
   const activeCustomers = customers.filter(c => c.isActive)
-  // Derive effective customer ID — fallback to first active if selection is invalid
-  const selCustomerId = activeCustomers.some(c => c.id === selCustomerIdRaw)
+  // Derive effective customer ID — validate against active list
+  const selCustomerId = selCustomerIdRaw && activeCustomers.some(c => c.id === selCustomerIdRaw)
     ? selCustomerIdRaw
-    : (activeCustomers[0]?.id || '')
+    : ''
+  // For per-customer tabs, auto-select first customer
+  const perCustomerTabs: TabKey[] = ['monthly', 'delivery', 'stock']
+  const needsCustomer = perCustomerTabs.includes(tab) && !selCustomerId
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'monthly', label: 'สรุปรายเดือน' },
@@ -126,10 +129,7 @@ export default function ReportsPage() {
           <div className="flex items-center gap-2">
             <select value={selCustomerId} onChange={e => setSelCustomerId(e.target.value)}
               className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
-              {tab === 'revenue' || tab === 'carryover'
-                ? <option value="">ทุกลูกค้า</option>
-                : null
-              }
+              <option value="">ทุกลูกค้า</option>
               {customers.filter(c => c.isActive).map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -145,6 +145,14 @@ export default function ReportsPage() {
         <input type="month" value={selMonth} onChange={e => setSelMonth(e.target.value)}
           className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
       </div>
+
+      {/* Per-customer tab: select customer prompt */}
+      {needsCustomer && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
+          <p className="text-amber-700 font-medium">กรุณาเลือกลูกค้าจากเมนูด้านบน</p>
+          <p className="text-sm text-amber-600 mt-1">รายงานนี้ต้องระบุลูกค้า</p>
+        </div>
+      )}
 
       {/* Monthly Summary Tab */}
       {tab === 'monthly' && selCustomer && (
@@ -167,9 +175,11 @@ export default function ReportsPage() {
       {/* Revenue Tab */}
       {tab === 'revenue' && (
         <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h3 className="font-semibold text-slate-800 mb-4">รายได้รวม — {selMonth}</h3>
+          <h3 className="font-semibold text-slate-800 mb-4">
+            รายได้{selCustomer ? ` — ${selCustomer.name}` : ''} ({selMonth})
+          </h3>
           <div className="text-3xl font-bold text-[#1B3A5C] mb-4">
-            {formatCurrency(billingStatements.filter(b => b.billingMonth === selMonth).reduce((s, b) => s + b.subtotal, 0))}
+            {formatCurrency(revenueByCustomer.reduce((s, r) => s + r.amount, 0))}
           </div>
           <div className="space-y-2">
             {revenueByCustomer.map(r => (

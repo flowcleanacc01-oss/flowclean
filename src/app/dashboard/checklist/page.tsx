@@ -64,10 +64,10 @@ export default function ChecklistPage() {
     if (newType === 'qc') {
       const form = linenForms.find(f => f.id === docId)
       if (form) {
-        setNewItems(form.rows.filter(r => r.col4_factoryApproved > 0).map(r => ({
+        setNewItems(form.rows.filter(r => (r.col6_factoryPackSend || 0) > 0).map(r => ({
           code: r.code,
           name: nameMap[r.code] || r.code,
-          expectedQty: r.col4_factoryApproved,
+          expectedQty: r.col6_factoryPackSend || 0,
           actualQty: 0,
           passed: false,
           note: '',
@@ -134,8 +134,21 @@ export default function ChecklistPage() {
   const handleAdvanceStatus = (id: string) => {
     const cl = checklists.find(c => c.id === id)
     if (!cl) return
-    if (cl.status === 'draft') updateChecklistStatus(id, 'checked')
-    else if (cl.status === 'checked') updateChecklistStatus(id, 'approved')
+    if (cl.status === 'draft') {
+      const unfilled = cl.items.filter(i => i.actualQty === 0)
+      if (unfilled.length > 0) {
+        alert(`กรุณากรอกจำนวนจริงให้ครบทุกรายการ (ยังขาด ${unfilled.length} รายการ)`)
+        return
+      }
+      updateChecklistStatus(id, 'checked')
+    } else if (cl.status === 'checked') {
+      const failedNoNote = cl.items.filter(i => !i.passed && !i.note)
+      if (failedNoNote.length > 0) {
+        alert(`มีรายการไม่ผ่าน ${failedNoNote.length} รายการที่ยังไม่มีหมายเหตุ — กรุณาระบุเหตุผลก่อนอนุมัติ`)
+        return
+      }
+      updateChecklistStatus(id, 'approved')
+    }
   }
 
   const nextStatusLabel = (status: ChecklistStatus): string | null => {

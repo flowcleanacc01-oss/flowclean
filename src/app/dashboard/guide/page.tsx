@@ -8,7 +8,7 @@ const STATUS_ORDER: LinenFormStatus[] = ['draft', 'received', 'sorting', 'washin
 
 const STEP_DETAILS: Record<LinenFormStatus, { who: string; what: string; editCols: string; bagField: string }> = {
   draft:     { who: 'ลูกค้า (โรงแรม)', what: 'นับผ้าส่งซัก แยกประเภท + นับเคลม', editCols: 'ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ', bagField: 'จำนวนถุงกระสอบส่งซัก' },
-  received:  { who: 'คนขับรถ / ขนส่ง', what: 'นับผ้ารับจากลูกค้า ตรวจจำนวน', editCols: 'โรงซักนับเข้า, เคลมOK, หมายเหตุ', bagField: '-' },
+  received:  { who: 'คนขับรถ / ขนส่ง', what: 'นับผ้ารับจากลูกค้า ตรวจจำนวน + อนุมัติเคลม', editCols: 'โรงซักนับเข้า, เคลมOK (ช่องลูกค้านับผ้ากลับ), หมายเหตุ', bagField: '-' },
   sorting:   { who: 'โรงซัก (แผนกรับเข้า)', what: 'คัดแยกผ้า เตรียมซัก', editCols: 'หมายเหตุ', bagField: '-' },
   washing:   { who: 'โรงซัก (แผนกซัก)', what: 'ซักอบผ้า → เสร็จแล้วกรอกจำนวนแพค', editCols: 'โรงซักแพคส่ง, หมายเหตุ', bagField: '-' },
   packed:    { who: 'โรงซัก (แผนกแพค)', what: 'แพคผ้าใส่ถุง นับจำนวนถุง', editCols: '-', bagField: 'จำนวนถุงแพคส่ง' },

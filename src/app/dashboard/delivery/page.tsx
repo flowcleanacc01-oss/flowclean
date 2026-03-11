@@ -7,6 +7,8 @@ import { DELIVERY_STATUS_CONFIG, type DeliveryNoteStatus, type DeliveryNoteItem 
 import { Plus, Search, Truck, Printer, X } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
+import DateFilter from '@/components/DateFilter'
+import SortableHeader from '@/components/SortableHeader'
 
 export default function DeliveryPage() {
   const {
@@ -21,6 +23,12 @@ export default function DeliveryPage() {
   const [showDetail, setShowDetail] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
+  const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('single')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [sortKey, setSortKey] = useState('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
   // Create form state
   const [selCustomerId, setSelCustomerId] = useState('')
   const [selFormIds, setSelFormIds] = useState<string[]>([])
@@ -30,6 +38,11 @@ export default function DeliveryPage() {
   const [receiverName, setReceiverName] = useState('')
   const [dnNotes, setDnNotes] = useState('')
 
+  const handleSort = (key: string) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
   const filtered = useMemo(() => {
     return deliveryNotes.filter(dn => {
       if (statusFilter !== 'all' && dn.status !== statusFilter) return false
@@ -38,9 +51,29 @@ export default function DeliveryPage() {
         const q = search.toLowerCase()
         if (!dn.noteNumber.toLowerCase().includes(q) && !customer?.name.toLowerCase().includes(q)) return false
       }
+      if (dateFrom) {
+        if (dateFilterMode === 'single') {
+          if (dn.date !== dateFrom) return false
+        } else {
+          if (dn.date < dateFrom) return false
+          if (dateTo && dn.date > dateTo) return false
+        }
+      }
       return true
-    }).sort((a, b) => b.date.localeCompare(a.date))
-  }, [deliveryNotes, statusFilter, search, getCustomer])
+    }).sort((a, b) => {
+      let va: string | number, vb: string | number
+      switch (sortKey) {
+        case 'noteNumber': va = a.noteNumber; vb = b.noteNumber; break
+        case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
+        case 'date': va = a.date; vb = b.date; break
+        case 'items': va = a.items.reduce((s, i) => s + i.quantity, 0); vb = b.items.reduce((s, i) => s + i.quantity, 0); break
+        case 'driver': va = a.driverName || ''; vb = b.driverName || ''; break
+        default: va = a.date; vb = b.date
+      }
+      const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
+      return sortDir === 'desc' ? -cmp : cmp
+    })
+  }, [deliveryNotes, statusFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
 
   // Forms available for delivery (packed status)
   const availableForms = useMemo(() => {
@@ -48,7 +81,7 @@ export default function DeliveryPage() {
     const linkedFormIds = new Set(deliveryNotes.flatMap(dn => dn.linenFormIds))
     return linenForms.filter(f =>
       f.customerId === selCustomerId &&
-      (f.status === 'packed' || f.status === 'delivered') &&
+      f.status === 'confirmed' &&
       !linkedFormIds.has(f.id)
     )
   }, [linenForms, selCustomerId, deliveryNotes])
@@ -141,17 +174,24 @@ export default function DeliveryPage() {
         </div>
       </div>
 
+      {/* Date Filter */}
+      <div className="mb-4">
+        <DateFilter dateFrom={dateFrom} dateTo={dateTo} mode={dateFilterMode}
+          onModeChange={setDateFilterMode} onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo} onClear={() => { setDateFrom(''); setDateTo('') }} />
+      </div>
+
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-4 py-3 font-medium text-slate-600">เลขที่</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">โรงแรม</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">วันที่</th>
-                <th className="text-right px-4 py-3 font-medium text-slate-600">จำนวนชิ้น</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">คนขับ</th>
+                <SortableHeader label="เลขที่" sortKey="noteNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                <SortableHeader label="จำนวนชิ้น" sortKey="items" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
+                <SortableHeader label="คนขับ" sortKey="driver" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
                 <th className="text-right px-4 py-3 font-medium text-slate-600 w-24"></th>
               </tr>
@@ -212,7 +252,7 @@ export default function DeliveryPage() {
 
           {selCustomerId && (
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">เลือกใบส่งรับผ้า (ที่แพคแล้ว)</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">เลือกใบส่งรับผ้า (ลูกค้านับผ้ากลับแล้ว)</label>
               {availableForms.length > 0 ? (
                 <div className="space-y-2">
                   {availableForms.map(f => (
@@ -228,7 +268,7 @@ export default function DeliveryPage() {
                 </div>
               ) : (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700">
-                  ไม่มีใบส่งรับผ้าที่สถานะ &quot;นับผ้าแพคส่งแล้ว&quot; — ต้องเลื่อนสถานะใบส่งรับผ้าให้ถึง &quot;นับผ้าแพคส่งแล้ว&quot; ก่อนจึงจะสร้างใบส่งของได้
+                  ไม่มีใบส่งรับผ้าที่สถานะ &quot;ลูกค้านับผ้ากลับแล้ว&quot; — ต้องเลื่อนสถานะใบส่งรับผ้าให้ถึง &quot;ลูกค้านับผ้ากลับแล้ว&quot; ก่อนจึงจะสร้างใบส่งของได้
                 </div>
               )}
             </div>

@@ -145,11 +145,11 @@ export type LinenFormStatus = 'draft' | 'received' | 'sorting' | 'washing' | 'pa
 
 export const LINEN_FORM_STATUS_CONFIG: Record<LinenFormStatus, { label: string; todoLabel: string; prevLabel: string; color: string; bgColor: string; dotColor: string }> = {
   draft: { label: 'ลูกค้านับผ้าส่งซักแล้ว', todoLabel: 'ลูกค้านับผ้าส่งซัก', prevLabel: 'ลูกค้านับผ้าส่งซัก', color: 'text-gray-700', bgColor: 'bg-gray-100', dotColor: 'bg-gray-400' },
-  received: { label: 'ขนส่งนับแล้ว', todoLabel: 'ขนส่งนับ', prevLabel: 'ขนส่งนับ', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
+  received: { label: 'ขนส่งนับแล้ว', todoLabel: 'ขนส่งนับ', prevLabel: 'ขนส่งนับ', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
   sorting: { label: 'โรงซักนับผ้าเข้าแล้ว', todoLabel: 'โรงซักนับผ้าเข้า', prevLabel: 'โรงซักนับผ้าเข้า', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
   washing: { label: 'ซักอบเสร็จ', todoLabel: 'กำลังซักอบ', prevLabel: 'กำลังซักอบ', color: 'text-blue-700', bgColor: 'bg-blue-50', dotColor: 'bg-blue-500' },
-  packed: { label: 'นับผ้าแพคส่งแล้ว', todoLabel: 'นับผ้าแพคส่ง', prevLabel: 'นับผ้าแพคส่ง', color: 'text-indigo-700', bgColor: 'bg-indigo-50', dotColor: 'bg-indigo-500' },
-  delivered: { label: 'นับจำนวนถุงแพคแล้ว', todoLabel: 'นับจำนวนถุงแพค', prevLabel: 'นับจำนวนถุงแพค', color: 'text-teal-700', bgColor: 'bg-teal-50', dotColor: 'bg-teal-500' },
+  packed: { label: 'นับผ้าแพคส่งแล้ว', todoLabel: 'นับผ้าแพคส่ง', prevLabel: 'นับผ้าแพคส่ง', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
+  delivered: { label: 'นับจำนวนถุงแพคแล้ว', todoLabel: 'นับจำนวนถุงแพค', prevLabel: 'นับจำนวนถุงแพค', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
   confirmed: { label: 'ลูกค้านับผ้ากลับแล้ว', todoLabel: 'ลูกค้านับผ้ากลับ', prevLabel: 'ลูกค้านับกลับ', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
 }
 

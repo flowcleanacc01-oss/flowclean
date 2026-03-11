@@ -445,21 +445,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
     dbSave(db.updateDeliveryNoteDB(id, updates))
 
-    // Sync linked linen form statuses
-    const note = deliveryNotes.find(dn => dn.id === id)
-    if (note && status === 'delivered') {
-      for (const formId of note.linenFormIds) {
-        const formUpdates = { status: 'delivered' as LinenFormStatus, updatedAt: todayISO() }
-        setLinenForms(prev => prev.map(x => x.id === formId ? { ...x, ...formUpdates } : x))
-        dbSave(db.updateLinenFormDB(formId, formUpdates))
-      }
-    } else if (note && status === 'acknowledged') {
-      for (const formId of note.linenFormIds) {
-        const formUpdates = { status: 'confirmed' as LinenFormStatus, updatedAt: todayISO() }
-        setLinenForms(prev => prev.map(x => x.id === formId ? { ...x, ...formUpdates } : x))
-        dbSave(db.updateLinenFormDB(formId, formUpdates))
-      }
-    }
+    // DN is created from confirmed LFs — no need to sync LF status back
   }, [deliveryNotes, logAudit])
 
   const deleteDeliveryNote = useCallback((id: string) => {

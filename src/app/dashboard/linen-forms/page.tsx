@@ -5,15 +5,17 @@ import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
-import { hasDiscrepancies } from '@/lib/discrepancy'
+import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check } from 'lucide-react'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
+import DateFilter from '@/components/DateFilter'
+import SortableHeader from '@/components/SortableHeader'
 
 export default function LinenFormsPage() {
   const {
     linenForms, addLinenForm, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
-    customers, getCustomer, getCarryOver, linenCatalog,
+    customers, getCustomer, getCarryOver, linenCatalog, deliveryNotes,
   } = useStore()
 
   const searchParams = useSearchParams()
@@ -26,6 +28,18 @@ export default function LinenFormsPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  // Date filter & sort state
+  const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('single')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [sortKey, setSortKey] = useState('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
 
   // Create form state
   const [newCustomerId, setNewCustomerId] = useState('')
@@ -43,9 +57,28 @@ export default function LinenFormsPage() {
         const q = search.toLowerCase()
         if (!f.formNumber.toLowerCase().includes(q) && !customer?.name.toLowerCase().includes(q)) return false
       }
+      if (dateFrom) {
+        if (dateFilterMode === 'single') {
+          if (f.date !== dateFrom) return false
+        } else {
+          if (f.date < dateFrom) return false
+          if (dateTo && f.date > dateTo) return false
+        }
+      }
       return true
-    }).sort((a, b) => b.date.localeCompare(a.date) || b.formNumber.localeCompare(a.formNumber))
-  }, [linenForms, statusFilter, customerFilter, search, getCustomer])
+    }).sort((a, b) => {
+      let va: string | number, vb: string | number
+      switch (sortKey) {
+        case 'formNumber': va = a.formNumber; vb = b.formNumber; break
+        case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
+        case 'date': va = a.date; vb = b.date; break
+        case 'pieces': va = a.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0); vb = b.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0); break
+        default: va = a.date; vb = b.date
+      }
+      const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
+      return sortDir === 'desc' ? -cmp : cmp
+    })
+  }, [linenForms, statusFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
 
   const statuses: (LinenFormStatus | 'all')[] = ['all', ...ALL_LINEN_STATUSES]
 
@@ -107,17 +140,41 @@ export default function LinenFormsPage() {
   const detailCustomer = detailForm ? getCustomer(detailForm.customerId) : null
   const detailCarryOver = detailForm ? getCarryOver(detailForm.customerId, detailForm.date) : {}
   const nextDetailStatus = detailForm ? NEXT_LINEN_STATUS[detailForm.status] : null
+  const linkedDN = detailForm ? deliveryNotes.find(dn => dn.linenFormIds.includes(detailForm.id)) : null
+  const isLockedByDN = !!linkedDN && detailForm?.status === 'confirmed'
 
   const handleAdvanceStatus = (formId: string) => {
     const form = linenForms.find(f => f.id === formId)
     if (!form) return
     const next = NEXT_LINEN_STATUS[form.status]
     if (!next) return
-    // Auto-default col4 (ลูกค้านับผ้ากลับ) from col6 (แพคส่ง) when entering delivered
+
+    // Per-step validation
+    if (form.status === 'draft') {
+      const hasData = form.rows.some(r => r.col2_hotelCountIn > 0 || r.col3_hotelClaimCount > 0)
+      if (!hasData) {
+        alert('กรุณากรอกจำนวนผ้าส่งซักหรือผ้าส่งเคลมอย่างน้อย 1 รายการ')
+        return
+      }
+    } else if (form.status === 'received') {
+      const hasCountIn = form.rows.some(r => r.col5_factoryClaimApproved > 0)
+      if (!hasCountIn) {
+        alert('กรุณากรอกจำนวนโรงซักนับเข้าอย่างน้อย 1 รายการ')
+        return
+      }
+    } else if (form.status === 'washing') {
+      const hasPack = form.rows.some(r => (r.col6_factoryPackSend || 0) > 0)
+      if (!hasPack) {
+        alert('กรุณากรอกจำนวนแพคส่งอย่างน้อย 1 รายการ')
+        return
+      }
+    }
+
+    // Pre-fill col4 (ลูกค้านับผ้ากลับ) from col6 (แพคส่ง) when entering delivered
     if (next === 'delivered') {
       const updatedRows = form.rows.map(row => ({
         ...row,
-        col4_factoryApproved: row.col4_factoryApproved || (row.col6_factoryPackSend || 0),
+        col4_factoryApproved: row.col6_factoryPackSend || 0,
       }))
       updateLinenForm(formId, { rows: updatedRows })
     }
@@ -165,6 +222,13 @@ export default function LinenFormsPage() {
         </select>
       </div>
 
+      {/* Date filter */}
+      <div className="mb-4">
+        <DateFilter dateFrom={dateFrom} dateTo={dateTo} mode={dateFilterMode}
+          onModeChange={setDateFilterMode} onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo} onClear={() => { setDateFrom(''); setDateTo('') }} />
+      </div>
+
       {/* Status filter tabs */}
       <div className="flex flex-wrap gap-1.5 mb-4">
         {statuses.map(s => (
@@ -189,10 +253,10 @@ export default function LinenFormsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-4 py-3 font-medium text-slate-600">เลขที่ฟอร์ม</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">โรงแรม</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">วันที่</th>
-                <th className="text-right px-4 py-3 font-medium text-slate-600">จำนวนชิ้น</th>
+                <SortableHeader label="เลขที่ฟอร์ม" sortKey="formNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                <SortableHeader label="จำนวนชิ้น" sortKey="pieces" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
                 <th className="text-center px-4 py-3 font-medium text-slate-600 w-12"></th>
                 <th className="text-right px-4 py-3 font-medium text-slate-600 w-28"></th>
@@ -204,7 +268,8 @@ export default function LinenFormsPage() {
               ) : filtered.map(form => {
                 const customer = getCustomer(form.customerId)
                 const totalPieces = form.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
-                const disc = hasDiscrepancies(form)
+                const disc1 = hasType1Discrepancy(form)
+                const disc2 = hasType2Discrepancy(form)
                 const cfg = LINEN_FORM_STATUS_CONFIG[form.status] || LINEN_FORM_STATUS_CONFIG.draft
                 const nextStatus = NEXT_LINEN_STATUS[form.status]
 
@@ -222,7 +287,8 @@ export default function LinenFormsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {disc && <AlertTriangle className="w-4 h-4 text-orange-500 inline" />}
+                      {disc1 && <span title="โรงซักนับเข้า ≠ นับส่ง+เคลม"><AlertTriangle className="w-4 h-4 text-amber-500 inline" /></span>}
+                      {disc2 && <span title="ลูกค้านับกลับ ≠ แพคส่ง"><AlertTriangle className="w-4 h-4 text-red-500 inline" /></span>}
                     </td>
                     <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                       <div className="inline-flex items-center gap-1">
@@ -294,6 +360,7 @@ export default function LinenFormsPage() {
                 catalog={linenCatalog}
                 carryOver={getCarryOver(newCustomerId, newDate)}
                 editableColumns={['col2', 'col3', 'note']}
+                formStatus="draft"
               />
             </>
           )}
@@ -396,6 +463,7 @@ export default function LinenFormsPage() {
               catalog={linenCatalog}
               carryOver={detailCarryOver}
               formDate={detailForm.date}
+              formStatus={detailForm.status}
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
                 detailForm.status === 'received' ? ['col4', 'col5', 'note'] :
@@ -500,34 +568,40 @@ export default function LinenFormsPage() {
                   <X className="w-3.5 h-3.5" />ลบ
                 </button>
 
-                <div className="flex items-center gap-2">
-                  {PREV_LINEN_STATUS[detailForm.status] ? (
-                    <button onClick={() => handleRevertStatus(detailForm.id)}
-                      className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
-                      <ChevronLeft className="w-4 h-4" />
-                      <span className="hidden sm:inline">{LINEN_FORM_STATUS_CONFIG[detailForm.status].prevLabel}</span>
-                      <span className="sm:hidden">ย้อน</span>
-                    </button>
-                  ) : (
-                    <button onClick={() => setShowDetail(null)}
-                      className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors">
-                      ปิด
-                    </button>
-                  )}
+                {isLockedByDN ? (
+                  <span className="px-4 py-2 text-sm bg-blue-50 text-blue-700 rounded-lg border border-blue-200">
+                    สถานะเปลี่ยนผ่านใบส่งของ <strong>{linkedDN!.noteNumber}</strong>
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    {PREV_LINEN_STATUS[detailForm.status] ? (
+                      <button onClick={() => handleRevertStatus(detailForm.id)}
+                        className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
+                        <ChevronLeft className="w-4 h-4" />
+                        <span className="hidden sm:inline">{LINEN_FORM_STATUS_CONFIG[detailForm.status].prevLabel}</span>
+                        <span className="sm:hidden">ย้อน</span>
+                      </button>
+                    ) : (
+                      <button onClick={() => setShowDetail(null)}
+                        className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors">
+                        ปิด
+                      </button>
+                    )}
 
-                  {NEXT_LINEN_STATUS[detailForm.status] ? (
-                    <button onClick={() => handleAdvanceStatus(detailForm.id)}
-                      className="px-4 py-2.5 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
-                      {LINEN_FORM_STATUS_CONFIG[NEXT_LINEN_STATUS[detailForm.status]!].label}
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <span className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1.5">
-                      <Check className="w-4 h-4" />
-                      เสร็จสมบูรณ์
-                    </span>
-                  )}
-                </div>
+                    {NEXT_LINEN_STATUS[detailForm.status] ? (
+                      <button onClick={() => handleAdvanceStatus(detailForm.id)}
+                        className="px-4 py-2.5 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                        {LINEN_FORM_STATUS_CONFIG[NEXT_LINEN_STATUS[detailForm.status]!].label}
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <span className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1.5">
+                        <Check className="w-4 h-4" />
+                        เสร็จสมบูรณ์
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

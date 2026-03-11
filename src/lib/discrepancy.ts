@@ -36,8 +36,24 @@ export function calculateCountBackDiscrepancies(form: LinenForm): Record<string,
 
 /**
  * Check if a form has any discrepancies (either type)
+ * Type 2 (col4 vs col6) only relevant at delivered/confirmed
+ * (before that, col4 is used for เคลมOK, not ลูกค้านับผ้ากลับ)
+ */
+/** Type 1 only: โรงซักนับเข้า ≠ นับส่ง+เคลม */
+export function hasType1Discrepancy(form: LinenForm): boolean {
+  return Object.keys(calculateCountInDiscrepancies(form)).length > 0
+}
+
+/** Type 2 only: ลูกค้านับกลับ ≠ แพคส่ง (only at delivered/confirmed) */
+export function hasType2Discrepancy(form: LinenForm): boolean {
+  return ['delivered', 'confirmed'].includes(form.status) &&
+    Object.keys(calculateCountBackDiscrepancies(form)).length > 0
+}
+
+/**
+ * Check if a form has any discrepancies (either type)
+ * Type 2 (col4 vs col6) only relevant at delivered/confirmed
  */
 export function hasDiscrepancies(form: LinenForm): boolean {
-  return Object.keys(calculateCountInDiscrepancies(form)).length > 0 ||
-    Object.keys(calculateCountBackDiscrepancies(form)).length > 0
+  return hasType1Discrepancy(form) || hasType2Discrepancy(form)
 }

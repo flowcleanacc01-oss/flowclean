@@ -9,6 +9,8 @@ import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, typ
 import { aggregateDeliveryItems, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { Plus, Search, FileText, Printer, X, ChevronRight } from 'lucide-react'
 import Modal from '@/components/Modal'
+import DateFilter from '@/components/DateFilter'
+import SortableHeader from '@/components/SortableHeader'
 import BillingPrint from '@/components/BillingPrint'
 import TaxInvoicePrint from '@/components/TaxInvoicePrint'
 import QuotationPrint from '@/components/QuotationPrint'
@@ -30,6 +32,11 @@ export default function BillingPage() {
     return 'billing'
   })
   const [search, setSearch] = useState('')
+  const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('single')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [sortKey, setSortKey] = useState('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [showCreate, setShowCreate] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
 
@@ -69,6 +76,19 @@ export default function BillingPage() {
     { key: 'quotation', label: 'ใบเสนอราคา (QU)' },
   ]
 
+  const handleSort = (key: string) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
+  const matchesDateFilter = (date: string) => {
+    if (!dateFrom) return true
+    if (dateFilterMode === 'single') return date === dateFrom
+    if (date < dateFrom) return false
+    if (dateTo && date > dateTo) return false
+    return true
+  }
+
   // Billing list
   const filteredBilling = useMemo(() => {
     return billingStatements.filter(b => {
@@ -77,9 +97,22 @@ export default function BillingPage() {
         const q = search.toLowerCase()
         if (!b.billingNumber.toLowerCase().includes(q) && !customer?.name.toLowerCase().includes(q)) return false
       }
+      if (!matchesDateFilter(b.issueDate)) return false
       return true
-    }).sort((a, b) => b.issueDate.localeCompare(a.issueDate))
-  }, [billingStatements, search, getCustomer])
+    }).sort((a, b) => {
+      let va: string | number, vb: string | number
+      switch (sortKey) {
+        case 'billingNumber': va = a.billingNumber; vb = b.billingNumber; break
+        case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
+        case 'billingMonth': va = a.billingMonth; vb = b.billingMonth; break
+        case 'grandTotal': va = a.grandTotal; vb = b.grandTotal; break
+        case 'netPayable': va = a.netPayable; vb = b.netPayable; break
+        default: va = a.issueDate; vb = b.issueDate
+      }
+      const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
+      return sortDir === 'desc' ? -cmp : cmp
+    })
+  }, [billingStatements, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
 
   // Preview for billing creation
   const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
@@ -191,9 +224,43 @@ export default function BillingPage() {
         const s = search.toLowerCase()
         if (!q.quotationNumber.toLowerCase().includes(s) && !q.customerName.toLowerCase().includes(s)) return false
       }
+      if (!matchesDateFilter(q.date)) return false
       return true
-    }).sort((a, b) => b.date.localeCompare(a.date))
-  }, [quotations, search])
+    }).sort((a, b) => {
+      let va: string | number, vb: string | number
+      switch (sortKey) {
+        case 'quotationNumber': va = a.quotationNumber; vb = b.quotationNumber; break
+        case 'customerName': va = a.customerName; vb = b.customerName; break
+        case 'validUntil': va = a.validUntil; vb = b.validUntil; break
+        default: va = a.date; vb = b.date
+      }
+      const cmp = String(va).localeCompare(String(vb))
+      return sortDir === 'desc' ? -cmp : cmp
+    })
+  }, [quotations, search, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
+
+  // Invoice list (filtered + sorted)
+  const filteredInvoices = useMemo(() => {
+    return taxInvoices.filter(inv => {
+      if (search) {
+        const customer = getCustomer(inv.customerId)
+        const q = search.toLowerCase()
+        if (!inv.invoiceNumber.toLowerCase().includes(q) && !customer?.name.toLowerCase().includes(q)) return false
+      }
+      if (!matchesDateFilter(inv.issueDate)) return false
+      return true
+    }).sort((a, b) => {
+      let va: string | number, vb: string | number
+      switch (sortKey) {
+        case 'invoiceNumber': va = a.invoiceNumber; vb = b.invoiceNumber; break
+        case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
+        case 'grandTotal': va = a.grandTotal; vb = b.grandTotal; break
+        default: va = a.issueDate; vb = b.issueDate
+      }
+      const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
+      return sortDir === 'desc' ? -cmp : cmp
+    })
+  }, [taxInvoices, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { draft: 0, sent: 0, paid: 0, overdue: 0 }
@@ -245,7 +312,7 @@ export default function BillingPage() {
       {/* Tabs */}
       <div className="flex gap-1 mb-4 border-b border-slate-200">
         {tabs.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
+          <button key={t.key} onClick={() => { setTab(t.key); setDateFrom(''); setDateTo(''); setSortKey('date'); setSortDir('desc') }}
             className={cn('px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
               tab === t.key ? 'border-[#1B3A5C] text-[#1B3A5C]' : 'border-transparent text-slate-500 hover:text-slate-700')}>
             {t.label}
@@ -261,6 +328,12 @@ export default function BillingPage() {
           className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
       </div>
 
+      <div className="mb-4">
+        <DateFilter dateFrom={dateFrom} dateTo={dateTo} mode={dateFilterMode}
+          onModeChange={setDateFilterMode} onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo} onClear={() => { setDateFrom(''); setDateTo('') }} />
+      </div>
+
       {/* Billing Tab */}
       {tab === 'billing' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -268,11 +341,11 @@ export default function BillingPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">เลขที่</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">โรงแรม</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">เดือน</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">ยอดรวม</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">จ่ายสุทธิ</th>
+                  <SortableHeader label="เลขที่" sortKey="billingNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="เดือน" sortKey="billingMonth" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="ยอดรวม" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
+                  <SortableHeader label="จ่ายสุทธิ" sortKey="netPayable" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
                   <th className="text-right px-4 py-3 font-medium text-slate-600 w-32"></th>
                 </tr>
@@ -322,16 +395,16 @@ export default function BillingPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">เลขที่</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">โรงแรม</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">วันที่</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">ยอดรวม VAT</th>
+                  <SortableHeader label="เลขที่" sortKey="invoiceNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="ยอดรวม VAT" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 </tr>
               </thead>
               <tbody>
-                {taxInvoices.length === 0 ? (
+                {filteredInvoices.length === 0 ? (
                   <tr><td colSpan={4} className="text-center py-12 text-slate-400">ยังไม่มีใบกำกับภาษี — สร้างจากใบวางบิล</td></tr>
-                ) : taxInvoices.map(inv => {
+                ) : filteredInvoices.map(inv => {
                   const customer = getCustomer(inv.customerId)
                   return (
                     <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
@@ -356,10 +429,10 @@ export default function BillingPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">เลขที่</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">ลูกค้า</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">วันที่</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">ใช้ได้ถึง</th>
+                  <SortableHeader label="เลขที่" sortKey="quotationNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="ลูกค้า" sortKey="customerName" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="ใช้ได้ถึง" sortKey="validUntil" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <th className="text-center px-4 py-3 font-medium text-slate-600">รายการ</th>
                   <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
                   <th className="text-right px-4 py-3 font-medium text-slate-600 w-32"></th>
