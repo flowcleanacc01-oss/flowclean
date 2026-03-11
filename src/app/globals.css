@@ -42,23 +42,29 @@ body {
   .no-print { display: none !important; }
   body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
+  /* Print only selected modal content */
+  body * { visibility: hidden !important; }
+  .print-target, .print-target * { visibility: visible !important; }
+
   /* Hide sidebar and main layout chrome */
   aside { display: none !important; }
   nav { display: none !important; }
 
-  /* Reset modal: make it fill the page, remove visual chrome */
-  .fixed.inset-0 {
-    position: absolute !important;
+  /* Reset print modal: remove viewport constraints and chrome */
+  .print-target {
+    position: static !important;
+    display: block !important;
+    inset: auto !important;
     overflow: visible !important;
     height: auto !important;
+    width: 100% !important;
     padding: 0 !important;
+    margin: 0 !important;
   }
   /* Remove modal backdrop */
-  .fixed.inset-0.bg-black\/40 { display: none !important; }
-  /* Hide all modals except print target */
-  .fixed.inset-0.z-50:not(.print-target) { display: none !important; }
+  .print-target > .fixed.inset-0.bg-black\/40 { display: none !important; }
   /* Modal card: remove shadow, border, max-height, make full-width */
-  .fixed.inset-0 > .relative {
+  .print-target > .relative {
     position: static !important;
     max-width: 100% !important;
     width: 100% !important;
@@ -67,11 +73,11 @@ body {
     border: none !important;
   }
   /* Modal header: hide */
-  .fixed.inset-0 > .relative > .flex.items-center.justify-between {
+  .print-target > .relative > .flex.items-center.justify-between {
     display: none !important;
   }
   /* Modal body: remove max-height/overflow */
-  .fixed.inset-0 > .relative > .max-h-\[70vh\] {
+  .print-target > .relative > .max-h-\[70vh\] {
     max-height: none !important;
     overflow: visible !important;
     padding: 0 !important;

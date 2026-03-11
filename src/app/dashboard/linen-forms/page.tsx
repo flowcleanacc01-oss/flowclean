@@ -73,6 +73,7 @@ export default function LinenFormsPage() {
         case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
         case 'date': va = a.date; vb = b.date; break
         case 'pieces': va = a.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0); vb = b.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0); break
+        case 'status': va = ALL_LINEN_STATUSES.indexOf(a.status); vb = ALL_LINEN_STATUSES.indexOf(b.status); break
         default: va = a.date; vb = b.date
       }
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
@@ -257,7 +258,7 @@ export default function LinenFormsPage() {
                 <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="จำนวนชิ้น" sortKey="pieces" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
-                <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
+                <SortableHeader label="สถานะ" sortKey="status" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                 <th className="text-center px-4 py-3 font-medium text-slate-600 w-12"></th>
                 <th className="text-right px-4 py-3 font-medium text-slate-600 w-28"></th>
               </tr>
