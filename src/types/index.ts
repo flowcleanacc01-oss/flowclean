@@ -262,6 +262,8 @@ export interface DeliveryNote {
   vehiclePlate: string
   receiverName: string
   status: DeliveryNoteStatus
+  isPrinted: boolean   // auto-set when user prints/exports
+  isBilled: boolean    // auto-set when included in billing statement
   notes: string
   createdBy: string
   updatedAt: string

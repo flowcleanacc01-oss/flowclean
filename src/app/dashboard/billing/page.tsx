@@ -3,9 +3,9 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
+import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { format } from 'date-fns'
-import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem } from '@/types'
+import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote } from '@/types'
 import { aggregateDeliveryItems, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { Plus, Search, FileText, FileDown, X, ChevronRight } from 'lucide-react'
 import Modal from '@/components/Modal'
@@ -24,7 +24,7 @@ export default function BillingPage() {
     billingStatements, addBillingStatement, updateBillingStatus, deleteBillingStatement,
     taxInvoices, addTaxInvoice,
     quotations, addQuotation, updateQuotationStatus,
-    deliveryNotes, customers, getCustomer, companyInfo, linenCatalog,
+    deliveryNotes, updateDeliveryNote, customers, getCustomer, companyInfo, linenCatalog,
   } = useStore()
 
   const searchParams = useSearchParams()
@@ -71,6 +71,9 @@ export default function BillingPage() {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
+  const [selDnIds, setSelDnIds] = useState<string[]>([])
+  const [dnSortKey, setDnSortKey] = useState('date')
+  const [dnSortDir, setDnSortDir] = useState<'asc' | 'desc'>('asc')
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'billing', label: 'ใบวางบิล (WB)' },
@@ -124,38 +127,58 @@ export default function BillingPage() {
     return billingStatements.some(b => b.customerId === selCustomerId && b.billingMonth === selMonth)
   }, [selCustomer, selCustomerId, selMonth, billingStatements])
 
+  // Available delivery notes for billing (unbilled, matching customer+month)
+  const availableDNs = useMemo((): DeliveryNote[] => {
+    if (!selCustomer || selCustomer.billingModel === 'monthly_flat') return []
+    const alreadyBilledIds = new Set(billingStatements.flatMap(b => b.deliveryNoteIds))
+    return deliveryNotes
+      .filter(dn =>
+        dn.customerId === selCustomerId &&
+        dn.date.startsWith(selMonth) &&
+        !alreadyBilledIds.has(dn.id)
+      )
+      .sort((a, b) => {
+        let va: string | number, vb: string | number
+        switch (dnSortKey) {
+          case 'noteNumber': va = a.noteNumber; vb = b.noteNumber; break
+          case 'date': va = a.date; vb = b.date; break
+          case 'items': va = a.items.reduce((s, i) => s + i.quantity, 0); vb = b.items.reduce((s, i) => s + i.quantity, 0); break
+          default: va = a.date; vb = b.date
+        }
+        const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
+        return dnSortDir === 'desc' ? -cmp : cmp
+      })
+  }, [selCustomer, selCustomerId, selMonth, deliveryNotes, billingStatements, dnSortKey, dnSortDir])
+
+  // Auto-select all available DNs when customer/month changes
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelDnIds(availableDNs.map(dn => dn.id))
+  }, [availableDNs])
+
   const previewBilling = useMemo(() => {
     if (!selCustomer) return null
     if (selCustomer.billingModel === 'monthly_flat') {
       if (flatRateBillExists) return null
       return createFlatRateBilling(selCustomer, selMonth)
     }
-    // per-piece: aggregate delivery notes for this customer in this month
-    const alreadyBilledIds = new Set(billingStatements.flatMap(b => b.deliveryNoteIds))
-    const monthNotes = deliveryNotes.filter(dn =>
-      dn.customerId === selCustomerId &&
-      dn.date.startsWith(selMonth) &&
-      (dn.status === 'delivered' || dn.status === 'acknowledged') &&
-      !alreadyBilledIds.has(dn.id)
-    )
-    if (monthNotes.length === 0) return null
-    const lineItems = aggregateDeliveryItems(monthNotes, selCustomer, linenCatalog)
+    // per-piece: use only selected DNs
+    const selectedNotes = deliveryNotes.filter(dn => selDnIds.includes(dn.id))
+    if (selectedNotes.length === 0) return null
+    const lineItems = aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog)
     return { lineItems, ...calculateBillingTotals(lineItems) }
-  }, [selCustomer, selMonth, deliveryNotes, selCustomerId, linenCatalog, billingStatements, flatRateBillExists])
+  }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists])
 
   const handleCreateBilling = () => {
     if (!selCustomer || !previewBilling) return
     const dueDate = new Date()
     dueDate.setDate(dueDate.getDate() + selCustomer.creditDays)
 
-    const alreadyBilledIds = new Set(billingStatements.flatMap(b => b.deliveryNoteIds))
+    const dnIds = selCustomer.billingModel === 'monthly_flat' ? [] : selDnIds
+
     addBillingStatement({
       customerId: selCustomerId,
-      deliveryNoteIds: deliveryNotes
-        .filter(dn => dn.customerId === selCustomerId && dn.date.startsWith(selMonth)
-          && (dn.status === 'delivered' || dn.status === 'acknowledged')
-          && !alreadyBilledIds.has(dn.id))
-        .map(dn => dn.id),
+      deliveryNoteIds: dnIds,
       billingMonth: selMonth,
       issueDate: todayISO(),
       dueDate: format(dueDate, 'yyyy-MM-dd'),
@@ -170,6 +193,12 @@ export default function BillingPage() {
       paidAmount: 0,
       notes: '',
     })
+
+    // Mark selected delivery notes as billed
+    for (const dnId of dnIds) {
+      updateDeliveryNote(dnId, { isBilled: true })
+    }
+
     setShowCreate(false)
   }
 
@@ -535,6 +564,59 @@ export default function BillingPage() {
             </div>
           </div>
 
+          {/* DN preview list with checkboxes (per-piece only) */}
+          {selCustomer && selCustomer.billingModel === 'per_piece' && availableDNs.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-slate-700">ใบส่งของที่จะนำมาวางบิล ({selDnIds.length}/{availableDNs.length})</h3>
+                <div className="flex gap-1">
+                  <button onClick={() => setSelDnIds(availableDNs.map(d => d.id))}
+                    className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors">เลือกทั้งหมด</button>
+                  <button onClick={() => setSelDnIds([])}
+                    className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors">ล้าง</button>
+                </div>
+              </div>
+              <div className="border border-slate-200 rounded-lg overflow-hidden mb-4">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="w-8 px-3 py-2"></th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600 cursor-pointer select-none"
+                        onClick={() => { if (dnSortKey === 'noteNumber') setDnSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setDnSortKey('noteNumber'); setDnSortDir('asc') } }}>
+                        เลขที่ {dnSortKey === 'noteNumber' && (dnSortDir === 'asc' ? '▲' : '▼')}
+                      </th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600 cursor-pointer select-none"
+                        onClick={() => { if (dnSortKey === 'date') setDnSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setDnSortKey('date'); setDnSortDir('asc') } }}>
+                        วันที่ {dnSortKey === 'date' && (dnSortDir === 'asc' ? '▲' : '▼')}
+                      </th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600 cursor-pointer select-none"
+                        onClick={() => { if (dnSortKey === 'items') setDnSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setDnSortKey('items'); setDnSortDir('asc') } }}>
+                        จำนวน {dnSortKey === 'items' && (dnSortDir === 'asc' ? '▲' : '▼')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {availableDNs.map(dn => {
+                      const totalPcs = dn.items.reduce((s, i) => s + i.quantity, 0)
+                      const checked = selDnIds.includes(dn.id)
+                      return (
+                        <tr key={dn.id} className={cn('border-t border-slate-100 cursor-pointer hover:bg-slate-50', checked && 'bg-blue-50/50')}
+                          onClick={() => setSelDnIds(prev => checked ? prev.filter(id => id !== dn.id) : [...prev, dn.id])}>
+                          <td className="px-3 py-1.5 text-center">
+                            <input type="checkbox" checked={checked} readOnly className="rounded border-slate-300 pointer-events-none" />
+                          </td>
+                          <td className="px-3 py-1.5 font-mono text-xs">{dn.noteNumber}</td>
+                          <td className="px-3 py-1.5 text-slate-600">{formatDate(dn.date)}</td>
+                          <td className="px-3 py-1.5 text-right">{formatNumber(totalPcs)} ชิ้น</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {previewBilling && (
             <div>
               <h3 className="text-sm font-medium text-slate-700 mb-2">รายการ</h3>
@@ -589,7 +671,9 @@ export default function BillingPage() {
             <div className="text-center py-8 text-slate-400 text-sm">
               {flatRateBillExists
                 ? 'ลูกค้านี้มีใบวางบิลเดือนนี้แล้ว (เหมาจ่าย)'
-                : 'ไม่พบใบส่งของในเดือนนี้'}
+                : availableDNs.length > 0 && selDnIds.length === 0
+                  ? 'กรุณาเลือกใบส่งของอย่างน้อย 1 รายการ'
+                  : 'ไม่พบใบส่งของที่ยังไม่วางบิลในเดือนนี้'}
             </div>
           )}
 

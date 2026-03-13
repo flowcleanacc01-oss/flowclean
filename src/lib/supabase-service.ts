@@ -61,6 +61,8 @@ const FIELD_MAP: Record<string, string> = {
   driverName: 'driver_name',
   vehiclePlate: 'vehicle_plate',
   receiverName: 'receiver_name',
+  isPrinted: 'is_printed',
+  isBilled: 'is_billed',
   billingNumber: 'billing_number',
   deliveryNoteIds: 'delivery_note_ids',
   billingMonth: 'billing_month',

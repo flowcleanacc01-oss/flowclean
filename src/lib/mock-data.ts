@@ -376,7 +376,7 @@ export const SAMPLE_DELIVERY_NOTES: DeliveryNote[] = [
       { code: 'B/M', quantity: 20, isClaim: false },
     ],
     driverName: 'สมชาย', vehiclePlate: 'กข-1234', receiverName: 'คุณสมศักดิ์',
-    status: 'acknowledged', notes: '', createdBy: 'staff-01', updatedAt: '2026-02-26',
+    status: 'acknowledged', isPrinted: true, isBilled: true, notes: '', createdBy: 'staff-01', updatedAt: '2026-02-26',
   },
   {
     id: 'dn-02', noteNumber: 'SD-20260228-001', customerId: 'cust-01',
@@ -390,7 +390,7 @@ export const SAMPLE_DELIVERY_NOTES: DeliveryNote[] = [
       { code: 'B/M', quantity: 40, isClaim: false },
     ],
     driverName: 'สมชาย', vehiclePlate: 'กข-1234', receiverName: 'คุณสมศักดิ์',
-    status: 'delivered', notes: '', createdBy: 'staff-01', updatedAt: '2026-02-28',
+    status: 'delivered', isPrinted: true, isBilled: true, notes: '', createdBy: 'staff-01', updatedAt: '2026-02-28',
   },
   {
     id: 'dn-03', noteNumber: 'SD-20260301-001', customerId: 'cust-02',
@@ -403,7 +403,7 @@ export const SAMPLE_DELIVERY_NOTES: DeliveryNote[] = [
       { code: 'D/Q', quantity: 8, isClaim: false }, { code: 'B/M', quantity: 12, isClaim: false },
     ],
     driverName: 'สมหญิง', vehiclePlate: 'ขค-5678', receiverName: 'คุณวรรณา',
-    status: 'acknowledged', notes: '', createdBy: 'staff-02', updatedAt: '2026-03-01',
+    status: 'acknowledged', isPrinted: false, isBilled: false, notes: '', createdBy: 'staff-02', updatedAt: '2026-03-01',
   },
 ]
 

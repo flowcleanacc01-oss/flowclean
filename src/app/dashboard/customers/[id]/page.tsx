@@ -9,9 +9,9 @@ import {
   Truck, Receipt, ClipboardCheck, TrendingUp, Package, AlertTriangle,
 } from 'lucide-react'
 import {
-  LINEN_FORM_STATUS_CONFIG, DELIVERY_STATUS_CONFIG, BILLING_STATUS_CONFIG,
+  LINEN_FORM_STATUS_CONFIG, BILLING_STATUS_CONFIG,
 } from '@/types'
-import type { LinenFormStatus, DeliveryNoteStatus, BillingStatus } from '@/types'
+import type { LinenFormStatus, BillingStatus } from '@/types'
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -260,14 +260,17 @@ export default function CustomerDetailPage() {
                 </thead>
                 <tbody>
                   {custDelivery.slice(0, 10).map(d => {
-                    const sc = DELIVERY_STATUS_CONFIG[d.status as DeliveryNoteStatus] || DELIVERY_STATUS_CONFIG.pending
                     const totalPcs = d.items.reduce((s, i) => s + i.quantity, 0)
                     return (
                       <tr key={d.id} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="px-4 py-2 font-mono text-xs">{d.noteNumber}</td>
                         <td className="px-4 py-2 text-slate-600">{d.date}</td>
                         <td className="px-4 py-2 text-center">
-                          <span className={cn('text-xs px-2 py-0.5 rounded-full', sc.bgColor, sc.color)}>{sc.label}</span>
+                          <div className="flex items-center justify-center gap-1">
+                            {d.isPrinted && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">พิมพ์แล้ว</span>}
+                            {d.isBilled && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">วางบิลแล้ว</span>}
+                            {!d.isPrinted && !d.isBilled && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">รอ</span>}
+                          </div>
                         </td>
                         <td className="px-4 py-2 text-right">{formatNumber(totalPcs)} ชิ้น</td>
                       </tr>

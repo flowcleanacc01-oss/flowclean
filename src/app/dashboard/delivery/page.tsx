@@ -4,8 +4,8 @@ import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, cn, todayISO, sanitizeNumber } from '@/lib/utils'
-import { DELIVERY_STATUS_CONFIG, type DeliveryNoteStatus, type DeliveryNoteItem } from '@/types'
-import { Plus, Search, Truck, X, FileDown } from 'lucide-react'
+import { type DeliveryNoteItem } from '@/types'
+import { Plus, Search, X, FileDown, Check } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import ExportButtons from '@/components/ExportButtons'
@@ -13,15 +13,17 @@ import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
 import { exportCSV } from '@/lib/export'
 
+type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed'
+
 export default function DeliveryPage() {
   const {
-    deliveryNotes, addDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
+    deliveryNotes, addDeliveryNote, updateDeliveryNote, deleteDeliveryNote,
     linenForms, customers, getCustomer, companyInfo, linenCatalog,
   } = useStore()
   const [showPrint, setShowPrint] = useState(false)
 
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<DeliveryNoteStatus | 'all'>('all')
+  const [dnFilter, setDnFilter] = useState<DNFilter>('all')
   const [showCreate, setShowCreate] = useState(false)
   const searchParams = useSearchParams()
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
@@ -49,7 +51,6 @@ export default function DeliveryPage() {
 
   const filtered = useMemo(() => {
     return deliveryNotes.filter(dn => {
-      if (statusFilter !== 'all' && dn.status !== statusFilter) return false
       if (search) {
         const customer = getCustomer(dn.customerId)
         const q = search.toLowerCase()
@@ -63,6 +64,11 @@ export default function DeliveryPage() {
           if (dateTo && dn.date > dateTo) return false
         }
       }
+      // Filter by printed/billed status
+      if (dnFilter === 'not-printed' && dn.isPrinted) return false
+      if (dnFilter === 'printed' && !dn.isPrinted) return false
+      if (dnFilter === 'not-billed' && dn.isBilled) return false
+      if (dnFilter === 'billed' && !dn.isBilled) return false
       return true
     }).sort((a, b) => {
       let va: string | number, vb: string | number
@@ -77,9 +83,9 @@ export default function DeliveryPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [deliveryNotes, statusFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
+  }, [deliveryNotes, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter])
 
-  // Forms available for delivery (packed status)
+  // Forms available for delivery (confirmed status)
   const availableForms = useMemo(() => {
     if (!selCustomerId) return []
     const linkedFormIds = new Set(deliveryNotes.flatMap(dn => dn.linenFormIds))
@@ -135,6 +141,8 @@ export default function DeliveryPage() {
       vehiclePlate,
       receiverName,
       status: 'pending',
+      isPrinted: false,
+      isBilled: false,
       notes: dnNotes,
     })
     setShowCreate(false)
@@ -160,6 +168,21 @@ export default function DeliveryPage() {
     exportCSV(headers, rows, detailNote.noteNumber)
   }
 
+  // Auto-mark as printed when export/print happens
+  const handlePrintExport = () => {
+    if (detailNote && !detailNote.isPrinted) {
+      updateDeliveryNote(detailNote.id, { isPrinted: true })
+    }
+  }
+
+  const filterOptions: { key: DNFilter; label: string }[] = [
+    { key: 'all', label: 'ทั้งหมด' },
+    { key: 'not-printed', label: 'ยังไม่พิมพ์' },
+    { key: 'printed', label: 'พิมพ์แล้ว' },
+    { key: 'not-billed', label: 'ยังไม่วางบิล' },
+    { key: 'billed', label: 'วางบิลแล้ว' },
+  ]
+
   return (
     <div>
       {/* Header */}
@@ -175,7 +198,7 @@ export default function DeliveryPage() {
         </button>
       </div>
 
-      {/* Search & Filter */}
+      {/* Search */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -183,15 +206,19 @@ export default function DeliveryPage() {
             placeholder="ค้นหาเลขที่ใบส่งของ, โรงแรม..."
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
-        <div className="flex gap-1.5">
-          {(['all', 'pending', 'delivered', 'acknowledged'] as const).map(s => (
-            <button key={s} onClick={() => setStatusFilter(s)}
-              className={cn('px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                statusFilter === s ? 'bg-[#1B3A5C] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
-              {s === 'all' ? 'ทั้งหมด' : DELIVERY_STATUS_CONFIG[s].label}
-            </button>
-          ))}
-        </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {filterOptions.map(f => (
+          <button key={f.key} onClick={() => setDnFilter(f.key)}
+            className={cn(
+              'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+              dnFilter === f.key ? 'bg-[#1B3A5C] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            )}>
+            {f.label}
+          </button>
+        ))}
       </div>
 
       {/* Date Filter */}
@@ -213,16 +240,14 @@ export default function DeliveryPage() {
                 <SortableHeader label="จำนวนชิ้น" sortKey="items" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="คนขับ" sortKey="driver" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
-                <th className="text-right px-4 py-3 font-medium text-slate-600 w-24"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={6} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
               ) : filtered.map(dn => {
                 const customer = getCustomer(dn.customerId)
                 const totalItems = dn.items.reduce((s, i) => s + i.quantity, 0)
-                const cfg = DELIVERY_STATUS_CONFIG[dn.status]
                 return (
                   <tr key={dn.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                     onClick={() => setShowDetail(dn.id)}>
@@ -232,21 +257,17 @@ export default function DeliveryPage() {
                     <td className="px-4 py-3 text-right text-slate-700">{formatNumber(totalItems)}</td>
                     <td className="px-4 py-3 text-slate-600">{dn.driverName || '-'}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>{cfg.label}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                      {dn.status === 'pending' && (
-                        <button onClick={() => updateDeliveryNoteStatus(dn.id, 'delivered')}
-                          className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors">
-                          <Truck className="w-3 h-3 inline mr-1" />ส่งแล้ว
-                        </button>
-                      )}
-                      {dn.status === 'delivered' && (
-                        <button onClick={() => updateDeliveryNoteStatus(dn.id, 'acknowledged')}
-                          className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100 transition-colors">
-                          รับแล้ว
-                        </button>
-                      )}
+                      <div className="flex items-center justify-center gap-1">
+                        {dn.isPrinted && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">พิมพ์แล้ว</span>
+                        )}
+                        {dn.isBilled && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">วางบิลแล้ว</span>
+                        )}
+                        {!dn.isPrinted && !dn.isBilled && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">รอดำเนินการ</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -372,12 +393,16 @@ export default function DeliveryPage() {
               <div><span className="text-slate-500">คนขับ:</span> {detailNote.driverName || '-'}</div>
               <div><span className="text-slate-500">ทะเบียน:</span> {detailNote.vehiclePlate || '-'}</div>
               <div><span className="text-slate-500">ผู้รับ:</span> {detailNote.receiverName || '-'}</div>
-              <div>
-                <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
-                  DELIVERY_STATUS_CONFIG[detailNote.status].bgColor,
-                  DELIVERY_STATUS_CONFIG[detailNote.status].color)}>
-                  {DELIVERY_STATUS_CONFIG[detailNote.status].label}
-                </span>
+              <div className="flex items-center gap-1">
+                {detailNote.isPrinted && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">พิมพ์แล้ว</span>
+                )}
+                {detailNote.isBilled && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">วางบิลแล้ว</span>
+                )}
+                {!detailNote.isPrinted && !detailNote.isBilled && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">รอดำเนินการ</span>
+                )}
               </div>
             </div>
 
@@ -452,13 +477,31 @@ export default function DeliveryPage() {
         </div>
       </Modal>
 
-      {/* Print Preview Modal */}
-      <Modal open={showPrint && !!detailNote} onClose={() => setShowPrint(false)} title="พิมพ์ใบส่งของ" size="xl" className="print-target">
+      {/* Print Preview Modal — ตรวจสอบข้อมูลก่อนพิมพ์ */}
+      <Modal open={showPrint && !!detailNote} onClose={() => setShowPrint(false)} title="ตรวจสอบข้อมูลก่อนพิมพ์" size="xl" className="print-target">
         {detailNote && detailCustomer && (
           <div>
+            {/* Printed checkbox */}
+            <div className="flex items-center justify-between mb-4 no-print">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={detailNote.isPrinted}
+                  onChange={e => updateDeliveryNote(detailNote.id, { isPrinted: e.target.checked })}
+                  className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-blue-700 flex items-center gap-1">
+                  <Check className="w-4 h-4" />พิมพ์แล้ว
+                </span>
+              </label>
+              {detailNote.isPrinted && (
+                <span className="text-xs text-blue-500">เอกสารนี้เคยถูกพิมพ์แล้ว</span>
+              )}
+            </div>
+
             <DeliveryNotePrint note={detailNote} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-delivery" filename={detailNote.noteNumber} onExportCSV={handleExportCSV} />
+              <ExportButtons targetId="print-delivery" filename={detailNote.noteNumber} onExportCSV={handleExportCSV} onExport={handlePrintExport} />
             </div>
           </div>
         )}

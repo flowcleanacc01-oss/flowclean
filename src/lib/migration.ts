@@ -101,6 +101,8 @@ export function migrateCustomer(oldCustomer: V2Customer, index: number): Custome
 export function migrateDeliveryNote(oldNote: DeliveryNote & { items: V2DeliveryNoteItem[] }): DeliveryNote {
   return {
     ...oldNote,
+    isPrinted: (oldNote as unknown as { isPrinted?: boolean }).isPrinted ?? false,
+    isBilled: (oldNote as unknown as { isBilled?: boolean }).isBilled ?? false,
     items: oldNote.items.map(item => ({
       code: item.code,
       quantity: item.quantity,

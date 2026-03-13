@@ -8,22 +8,25 @@ interface ExportButtonsProps {
   targetId: string
   filename: string
   onExportCSV?: () => void
+  onExport?: () => void // fires on any export/print action
   showPrint?: boolean
 }
 
-export default function ExportButtons({ targetId, filename, onExportCSV, showPrint = true }: ExportButtonsProps) {
+export default function ExportButtons({ targetId, filename, onExportCSV, onExport, showPrint = true }: ExportButtonsProps) {
   const [busy, setBusy] = useState(false)
 
   const handleJPG = async () => {
     setBusy(true)
     try { await exportJPG(targetId, filename) } catch { /* ignore */ }
     setBusy(false)
+    onExport?.()
   }
 
   const handlePDF = async () => {
     setBusy(true)
     try { await exportPDF(targetId, filename) } catch { /* ignore */ }
     setBusy(false)
+    onExport?.()
   }
 
   const btnBase = 'px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50'
@@ -39,13 +42,13 @@ export default function ExportButtons({ targetId, filename, onExportCSV, showPri
         <FileDown className="w-3.5 h-3.5" />PDF
       </button>
       {onExportCSV && (
-        <button onClick={onExportCSV}
+        <button onClick={() => { onExportCSV(); onExport?.() }}
           className={`${btnBase} bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200`}>
           <Table2 className="w-3.5 h-3.5" />CSV
         </button>
       )}
       {showPrint && (
-        <button onClick={() => window.print()} disabled={busy}
+        <button onClick={() => { window.print(); onExport?.() }} disabled={busy}
           className={`${btnBase} bg-[#1B3A5C] text-white hover:bg-[#122740]`}>
           <Printer className="w-3.5 h-3.5" />พิมพ์
         </button>
