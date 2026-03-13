@@ -12,7 +12,7 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   customerCode: '', customerType: 'hotel',
   name: '', nameEn: '', address: '', taxId: '', branch: 'สำนักงานใหญ่',
   contactName: '', contactPhone: '', contactEmail: '',
-  creditDays: 30, billingModel: 'per_piece', monthlyFlatRate: 0,
+  creditDays: 30, billingModel: 'per_piece', monthlyFlatRate: 0, minPerTrip: 0,
   enabledItems: [], priceList: [], priceHistory: [],
   notes: '', isActive: true,
 }
@@ -48,7 +48,7 @@ export default function CustomersPage() {
       customerCode: c.customerCode, customerType: c.customerType,
       name: c.name, nameEn: c.nameEn, address: c.address, taxId: c.taxId, branch: c.branch,
       contactName: c.contactName, contactPhone: c.contactPhone, contactEmail: c.contactEmail,
-      creditDays: c.creditDays, billingModel: c.billingModel, monthlyFlatRate: c.monthlyFlatRate,
+      creditDays: c.creditDays, billingModel: c.billingModel, monthlyFlatRate: c.monthlyFlatRate, minPerTrip: c.minPerTrip ?? 0,
       enabledItems: [...c.enabledItems], priceList: [...c.priceList], priceHistory: [...c.priceHistory],
       notes: c.notes, isActive: c.isActive,
     })
@@ -167,7 +167,7 @@ export default function CustomersPage() {
                 'text-[10px] font-medium px-2 py-0.5 rounded-full',
                 c.billingModel === 'monthly_flat' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
               )}>
-                {c.billingModel === 'monthly_flat' ? `เหมา ${formatCurrency(c.monthlyFlatRate)}` : 'ตามชิ้น'}
+                {c.billingModel === 'monthly_flat' ? `ขั้นต่ำ/ด. ${formatCurrency(c.monthlyFlatRate)}` : 'ตามชิ้น'}
               </span>
             </div>
 
@@ -273,17 +273,26 @@ export default function CustomersPage() {
                 <input type="radio" name="billing" checked={form.billingModel === 'monthly_flat'}
                   onChange={() => setForm({ ...form, billingModel: 'monthly_flat' })}
                   className="accent-[#1B3A5C]" />
-                <span>เหมาเดือน</span>
+                <span>เหมาขั้นต่ำ/เดือน</span>
               </label>
             </div>
-            {form.billingModel === 'monthly_flat' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-slate-600 mb-1">ค่าเหมารายเดือน (บาท)</label>
-                <input type="number" value={form.monthlyFlatRate}
-                  onChange={e => setForm({ ...form, monthlyFlatRate: sanitizeNumber(e.target.value) })}
-                  className="w-48 px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                <label className="block text-sm text-slate-600 mb-1">เหมาขั้นต่ำ/ครั้ง (บาท)</label>
+                <input type="number" value={form.minPerTrip}
+                  onChange={e => setForm({ ...form, minPerTrip: sanitizeNumber(e.target.value) })}
+                  placeholder="0 = ไม่กำหนด"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               </div>
-            )}
+              {form.billingModel === 'monthly_flat' && (
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">เหมาขั้นต่ำ/เดือน (บาท)</label>
+                  <input type="number" value={form.monthlyFlatRate}
+                    onChange={e => setForm({ ...form, monthlyFlatRate: sanitizeNumber(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Load from Quotation / Customer */}

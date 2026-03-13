@@ -3,7 +3,8 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatNumber, cn } from '@/lib/utils'
-import { Printer, ExternalLink } from 'lucide-react'
+import { FileDown, ExternalLink } from 'lucide-react'
+import ExportButtons from '@/components/ExportButtons'
 import Link from 'next/link'
 import MonthlySummaryGrid from '@/components/MonthlySummaryGrid'
 import MonthlyDeliveryReportPrint from '@/components/MonthlyDeliveryReportPrint'
@@ -316,7 +317,7 @@ export default function ReportsPage() {
             </h3>
             <button onClick={() => { setPrintOrientation('landscape'); setPrintMargin('narrow'); setShowDeliveryPrint(true) }}
               className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-              <Printer className="w-4 h-4" />พิมพ์
+              <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
             </button>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -340,7 +341,7 @@ export default function ReportsPage() {
             </h3>
             <button onClick={() => { setPrintOrientation('landscape'); setPrintMargin('narrow'); setShowStockPrint(true) }}
               className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-              <Printer className="w-4 h-4" />พิมพ์
+              <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
             </button>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -357,7 +358,7 @@ export default function ReportsPage() {
       )}
 
       {/* Delivery Report Print Modal */}
-      <Modal open={showDeliveryPrint} onClose={() => setShowDeliveryPrint(false)} title="พิมพ์รายงานส่งสินค้า" size="full">
+      <Modal open={showDeliveryPrint} onClose={() => setShowDeliveryPrint(false)} title="พิมพ์รายงานส่งสินค้า" size="full" className="print-target">
         {selCustomer && (
           <div>
             {/* Dynamic @page override */}
@@ -405,17 +406,14 @@ export default function ReportsPage() {
               company={companyInfo}
             />
             <div className="flex justify-end mt-4 no-print">
-              <button onClick={() => window.print()}
-                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
-                <Printer className="w-4 h-4" />พิมพ์
-              </button>
+              <ExportButtons targetId="print-delivery-report" filename={`delivery-report-${selCustomer.name}-${selMonth}`} showPrint={true} />
             </div>
           </div>
         )}
       </Modal>
 
       {/* Stock Report Print Modal */}
-      <Modal open={showStockPrint} onClose={() => setShowStockPrint(false)} title="พิมพ์สต็อกรายเดือน" size="full">
+      <Modal open={showStockPrint} onClose={() => setShowStockPrint(false)} title="พิมพ์สต็อกรายเดือน" size="full" className="print-target">
         {selCustomer && (
           <div>
             {/* Dynamic @page override */}
@@ -464,10 +462,7 @@ export default function ReportsPage() {
               getCarryOver={getCarryOver}
             />
             <div className="flex justify-end mt-4 no-print">
-              <button onClick={() => window.print()}
-                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
-                <Printer className="w-4 h-4" />พิมพ์
-              </button>
+              <ExportButtons targetId="print-stock-report" filename={`stock-report-${selCustomer.name}-${selMonth}`} showPrint={true} />
             </div>
           </div>
         )}

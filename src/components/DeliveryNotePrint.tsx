@@ -19,9 +19,9 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
   const totalAmount = isPer ? note.items.reduce((s, i) => s + i.quantity * (priceMap[i.code] || 0), 0) : 0
 
   return (
-    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none print:max-w-none print:w-full print:mx-0" id="print-delivery">
+    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-4 print:shadow-none print:max-w-none print:w-full print:mx-0" id="print-delivery">
       {/* Header */}
-      <div className="flex justify-between items-start mb-6 border-b border-slate-300 pb-4">
+      <div className="flex justify-between items-start mb-4 border-b border-slate-300 pb-3 print:mb-3 print:pb-2">
         <div className="flex items-start gap-3">
           <Image src="/flowclean-logo.png" alt="FlowClean" width={48} height={48} className="mt-0.5 print:w-[48px] print:h-[48px]" />
           <div>
@@ -40,7 +40,7 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
       </div>
 
       {/* Customer Info */}
-      <div className="grid grid-cols-2 gap-4 mb-6 text-xs">
+      <div className="grid grid-cols-2 gap-4 mb-4 text-xs print:mb-3">
         <div>
           <p className="text-slate-500">ลูกค้า:</p>
           <p className="font-medium text-slate-800">{customer.name}</p>
@@ -54,7 +54,7 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
       </div>
 
       {/* Items Table */}
-      <table className="w-full text-sm border border-slate-300">
+      <table className="w-full text-sm border border-slate-300" style={{ breakInside: 'avoid' }}>
         <thead>
           <tr className="bg-slate-100">
             <th className="text-center px-3 py-2 border border-slate-300 w-10">ลำดับ</th>
@@ -100,7 +100,7 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
       )}
 
       {/* Signatures */}
-      <div className="grid grid-cols-3 gap-8 mt-12 text-xs text-center">
+      <div className="grid grid-cols-3 gap-8 mt-8 text-xs text-center print:mt-6">
         <div>
           <div className="border-b border-slate-300 pb-8 mb-2"></div>
           <p className="text-slate-500">ผู้ส่ง</p>

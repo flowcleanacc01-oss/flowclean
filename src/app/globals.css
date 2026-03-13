@@ -50,16 +50,19 @@ body {
   aside { display: none !important; }
   nav { display: none !important; }
 
-  /* Reset print modal: remove viewport constraints and chrome */
+  /* Reset print modal: position at page top, remove viewport constraints */
   .print-target {
-    position: static !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
     display: block !important;
-    inset: auto !important;
     overflow: visible !important;
     height: auto !important;
     width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
+    z-index: 9999 !important;
   }
   /* Remove modal backdrop */
   .print-target > .fixed.inset-0.bg-black\/40 { display: none !important; }

@@ -4,11 +4,13 @@ import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { DELIVERY_STATUS_CONFIG, type DeliveryNoteStatus, type DeliveryNoteItem } from '@/types'
-import { Plus, Search, Truck, Printer, X } from 'lucide-react'
+import { Plus, Search, Truck, X, FileDown } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
+import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
+import { exportCSV } from '@/lib/export'
 
 export default function DeliveryPage() {
   const {
@@ -139,6 +141,22 @@ export default function DeliveryPage() {
   const detailNote = showDetail ? deliveryNotes.find(d => d.id === showDetail) : null
   const detailCustomer = detailNote ? getCustomer(detailNote.customerId) : null
   const itemNameMap = Object.fromEntries(linenCatalog.map(i => [i.code, i.name]))
+
+  const handleExportCSV = () => {
+    if (!detailNote || !detailCustomer) return
+    const isPer = detailCustomer.billingModel === 'per_piece'
+    const priceMap = Object.fromEntries(detailCustomer.priceList.map(p => [p.code, p.price]))
+    const headers = isPer
+      ? ['รหัส', 'รายการ', 'จำนวน', 'ราคา/หน่วย', 'มูลค่า']
+      : ['รหัส', 'รายการ', 'จำนวน']
+    const rows = detailNote.items.map(item => {
+      const price = priceMap[item.code] || 0
+      return isPer
+        ? [item.code, itemNameMap[item.code] || item.code, String(item.quantity), String(price), String(item.quantity * price)]
+        : [item.code, itemNameMap[item.code] || item.code, String(item.quantity)]
+    })
+    exportCSV(headers, rows, detailNote.noteNumber)
+  }
 
   return (
     <div>
@@ -412,7 +430,7 @@ export default function DeliveryPage() {
               </button>
               <button onClick={() => setShowPrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1">
-                <Printer className="w-4 h-4" />พิมพ์
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
               </button>
             </div>
           </div>
@@ -438,10 +456,7 @@ export default function DeliveryPage() {
           <div>
             <DeliveryNotePrint note={detailNote} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} />
             <div className="flex justify-end mt-4 no-print">
-              <button onClick={() => window.print()}
-                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
-                <Printer className="w-4 h-4" />พิมพ์
-              </button>
+              <ExportButtons targetId="print-delivery" filename={detailNote.noteNumber} onExportCSV={handleExportCSV} />
             </div>
           </div>
         )}

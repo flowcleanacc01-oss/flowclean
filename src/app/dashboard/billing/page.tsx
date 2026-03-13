@@ -7,8 +7,10 @@ import { formatCurrency, formatDate, cn, todayISO, sanitizeNumber } from '@/lib/
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem } from '@/types'
 import { aggregateDeliveryItems, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
-import { Plus, Search, FileText, Printer, X, ChevronRight } from 'lucide-react'
+import { Plus, Search, FileText, FileDown, X, ChevronRight } from 'lucide-react'
 import Modal from '@/components/Modal'
+import ExportButtons from '@/components/ExportButtons'
+import { exportCSV } from '@/lib/export'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
 import BillingPrint from '@/components/BillingPrint'
@@ -217,6 +219,40 @@ export default function BillingPage() {
   const detailInvoiceCustomer = detailInvoice ? getCustomer(detailInvoice.customerId) : null
 
   const detailQuotation = showQuDetail ? quotations.find(q => q.id === showQuDetail) : null
+
+  const handleBillingCSV = () => {
+    if (!detailBilling || !detailCustomer) return
+    const headers = ['รหัส', 'รายการ', 'จำนวน', 'ราคา/หน่วย', 'มูลค่า']
+    const rows = detailBilling.lineItems.map(item => [
+      item.code, item.name, String(item.quantity), String(item.pricePerUnit), String(item.amount),
+    ])
+    rows.push(['', '', '', 'รวมก่อน VAT', String(detailBilling.subtotal)])
+    rows.push(['', '', '', 'VAT 7%', String(detailBilling.vat)])
+    rows.push(['', '', '', 'หัก ณ ที่จ่าย 3%', String(detailBilling.withholdingTax)])
+    rows.push(['', '', '', 'ยอดจ่ายสุทธิ', String(detailBilling.netPayable)])
+    exportCSV(headers, rows, detailBilling.billingNumber)
+  }
+
+  const handleInvoiceCSV = () => {
+    if (!detailInvoice) return
+    const headers = ['รายการ', 'จำนวน', 'ราคา/หน่วย', 'รวม']
+    const rows = detailInvoice.lineItems.map(item => [
+      item.name, String(item.quantity), String(item.pricePerUnit), String(item.amount),
+    ])
+    rows.push(['', '', 'รวมก่อน VAT', String(detailInvoice.subtotal)])
+    rows.push(['', '', 'VAT 7%', String(detailInvoice.vat)])
+    rows.push(['', '', 'รวมทั้งสิ้น', String(detailInvoice.grandTotal)])
+    exportCSV(headers, rows, detailInvoice.invoiceNumber)
+  }
+
+  const handleQuotationCSV = () => {
+    if (!detailQuotation) return
+    const headers = ['รหัส', 'รายการ', 'ราคา/หน่วย']
+    const rows = detailQuotation.items.filter(i => i.pricePerUnit > 0).map(item => [
+      item.code, item.name, String(item.pricePerUnit),
+    ])
+    exportCSV(headers, rows, detailQuotation.quotationNumber)
+  }
 
   const filteredQuotations = useMemo(() => {
     return quotations.filter(q => {
@@ -635,7 +671,7 @@ export default function BillingPage() {
               </div>
               <button onClick={() => setShowPrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-                <Printer className="w-4 h-4" />พิมพ์
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
               </button>
             </div>
           </div>
@@ -661,10 +697,7 @@ export default function BillingPage() {
           <div>
             <BillingPrint billing={detailBilling} customer={detailCustomer} company={companyInfo} />
             <div className="flex justify-end mt-4 no-print">
-              <button onClick={() => window.print()}
-                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
-                <Printer className="w-4 h-4" />พิมพ์
-              </button>
+              <ExportButtons targetId="print-billing" filename={detailBilling.billingNumber} onExportCSV={handleBillingCSV} />
             </div>
           </div>
         )}
@@ -719,7 +752,7 @@ export default function BillingPage() {
             <div className="flex justify-end pt-2">
               <button onClick={() => setShowInvoicePrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-                <Printer className="w-4 h-4" />พิมพ์
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
               </button>
             </div>
           </div>
@@ -738,10 +771,7 @@ export default function BillingPage() {
               netPayable={billingStatements.find(b => b.id === detailInvoice.billingStatementId)?.netPayable}
             />
             <div className="flex justify-end mt-4 no-print">
-              <button onClick={() => window.print()}
-                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
-                <Printer className="w-4 h-4" />พิมพ์
-              </button>
+              <ExportButtons targetId="print-tax-invoice" filename={detailInvoice.invoiceNumber} onExportCSV={handleInvoiceCSV} />
             </div>
           </div>
         )}
@@ -906,7 +936,7 @@ export default function BillingPage() {
               </div>
               <button onClick={() => setShowQuPrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-                <Printer className="w-4 h-4" />พิมพ์
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
               </button>
             </div>
           </div>
@@ -919,10 +949,7 @@ export default function BillingPage() {
           <div>
             <QuotationPrint quotation={detailQuotation} company={companyInfo} />
             <div className="flex justify-end mt-4 no-print">
-              <button onClick={() => window.print()}
-                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
-                <Printer className="w-4 h-4" />พิมพ์
-              </button>
+              <ExportButtons targetId="print-quotation" filename={detailQuotation.quotationNumber} onExportCSV={handleQuotationCSV} />
             </div>
           </div>
         )}

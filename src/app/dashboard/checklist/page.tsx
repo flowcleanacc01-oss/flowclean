@@ -7,10 +7,11 @@ import {
   CHECKLIST_TYPE_CONFIG, CHECKLIST_STATUS_CONFIG,
   type ChecklistType, type ChecklistStatus, type ChecklistItem,
 } from '@/types'
-import { Plus, Search, Printer, X, ChevronRight, ClipboardCheck } from 'lucide-react'
+import { Plus, Search, FileDown, X, ChevronRight, ClipboardCheck } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ChecklistPrint from '@/components/ChecklistPrint'
 import BlankChecklistPrint from '@/components/BlankChecklistPrint'
+import ExportButtons from '@/components/ExportButtons'
 
 export default function ChecklistPage() {
   const {
@@ -167,7 +168,7 @@ export default function ChecklistPage() {
         <div className="flex gap-2">
           <button onClick={() => { setBlankCustomerId(''); setShowBlankPrint(true) }}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium">
-            <Printer className="w-4 h-4" />พิมพ์ใบเช็คของ
+            <FileDown className="w-4 h-4" />พิมพ์ใบเช็คของ
           </button>
           <button onClick={handleCreateOpen}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
@@ -466,7 +467,7 @@ export default function ChecklistPage() {
                 )}
                 <button onClick={() => setShowPrint(true)}
                   className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-                  <Printer className="w-4 h-4" />พิมพ์
+                  <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
                 </button>
               </div>
             </div>
@@ -493,10 +494,7 @@ export default function ChecklistPage() {
           <div>
             <ChecklistPrint checklist={detailCL} customer={detailCustomer} company={companyInfo} />
             <div className="flex justify-end mt-4 no-print">
-              <button onClick={() => window.print()}
-                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
-                <Printer className="w-4 h-4" />พิมพ์
-              </button>
+              <ExportButtons targetId="print-checklist" filename={detailCL.checklistNumber} showPrint={true} />
             </div>
           </div>
         )}
@@ -523,10 +521,7 @@ export default function ChecklistPage() {
               <div className="flex justify-between items-center mb-4 no-print">
                 <button onClick={() => setBlankCustomerId('')}
                   className="text-sm text-slate-500 hover:text-slate-700">← เลือกลูกค้าอื่น</button>
-                <button onClick={() => window.print()}
-                  className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
-                  <Printer className="w-4 h-4" />พิมพ์
-                </button>
+                <ExportButtons targetId="print-blank-checklist" filename="blank-checklist" showPrint={true} />
               </div>
               {(() => {
                 const cust = getCustomer(blankCustomerId)

@@ -44,7 +44,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     contactEmail: 'laundry@wildorchid.co.th',
     creditDays: 30,
     billingModel: 'per_piece',
-    monthlyFlatRate: 0,
+    monthlyFlatRate: 0, minPerTrip: 0,
     enabledItems: perPieceItems,
     priceList: [
       { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
@@ -72,7 +72,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     contactEmail: 'hk@villachacha.com',
     creditDays: 30,
     billingModel: 'per_piece',
-    monthlyFlatRate: 0,
+    monthlyFlatRate: 0, minPerTrip: 0,
     enabledItems: ['B/F', 'B/H', 'B/T', 'P/C', 'S/Q', 'S/K', 'D/Q', 'D/K', 'B/M', 'P/T'],
     priceList: [
       { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
@@ -99,7 +99,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     contactEmail: 'ops@villachachakhaosan.com',
     creditDays: 30,
     billingModel: 'per_piece',
-    monthlyFlatRate: 0,
+    monthlyFlatRate: 0, minPerTrip: 0,
     enabledItems: ['B/F', 'B/H', 'B/T', 'P/C', 'S/Q', 'S/K', 'D/Q', 'D/K', 'B/M'],
     priceList: [
       { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
@@ -125,7 +125,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     contactEmail: 'napa@sawaddeehouse.com',
     creditDays: 30,
     billingModel: 'per_piece',
-    monthlyFlatRate: 0,
+    monthlyFlatRate: 0, minPerTrip: 0,
     enabledItems: ['B/F', 'B/H', 'B/T', 'P/C', 'S/Q', 'S/K', 'D/Q', 'B/M'],
     priceList: [
       { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
@@ -151,7 +151,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     contactEmail: 'thanapol@baanwachara.com',
     creditDays: 30,
     billingModel: 'monthly_flat',
-    monthlyFlatRate: 25000,
+    monthlyFlatRate: 25000, minPerTrip: 0,
     enabledItems: flatRateItems,
     priceList: [],
     priceHistory: [],
@@ -173,7 +173,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     contactEmail: 'malee@thaisin.com',
     creditDays: 30,
     billingModel: 'monthly_flat',
-    monthlyFlatRate: 18000,
+    monthlyFlatRate: 18000, minPerTrip: 0,
     enabledItems: ['B/T', 'B/H', 'B/M'],
     priceList: [],
     priceHistory: [],

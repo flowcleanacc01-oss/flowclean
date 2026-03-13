@@ -112,7 +112,7 @@ export default function CustomerDetailPage() {
           </span>
           <span className={cn('text-xs font-medium px-2.5 py-1 rounded-full',
             customer.billingModel === 'monthly_flat' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700')}>
-            {customer.billingModel === 'monthly_flat' ? `เหมา ${formatCurrency(customer.monthlyFlatRate)}` : 'คิดตามชิ้น'}
+            {customer.billingModel === 'monthly_flat' ? `ขั้นต่ำ/ด. ${formatCurrency(customer.monthlyFlatRate)}` : 'คิดตามชิ้น'}
           </span>
         </div>
       </div>

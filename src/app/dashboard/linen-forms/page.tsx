@@ -6,17 +6,19 @@ import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Share2 } from 'lucide-react'
-import html2canvas from 'html2canvas-pro'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer } from 'lucide-react'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
+import LinenFormPrint from '@/components/LinenFormPrint'
+import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
+import { exportCSV } from '@/lib/export'
 
 export default function LinenFormsPage() {
   const {
     linenForms, addLinenForm, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
-    customers, getCustomer, getCarryOver, linenCatalog, deliveryNotes,
+    customers, getCustomer, getCarryOver, linenCatalog, deliveryNotes, companyInfo,
   } = useStore()
 
   const searchParams = useSearchParams()
@@ -37,25 +39,28 @@ export default function LinenFormsPage() {
   const [sortKey, setSortKey] = useState('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  const [exporting, setExporting] = useState(false)
+  const [showPrint, setShowPrint] = useState(false)
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
   }
 
-  const handleExportImage = async () => {
-    const el = document.getElementById('linen-form-detail')
-    if (!el) return
-    setExporting(true)
-    try {
-      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
-      const link = document.createElement('a')
-      link.download = `${detailForm?.formNumber || 'linen-form'}.png`
-      link.href = canvas.toDataURL('image/png')
-      link.click()
-    } catch { /* ignore */ }
-    setExporting(false)
+  const handleExportCSV = () => {
+    if (!detailForm || !detailCustomer) return
+    const headers = ['รหัส', 'รายการ', 'ยกยอดมา', 'ลูกค้านับผ้าส่งซัก', 'ลูกค้านับผ้าส่งเคลม', 'โรงซักนับเข้า', 'โรงซักแพคส่ง', 'ค้าง/คืน', 'หมายเหตุ', 'ลูกค้านับผ้ากลับ']
+    const nameMap = Object.fromEntries(linenCatalog.map(i => [i.code, i.name]))
+    const rows = detailForm.rows.map(r => {
+      const co = detailCarryOver[r.code] || 0
+      const diff = (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved
+      return [
+        r.code, nameMap[r.code] || r.code,
+        String(co), String(r.col2_hotelCountIn), String(r.col3_hotelClaimCount),
+        String(r.col5_factoryClaimApproved), String(r.col6_factoryPackSend || 0),
+        String(diff), r.note, String(r.col4_factoryApproved),
+      ]
+    })
+    exportCSV(headers, rows, `${detailForm.formNumber}_${detailCustomer.name}`)
   }
 
   // Create form state
@@ -589,12 +594,10 @@ export default function LinenFormsPage() {
                     className="text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1">
                     <X className="w-3.5 h-3.5" />ลบ
                   </button>
-                  {['sorting', 'washing', 'packed', 'delivered', 'confirmed'].includes(detailForm.status) && (
-                    <button onClick={handleExportImage} disabled={exporting}
-                      className="text-xs text-slate-400 hover:text-[#1B3A5C] transition-colors flex items-center gap-1 disabled:opacity-50">
-                      <Share2 className="w-3.5 h-3.5" />{exporting ? 'กำลังสร้าง...' : 'ส่งออกรูป'}
-                    </button>
-                  )}
+                  <button onClick={() => setShowPrint(true)}
+                    className="text-xs text-slate-400 hover:text-[#1B3A5C] transition-colors flex items-center gap-1">
+                    <Printer className="w-3.5 h-3.5" />พิมพ์/ส่งออก
+                  </button>
                 </div>
 
                 {isLockedByDN ? (
@@ -632,6 +635,18 @@ export default function LinenFormsPage() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* LF Print Preview Modal */}
+      <Modal open={showPrint && !!detailForm} onClose={() => setShowPrint(false)} title="พิมพ์ใบส่งรับผ้า" size="xl" className="print-target">
+        {detailForm && detailCustomer && (
+          <div>
+            <LinenFormPrint form={detailForm} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} carryOver={detailCarryOver} />
+            <div className="flex justify-end mt-4 no-print">
+              <ExportButtons targetId="print-lf" filename={detailForm.formNumber} onExportCSV={handleExportCSV} />
             </div>
           </div>
         )}

@@ -118,7 +118,8 @@ export interface Customer {
   contactEmail: string
   creditDays: number
   billingModel: 'per_piece' | 'monthly_flat'
-  monthlyFlatRate: number
+  monthlyFlatRate: number // ยอดเหมาขั้นต่ำ/เดือน
+  minPerTrip: number // ยอดเหมาขั้นต่ำ/ครั้ง
   enabledItems: string[] // list of linen codes enabled for this hotel
   priceList: CustomerPriceItem[] // per-piece prices
   priceHistory: CustomerPriceHistoryEntry[]

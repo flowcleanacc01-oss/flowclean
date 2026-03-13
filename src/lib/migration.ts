@@ -93,6 +93,7 @@ export function migrateCustomer(oldCustomer: V2Customer, index: number): Custome
     customerCode: oldCustomer.customerCode || generateCustomerCode(index, customerType),
     customerType,
     priceHistory: oldCustomer.priceHistory || [],
+    minPerTrip: (oldCustomer as unknown as { minPerTrip?: number }).minPerTrip ?? 0,
   }
 }
 

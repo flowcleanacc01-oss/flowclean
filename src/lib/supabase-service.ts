@@ -46,6 +46,7 @@ const FIELD_MAP: Record<string, string> = {
   creditDays: 'credit_days',
   billingModel: 'billing_model',
   monthlyFlatRate: 'monthly_flat_rate',
+  minPerTrip: 'min_per_trip',
   enabledItems: 'enabled_items',
   priceList: 'price_list',
   priceHistory: 'price_history',
