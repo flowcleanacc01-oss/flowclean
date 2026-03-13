@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# AI project files (ห้าม push ข้อมูล ecosystem)
+CLAUDE.md
+GEMINI.md
+AGENTS.md
+.ai-memory/
+.ai-secretary/
+.claude/
