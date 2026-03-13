@@ -699,6 +699,48 @@ export default function BillingPage() {
               <div><span className="text-slate-500">ครบกำหนด:</span> {formatDate(detailBilling.dueDate)}</div>
             </div>
 
+            {/* Linked Delivery Notes */}
+            {detailBilling.deliveryNoteIds.length > 0 && (() => {
+              const linkedDNs = detailBilling.deliveryNoteIds
+                .map(dnId => deliveryNotes.find(d => d.id === dnId))
+                .filter(Boolean)
+                .sort((a, b) => a!.date.localeCompare(b!.date))
+              if (linkedDNs.length === 0) return null
+              const isPer = detailCustomer.billingModel === 'per_piece'
+              const priceMap = isPer ? Object.fromEntries(detailCustomer.priceList.map(p => [p.code, p.price])) : {}
+              return (
+                <div>
+                  <h3 className="text-sm font-medium text-slate-700 mb-2">ใบส่งของที่รวมวางบิล ({linkedDNs.length} ใบ)</h3>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-blue-50 border-b border-blue-100">
+                          <th className="text-left px-3 py-2 font-medium text-blue-800">เลขที่ SD</th>
+                          <th className="text-left px-3 py-2 font-medium text-blue-800">วันที่</th>
+                          <th className="text-right px-3 py-2 font-medium text-blue-800">จำนวน</th>
+                          {isPer && <th className="text-right px-3 py-2 font-medium text-blue-800">ยอดรวม</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {linkedDNs.map(dn => {
+                          const totalPcs = dn!.items.reduce((s, i) => s + i.quantity, 0)
+                          const totalAmt = isPer ? dn!.items.reduce((s, i) => s + i.quantity * (priceMap[i.code] || 0), 0) : 0
+                          return (
+                            <tr key={dn!.id} className="border-t border-slate-100">
+                              <td className="px-3 py-1.5 font-mono text-xs">{dn!.noteNumber}</td>
+                              <td className="px-3 py-1.5 text-slate-600">{formatDate(dn!.date)}</td>
+                              <td className="px-3 py-1.5 text-right">{formatNumber(totalPcs)} ชิ้น</td>
+                              {isPer && <td className="px-3 py-1.5 text-right">{formatCurrency(totalAmt)}</td>}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })()}
+
             <div className="border border-slate-200 rounded-lg overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
