@@ -75,7 +75,7 @@ export default function BillingPage() {
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'billing', label: 'ใบวางบิล (WB)' },
     { key: 'invoice', label: 'ใบกำกับภาษี/ใบเสร็จ (IV)' },
-    { key: 'quotation', label: 'ใบเสนอราคา (QU)' },
+    { key: 'quotation', label: 'ใบเสนอราคา (QT)' },
   ]
 
   const handleSort = (key: string) => {

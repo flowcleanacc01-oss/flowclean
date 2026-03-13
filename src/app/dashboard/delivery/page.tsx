@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { DELIVERY_STATUS_CONFIG, type DeliveryNoteStatus, type DeliveryNoteItem } from '@/types'
@@ -22,7 +23,8 @@ export default function DeliveryPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DeliveryNoteStatus | 'all'>('all')
   const [showCreate, setShowCreate] = useState(false)
-  const [showDetail, setShowDetail] = useState<string | null>(null)
+  const searchParams = useSearchParams()
+  const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('single')

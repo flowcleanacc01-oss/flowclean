@@ -10,7 +10,6 @@ import {
 } from 'lucide-react'
 import {
   LINEN_FORM_STATUS_CONFIG, DELIVERY_STATUS_CONFIG, BILLING_STATUS_CONFIG,
-  CUSTOMER_TYPE_CONFIG,
 } from '@/types'
 import type { LinenFormStatus, DeliveryNoteStatus, BillingStatus } from '@/types'
 
@@ -19,7 +18,7 @@ export default function CustomerDetailPage() {
   const router = useRouter()
   const {
     getCustomer, linenForms, deliveryNotes, billingStatements,
-    taxInvoices, checklists, getCarryOver, linenCatalog,
+    taxInvoices, checklists, getCarryOver, linenCatalog, getCustomerCategoryLabel,
   } = useStore()
 
   const customer = getCustomer(id)
@@ -108,7 +107,7 @@ export default function CustomerDetailPage() {
             {customer.isActive ? 'ใช้งาน' : 'ปิดใช้งาน'}
           </span>
           <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
-            {CUSTOMER_TYPE_CONFIG[customer.customerType]}
+            {getCustomerCategoryLabel(customer.customerType)}
           </span>
           <span className={cn('text-xs font-medium px-2.5 py-1 rounded-full',
             customer.billingModel === 'monthly_flat' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700')}>

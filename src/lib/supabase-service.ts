@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 import type {
   Customer, LinenForm, DeliveryNote, BillingStatement, TaxInvoice,
   Quotation, Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
-  ProductChecklist, AuditLog,
+  CustomerCategoryDef, ProductChecklist, AuditLog,
 } from '@/types'
 
 // ============================================================
@@ -88,6 +88,8 @@ const FIELD_MAP: Record<string, string> = {
   bankName: 'bank_name',
   bankAccountName: 'bank_account_name',
   bankAccountNumber: 'bank_account_number',
+  bankAccounts: 'bank_accounts',
+  selectedBankAccountId: 'selected_bank_account_id',
   passwordHash: 'password_hash',
   // Bag counts
   bagsSentCount: 'bags_sent_count',
@@ -160,6 +162,31 @@ export async function updateLinenCategoryDB(key: string, updates: Partial<LinenC
 
 export async function deleteLinenCategoryDB(key: string): Promise<void> {
   await dbWrite({ table: 'linen_categories', operation: 'delete', match: { column: 'key', value: key } })
+}
+
+// ============================================================
+// Customer Categories (Dynamic)
+// ============================================================
+
+export async function fetchCustomerCategories(): Promise<CustomerCategoryDef[]> {
+  const { data, error } = await supabase
+    .from('customer_categories')
+    .select('*')
+    .order('sort_order')
+  if (error) throw error
+  return toCamelCaseArray<CustomerCategoryDef>(data || [])
+}
+
+export async function insertCustomerCategory(cat: CustomerCategoryDef): Promise<void> {
+  await dbWrite({ table: 'customer_categories', operation: 'insert', data: toSnakeCase(cat as unknown as Record<string, unknown>) })
+}
+
+export async function updateCustomerCategoryDB(key: string, updates: Partial<CustomerCategoryDef>): Promise<void> {
+  await dbWrite({ table: 'customer_categories', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'key', value: key } })
+}
+
+export async function deleteCustomerCategoryDB(key: string): Promise<void> {
+  await dbWrite({ table: 'customer_categories', operation: 'delete', match: { column: 'key', value: key } })
 }
 
 // ============================================================
@@ -522,6 +549,7 @@ export async function fetchAllData() {
     fetchLinenItems(),
     fetchChecklists(),
     fetchLinenCategories(),
+    fetchCustomerCategories().catch(() => [] as CustomerCategoryDef[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -530,7 +558,7 @@ export async function fetchAllData() {
   const [
     customers, linenForms, deliveryNotes, billingStatements,
     taxInvoices, quotations, expenses, users, companyInfo,
-    linenItems, checklists, linenCategories,
+    linenItems, checklists, linenCategories, customerCategories,
   ] = [
     val(results[0], [] as Customer[]),
     val(results[1], [] as LinenForm[]),
@@ -544,6 +572,7 @@ export async function fetchAllData() {
     val(results[9], [] as LinenItemDef[]),
     val(results[10], [] as ProductChecklist[]),
     val(results[11], [] as LinenCategoryDef[]),
+    val(results[12], [] as CustomerCategoryDef[]),
   ]
 
   return {
@@ -559,5 +588,6 @@ export async function fetchAllData() {
     linenItems,
     checklists,
     linenCategories,
+    customerCategories,
   }
 }

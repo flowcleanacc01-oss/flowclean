@@ -78,15 +78,29 @@ export const STANDARD_LINEN_ITEMS: LinenItemDef[] = [
 // ============================================================
 // Customer Type
 // ============================================================
-export type CustomerType = 'hotel' | 'spa' | 'clinic' | 'restaurant' | 'other'
+export type CustomerType = string
 
-export const CUSTOMER_TYPE_CONFIG: Record<CustomerType, string> = {
+export const CUSTOMER_TYPE_CONFIG: Record<string, string> = {
   hotel: 'โรงแรม',
   spa: 'สปา',
   clinic: 'คลินิก',
   restaurant: 'ร้านอาหาร',
   other: 'อื่นๆ',
 }
+
+export interface CustomerCategoryDef {
+  key: string
+  label: string
+  sortOrder: number
+}
+
+export const DEFAULT_CUSTOMER_CATEGORIES: CustomerCategoryDef[] = [
+  { key: 'hotel', label: 'โรงแรม', sortOrder: 1 },
+  { key: 'spa', label: 'สปา', sortOrder: 2 },
+  { key: 'clinic', label: 'คลินิก', sortOrder: 3 },
+  { key: 'restaurant', label: 'ร้านอาหาร', sortOrder: 4 },
+  { key: 'other', label: 'อื่นๆ', sortOrder: 5 },
+]
 
 // ============================================================
 // Customer
@@ -120,6 +134,7 @@ export interface Customer {
   billingModel: 'per_piece' | 'monthly_flat'
   monthlyFlatRate: number // ยอดเหมาขั้นต่ำ/เดือน
   minPerTrip: number // ยอดเหมาขั้นต่ำ/ครั้ง
+  selectedBankAccountId: string // references BankAccount.id from CompanyInfo
   enabledItems: string[] // list of linen codes enabled for this hotel
   priceList: CustomerPriceItem[] // per-piece prices
   priceHistory: CustomerPriceHistoryEntry[]
@@ -328,7 +343,7 @@ export interface QuotationItem {
 
 export interface Quotation {
   id: string
-  quotationNumber: string // QU-YYYYMM-XXX
+  quotationNumber: string // QT-YYYYMM-XXX
   customerName: string
   customerContact: string
   date: string
@@ -399,6 +414,17 @@ export interface AuditLog {
 }
 
 // ============================================================
+// Bank Account
+// ============================================================
+export interface BankAccount {
+  id: string
+  bankName: string
+  accountName: string
+  accountNumber: string
+  isDefault: boolean
+}
+
+// ============================================================
 // Company Info (for tax invoices)
 // ============================================================
 export interface CompanyInfo {
@@ -411,6 +437,7 @@ export interface CompanyInfo {
   bankName: string
   bankAccountName: string
   bankAccountNumber: string
+  bankAccounts: BankAccount[]
 }
 
 // ============================================================

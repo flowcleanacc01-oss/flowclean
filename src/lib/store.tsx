@@ -5,10 +5,10 @@ import type {
   Customer, LinenForm, LinenFormStatus, DeliveryNote, DeliveryNoteStatus,
   BillingStatement, BillingStatus, TaxInvoice, Quotation, QuotationStatus,
   Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
-  ProductChecklist, ChecklistStatus,
+  CustomerCategoryDef, ProductChecklist, ChecklistStatus,
   AuditAction, AuditEntityType, AuditLog,
 } from '@/types'
-import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES } from '@/types'
+import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES, DEFAULT_CUSTOMER_CATEGORIES } from '@/types'
 import {
   SAMPLE_CUSTOMERS, SAMPLE_LINEN_FORMS, SAMPLE_DELIVERY_NOTES,
   SAMPLE_BILLING_STATEMENTS, SAMPLE_EXPENSES, SAMPLE_USERS,
@@ -99,6 +99,13 @@ interface StoreContextType {
   deleteCategory: (key: string) => void
   getCategoryLabel: (key: string) => string
 
+  // Customer Categories
+  customerCategories: CustomerCategoryDef[]
+  addCustomerCategory: (cat: CustomerCategoryDef) => void
+  updateCustomerCategory: (key: string, updates: Partial<CustomerCategoryDef>) => void
+  deleteCustomerCategory: (key: string) => void
+  getCustomerCategoryLabel: (key: string) => string
+
   // Checklists
   checklists: ProductChecklist[]
   addChecklist: (c: Omit<ProductChecklist, 'id' | 'checklistNumber' | 'createdBy' | 'updatedAt'>) => ProductChecklist
@@ -153,6 +160,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(DEFAULT_COMPANY_INFO)
   const [linenCatalog, setLinenCatalog] = useState<LinenItemDef[]>(STANDARD_LINEN_ITEMS)
   const [linenCategories, setLinenCategories] = useState<LinenCategoryDef[]>(DEFAULT_LINEN_CATEGORIES)
+  const [customerCategories, setCustomerCategories] = useState<CustomerCategoryDef[]>(DEFAULT_CUSTOMER_CATEGORIES)
   const [checklists, setChecklists] = useState<ProductChecklist[]>([])
   const [loaded, setLoaded] = useState(false)
   const seeded = useRef(false)
@@ -268,6 +276,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setCompanyInfo(data.companyInfo || DEFAULT_COMPANY_INFO)
       setLinenCatalog(data.linenItems.length > 0 ? data.linenItems : STANDARD_LINEN_ITEMS)
       setLinenCategories(data.linenCategories.length > 0 ? data.linenCategories : DEFAULT_LINEN_CATEGORIES)
+      if (data.customerCategories) {
+        setCustomerCategories(data.customerCategories.length > 0 ? data.customerCategories : DEFAULT_CUSTOMER_CATEGORIES)
+      }
       setChecklists(data.checklists)
 
       // Build defaultPrices from linenItems
@@ -677,6 +688,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return linenCategories.find(c => c.key === key)?.label || key
   }, [linenCategories])
 
+  // ---- Customer Categories ----
+  const addCustomerCategory = useCallback((cat: CustomerCategoryDef) => {
+    setCustomerCategories(prev => [...prev, cat])
+    dbSave(db.insertCustomerCategory(cat), () => {
+      setCustomerCategories(prev => prev.filter(c => c.key !== cat.key))
+    })
+    logAudit('create', 'customer_category' as AuditEntityType, cat.key, cat.label)
+  }, [logAudit])
+
+  const updateCustomerCategory = useCallback((key: string, updates: Partial<CustomerCategoryDef>) => {
+    setCustomerCategories(prev => prev.map(c => c.key === key ? { ...c, ...updates } : c))
+    dbSave(db.updateCustomerCategoryDB(key, updates))
+    logAudit('update', 'customer_category' as AuditEntityType, key, updates.label || key)
+  }, [logAudit])
+
+  const deleteCustomerCategory = useCallback((key: string) => {
+    setCustomerCategories(prev => {
+      const old = prev.find(c => c.key === key)
+      logAudit('delete', 'customer_category' as AuditEntityType, key, old?.label || key)
+      return prev.filter(c => c.key !== key)
+    })
+    dbSave(db.deleteCustomerCategoryDB(key))
+  }, [logAudit])
+
+  const getCustomerCategoryLabel = useCallback((key: string): string => {
+    return customerCategories.find(c => c.key === key)?.label || key
+  }, [customerCategories])
+
   // ---- Checklists ----
   const addChecklist = useCallback((c: Omit<ProductChecklist, 'id' | 'checklistNumber' | 'createdBy' | 'updatedAt'>): ProductChecklist => {
     const newCL: ProductChecklist = {
@@ -790,6 +829,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       companyInfo, updateCompanyInfo,
       linenCatalog, addLinenItem, updateLinenItem, deleteLinenItem, getItemName, getItemNameMap,
       linenCategories, addCategory, updateCategory, deleteCategory, getCategoryLabel,
+      customerCategories, addCustomerCategory, updateCustomerCategory, deleteCustomerCategory, getCustomerCategoryLabel,
       checklists, addChecklist, updateChecklist, updateChecklistStatus, deleteChecklist,
       getCarryOver, getDiscrepancies,
     }}>

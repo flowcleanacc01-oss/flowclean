@@ -6,7 +6,8 @@ import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
 import LinenFormPrint from '@/components/LinenFormPrint'
@@ -21,6 +22,7 @@ export default function LinenFormsPage() {
     customers, getCustomer, getCarryOver, linenCatalog, deliveryNotes, companyInfo,
   } = useStore()
 
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<LinenFormStatus | 'all'>(() => {
@@ -40,6 +42,18 @@ export default function LinenFormsPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   const [showPrint, setShowPrint] = useState(false)
+  const [alertFilter, setAlertFilter] = useState<'all' | 'alert' | 'no-sd'>('all')
+
+  // Map: lfId → deliveryNote (for SD badge)
+  const linkedLFMap = useMemo(() => {
+    const map = new Map<string, { dnId: string; noteNumber: string }>()
+    for (const dn of deliveryNotes) {
+      for (const lfId of dn.linenFormIds) {
+        map.set(lfId, { dnId: dn.id, noteNumber: dn.noteNumber })
+      }
+    }
+    return map
+  }, [deliveryNotes])
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -87,6 +101,12 @@ export default function LinenFormsPage() {
           if (dateTo && f.date > dateTo) return false
         }
       }
+      // Alert filters
+      if (alertFilter === 'alert') {
+        if (!hasType1Discrepancy(f) && !hasType2Discrepancy(f)) return false
+      } else if (alertFilter === 'no-sd') {
+        if (linkedLFMap.has(f.id)) return false
+      }
       return true
     }).sort((a, b) => {
       let va: string | number, vb: string | number
@@ -96,12 +116,22 @@ export default function LinenFormsPage() {
         case 'date': va = a.date; vb = b.date; break
         case 'pieces': va = a.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0); vb = b.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0); break
         case 'status': va = ALL_LINEN_STATUSES.indexOf(a.status); vb = ALL_LINEN_STATUSES.indexOf(b.status); break
+        case 'alert': {
+          const aScore = (hasType1Discrepancy(a) ? 1 : 0) + (hasType2Discrepancy(a) ? 2 : 0)
+          const bScore = (hasType1Discrepancy(b) ? 1 : 0) + (hasType2Discrepancy(b) ? 2 : 0)
+          va = aScore; vb = bScore; break
+        }
+        case 'sd': {
+          va = linkedLFMap.has(a.id) ? 1 : 0
+          vb = linkedLFMap.has(b.id) ? 1 : 0
+          break
+        }
         default: va = a.date; vb = b.date
       }
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [linenForms, statusFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
+  }, [linenForms, statusFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, alertFilter, linkedLFMap])
 
   const statuses: (LinenFormStatus | 'all')[] = ['all', ...ALL_LINEN_STATUSES]
 
@@ -270,6 +300,25 @@ export default function LinenFormsPage() {
         ))}
       </div>
 
+      {/* Alert / SD filter */}
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {([
+          { key: 'all' as const, label: 'ทั้งหมด' },
+          { key: 'alert' as const, label: '⚠ ยอดไม่ตรง' },
+          { key: 'no-sd' as const, label: 'ยังไม่มีใบส่งของ' },
+        ]).map(f => (
+          <button key={f.key} onClick={() => setAlertFilter(f.key)}
+            className={cn(
+              'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+              alertFilter === f.key
+                ? f.key === 'alert' ? 'bg-amber-500 text-white' : f.key === 'no-sd' ? 'bg-blue-500 text-white' : 'bg-[#1B3A5C] text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            )}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
@@ -281,13 +330,14 @@ export default function LinenFormsPage() {
                 <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="จำนวนชิ้น" sortKey="pieces" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="สถานะ" sortKey="status" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
-                <th className="text-center px-4 py-3 font-medium text-slate-600 w-12"></th>
+                <SortableHeader label="⚠" sortKey="alert" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center w-12" />
+                <SortableHeader label="SD" sortKey="sd" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center w-14" />
                 <th className="text-right px-4 py-3 font-medium text-slate-600 w-28"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
               ) : filtered.map(form => {
                 const customer = getCustomer(form.customerId)
                 const totalPieces = form.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
@@ -295,6 +345,7 @@ export default function LinenFormsPage() {
                 const disc2 = hasType2Discrepancy(form)
                 const cfg = LINEN_FORM_STATUS_CONFIG[form.status] || LINEN_FORM_STATUS_CONFIG.draft
                 const nextStatus = NEXT_LINEN_STATUS[form.status]
+                const linkedDNInfo = linkedLFMap.get(form.id)
 
                 return (
                   <tr key={form.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
@@ -312,6 +363,17 @@ export default function LinenFormsPage() {
                     <td className="px-4 py-3 text-center">
                       {disc1 && <span title="โรงซักนับเข้า ≠ นับส่ง+เคลม"><AlertTriangle className="w-4 h-4 text-amber-500 inline" /></span>}
                       {disc2 && <span title="ลูกค้านับกลับ ≠ แพคส่ง"><AlertTriangle className="w-4 h-4 text-red-500 inline" /></span>}
+                    </td>
+                    <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                      {linkedDNInfo && (
+                        <button
+                          onClick={() => router.push(`/dashboard/delivery?detail=${linkedDNInfo.dnId}`)}
+                          title={`ใบส่งของ ${linkedDNInfo.noteNumber}`}
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-semibold hover:bg-blue-200 transition-colors"
+                        >
+                          <FileText className="w-3 h-3" />SD
+                        </button>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                       <div className="inline-flex items-center gap-1">

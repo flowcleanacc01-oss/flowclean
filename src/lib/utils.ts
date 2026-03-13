@@ -39,7 +39,7 @@ export function genTaxInvoiceNumber(): string {
 }
 
 export function genQuotationNumber(): string {
-  return `QU-${format(new Date(), 'yyyyMM')}-${nextSeq()}`
+  return `QT-${format(new Date(), 'yyyyMM')}-${nextSeq()}`
 }
 
 export function genChecklistNumber(): string {

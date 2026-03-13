@@ -94,6 +94,7 @@ export function migrateCustomer(oldCustomer: V2Customer, index: number): Custome
     customerType,
     priceHistory: oldCustomer.priceHistory || [],
     minPerTrip: (oldCustomer as unknown as { minPerTrip?: number }).minPerTrip ?? 0,
+    selectedBankAccountId: (oldCustomer as unknown as { selectedBankAccountId?: string }).selectedBankAccountId ?? '',
   }
 }
 
