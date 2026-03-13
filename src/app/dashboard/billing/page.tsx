@@ -25,6 +25,7 @@ export default function BillingPage() {
     taxInvoices, addTaxInvoice,
     quotations, addQuotation, updateQuotationStatus,
     deliveryNotes, updateDeliveryNote, customers, getCustomer, companyInfo, linenCatalog,
+    linenCategories, getCategoryLabel,
   } = useStore()
 
   const searchParams = useSearchParams()
@@ -64,6 +65,12 @@ export default function BillingPage() {
   const [quConditions, setQuConditions] = useState('1. ราคายังไม่รวมภาษีมูลค่าเพิ่ม 7%\n2. ระยะเวลาเครดิต 30 วัน\n3. บริการรับ-ส่งผ้าทุกวัน')
   const [quNotes, setQuNotes] = useState('')
   const [quItems, setQuItems] = useState<QuotationItem[]>([])
+  const [quSearch, setQuSearch] = useState('')
+  const [quFilterCat, setQuFilterCat] = useState<string>('all')
+
+  const sortedCategories = useMemo(() =>
+    [...linenCategories].sort((a, b) => a.sortOrder - b.sortOrder)
+  , [linenCategories])
 
   // Create billing state
   const [selCustomerId, setSelCustomerId] = useState('')
@@ -356,6 +363,8 @@ export default function BillingPage() {
             setQuConditions('1. ราคายังไม่รวมภาษีมูลค่าเพิ่ม 7%\n2. ระยะเวลาเครดิต 30 วัน\n3. บริการรับ-ส่งผ้าทุกวัน')
             setQuNotes('')
             setQuItems(linenCatalog.map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice })))
+            setQuSearch('')
+            setQuFilterCat('all')
             setShowCreateQU(true)
           }}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
@@ -939,38 +948,68 @@ export default function BillingPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">รายการผ้า + ราคา</label>
-            <div className="border border-slate-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+            <label className="block text-sm font-medium text-slate-600 mb-1">รายการผ้า + ราคา ({quItems.length} รายการ)</label>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <div className="relative flex-1 min-w-[150px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input value={quSearch} onChange={e => setQuSearch(e.target.value)}
+                  placeholder="ค้นหา..."
+                  className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+              </div>
+              <select value={quFilterCat} onChange={e => setQuFilterCat(e.target.value)}
+                className="px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+                <option value="all">ทุกหมวด</option>
+                {sortedCategories.map(c => (
+                  <option key={c.key} value={c.key}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0">
+                <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50">
                     <th className="text-left px-3 py-2 font-medium text-slate-600 w-16">รหัส</th>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">ชื่อรายการ</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">ชื่อ (ไทย)</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">ชื่อ (EN)</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">หมวด</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600 w-14">หน่วย</th>
                     <th className="text-right px-3 py-2 font-medium text-slate-600 w-28">ราคา/หน่วย</th>
-                    <th className="text-center px-3 py-2 font-medium text-slate-600 w-12"></th>
+                    <th className="text-center px-3 py-2 font-medium text-slate-600 w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {quItems.map((item, idx) => (
-                    <tr key={item.code} className="border-t border-slate-100">
-                      <td className="px-3 py-1 font-mono text-xs text-slate-500">{item.code}</td>
-                      <td className="px-3 py-1 text-slate-700">{item.name}</td>
-                      <td className="px-1 py-1 text-right">
-                        <input type="number" min={0} step={0.5}
-                          value={item.pricePerUnit || ''}
-                          onChange={e => {
-                            const updated = [...quItems]
-                            updated[idx] = { ...item, pricePerUnit: sanitizeNumber(e.target.value) }
-                            setQuItems(updated)
-                          }}
-                          className="w-24 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                      </td>
-                      <td className="px-1 py-1 text-center">
-                        <button onClick={() => setQuItems(quItems.filter((_, i) => i !== idx))}
-                          className="text-slate-400 hover:text-red-500 p-1"><X className="w-3 h-3" /></button>
-                      </td>
-                    </tr>
-                  ))}
+                  {quItems.map((item, idx) => {
+                    const catItem = linenCatalog.find(i => i.code === item.code)
+                    // Apply search + category filter
+                    if (quSearch) {
+                      const s = quSearch.toLowerCase()
+                      if (!item.code.toLowerCase().includes(s) && !item.name.toLowerCase().includes(s) && !(catItem?.nameEn || '').toLowerCase().includes(s)) return null
+                    }
+                    if (quFilterCat !== 'all' && catItem?.category !== quFilterCat) return null
+                    return (
+                      <tr key={item.code} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="px-3 py-1 font-mono text-xs text-slate-500">{item.code}</td>
+                        <td className="px-3 py-1 text-slate-700">{item.name}</td>
+                        <td className="px-3 py-1 text-slate-500 text-xs">{catItem?.nameEn || ''}</td>
+                        <td className="px-3 py-1 text-xs text-slate-400">{catItem ? getCategoryLabel(catItem.category) : ''}</td>
+                        <td className="px-3 py-1 text-xs text-slate-400">{catItem?.unit || 'ชิ้น'}</td>
+                        <td className="px-1 py-1 text-right">
+                          <input type="number" min={0} step={0.5}
+                            value={item.pricePerUnit || ''}
+                            onChange={e => {
+                              const updated = [...quItems]
+                              updated[idx] = { ...item, pricePerUnit: sanitizeNumber(e.target.value) }
+                              setQuItems(updated)
+                            }}
+                            className="w-24 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                        </td>
+                        <td className="px-1 py-1 text-center">
+                          <button onClick={() => setQuItems(quItems.filter((_, i) => i !== idx))}
+                            className="text-slate-400 hover:text-red-500 p-1"><X className="w-3 h-3" /></button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

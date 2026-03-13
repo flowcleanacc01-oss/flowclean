@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { type DeliveryNoteItem } from '@/types'
-import { Plus, Search, X, FileDown, Check } from 'lucide-react'
+import { Plus, Search, X, FileDown, Check, ExternalLink } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import ExportButtons from '@/components/ExportButtons'
@@ -19,6 +19,7 @@ export default function DeliveryPage() {
   const {
     deliveryNotes, addDeliveryNote, updateDeliveryNote, deleteDeliveryNote,
     linenForms, customers, getCustomer, companyInfo, linenCatalog,
+    billingStatements,
   } = useStore()
   const [showPrint, setShowPrint] = useState(false)
 
@@ -152,6 +153,17 @@ export default function DeliveryPage() {
   const detailCustomer = detailNote ? getCustomer(detailNote.customerId) : null
   const itemNameMap = Object.fromEntries(linenCatalog.map(i => [i.code, i.name]))
 
+  // Map DN id → billing statement (for WB badge)
+  const dnBillingMap = useMemo(() => {
+    const map = new Map<string, { billingId: string; billingNumber: string }>()
+    for (const bs of billingStatements) {
+      for (const dnId of bs.deliveryNoteIds) {
+        map.set(dnId, { billingId: bs.id, billingNumber: bs.billingNumber })
+      }
+    }
+    return map
+  }, [billingStatements])
+
   const handleExportCSV = () => {
     if (!detailNote || !detailCustomer) return
     const isPer = detailCustomer.billingModel === 'per_piece'
@@ -262,7 +274,17 @@ export default function DeliveryPage() {
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">พิมพ์แล้ว</span>
                         )}
                         {dn.isBilled && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">วางบิลแล้ว</span>
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700">วางบิลแล้ว</span>
+                        )}
+                        {dn.isBilled && dnBillingMap.has(dn.id) && (
+                          <button
+                            onClick={e => { e.stopPropagation(); window.location.href = `/dashboard/billing?detail=${dnBillingMap.get(dn.id)!.billingId}` }}
+                            className="px-1.5 py-0.5 rounded text-xs font-bold text-orange-600 hover:text-orange-800 hover:bg-orange-100 transition-colors flex items-center gap-0.5"
+                            title={`ไปที่ ${dnBillingMap.get(dn.id)!.billingNumber}`}
+                          >
+                            WB
+                            <ExternalLink className="w-3 h-3" />
+                          </button>
                         )}
                         {!dn.isPrinted && !dn.isBilled && (
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">รอดำเนินการ</span>
@@ -398,7 +420,14 @@ export default function DeliveryPage() {
                   <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">พิมพ์แล้ว</span>
                 )}
                 {detailNote.isBilled && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">วางบิลแล้ว</span>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700">วางบิลแล้ว</span>
+                )}
+                {detailNote.isBilled && dnBillingMap.has(detailNote.id) && (
+                  <a href={`/dashboard/billing?detail=${dnBillingMap.get(detailNote.id)!.billingId}`}
+                    className="px-1.5 py-0.5 rounded text-xs font-bold text-orange-600 hover:text-orange-800 hover:bg-orange-100 transition-colors flex items-center gap-0.5">
+                    WB
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 )}
                 {!detailNote.isPrinted && !detailNote.isBilled && (
                   <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">รอดำเนินการ</span>
