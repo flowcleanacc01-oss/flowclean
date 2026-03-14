@@ -131,9 +131,13 @@ export interface Customer {
   contactPhone: string
   contactEmail: string
   creditDays: number
-  billingModel: 'per_piece' | 'monthly_flat'
-  monthlyFlatRate: number // ยอดเหมาขั้นต่ำ/เดือน
-  minPerTrip: number // ยอดเหมาขั้นต่ำ/ครั้ง
+  billingModel: 'per_piece' | 'monthly_flat' // derived from flags — kept for backward compat
+  monthlyFlatRate: number // ยอดขั้นต่ำ/เดือน
+  minPerTrip: number // ยอดขั้นต่ำ/ครั้ง
+  enablePerPiece: boolean // เงื่อนไข: คิดตามชิ้น
+  enableMinPerTrip: boolean // เงื่อนไข: ขั้นต่ำ/ครั้ง
+  minPerTripThreshold: number // เกินค่านี้ไม่ต้องคิดขั้นต่ำ/ครั้ง
+  enableMinPerMonth: boolean // เงื่อนไข: ขั้นต่ำ/เดือน
   selectedBankAccountId: string // references BankAccount.id from CompanyInfo
   enabledItems: string[] // list of linen codes enabled for this hotel
   priceList: CustomerPriceItem[] // per-piece prices

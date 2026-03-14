@@ -20,7 +20,8 @@ function makeCustomer(overrides: Partial<Customer> = {}): Customer {
     contactEmail: 'test@test.com',
     creditDays: 30,
     billingModel: 'per_piece',
-    monthlyFlatRate: 0,
+    monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',
+    enablePerPiece: true, enableMinPerTrip: false, minPerTripThreshold: 0, enableMinPerMonth: false,
     enabledItems: ['B/T', 'B/H', 'P/C', 'S/K'],
     priceList: [
       { code: 'B/T', price: 8 },

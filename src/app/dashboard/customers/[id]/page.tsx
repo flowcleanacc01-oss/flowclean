@@ -109,10 +109,15 @@ export default function CustomerDetailPage() {
           <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
             {getCustomerCategoryLabel(customer.customerType)}
           </span>
-          <span className={cn('text-xs font-medium px-2.5 py-1 rounded-full',
-            customer.billingModel === 'monthly_flat' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700')}>
-            {customer.billingModel === 'monthly_flat' ? `ขั้นต่ำ/ด. ${formatCurrency(customer.monthlyFlatRate)}` : 'คิดตามชิ้น'}
-          </span>
+          {(customer.enablePerPiece ?? true) && (
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">ตามชิ้น</span>
+          )}
+          {customer.enableMinPerTrip && (
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">ขั้นต่ำ/ครั้ง {formatCurrency(customer.minPerTrip)}</span>
+          )}
+          {customer.enableMinPerMonth && (
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">ขั้นต่ำ/ด. {formatCurrency(customer.monthlyFlatRate)}</span>
+          )}
         </div>
       </div>
 
@@ -167,7 +172,7 @@ export default function CustomerDetailPage() {
                         <span className="font-mono text-xs text-slate-400 mr-2">{code}</span>
                         {catalogMap[code] || code}
                       </span>
-                      {customer.billingModel === 'per_piece' && (
+                      {(customer.enablePerPiece ?? true) && (
                         <span className="text-slate-800 font-medium">{formatCurrency(price?.price ?? 0)}</span>
                       )}
                     </div>

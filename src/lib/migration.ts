@@ -95,6 +95,10 @@ export function migrateCustomer(oldCustomer: V2Customer, index: number): Custome
     priceHistory: oldCustomer.priceHistory || [],
     minPerTrip: (oldCustomer as unknown as { minPerTrip?: number }).minPerTrip ?? 0,
     selectedBankAccountId: (oldCustomer as unknown as { selectedBankAccountId?: string }).selectedBankAccountId ?? '',
+    enablePerPiece: (oldCustomer as unknown as { enablePerPiece?: boolean }).enablePerPiece ?? (oldCustomer.billingModel !== 'monthly_flat'),
+    enableMinPerTrip: (oldCustomer as unknown as { enableMinPerTrip?: boolean }).enableMinPerTrip ?? false,
+    minPerTripThreshold: (oldCustomer as unknown as { minPerTripThreshold?: number }).minPerTripThreshold ?? 0,
+    enableMinPerMonth: (oldCustomer as unknown as { enableMinPerMonth?: boolean }).enableMinPerMonth ?? (oldCustomer.billingModel === 'monthly_flat'),
   }
 }
 

@@ -17,6 +17,7 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   name: '', nameEn: '', address: '', taxId: '', branch: 'สำนักงานใหญ่',
   contactName: '', contactPhone: '', contactEmail: '',
   creditDays: 30, billingModel: 'per_piece', monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',
+  enablePerPiece: true, enableMinPerTrip: false, minPerTripThreshold: 0, enableMinPerMonth: false,
   enabledItems: [], priceList: [], priceHistory: [],
   notes: '', isActive: true,
 }
@@ -92,6 +93,8 @@ export default function CustomersPage() {
       name: c.name, nameEn: c.nameEn, address: c.address, taxId: c.taxId, branch: c.branch,
       contactName: c.contactName, contactPhone: c.contactPhone, contactEmail: c.contactEmail,
       creditDays: c.creditDays, billingModel: c.billingModel, monthlyFlatRate: c.monthlyFlatRate, minPerTrip: c.minPerTrip ?? 0, selectedBankAccountId: c.selectedBankAccountId ?? '',
+      enablePerPiece: c.enablePerPiece ?? true, enableMinPerTrip: c.enableMinPerTrip ?? false,
+      minPerTripThreshold: c.minPerTripThreshold ?? 0, enableMinPerMonth: c.enableMinPerMonth ?? false,
       enabledItems: [...c.enabledItems], priceList: [...c.priceList], priceHistory: [...c.priceHistory],
       notes: c.notes, isActive: c.isActive,
     })
@@ -106,10 +109,15 @@ export default function CustomersPage() {
 
   const handleSave = () => {
     if (!form.name) return
+    // Derive billingModel from flags for backward compat
+    const derived = {
+      ...form,
+      billingModel: form.enableMinPerMonth ? 'monthly_flat' as const : 'per_piece' as const,
+    }
     if (editId) {
-      updateCustomer(editId, form)
+      updateCustomer(editId, derived)
     } else {
-      addCustomer(form)
+      addCustomer(derived)
     }
     setShowForm(false)
   }
@@ -248,10 +256,20 @@ export default function CustomersPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-600 text-xs">{getCustomerCategoryLabel(c.customerType)}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-medium',
-                          c.billingModel === 'monthly_flat' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700')}>
-                          {c.billingModel === 'monthly_flat' ? `ขั้นต่ำ/ด. ${formatCurrency(c.monthlyFlatRate)}` : 'ตามชิ้น'}
-                        </span>
+                        <div className="flex flex-wrap justify-center gap-1">
+                          {(c.enablePerPiece ?? true) && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700">ตามชิ้น</span>
+                          )}
+                          {c.enableMinPerTrip && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700">ขั้นต่ำ/ครั้ง</span>
+                          )}
+                          {c.enableMinPerMonth && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-100 text-purple-700">ขั้นต่ำ/ด.</span>
+                          )}
+                          {!(c.enablePerPiece ?? true) && !c.enableMinPerTrip && !c.enableMinPerMonth && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500">-</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right text-slate-600">{c.creditDays} วัน</td>
                       <td className="px-4 py-3 text-right text-slate-600">{c.enabledItems.length}</td>
@@ -458,39 +476,64 @@ export default function CustomersPage() {
             </div>
           </div>
 
-          {/* Billing Model */}
+          {/* Billing Conditions — 3 independent checkboxes */}
           <div className="bg-slate-50 rounded-lg p-4">
-            <label className="block font-medium text-slate-700 mb-2">รูปแบบการคิดเงิน</label>
-            <div className="flex gap-4 mb-3">
+            <label className="block font-medium text-slate-700 mb-3">รูปแบบการคิดเงิน</label>
+            <div className="space-y-3">
+              {/* 1. คิดตามชิ้น */}
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="billing" checked={form.billingModel === 'per_piece'}
-                  onChange={() => setForm({ ...form, billingModel: 'per_piece', monthlyFlatRate: 0 })}
-                  className="accent-[#1B3A5C]" />
-                <span>คิดตามชิ้น</span>
+                <input type="checkbox" checked={form.enablePerPiece}
+                  onChange={e => setForm({ ...form, enablePerPiece: e.target.checked })}
+                  className="rounded accent-[#1B3A5C]" />
+                <span className="text-sm font-medium text-slate-700">คิดตามชิ้น</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="billing" checked={form.billingModel === 'monthly_flat'}
-                  onChange={() => setForm({ ...form, billingModel: 'monthly_flat' })}
-                  className="accent-[#1B3A5C]" />
-                <span>เหมาขั้นต่ำ/เดือน</span>
-              </label>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+              {/* 2. ขั้นต่ำ/ครั้ง */}
               <div>
-                <label className="block text-sm text-slate-600 mb-1">เหมาขั้นต่ำ/ครั้ง (บาท)</label>
-                <input type="number" value={form.minPerTrip}
-                  onChange={e => setForm({ ...form, minPerTrip: sanitizeNumber(e.target.value) })}
-                  placeholder="0 = ไม่กำหนด"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.enableMinPerTrip}
+                    onChange={e => setForm({ ...form, enableMinPerTrip: e.target.checked })}
+                    className="rounded accent-[#1B3A5C]" />
+                  <span className="text-sm font-medium text-slate-700">ขั้นต่ำ/ครั้ง (บาท)</span>
+                </label>
+                {form.enableMinPerTrip && (
+                  <div className="ml-6 mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">ขั้นต่ำ/ครั้ง (บาท)</label>
+                      <input type="number" value={form.minPerTrip}
+                        onChange={e => setForm({ ...form, minPerTrip: sanitizeNumber(e.target.value) })}
+                        placeholder="0"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">เกินค่านี้ไม่ต้องคิดขั้นต่ำ (บาท)</label>
+                      <input type="number" value={form.minPerTripThreshold}
+                        onChange={e => setForm({ ...form, minPerTripThreshold: sanitizeNumber(e.target.value) })}
+                        placeholder="0 = ไม่กำหนด"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                    </div>
+                  </div>
+                )}
               </div>
-              {form.billingModel === 'monthly_flat' && (
-                <div>
-                  <label className="block text-sm text-slate-600 mb-1">เหมาขั้นต่ำ/เดือน (บาท)</label>
-                  <input type="number" value={form.monthlyFlatRate}
-                    onChange={e => setForm({ ...form, monthlyFlatRate: sanitizeNumber(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                </div>
-              )}
+
+              {/* 3. ขั้นต่ำ/เดือน */}
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.enableMinPerMonth}
+                    onChange={e => setForm({ ...form, enableMinPerMonth: e.target.checked })}
+                    className="rounded accent-[#1B3A5C]" />
+                  <span className="text-sm font-medium text-slate-700">ขั้นต่ำ/เดือน (บาท)</span>
+                </label>
+                {form.enableMinPerMonth && (
+                  <div className="ml-6 mt-2 max-w-xs">
+                    <label className="block text-xs text-slate-500 mb-1">ขั้นต่ำ/เดือน (บาท)</label>
+                    <input type="number" value={form.monthlyFlatRate}
+                      onChange={e => setForm({ ...form, monthlyFlatRate: sanitizeNumber(e.target.value) })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -563,7 +606,7 @@ export default function CustomersPage() {
                     <th className="w-16 px-1 py-2"></th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600">รหัส</th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600">รายการ</th>
-                    {form.billingModel === 'per_piece' && (
+                    {form.enablePerPiece && (
                       <th className="text-right px-3 py-2 font-medium text-slate-600 w-28">ราคา/ชิ้น</th>
                     )}
                   </tr>
@@ -590,7 +633,7 @@ export default function CustomersPage() {
                         </td>
                         <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
                         <td className="px-3 py-1.5">{item.name}</td>
-                        {form.billingModel === 'per_piece' && (
+                        {form.enablePerPiece && (
                           <td className="px-3 py-1.5 text-right">
                             <input type="number" min={0} step={0.5} value={priceItem?.price ?? 0}
                               onChange={e => updatePrice(item.code, sanitizeNumber(e.target.value))}
@@ -601,7 +644,7 @@ export default function CustomersPage() {
                     )
                   })}
                   {enabledItemsList.length > 0 && uncheckedItems.length > 0 && (
-                    <tr><td colSpan={form.billingModel === 'per_piece' ? 5 : 4} className="border-t-2 border-slate-200"></td></tr>
+                    <tr><td colSpan={form.enablePerPiece ? 5 : 4} className="border-t-2 border-slate-200"></td></tr>
                   )}
                   {uncheckedItems.map(item => (
                     <tr key={item.code} className="border-t border-slate-100">
@@ -611,7 +654,7 @@ export default function CustomersPage() {
                       <td className="px-1 py-1.5"></td>
                       <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
                       <td className="px-3 py-1.5 text-slate-400">{item.name}</td>
-                      {form.billingModel === 'per_piece' && (
+                      {form.enablePerPiece && (
                         <td className="px-3 py-1.5 text-right"><span className="text-slate-300">-</span></td>
                       )}
                     </tr>
