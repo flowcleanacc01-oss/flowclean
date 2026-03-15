@@ -93,6 +93,7 @@ CREATE TABLE customers (
   min_per_trip NUMERIC NOT NULL DEFAULT 0,
   enable_per_piece BOOLEAN NOT NULL DEFAULT true,
   enable_min_per_trip BOOLEAN NOT NULL DEFAULT false,
+  enable_waive BOOLEAN NOT NULL DEFAULT false,
   min_per_trip_threshold NUMERIC NOT NULL DEFAULT 0,
   enable_min_per_month BOOLEAN NOT NULL DEFAULT false,
   enabled_items TEXT[] NOT NULL DEFAULT '{}',
@@ -138,6 +139,10 @@ CREATE TABLE delivery_notes (
   vehicle_plate TEXT NOT NULL DEFAULT '',
   receiver_name TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'pending',
+  is_printed BOOLEAN NOT NULL DEFAULT false,
+  is_billed BOOLEAN NOT NULL DEFAULT false,
+  transport_fee_trip NUMERIC NOT NULL DEFAULT 0,
+  transport_fee_month NUMERIC NOT NULL DEFAULT 0,
   notes TEXT NOT NULL DEFAULT '',
   created_by TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL DEFAULT ''

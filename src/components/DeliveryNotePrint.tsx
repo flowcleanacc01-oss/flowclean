@@ -15,8 +15,11 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
   const itemNameMap = Object.fromEntries(catalog.map(i => [i.code, i.name]))
   const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
   const totalItems = note.items.reduce((s, i) => s + i.quantity, 0)
-  const isPer = customer.billingModel === 'per_piece'
-  const totalAmount = isPer ? note.items.reduce((s, i) => s + i.quantity * (priceMap[i.code] || 0), 0) : 0
+  const isPer = (customer.enablePerPiece ?? true)
+  const itemSubtotal = isPer ? note.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0) : 0
+  const tripFee = note.transportFeeTrip || 0
+  const monthFee = note.transportFeeMonth || 0
+  const totalAmount = itemSubtotal + tripFee + monthFee
 
   return (
     <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-4 print:shadow-none print:max-w-none print:w-full print:mx-0" id="print-delivery">
@@ -83,12 +86,36 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
               </tr>
             )
           })}
+          {/* รวมค่าซัก */}
           <tr className="bg-slate-50 font-medium">
-            <td colSpan={isPer ? 3 : 3} className="text-right px-3 py-2 border border-slate-300">รวมทั้งหมด</td>
+            <td colSpan={isPer ? 3 : 3} className="text-right px-3 py-2 border border-slate-300">
+              {(tripFee > 0 || monthFee > 0) ? 'รวมค่าซัก' : 'รวมทั้งหมด'}
+            </td>
             <td className="text-right px-3 py-2 border border-slate-300">{formatNumber(totalItems)}</td>
             {isPer && <td className="border border-slate-300"></td>}
-            {isPer && <td className="text-right px-3 py-2 border border-slate-300 font-bold">{formatNumber(totalAmount)}</td>}
+            {isPer && <td className="text-right px-3 py-2 border border-slate-300 font-bold">{formatNumber(itemSubtotal)}</td>}
           </tr>
+          {/* ค่ารถ (ครั้ง) */}
+          {isPer && tripFee > 0 && (
+            <tr>
+              <td colSpan={isPer ? 5 : 3} className="text-right px-3 py-1.5 border border-slate-300">ค่ารถ (ครั้ง)</td>
+              <td className="text-right px-3 py-1.5 border border-slate-300">{formatNumber(tripFee)}</td>
+            </tr>
+          )}
+          {/* ค่ารถ (เดือน) */}
+          {isPer && monthFee > 0 && (
+            <tr>
+              <td colSpan={isPer ? 5 : 3} className="text-right px-3 py-1.5 border border-slate-300">ค่ารถ (เดือน)</td>
+              <td className="text-right px-3 py-1.5 border border-slate-300">{formatNumber(monthFee)}</td>
+            </tr>
+          )}
+          {/* ยอดรวมทั้งหมด (with transport fees) */}
+          {isPer && (tripFee > 0 || monthFee > 0) && (
+            <tr className="bg-slate-100 font-bold">
+              <td colSpan={isPer ? 5 : 3} className="text-right px-3 py-2 border border-slate-300">ยอดรวมทั้งหมด</td>
+              <td className="text-right px-3 py-2 border border-slate-300">{formatNumber(totalAmount)}</td>
+            </tr>
+          )}
         </tbody>
       </table>
 

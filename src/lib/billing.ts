@@ -20,7 +20,7 @@ export function aggregateDeliveryItems(
 
   const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
 
-  return Object.entries(qtyMap)
+  const result = Object.entries(qtyMap)
     .filter(([, qty]) => qty > 0)
     .map(([code, quantity]) => {
       const pricePerUnit = priceMap[code] ?? 0
@@ -37,6 +37,34 @@ export function aggregateDeliveryItems(
       const bIdx = catalog.findIndex(i => i.code === b.code)
       return aIdx - bIdx
     })
+
+  // Aggregate transport fees from delivery notes
+  let totalTransportTrip = 0
+  let totalTransportMonth = 0
+  for (const note of notes) {
+    totalTransportTrip += note.transportFeeTrip || 0
+    totalTransportMonth += note.transportFeeMonth || 0
+  }
+  if (totalTransportTrip > 0) {
+    result.push({
+      code: 'TRANSPORT_TRIP',
+      name: 'ค่ารถ (ครั้ง)',
+      quantity: 1,
+      pricePerUnit: totalTransportTrip,
+      amount: totalTransportTrip,
+    })
+  }
+  if (totalTransportMonth > 0) {
+    result.push({
+      code: 'TRANSPORT_MONTH',
+      name: 'ค่ารถ (เดือน)',
+      quantity: 1,
+      pricePerUnit: totalTransportMonth,
+      amount: totalTransportMonth,
+    })
+  }
+
+  return result
 }
 
 /**

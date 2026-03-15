@@ -3,8 +3,9 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatDate, formatNumber, cn, todayISO, sanitizeNumber } from '@/lib/utils'
+import { formatDate, formatNumber, formatCurrency, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { type DeliveryNoteItem } from '@/types'
+import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
@@ -133,10 +134,34 @@ export default function DeliveryPage() {
 
   const handleCreate = () => {
     if (!selCustomerId || deliveryItems.length === 0) return
+    const customer = getCustomer(selCustomerId)
+    const dnDate = todayISO()
+    const month = dnDate.slice(0, 7)
+
+    // Calculate item subtotal for trip fee
+    let tripFee = 0
+    let monthFee = 0
+    if (customer) {
+      const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+      const itemSubtotal = deliveryItems.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
+      tripFee = calculateTransportFeeTrip(itemSubtotal, customer)
+
+      // Monthly fee: find existing DNs for same customer+month
+      const monthDNs = deliveryNotes.filter(d => d.customerId === selCustomerId && d.date.startsWith(month))
+
+      // Clear transportFeeMonth from previous last DN (will recalculate for this new one)
+      const prevLastDN = [...monthDNs].sort((a, b) => b.date.localeCompare(a.date))[0]
+      if (prevLastDN && prevLastDN.transportFeeMonth > 0) {
+        updateDeliveryNote(prevLastDN.id, { transportFeeMonth: 0 })
+      }
+
+      monthFee = calculateTransportFeeMonth(monthDNs, customer, itemSubtotal, tripFee)
+    }
+
     addDeliveryNote({
       customerId: selCustomerId,
       linenFormIds: selFormIds,
-      date: todayISO(),
+      date: dnDate,
       items: deliveryItems,
       driverName,
       vehiclePlate,
@@ -144,6 +169,8 @@ export default function DeliveryPage() {
       status: 'pending',
       isPrinted: false,
       isBilled: false,
+      transportFeeTrip: tripFee,
+      transportFeeMonth: monthFee,
       notes: dnNotes,
     })
     setShowCreate(false)
@@ -436,9 +463,12 @@ export default function DeliveryPage() {
             </div>
 
             {(() => {
-              const isPer = detailCustomer.billingModel === 'per_piece'
+              const isPer = (detailCustomer.enablePerPiece ?? true)
               const priceMap = Object.fromEntries(detailCustomer.priceList.map(p => [p.code, p.price]))
-              const totalAmt = isPer ? detailNote.items.reduce((s, i) => s + i.quantity * (priceMap[i.code] || 0), 0) : 0
+              const itemSubtotal = isPer ? detailNote.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0) : 0
+              const tripFee = detailNote.transportFeeTrip || 0
+              const monthFee = detailNote.transportFeeMonth || 0
+              const grandTotal = itemSubtotal + tripFee + monthFee
               return (
                 <div className="border border-slate-200 rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
@@ -467,12 +497,48 @@ export default function DeliveryPage() {
                           </tr>
                         )
                       })}
+                      {/* รวมค่าซัก */}
                       <tr className="bg-slate-50 font-medium">
-                        <td className="px-3 py-2" colSpan={2}>รวม</td>
+                        <td className="px-3 py-2" colSpan={2}>รวมค่าซัก</td>
                         <td className="px-3 py-2 text-right">{formatNumber(detailNote.items.reduce((s, i) => s + i.quantity, 0))}</td>
                         {isPer && <td className="px-3 py-2"></td>}
-                        {isPer && <td className="px-3 py-2 text-right font-bold text-[#1B3A5C]">{formatNumber(totalAmt)}</td>}
+                        {isPer && <td className="px-3 py-2 text-right">{formatNumber(itemSubtotal)}</td>}
                       </tr>
+                      {/* ค่ารถ (ครั้ง) */}
+                      {isPer && tripFee > 0 && (
+                        <tr className="border-t border-amber-200 bg-amber-50/50">
+                          <td className="px-3 py-1.5" colSpan={2}>
+                            <span className="text-amber-700 font-medium">ค่ารถ (ครั้ง)</span>
+                          </td>
+                          <td className="px-3 py-1.5" colSpan={2}></td>
+                          <td className="px-3 py-1.5 text-right">
+                            <input type="number" value={tripFee}
+                              onChange={e => updateDeliveryNote(detailNote.id, { transportFeeTrip: sanitizeNumber(e.target.value) })}
+                              className="w-24 px-2 py-1 border border-amber-300 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-white" />
+                          </td>
+                        </tr>
+                      )}
+                      {/* ค่ารถ (เดือน) */}
+                      {isPer && monthFee > 0 && (
+                        <tr className="border-t border-purple-200 bg-purple-50/50">
+                          <td className="px-3 py-1.5" colSpan={2}>
+                            <span className="text-purple-700 font-medium">ค่ารถ (เดือน)</span>
+                          </td>
+                          <td className="px-3 py-1.5" colSpan={2}></td>
+                          <td className="px-3 py-1.5 text-right">
+                            <input type="number" value={monthFee}
+                              onChange={e => updateDeliveryNote(detailNote.id, { transportFeeMonth: sanitizeNumber(e.target.value) })}
+                              className="w-24 px-2 py-1 border border-purple-300 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-white" />
+                          </td>
+                        </tr>
+                      )}
+                      {/* ยอดรวมทั้งหมด */}
+                      {isPer && (tripFee > 0 || monthFee > 0) && (
+                        <tr className="bg-slate-100 font-bold">
+                          <td className="px-3 py-2" colSpan={4}>ยอดรวมทั้งหมด</td>
+                          <td className="px-3 py-2 text-right text-[#1B3A5C]">{formatNumber(grandTotal)}</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -500,7 +566,32 @@ export default function DeliveryPage() {
           <div className="flex justify-end gap-3">
             <button onClick={() => setConfirmDeleteId(null)}
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={() => { if (confirmDeleteId) { deleteDeliveryNote(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
+            <button onClick={() => {
+              if (!confirmDeleteId) return
+              const deletedDN = deliveryNotes.find(d => d.id === confirmDeleteId)
+              deleteDeliveryNote(confirmDeleteId)
+              // Reassign monthly fee if deleted DN had one
+              if (deletedDN && deletedDN.transportFeeMonth > 0) {
+                const month = deletedDN.date.slice(0, 7)
+                const customer = getCustomer(deletedDN.customerId)
+                const remainingDNs = deliveryNotes
+                  .filter(d => d.id !== confirmDeleteId && d.customerId === deletedDN.customerId && d.date.startsWith(month))
+                  .sort((a, b) => b.date.localeCompare(a.date))
+                if (remainingDNs.length > 0 && customer && customer.enableMinPerMonth) {
+                  const newLastDN = remainingDNs[0]
+                  const otherDNs = remainingDNs.filter(d => d.id !== newLastDN.id)
+                  const existingTotal = otherDNs.reduce((s, d) => {
+                    return s + calculateDNSubtotal(d, customer) + (d.transportFeeTrip || 0)
+                  }, 0)
+                  const lastDNSubtotal = calculateDNSubtotal(newLastDN, customer) + (newLastDN.transportFeeTrip || 0)
+                  const monthTotal = existingTotal + lastDNSubtotal
+                  const newMonthFee = monthTotal < customer.monthlyFlatRate ? customer.monthlyFlatRate - monthTotal : 0
+                  updateDeliveryNote(newLastDN.id, { transportFeeMonth: newMonthFee })
+                }
+              }
+              setConfirmDeleteId(null)
+              setShowDetail(null)
+            }}
               className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
           </div>
         </div>

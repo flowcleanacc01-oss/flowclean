@@ -46,7 +46,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     creditDays: 30,
     billingModel: 'per_piece',
     monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',
-    enablePerPiece: true, enableMinPerTrip: false, minPerTripThreshold: 0, enableMinPerMonth: false,
+    enablePerPiece: true, enableMinPerTrip: false, enableWaive: false, minPerTripThreshold: 0, enableMinPerMonth: false,
     enabledItems: perPieceItems,
     priceList: [
       { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
@@ -75,7 +75,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     creditDays: 30,
     billingModel: 'per_piece',
     monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',
-    enablePerPiece: true, enableMinPerTrip: false, minPerTripThreshold: 0, enableMinPerMonth: false,
+    enablePerPiece: true, enableMinPerTrip: false, enableWaive: false, minPerTripThreshold: 0, enableMinPerMonth: false,
     enabledItems: ['B/F', 'B/H', 'B/T', 'P/C', 'S/Q', 'S/K', 'D/Q', 'D/K', 'B/M', 'P/T'],
     priceList: [
       { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
@@ -103,7 +103,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     creditDays: 30,
     billingModel: 'per_piece',
     monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',
-    enablePerPiece: true, enableMinPerTrip: false, minPerTripThreshold: 0, enableMinPerMonth: false,
+    enablePerPiece: true, enableMinPerTrip: false, enableWaive: false, minPerTripThreshold: 0, enableMinPerMonth: false,
     enabledItems: ['B/F', 'B/H', 'B/T', 'P/C', 'S/Q', 'S/K', 'D/Q', 'D/K', 'B/M'],
     priceList: [
       { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
@@ -130,7 +130,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     creditDays: 30,
     billingModel: 'per_piece',
     monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',
-    enablePerPiece: true, enableMinPerTrip: false, minPerTripThreshold: 0, enableMinPerMonth: false,
+    enablePerPiece: true, enableMinPerTrip: false, enableWaive: false, minPerTripThreshold: 0, enableMinPerMonth: false,
     enabledItems: ['B/F', 'B/H', 'B/T', 'P/C', 'S/Q', 'S/K', 'D/Q', 'B/M'],
     priceList: [
       { code: 'B/F', price: 4 }, { code: 'B/H', price: 5 }, { code: 'B/T', price: 8 },
@@ -157,7 +157,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     creditDays: 30,
     billingModel: 'monthly_flat',
     monthlyFlatRate: 25000, minPerTrip: 0, selectedBankAccountId: '',
-    enablePerPiece: false, enableMinPerTrip: false, minPerTripThreshold: 0, enableMinPerMonth: true,
+    enablePerPiece: false, enableMinPerTrip: false, enableWaive: false, minPerTripThreshold: 0, enableMinPerMonth: true,
     enabledItems: flatRateItems,
     priceList: [],
     priceHistory: [],
@@ -180,7 +180,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     creditDays: 30,
     billingModel: 'monthly_flat',
     monthlyFlatRate: 18000, minPerTrip: 0, selectedBankAccountId: '',
-    enablePerPiece: false, enableMinPerTrip: false, minPerTripThreshold: 0, enableMinPerMonth: true,
+    enablePerPiece: false, enableMinPerTrip: false, enableWaive: false, minPerTripThreshold: 0, enableMinPerMonth: true,
     enabledItems: ['B/T', 'B/H', 'B/M'],
     priceList: [],
     priceHistory: [],
@@ -382,7 +382,7 @@ export const SAMPLE_DELIVERY_NOTES: DeliveryNote[] = [
       { code: 'B/M', quantity: 20, isClaim: false },
     ],
     driverName: 'สมชาย', vehiclePlate: 'กข-1234', receiverName: 'คุณสมศักดิ์',
-    status: 'acknowledged', isPrinted: true, isBilled: true, notes: '', createdBy: 'staff-01', updatedAt: '2026-02-26',
+    status: 'acknowledged', isPrinted: true, isBilled: true, transportFeeTrip: 0, transportFeeMonth: 0, notes: '', createdBy: 'staff-01', updatedAt: '2026-02-26',
   },
   {
     id: 'dn-02', noteNumber: 'SD-20260228-001', customerId: 'cust-01',
@@ -396,7 +396,7 @@ export const SAMPLE_DELIVERY_NOTES: DeliveryNote[] = [
       { code: 'B/M', quantity: 40, isClaim: false },
     ],
     driverName: 'สมชาย', vehiclePlate: 'กข-1234', receiverName: 'คุณสมศักดิ์',
-    status: 'delivered', isPrinted: true, isBilled: true, notes: '', createdBy: 'staff-01', updatedAt: '2026-02-28',
+    status: 'delivered', isPrinted: true, isBilled: true, transportFeeTrip: 0, transportFeeMonth: 0, notes: '', createdBy: 'staff-01', updatedAt: '2026-02-28',
   },
   {
     id: 'dn-03', noteNumber: 'SD-20260301-001', customerId: 'cust-02',
@@ -409,7 +409,7 @@ export const SAMPLE_DELIVERY_NOTES: DeliveryNote[] = [
       { code: 'D/Q', quantity: 8, isClaim: false }, { code: 'B/M', quantity: 12, isClaim: false },
     ],
     driverName: 'สมหญิง', vehiclePlate: 'ขค-5678', receiverName: 'คุณวรรณา',
-    status: 'acknowledged', isPrinted: false, isBilled: false, notes: '', createdBy: 'staff-02', updatedAt: '2026-03-01',
+    status: 'acknowledged', isPrinted: false, isBilled: false, transportFeeTrip: 0, transportFeeMonth: 0, notes: '', createdBy: 'staff-02', updatedAt: '2026-03-01',
   },
 ]
 

@@ -17,7 +17,7 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   name: '', nameEn: '', address: '', taxId: '', branch: 'สำนักงานใหญ่',
   contactName: '', contactPhone: '', contactEmail: '',
   creditDays: 30, billingModel: 'per_piece', monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',
-  enablePerPiece: true, enableMinPerTrip: false, minPerTripThreshold: 0, enableMinPerMonth: false,
+  enablePerPiece: true, enableMinPerTrip: false, enableWaive: false, minPerTripThreshold: 0, enableMinPerMonth: false,
   enabledItems: [], priceList: [], priceHistory: [],
   notes: '', isActive: true,
 }
@@ -94,7 +94,7 @@ export default function CustomersPage() {
       contactName: c.contactName, contactPhone: c.contactPhone, contactEmail: c.contactEmail,
       creditDays: c.creditDays, billingModel: c.billingModel, monthlyFlatRate: c.monthlyFlatRate, minPerTrip: c.minPerTrip ?? 0, selectedBankAccountId: c.selectedBankAccountId ?? '',
       enablePerPiece: c.enablePerPiece ?? true, enableMinPerTrip: c.enableMinPerTrip ?? false,
-      minPerTripThreshold: c.minPerTripThreshold ?? 0, enableMinPerMonth: c.enableMinPerMonth ?? false,
+      enableWaive: c.enableWaive ?? false, minPerTripThreshold: c.minPerTripThreshold ?? 0, enableMinPerMonth: c.enableMinPerMonth ?? false,
       enabledItems: [...c.enabledItems], priceList: [...c.priceList], priceHistory: [...c.priceHistory],
       notes: c.notes, isActive: c.isActive,
     })
@@ -497,8 +497,8 @@ export default function CustomersPage() {
                   <span className="text-sm font-medium text-slate-700">ขั้นต่ำ/ครั้ง (บาท)</span>
                 </label>
                 {form.enableMinPerTrip && (
-                  <div className="ml-6 mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
+                  <div className="ml-6 mt-2 space-y-3">
+                    <div className="max-w-xs">
                       <label className="block text-xs text-slate-500 mb-1">ขั้นต่ำ/ครั้ง (บาท)</label>
                       <input type="number" value={form.minPerTrip}
                         onChange={e => setForm({ ...form, minPerTrip: sanitizeNumber(e.target.value) })}
@@ -506,11 +506,21 @@ export default function CustomersPage() {
                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-500 mb-1">เกินค่านี้ไม่ต้องคิดขั้นต่ำ (บาท)</label>
-                      <input type="number" value={form.minPerTripThreshold}
-                        onChange={e => setForm({ ...form, minPerTripThreshold: sanitizeNumber(e.target.value) })}
-                        placeholder="0 = ไม่กำหนด"
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={form.enableWaive}
+                          onChange={e => setForm({ ...form, enableWaive: e.target.checked })}
+                          className="rounded accent-[#1B3A5C]" />
+                        <span className="text-xs text-slate-600">เวฟ (ถ้าเท่ากับหรือเกินค่านี้เวฟให้)</span>
+                      </label>
+                      {form.enableWaive && (
+                        <div className="mt-1.5 max-w-xs">
+                          <label className="block text-xs text-slate-500 mb-1">เวฟเมื่อยอดถึง (บาท)</label>
+                          <input type="number" value={form.minPerTripThreshold}
+                            onChange={e => setForm({ ...form, minPerTripThreshold: sanitizeNumber(e.target.value) })}
+                            placeholder="0"
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

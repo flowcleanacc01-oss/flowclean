@@ -136,7 +136,8 @@ export interface Customer {
   minPerTrip: number // ยอดขั้นต่ำ/ครั้ง
   enablePerPiece: boolean // เงื่อนไข: คิดตามชิ้น
   enableMinPerTrip: boolean // เงื่อนไข: ขั้นต่ำ/ครั้ง
-  minPerTripThreshold: number // เกินค่านี้ไม่ต้องคิดขั้นต่ำ/ครั้ง
+  enableWaive: boolean // เวฟ (ถ้าเท่ากับหรือเกินค่านี้เวฟให้)
+  minPerTripThreshold: number // เวฟ threshold
   enableMinPerMonth: boolean // เงื่อนไข: ขั้นต่ำ/เดือน
   selectedBankAccountId: string // references BankAccount.id from CompanyInfo
   enabledItems: string[] // list of linen codes enabled for this hotel
@@ -268,6 +269,8 @@ export interface DeliveryNote {
   status: DeliveryNoteStatus
   isPrinted: boolean   // auto-set when user prints/exports
   isBilled: boolean    // auto-set when included in billing statement
+  transportFeeTrip: number   // ค่ารถ (ครั้ง) — auto-calc, editable
+  transportFeeMonth: number  // ค่ารถ (เดือน) — on last DN of month, editable
   notes: string
   createdBy: string
   updatedAt: string
