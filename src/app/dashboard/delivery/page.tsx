@@ -45,6 +45,7 @@ export default function DeliveryPage() {
   const [vehiclePlate, setVehiclePlate] = useState('')
   const [receiverName, setReceiverName] = useState('')
   const [dnNotes, setDnNotes] = useState('')
+  const [dnDate, setDnDate] = useState(todayISO())
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -102,6 +103,7 @@ export default function DeliveryPage() {
     setSelCustomerId(custId)
     setSelFormIds([])
     setDeliveryItems([])
+    setDnDate(todayISO())
   }
 
   const handleFormToggle = (formId: string) => {
@@ -109,6 +111,12 @@ export default function DeliveryPage() {
       ? selFormIds.filter(id => id !== formId)
       : [...selFormIds, formId]
     setSelFormIds(updated)
+
+    // Default date from first selected LF
+    if (updated.length > 0) {
+      const firstForm = linenForms.find(f => f.id === updated[0])
+      if (firstForm) setDnDate(firstForm.date)
+    }
 
     // Billing = Col5 (UI: แพคส่ง) = code col6_factoryPackSend ทั้งหมด
     const qtyMap: Record<string, number> = {}
@@ -135,7 +143,6 @@ export default function DeliveryPage() {
   const handleCreate = () => {
     if (!selCustomerId || deliveryItems.length === 0) return
     const customer = getCustomer(selCustomerId)
-    const dnDate = todayISO()
     const month = dnDate.slice(0, 7)
 
     // Calculate item subtotal for trip fee
@@ -230,7 +237,7 @@ export default function DeliveryPage() {
           <h1 className="text-2xl font-bold text-slate-800">ใบส่งของ</h1>
           <p className="text-sm text-slate-500 mt-0.5">จัดการใบส่งของชั่วคราว (SD)</p>
         </div>
-        <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes('') }}
+        <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()) }}
           className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
           <Plus className="w-4 h-4" />
           สร้างใบส่งของ
@@ -396,6 +403,12 @@ export default function DeliveryPage() {
               </div>
             </div>
           )}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">วันที่</label>
+            <input type="date" value={dnDate} onChange={e => setDnDate(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>

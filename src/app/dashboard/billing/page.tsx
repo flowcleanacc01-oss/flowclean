@@ -81,6 +81,7 @@ export default function BillingPage() {
   const [selDnIds, setSelDnIds] = useState<string[]>([])
   const [dnSortKey, setDnSortKey] = useState('date')
   const [dnSortDir, setDnSortDir] = useState<'asc' | 'desc'>('asc')
+  const [billingIssueDate, setBillingIssueDate] = useState(todayISO())
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'billing', label: 'ใบวางบิล (WB)' },
@@ -128,15 +129,15 @@ export default function BillingPage() {
 
   // Preview for billing creation
   const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
-  // Check if flat-rate bill already exists for this customer+month
+  // Check if flat-rate bill already exists for this customer+month (only for minPerMonth customers)
   const flatRateBillExists = useMemo(() => {
-    if (!selCustomer || selCustomer.billingModel !== 'monthly_flat') return false
+    if (!selCustomer || !(selCustomer.enableMinPerMonth)) return false
     return billingStatements.some(b => b.customerId === selCustomerId && b.billingMonth === selMonth)
   }, [selCustomer, selCustomerId, selMonth, billingStatements])
 
   // Available delivery notes for billing (unbilled, matching customer+month)
   const availableDNs = useMemo((): DeliveryNote[] => {
-    if (!selCustomer || selCustomer.billingModel === 'monthly_flat') return []
+    if (!selCustomer) return []
     const alreadyBilledIds = new Set(billingStatements.flatMap(b => b.deliveryNoteIds))
     return deliveryNotes
       .filter(dn =>
@@ -165,7 +166,7 @@ export default function BillingPage() {
 
   const previewBilling = useMemo(() => {
     if (!selCustomer) return null
-    if (selCustomer.billingModel === 'monthly_flat') {
+    if (!(selCustomer.enablePerPiece ?? true)) {
       if (flatRateBillExists) return null
       return createFlatRateBilling(selCustomer, selMonth)
     }
@@ -178,16 +179,14 @@ export default function BillingPage() {
 
   const handleCreateBilling = () => {
     if (!selCustomer || !previewBilling) return
-    const dueDate = new Date()
+    const dueDate = new Date(billingIssueDate)
     dueDate.setDate(dueDate.getDate() + selCustomer.creditDays)
-
-    const dnIds = selCustomer.billingModel === 'monthly_flat' ? [] : selDnIds
 
     addBillingStatement({
       customerId: selCustomerId,
-      deliveryNoteIds: dnIds,
+      deliveryNoteIds: selDnIds,
       billingMonth: selMonth,
-      issueDate: todayISO(),
+      issueDate: billingIssueDate,
       dueDate: format(dueDate, 'yyyy-MM-dd'),
       lineItems: previewBilling.lineItems,
       subtotal: previewBilling.subtotal,
@@ -202,7 +201,7 @@ export default function BillingPage() {
     })
 
     // Mark selected delivery notes as billed
-    for (const dnId of dnIds) {
+    for (const dnId of selDnIds) {
       updateDeliveryNote(dnId, { isBilled: true })
     }
 
@@ -349,7 +348,7 @@ export default function BillingPage() {
           <p className="text-sm text-slate-500 mt-0.5">จัดการเอกสารทางการเงิน</p>
         </div>
         {tab === 'billing' && (
-          <button onClick={() => { setShowCreate(true); setSelCustomerId('') }}
+          <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setBillingIssueDate(todayISO()) }}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />สร้างใบวางบิล
           </button>
@@ -555,7 +554,7 @@ export default function BillingPage() {
       {/* Create Billing Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบวางบิล" size="lg">
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">โรงแรม</label>
               <select value={selCustomerId} onChange={e => setSelCustomerId(e.target.value)}
@@ -571,10 +570,15 @@ export default function BillingPage() {
               <input type="month" value={selMonth} onChange={e => setSelMonth(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">วันที่ออกบิล</label>
+              <input type="date" value={billingIssueDate} onChange={e => setBillingIssueDate(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+            </div>
           </div>
 
-          {/* DN preview list with checkboxes (per-piece only) */}
-          {selCustomer && selCustomer.billingModel === 'per_piece' && availableDNs.length > 0 && (
+          {/* DN preview list with checkboxes */}
+          {selCustomer && availableDNs.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-slate-700">ใบส่งของที่จะนำมาวางบิล ({selDnIds.length}/{availableDNs.length})</h3>
@@ -673,6 +677,18 @@ export default function BillingPage() {
                   </tfoot>
                 </table>
               </div>
+              {selDnIds.length > 0 && (
+                <div className="mt-3">
+                  <h4 className="text-xs font-medium text-slate-500 mb-1">อ้างอิงใบส่งของ ({selDnIds.length} ฉบับ)</h4>
+                  <div className="text-xs text-slate-500 space-y-0.5">
+                    {selDnIds.map(id => {
+                      const dn = deliveryNotes.find(d => d.id === id)
+                      if (!dn) return null
+                      return <div key={id}>{dn.noteNumber} — {formatDate(dn.date)}</div>
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -715,7 +731,7 @@ export default function BillingPage() {
                 .filter(Boolean)
                 .sort((a, b) => a!.date.localeCompare(b!.date))
               if (linkedDNs.length === 0) return null
-              const isPer = detailCustomer.billingModel === 'per_piece'
+              const isPer = (detailCustomer.enablePerPiece ?? true)
               const priceMap = isPer ? Object.fromEntries(detailCustomer.priceList.map(p => [p.code, p.price])) : {}
               return (
                 <div>
