@@ -96,6 +96,7 @@ CREATE TABLE customers (
   enable_waive BOOLEAN NOT NULL DEFAULT false,
   min_per_trip_threshold NUMERIC NOT NULL DEFAULT 0,
   enable_min_per_month BOOLEAN NOT NULL DEFAULT false,
+  selected_bank_account_id TEXT DEFAULT '',
   enabled_items TEXT[] NOT NULL DEFAULT '{}',
   price_list JSONB NOT NULL DEFAULT '[]',
   price_history JSONB NOT NULL DEFAULT '[]',

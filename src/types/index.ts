@@ -134,7 +134,7 @@ export interface Customer {
   billingModel: 'per_piece' | 'monthly_flat' // derived from flags — kept for backward compat
   monthlyFlatRate: number // ยอดขั้นต่ำ/เดือน
   minPerTrip: number // ยอดขั้นต่ำ/ครั้ง
-  enablePerPiece: boolean // เงื่อนไข: คิดตามชิ้น
+  enablePerPiece: boolean // เงื่อนไข: คิดตามหน่วย
   enableMinPerTrip: boolean // เงื่อนไข: ขั้นต่ำ/ครั้ง
   enableWaive: boolean // เวฟ (ถ้าเท่ากับหรือเกินค่านี้เวฟให้)
   minPerTripThreshold: number // เวฟ threshold

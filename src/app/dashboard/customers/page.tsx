@@ -258,7 +258,7 @@ export default function CustomersPage() {
                       <td className="px-4 py-3 text-center">
                         <div className="flex flex-wrap justify-center gap-1">
                           {(c.enablePerPiece ?? true) && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700">ตามชิ้น</span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700">ตามหน่วย</span>
                           )}
                           {c.enableMinPerTrip && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700">ขั้นต่ำ/ครั้ง</span>
@@ -480,12 +480,12 @@ export default function CustomersPage() {
           <div className="bg-slate-50 rounded-lg p-4">
             <label className="block font-medium text-slate-700 mb-3">รูปแบบการคิดเงิน</label>
             <div className="space-y-3">
-              {/* 1. คิดตามชิ้น */}
+              {/* 1. คิดตามหน่วย */}
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.enablePerPiece}
                   onChange={e => setForm({ ...form, enablePerPiece: e.target.checked })}
                   className="rounded accent-[#1B3A5C]" />
-                <span className="text-sm font-medium text-slate-700">คิดตามชิ้น</span>
+                <span className="text-sm font-medium text-slate-700">คิดตามหน่วย</span>
               </label>
 
               {/* 2. ขั้นต่ำ/ครั้ง */}

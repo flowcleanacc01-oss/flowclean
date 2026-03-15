@@ -193,7 +193,7 @@ export default function DeliveryPage() {
 
   const handleExportCSV = () => {
     if (!detailNote || !detailCustomer) return
-    const isPer = detailCustomer.billingModel === 'per_piece'
+    const isPer = (detailCustomer.enablePerPiece ?? true)
     const priceMap = Object.fromEntries(detailCustomer.priceList.map(p => [p.code, p.price]))
     const headers = isPer
       ? ['รหัส', 'รายการ', 'จำนวน', 'ราคา/หน่วย', 'มูลค่า']
