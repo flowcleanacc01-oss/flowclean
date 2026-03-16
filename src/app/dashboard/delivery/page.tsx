@@ -33,6 +33,7 @@ export default function DeliveryPage() {
 
   const [selectedDnIds, setSelectedDnIds] = useState<string[]>([])
   const [showPrintList, setShowPrintList] = useState(false)
+  const [showBulkPrint, setShowBulkPrint] = useState(false)
 
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('single')
   const [dateFrom, setDateFrom] = useState('')
@@ -53,6 +54,15 @@ export default function DeliveryPage() {
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
+  }
+
+  // Calculate total amount for a DN (items subtotal + transport fees)
+  const getDNTotalAmount = (dn: typeof deliveryNotes[number]): number => {
+    const customer = getCustomer(dn.customerId)
+    if (!customer || !(customer.enablePerPiece ?? true)) return 0
+    const priceMap = Object.fromEntries((customer.priceList || []).map(p => [p.code, p.price]))
+    const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
+    return itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0)
   }
 
   const filtered = useMemo(() => {
@@ -102,15 +112,6 @@ export default function DeliveryPage() {
       !linkedFormIds.has(f.id)
     )
   }, [linenForms, selCustomerId, deliveryNotes])
-
-  // Calculate total amount for a DN (items subtotal + transport fees)
-  const getDNTotalAmount = (dn: typeof deliveryNotes[number]): number => {
-    const customer = getCustomer(dn.customerId)
-    if (!customer || !(customer.enablePerPiece ?? true)) return 0
-    const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
-    const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
-    return itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0)
-  }
 
   const handleCustomerSelect = (custId: string) => {
     setSelCustomerId(custId)
@@ -251,11 +252,18 @@ export default function DeliveryPage() {
           <p className="text-sm text-slate-500 mt-0.5">จัดการใบส่งของชั่วคราว</p>
         </div>
         <div className="flex items-center gap-2">
+          {selectedDnIds.length > 0 && (
+            <button onClick={() => setShowBulkPrint(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+              <FileDown className="w-4 h-4" />
+              พิมพ์เอกสารที่เลือก ({selectedDnIds.length})
+            </button>
+          )}
           <button onClick={() => setShowPrintList(true)}
             disabled={filtered.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
             <Printer className="w-4 h-4" />
-            พิมพ์รายการ{selectedDnIds.length > 0 ? ` (${selectedDnIds.length})` : ''}
+            พิมพ์รายการ
           </button>
           <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()) }}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
@@ -665,8 +673,9 @@ export default function DeliveryPage() {
               <div className="mb-2 text-sm text-slate-500 no-print">
                 {selectedDnIds.length > 0 ? `เลือก ${printDNs.length} รายการ` : `ทั้งหมด ${printDNs.length} รายการ`}
               </div>
-              <div id="print-dn-list" className="border border-slate-200 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
+              <div id="print-dn-list" className="border border-slate-200 rounded-lg overflow-hidden print:border-none">
+                <h2 className="hidden print:block text-lg font-bold text-center mb-2">{companyInfo.name} — รายการใบส่งของชั่วคราว</h2>
+                <table className="w-full text-sm print:text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
@@ -780,6 +789,33 @@ export default function DeliveryPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Bulk Print Modal — พิมพ์เอกสารหลายใบ */}
+      <Modal open={showBulkPrint} onClose={() => setShowBulkPrint(false)} title={`พิมพ์เอกสาร (${selectedDnIds.length} ใบ)`} size="xl" className="print-target">
+        <div id="print-bulk-dn">
+          {selectedDnIds.map((dnId, idx) => {
+            const dn = deliveryNotes.find(d => d.id === dnId)
+            const cust = dn ? getCustomer(dn.customerId) : null
+            if (!dn || !cust) return null
+            return (
+              <div key={dnId}>
+                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6" style={{ pageBreakBefore: 'always' }} />}
+                <DeliveryNotePrint note={dn} customer={cust} company={companyInfo} catalog={linenCatalog} />
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex justify-between items-center mt-4 no-print">
+          <button onClick={() => {
+            for (const dnId of selectedDnIds) {
+              const dn = deliveryNotes.find(d => d.id === dnId)
+              if (dn && !dn.isPrinted) updateDeliveryNote(dnId, { isPrinted: true })
+            }
+          }}
+            className="text-xs text-blue-600 hover:underline">ทำเครื่องหมาย "พิมพ์แล้ว" ทั้งหมด</button>
+          <ExportButtons targetId="print-bulk-dn" filename={`SD-bulk-${selectedDnIds.length}`} />
+        </div>
       </Modal>
     </div>
   )
