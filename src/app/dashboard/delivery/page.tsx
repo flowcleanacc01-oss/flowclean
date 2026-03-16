@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { type DeliveryNoteItem } from '@/types'
 import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal } from '@/lib/transport-fee'
-import { Plus, Search, X, FileDown, Check, ExternalLink } from 'lucide-react'
+import { Plus, Search, X, FileDown, Check, ExternalLink, Printer } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import ExportButtons from '@/components/ExportButtons'
@@ -30,6 +30,9 @@ export default function DeliveryPage() {
   const searchParams = useSearchParams()
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  const [selectedDnIds, setSelectedDnIds] = useState<string[]>([])
+  const [showPrintList, setShowPrintList] = useState(false)
 
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('single')
   const [dateFrom, setDateFrom] = useState('')
@@ -80,6 +83,7 @@ export default function DeliveryPage() {
         case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
         case 'date': va = a.date; vb = b.date; break
         case 'items': va = a.items.reduce((s, i) => s + i.quantity, 0); vb = b.items.reduce((s, i) => s + i.quantity, 0); break
+        case 'amount': va = getDNTotalAmount(a); vb = getDNTotalAmount(b); break
         case 'driver': va = a.driverName || ''; vb = b.driverName || ''; break
         default: va = a.date; vb = b.date
       }
@@ -98,6 +102,15 @@ export default function DeliveryPage() {
       !linkedFormIds.has(f.id)
     )
   }, [linenForms, selCustomerId, deliveryNotes])
+
+  // Calculate total amount for a DN (items subtotal + transport fees)
+  const getDNTotalAmount = (dn: typeof deliveryNotes[number]): number => {
+    const customer = getCustomer(dn.customerId)
+    if (!customer || !(customer.enablePerPiece ?? true)) return 0
+    const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+    const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
+    return itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0)
+  }
 
   const handleCustomerSelect = (custId: string) => {
     setSelCustomerId(custId)
@@ -234,14 +247,22 @@ export default function DeliveryPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">ใบส่งของชั่วคราว (SD)</h1>
+          <h1 className="text-2xl font-bold text-slate-800">2. ใบส่งของชั่วคราว (SD)</h1>
           <p className="text-sm text-slate-500 mt-0.5">จัดการใบส่งของชั่วคราว</p>
         </div>
-        <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()) }}
-          className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
-          <Plus className="w-4 h-4" />
-          สร้างใบส่งของ
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowPrintList(true)}
+            disabled={filtered.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
+            <Printer className="w-4 h-4" />
+            พิมพ์รายการ{selectedDnIds.length > 0 ? ` (${selectedDnIds.length})` : ''}
+          </button>
+          <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()) }}
+            className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
+            <Plus className="w-4 h-4" />
+            สร้างใบส่งของ
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -280,27 +301,48 @@ export default function DeliveryPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-2 py-3 w-10">
+                  <input type="checkbox"
+                    checked={filtered.length > 0 && selectedDnIds.length === filtered.length}
+                    onChange={e => {
+                      if (e.target.checked) setSelectedDnIds(filtered.map(d => d.id))
+                      else setSelectedDnIds([])
+                    }}
+                    className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                </th>
                 <SortableHeader label="เลขที่" sortKey="noteNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="จำนวนชิ้น" sortKey="items" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
+                <SortableHeader label="ยอดรวม" sortKey="amount" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="คนขับ" sortKey="driver" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
               ) : filtered.map(dn => {
                 const customer = getCustomer(dn.customerId)
                 const totalItems = dn.items.reduce((s, i) => s + i.quantity, 0)
+                const dnAmount = getDNTotalAmount(dn)
                 return (
                   <tr key={dn.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                     onClick={() => setShowDetail(dn.id)}>
+                    <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
+                      <input type="checkbox"
+                        checked={selectedDnIds.includes(dn.id)}
+                        onChange={e => {
+                          if (e.target.checked) setSelectedDnIds(prev => [...prev, dn.id])
+                          else setSelectedDnIds(prev => prev.filter(id => id !== dn.id))
+                        }}
+                        className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs text-slate-600">{dn.noteNumber}</td>
                     <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
                     <td className="px-4 py-3 text-slate-600">{formatDate(dn.date)}</td>
                     <td className="px-4 py-3 text-right text-slate-700">{formatNumber(totalItems)}</td>
+                    <td className="px-4 py-3 text-right text-slate-700">{dnAmount > 0 ? formatCurrency(dnAmount) : '-'}</td>
                     <td className="px-4 py-3 text-slate-600">{dn.driverName || '-'}</td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -610,10 +652,110 @@ export default function DeliveryPage() {
         </div>
       </Modal>
 
+      {/* Print List Modal — พิมพ์รายการ SD */}
+      <Modal open={showPrintList} onClose={() => setShowPrintList(false)} title="รายการใบส่งของ" size="xl" className="print-target">
+        {(() => {
+          const printDNs = selectedDnIds.length > 0
+            ? filtered.filter(d => selectedDnIds.includes(d.id))
+            : filtered
+          const grandTotal = printDNs.reduce((s, dn) => s + getDNTotalAmount(dn), 0)
+          const totalPieces = printDNs.reduce((s, dn) => s + dn.items.reduce((ss, i) => ss + i.quantity, 0), 0)
+          return (
+            <div>
+              <div className="mb-2 text-sm text-slate-500 no-print">
+                {selectedDnIds.length > 0 ? `เลือก ${printDNs.length} รายการ` : `ทั้งหมด ${printDNs.length} รายการ`}
+              </div>
+              <div id="print-dn-list" className="border border-slate-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">เลขที่</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">โรงแรม</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">วันที่</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600">จำนวนชิ้น</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600">ยอดรวม</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printDNs.map((dn, idx) => {
+                      const customer = getCustomer(dn.customerId)
+                      const pieces = dn.items.reduce((s, i) => s + i.quantity, 0)
+                      const amount = getDNTotalAmount(dn)
+                      return (
+                        <tr key={dn.id} className="border-t border-slate-100">
+                          <td className="text-center px-3 py-1.5 text-slate-500">{idx + 1}</td>
+                          <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{dn.noteNumber}</td>
+                          <td className="px-3 py-1.5 text-slate-800">{customer?.name || '-'}</td>
+                          <td className="px-3 py-1.5 text-slate-600">{formatDate(dn.date)}</td>
+                          <td className="px-3 py-1.5 text-right text-slate-700">{formatNumber(pieces)}</td>
+                          <td className="px-3 py-1.5 text-right text-slate-700">{amount > 0 ? formatCurrency(amount) : '-'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-100 font-bold border-t border-slate-300">
+                      <td className="px-3 py-2" colSpan={4}>ยอดรวมทั้งหมด</td>
+                      <td className="px-3 py-2 text-right">{formatNumber(totalPieces)}</td>
+                      <td className="px-3 py-2 text-right text-[#1B3A5C]">{grandTotal > 0 ? formatCurrency(grandTotal) : '-'}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <div className="flex justify-end mt-4 no-print">
+                <ExportButtons targetId="print-dn-list" filename="รายการใบส่งของ" />
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
       {/* Print Preview Modal — ตรวจสอบข้อมูลก่อนพิมพ์ */}
       <Modal open={showPrint && !!detailNote} onClose={() => setShowPrint(false)} title="ตรวจสอบข้อมูลก่อนพิมพ์" size="xl" className="print-target">
         {detailNote && detailCustomer && (
           <div>
+            {/* SD linked status checkbox */}
+            <div className="flex items-center justify-between mb-2 no-print">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={true}
+                  onChange={() => {
+                    const linkedLFs = detailNote.linenFormIds.map(id => linenForms.find(f => f.id === id)).filter(Boolean)
+                    const lfNumbers = linkedLFs.map(f => f!.formNumber).join(', ')
+                    if (confirm(`ยืนยันการลบใบส่งของ ${detailNote.noteNumber}?\n\nLF ที่จะย้อนสถานะกลับ:\n${lfNumbers}\n\nSD badge และ link ใน LF จะหายไปด้วย`)) {
+                      const deletedDN = detailNote
+                      deleteDeliveryNote(deletedDN.id)
+                      // Reassign monthly fee if deleted DN had one
+                      if (deletedDN.transportFeeMonth > 0) {
+                        const month = deletedDN.date.slice(0, 7)
+                        const customer = getCustomer(deletedDN.customerId)
+                        const remainingDNs = deliveryNotes
+                          .filter(d => d.id !== deletedDN.id && d.customerId === deletedDN.customerId && d.date.startsWith(month))
+                          .sort((a, b) => b.date.localeCompare(a.date))
+                        if (remainingDNs.length > 0 && customer && customer.enableMinPerMonth) {
+                          const newLastDN = remainingDNs[0]
+                          const otherDNs = remainingDNs.filter(d => d.id !== newLastDN.id)
+                          const existingTotal = otherDNs.reduce((s, d) => {
+                            return s + calculateDNSubtotal(d, customer) + (d.transportFeeTrip || 0)
+                          }, 0)
+                          const lastDNSubtotal = calculateDNSubtotal(newLastDN, customer) + (newLastDN.transportFeeTrip || 0)
+                          const monthTotal = existingTotal + lastDNSubtotal
+                          const newMonthFee = monthTotal < customer.monthlyFlatRate ? customer.monthlyFlatRate - monthTotal : 0
+                          updateDeliveryNote(newLastDN.id, { transportFeeMonth: newMonthFee })
+                        }
+                      }
+                      setShowPrint(false)
+                      setShowDetail(null)
+                    }
+                  }}
+                  className="w-4 h-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-sm font-medium text-emerald-700">สถานะเปลี่ยนผ่านใบส่งของ SD</span>
+              </label>
+            </div>
+
             {/* Printed checkbox */}
             <div className="flex items-center justify-between mb-4 no-print">
               <label className="flex items-center gap-2 cursor-pointer select-none">

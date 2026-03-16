@@ -344,7 +344,7 @@ export default function BillingPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
-            {tab === 'billing' ? 'ใบวางบิล (WB)' : tab === 'invoice' ? 'ใบกำกับภาษี/ใบเสร็จ (IV)' : 'ใบเสนอราคา (QT)'}
+            {tab === 'billing' ? '3. ใบวางบิล (WB)' : tab === 'invoice' ? '4. ใบกำกับภาษี/ใบเสร็จ (IV)' : 'ใบเสนอราคา (QT)'}
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {tab === 'billing' ? `${billingStatements.length} รายการ` : tab === 'invoice' ? `${taxInvoices.length} รายการ` : `${quotations.length} รายการ`}

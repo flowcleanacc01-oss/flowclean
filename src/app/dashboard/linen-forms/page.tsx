@@ -246,7 +246,7 @@ export default function LinenFormsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">ใบส่งรับผ้า (LF)</h1>
+          <h1 className="text-2xl font-bold text-slate-800">1. ใบส่งรับผ้า (LF)</h1>
           <p className="text-sm text-slate-500 mt-0.5">จัดการใบส่งรับผ้าทั้งหมด</p>
         </div>
         <button onClick={handleCreateOpen}
