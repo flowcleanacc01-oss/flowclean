@@ -234,8 +234,8 @@ export default function DeliveryPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">ใบส่งของ</h1>
-          <p className="text-sm text-slate-500 mt-0.5">จัดการใบส่งของชั่วคราว (SD)</p>
+          <h1 className="text-2xl font-bold text-slate-800">ใบส่งของชั่วคราว (SD)</h1>
+          <p className="text-sm text-slate-500 mt-0.5">จัดการใบส่งของชั่วคราว</p>
         </div>
         <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()) }}
           className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">

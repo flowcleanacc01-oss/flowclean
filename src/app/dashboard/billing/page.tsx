@@ -227,7 +227,6 @@ export default function BillingPage() {
       notes: '',
     })
     setShowDetail(null)
-    setTab('invoice')
   }
 
   const handleCreateQuotation = () => {
@@ -344,8 +343,12 @@ export default function BillingPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">วางบิล / ใบเสร็จ</h1>
-          <p className="text-sm text-slate-500 mt-0.5">จัดการเอกสารทางการเงิน</p>
+          <h1 className="text-2xl font-bold text-slate-800">
+            {tab === 'billing' ? 'ใบวางบิล (WB)' : tab === 'invoice' ? 'ใบกำกับภาษี/ใบเสร็จ (IV)' : 'ใบเสนอราคา (QT)'}
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {tab === 'billing' ? `${billingStatements.length} รายการ` : tab === 'invoice' ? `${taxInvoices.length} รายการ` : `${quotations.length} รายการ`}
+          </p>
         </div>
         {tab === 'billing' && (
           <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setBillingIssueDate(todayISO()) }}
@@ -372,26 +375,17 @@ export default function BillingPage() {
         )}
       </div>
 
-      {/* Status cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+      {/* Status cards — billing tab only */}
+      {tab === 'billing' && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {(Object.entries(BILLING_STATUS_CONFIG) as [BillingStatus, typeof BILLING_STATUS_CONFIG[BillingStatus]][]).map(([status, cfg]) => (
           <div key={status} className={cn('rounded-xl border p-4', cfg.bgColor, 'border-transparent')}>
             <p className={cn('text-2xl font-bold', cfg.color)}>{statusCounts[status] || 0}</p>
             <p className="text-sm text-slate-600">{cfg.label}</p>
           </div>
         ))}
-      </div>
+      </div>}
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-4 border-b border-slate-200">
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => { setTab(t.key); setDateFrom(''); setDateTo(''); setSortKey('date'); setSortDir('desc') }}
-            className={cn('px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
-              tab === t.key ? 'border-[#1B3A5C] text-[#1B3A5C]' : 'border-transparent text-slate-500 hover:text-slate-700')}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Tab buttons removed — sidebar handles navigation */}
 
       {/* Search */}
       <div className="relative mb-4">
