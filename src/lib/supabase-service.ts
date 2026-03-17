@@ -67,6 +67,7 @@ const FIELD_MAP: Record<string, string> = {
   vehiclePlate: 'vehicle_plate',
   receiverName: 'receiver_name',
   isPrinted: 'is_printed',
+  isExported: 'is_exported',
   isBilled: 'is_billed',
   transportFeeTrip: 'transport_fee_trip',
   transportFeeMonth: 'transport_fee_month',

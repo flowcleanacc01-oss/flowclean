@@ -191,6 +191,7 @@ export default function DeliveryPage() {
       receiverName,
       status: 'pending',
       isPrinted: false,
+      isExported: false,
       isBilled: false,
       transportFeeTrip: tripFee,
       transportFeeMonth: monthFee,
@@ -230,10 +231,16 @@ export default function DeliveryPage() {
     exportCSV(headers, rows, detailNote.noteNumber)
   }
 
-  // Auto-mark as printed when export/print happens
+  // Mark isPrinted when print button is clicked
   const handlePrintExport = () => {
     if (detailNote && !detailNote.isPrinted) {
       updateDeliveryNote(detailNote.id, { isPrinted: true })
+    }
+  }
+  // Mark isExported when file export (JPG/PDF/CSV) is used
+  const handleExportFile = () => {
+    if (detailNote && !detailNote.isExported) {
+      updateDeliveryNote(detailNote.id, { isExported: true })
     }
   }
 
@@ -792,8 +799,8 @@ export default function DeliveryPage() {
               )}
             </div>
 
-            {/* Printed checkbox */}
-            <div className="flex items-center justify-between mb-4 no-print">
+            {/* Printed / Exported status */}
+            <div className="flex items-center gap-6 mb-4 no-print">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -805,14 +812,22 @@ export default function DeliveryPage() {
                   <Check className="w-4 h-4" />พิมพ์แล้ว
                 </span>
               </label>
-              {detailNote.isPrinted && (
-                <span className="text-xs text-blue-500">เอกสารนี้เคยถูกพิมพ์แล้ว</span>
-              )}
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={!!detailNote.isExported}
+                  onChange={e => updateDeliveryNote(detailNote.id, { isExported: e.target.checked })}
+                  className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500"
+                />
+                <span className="text-sm font-medium text-violet-700 flex items-center gap-1">
+                  <Check className="w-4 h-4" />ส่งออกแล้ว
+                </span>
+              </label>
             </div>
 
             <DeliveryNotePrint note={detailNote} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-delivery" filename={detailNote.noteNumber} onExportCSV={handleExportCSV} onExport={handlePrintExport} />
+              <ExportButtons targetId="print-delivery" filename={detailNote.noteNumber} onExportCSV={handleExportCSV} onPrint={handlePrintExport} onExportFile={handleExportFile} />
             </div>
           </div>
         )}
@@ -834,16 +849,29 @@ export default function DeliveryPage() {
           })}
         </div>
         <div className="flex justify-between items-center mt-4 no-print">
-          <span className="text-xs text-slate-400">เมื่อส่งออก/พิมพ์ ระบบจะทำเครื่องหมาย "พิมพ์แล้ว" อัตโนมัติ</span>
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={selectedDnIds.every(id => deliveryNotes.find(d => d.id === id)?.isPrinted)}
+                onChange={e => {
+                  for (const dnId of selectedDnIds) updateDeliveryNote(dnId, { isPrinted: e.target.checked })
+                }}
+                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว (ทุกรายการ)</span>
+            </label>
+            <p className="text-xs text-slate-400">พิมพ์ → สถานะ "พิมพ์แล้ว" | ส่งออก JPG/PDF/CSV → สถานะ "ส่งออกแล้ว"</p>
+          </div>
           <ExportButtons
             targetId="print-bulk-dn"
             filename={`SD-bulk-${selectedDnIds.length}`}
             onExportCSV={() => handleDnListCSV(deliveryNotes.filter(d => selectedDnIds.includes(d.id)))}
-            onExport={() => {
-              for (const dnId of selectedDnIds) {
-                const dn = deliveryNotes.find(d => d.id === dnId)
-                if (dn && !dn.isPrinted) updateDeliveryNote(dnId, { isPrinted: true })
-              }
+            onPrint={() => {
+              for (const dnId of selectedDnIds) updateDeliveryNote(dnId, { isPrinted: true })
+            }}
+            onExportFile={() => {
+              for (const dnId of selectedDnIds) updateDeliveryNote(dnId, { isExported: true })
             }}
           />
         </div>

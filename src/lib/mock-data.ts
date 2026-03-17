@@ -409,7 +409,7 @@ export const SAMPLE_DELIVERY_NOTES: DeliveryNote[] = [
       { code: 'D/Q', quantity: 8, isClaim: false }, { code: 'B/M', quantity: 12, isClaim: false },
     ],
     driverName: 'สมหญิง', vehiclePlate: 'ขค-5678', receiverName: 'คุณวรรณา',
-    status: 'acknowledged', isPrinted: false, isBilled: false, transportFeeTrip: 0, transportFeeMonth: 0, notes: '', createdBy: 'staff-02', updatedAt: '2026-03-01',
+    status: 'acknowledged', isPrinted: false, isExported: false, isBilled: false, transportFeeTrip: 0, transportFeeMonth: 0, notes: '', createdBy: 'staff-02', updatedAt: '2026-03-01',
   },
 ]
 

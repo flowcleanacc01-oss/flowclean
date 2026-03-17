@@ -237,7 +237,8 @@ export interface LinenForm {
   deptIroning: boolean
   deptFolding: boolean
   deptQc: boolean
-  isPrinted?: boolean  // auto-set when user prints/exports
+  isPrinted?: boolean   // auto-set when user clicks print
+  isExported?: boolean  // auto-set when user exports JPG/PDF/CSV
 }
 
 // ============================================================
@@ -268,8 +269,9 @@ export interface DeliveryNote {
   vehiclePlate: string
   receiverName: string
   status: DeliveryNoteStatus
-  isPrinted: boolean   // auto-set when user prints/exports
-  isBilled: boolean    // auto-set when included in billing statement
+  isPrinted: boolean    // auto-set when user clicks print
+  isExported?: boolean  // auto-set when user exports JPG/PDF/CSV
+  isBilled: boolean     // auto-set when included in billing statement
   transportFeeTrip: number   // ค่ารถ (ครั้ง) — auto-calc, editable
   transportFeeMonth: number  // ค่ารถ (เดือน) — on last DN of month, editable
   notes: string
@@ -316,6 +318,7 @@ export interface BillingStatement {
   paidAmount: number
   notes: string
   isPrinted?: boolean
+  isExported?: boolean
 }
 
 // ============================================================
@@ -333,6 +336,7 @@ export interface TaxInvoice {
   grandTotal: number
   notes: string
   isPrinted?: boolean
+  isExported?: boolean
   isPaid?: boolean
 }
 

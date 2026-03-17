@@ -8,17 +8,20 @@ interface ExportButtonsProps {
   targetId: string
   filename: string
   onExportCSV?: () => void
-  onExport?: () => void // fires on any export/print action
+  onExport?: () => void     // backward compat: fires on any action
+  onPrint?: () => void      // fires only on print button
+  onExportFile?: () => void // fires only on JPG/PDF/CSV
   showPrint?: boolean
 }
 
-export default function ExportButtons({ targetId, filename, onExportCSV, onExport, showPrint = true }: ExportButtonsProps) {
+export default function ExportButtons({ targetId, filename, onExportCSV, onExport, onPrint, onExportFile, showPrint = true }: ExportButtonsProps) {
   const [busy, setBusy] = useState(false)
 
   const handleJPG = async () => {
     setBusy(true)
     try { await exportJPG(targetId, filename) } catch { /* ignore */ }
     setBusy(false)
+    onExportFile?.()
     onExport?.()
   }
 
@@ -26,6 +29,7 @@ export default function ExportButtons({ targetId, filename, onExportCSV, onExpor
     setBusy(true)
     try { await exportPDF(targetId, filename) } catch { /* ignore */ }
     setBusy(false)
+    onExportFile?.()
     onExport?.()
   }
 
@@ -42,13 +46,13 @@ export default function ExportButtons({ targetId, filename, onExportCSV, onExpor
         <FileDown className="w-3.5 h-3.5" />PDF
       </button>
       {onExportCSV && (
-        <button onClick={() => { onExportCSV(); onExport?.() }}
+        <button onClick={() => { onExportCSV(); onExportFile?.(); onExport?.() }}
           className={`${btnBase} bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200`}>
           <Table2 className="w-3.5 h-3.5" />CSV
         </button>
       )}
       {showPrint && (
-        <button onClick={() => { window.print(); onExport?.() }} disabled={busy}
+        <button onClick={() => { window.print(); onPrint?.(); onExport?.() }} disabled={busy}
           className={`${btnBase} bg-[#1B3A5C] text-white hover:bg-[#122740]`}>
           <Printer className="w-3.5 h-3.5" />พิมพ์
         </button>

@@ -745,8 +745,24 @@ export default function LinenFormsPage() {
         {detailForm && detailCustomer && (
           <div>
             <LinenFormPrint form={detailForm} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} carryOver={detailCarryOver} />
-            <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-lf" filename={detailForm.formNumber} onExportCSV={handleExportCSV} />
+            <div className="flex justify-between items-center mt-4 no-print">
+              <div className="flex items-center gap-6">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={!!detailForm.isPrinted}
+                    onChange={e => updateLinenForm(detailForm.id, { isPrinted: e.target.checked })}
+                    className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+                  <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={!!detailForm.isExported}
+                    onChange={e => updateLinenForm(detailForm.id, { isExported: e.target.checked })}
+                    className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+                  <span className="text-sm font-medium text-violet-700">ส่งออกแล้ว</span>
+                </label>
+              </div>
+              <ExportButtons targetId="print-lf" filename={detailForm.formNumber} onExportCSV={handleExportCSV}
+                onPrint={() => { if (!detailForm.isPrinted) updateLinenForm(detailForm.id, { isPrinted: true }) }}
+                onExportFile={() => { if (!detailForm.isExported) updateLinenForm(detailForm.id, { isExported: true }) }} />
             </div>
           </div>
         )}
@@ -843,16 +859,29 @@ export default function LinenFormsPage() {
           })}
         </div>
         <div className="flex justify-between items-center mt-4 no-print">
-          <span className="text-xs text-slate-400">เมื่อส่งออก/พิมพ์ ระบบจะทำเครื่องหมาย "พิมพ์แล้ว" อัตโนมัติ</span>
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={selectedLfIds.every(id => linenForms.find(f => f.id === id)?.isPrinted)}
+                onChange={e => {
+                  for (const lfId of selectedLfIds) updateLinenForm(lfId, { isPrinted: e.target.checked })
+                }}
+                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว (ทุกรายการ)</span>
+            </label>
+            <p className="text-xs text-slate-400">พิมพ์ → สถานะ "พิมพ์แล้ว" | ส่งออก JPG/PDF/CSV → สถานะ "ส่งออกแล้ว"</p>
+          </div>
           <ExportButtons
             targetId="print-bulk-lf"
             filename={`LF-bulk-${selectedLfIds.length}`}
             onExportCSV={() => handleLfListCSV(linenForms.filter(f => selectedLfIds.includes(f.id)))}
-            onExport={() => {
-              for (const lfId of selectedLfIds) {
-                const f = linenForms.find(x => x.id === lfId)
-                if (f && !f.isPrinted) updateLinenForm(lfId, { isPrinted: true })
-              }
+            onPrint={() => {
+              for (const lfId of selectedLfIds) updateLinenForm(lfId, { isPrinted: true })
+            }}
+            onExportFile={() => {
+              for (const lfId of selectedLfIds) updateLinenForm(lfId, { isExported: true })
             }}
           />
         </div>

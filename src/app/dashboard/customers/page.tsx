@@ -286,6 +286,11 @@ export default function CustomersPage() {
                             className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-[#1B3A5C]">
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
+                          <Link href={`/dashboard/billing?tab=quotation&newqt=${c.id}`}
+                            className="p-1.5 rounded hover:bg-emerald-50 text-slate-400 hover:text-emerald-600"
+                            title="สร้างใบเสนอราคา">
+                            <FileText className="w-3.5 h-3.5" />
+                          </Link>
                           <button onClick={() => {
                             if (hasDocuments(c.id)) {
                               alert('ไม่สามารถลบได้ — ลูกค้านี้มีเอกสารที่เกี่ยวข้อง\nปิดใช้งานแทน (แก้ไข → สถานะ = ปิด)')
