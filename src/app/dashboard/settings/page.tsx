@@ -324,6 +324,14 @@ export default function SettingsPage() {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <div>
+              <label className="block font-medium text-slate-600 mb-1">รหัสสาขา (5 หลัก)</label>
+              <input value={companyDraft.branch} onChange={e => handleCompanyChange('branch', e.target.value)}
+                placeholder="00000 = สำนักงานใหญ่, 00001 = สาขาที่ 1"
+                maxLength={5}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+              <p className="text-[11px] text-slate-400 mt-0.5">00000 → แสดง "สำนักงานใหญ่" | 00001 → แสดง "สาขาที่ 00001"</p>
+            </div>
+            <div>
               <label className="block font-medium text-slate-600 mb-1">โทรศัพท์</label>
               <input value={companyDraft.phone} onChange={e => handleCompanyChange('phone', e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />

@@ -472,6 +472,10 @@ export async function updateQuotationDB(id: string, updates: Partial<Quotation>)
   await dbWrite({ table: 'quotations', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
 }
 
+export async function deleteQuotationDB(id: string): Promise<void> {
+  await dbWrite({ table: 'quotations', operation: 'delete', match: { column: 'id', value: id } })
+}
+
 // ============================================================
 // Expenses
 // ============================================================

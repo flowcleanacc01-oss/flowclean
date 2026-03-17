@@ -1,6 +1,6 @@
 'use client'
 
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatCurrency, formatBranch } from '@/lib/utils'
 import type { Quotation, CompanyInfo } from '@/types'
 
 interface QuotationPrintProps {
@@ -17,7 +17,7 @@ export default function QuotationPrint({ quotation, company }: QuotationPrintPro
           <h1 className="text-xl font-bold text-[#1B3A5C]">{company.name}</h1>
           <p className="text-xs text-slate-500">{company.nameEn}</p>
           <p className="text-xs text-slate-500 mt-1">{company.address}</p>
-          <p className="text-xs text-slate-500">เลขผู้เสียภาษี: {company.taxId} | {company.branch}</p>
+          <p className="text-xs text-slate-500">เลขผู้เสียภาษี: {company.taxId} | {formatBranch(company.branch)}</p>
           <p className="text-xs text-slate-500">โทร: {company.phone}</p>
         </div>
         <div className="text-right">

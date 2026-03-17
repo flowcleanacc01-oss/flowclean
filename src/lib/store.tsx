@@ -68,6 +68,7 @@ interface StoreContextType {
   quotations: Quotation[]
   addQuotation: (q: Omit<Quotation, 'id' | 'quotationNumber'>) => Quotation
   updateQuotationStatus: (id: string, status: QuotationStatus) => void
+  deleteQuotation: (id: string) => void
 
   // Expenses
   expenses: Expense[]
@@ -561,6 +562,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dbSave(db.updateQuotationDB(id, { status }))
   }, [logAudit])
 
+  const deleteQuotation = useCallback((id: string) => {
+    setQuotations(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('delete', 'quotation', id, old?.quotationNumber || id, 'ลบใบเสนอราคา')
+      return prev.filter(x => x.id !== id)
+    })
+    dbSave(db.deleteQuotationDB(id))
+  }, [logAudit])
+
   // ---- Expenses ----
   const addExpense = useCallback((e: Omit<Expense, 'id' | 'createdBy'>): Expense => {
     const newExp: Expense = { ...e, id: genId(), createdBy: currentUserRef.current?.id || 'unknown' }
@@ -844,7 +854,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deliveryNotes, addDeliveryNote, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
       billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
       taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
-      quotations, addQuotation, updateQuotationStatus,
+      quotations, addQuotation, updateQuotationStatus, deleteQuotation,
       expenses, addExpense, updateExpense, deleteExpense,
       users, addUser, updateUser, resetPassword,
       defaultPrices, updateDefaultPrice,

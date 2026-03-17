@@ -7,7 +7,7 @@ import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber 
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
-import { Plus, Search, FileText, FileDown, X, ChevronRight, Printer, Check, ExternalLink } from 'lucide-react'
+import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
@@ -23,7 +23,7 @@ export default function BillingPage() {
   const {
     billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
     taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
-    quotations, addQuotation, updateQuotationStatus,
+    quotations, addQuotation, updateQuotationStatus, deleteQuotation,
     deliveryNotes, updateDeliveryNote, customers, getCustomer, companyInfo, linenCatalog,
     linenCategories, getCategoryLabel,
   } = useStore()
@@ -277,6 +277,16 @@ export default function BillingPage() {
       notes: quNotes,
     })
     setShowCreateQU(false)
+  }
+
+  const moveQuItem = (code: string, dir: 'up' | 'down') => {
+    const idx = quItems.findIndex(i => i.code === code)
+    if (idx < 0) return
+    const newIdx = dir === 'up' ? idx - 1 : idx + 1
+    if (newIdx < 0 || newIdx >= quItems.length) return
+    const arr = [...quItems]
+    ;[arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]]
+    setQuItems(arr)
   }
 
   const detailBilling = showDetail ? billingStatements.find(b => b.id === showDetail) : null
@@ -796,7 +806,7 @@ export default function BillingPage() {
                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>{cfg.label}</span>
                       </td>
                       <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                        <div className="flex gap-1 justify-end">
+                        <div className="flex gap-1 justify-end items-center">
                           {nextStatus && (
                             <button onClick={() => updateQuotationStatus(q.id, nextStatus)}
                               className="text-xs px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] rounded font-medium hover:bg-[#2bb8b8] inline-flex items-center gap-0.5">
@@ -807,6 +817,12 @@ export default function BillingPage() {
                             <button onClick={() => updateQuotationStatus(q.id, 'rejected')}
                               className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100">ปฏิเสธ</button>
                           )}
+                          <button onClick={() => {
+                            if (confirm(`ลบใบเสนอราคา ${q.quotationNumber}?`)) deleteQuotation(q.id)
+                          }}
+                            className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1396,12 +1412,13 @@ export default function BillingPage() {
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50">
                     <th className="text-left px-3 py-2 font-medium text-slate-600 w-16">รหัส</th>
+                    <th className="text-center px-1 py-2 font-medium text-slate-600 w-8">ลำดับ</th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600">ชื่อ (ไทย)</th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600">ชื่อ (EN)</th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600">หมวด</th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600 w-14">หน่วย</th>
                     <th className="text-right px-3 py-2 font-medium text-slate-600 w-28">ราคา/หน่วย</th>
-                    <th className="text-center px-3 py-2 font-medium text-slate-600 w-10"></th>
+                    <th className="text-center px-3 py-2 font-medium text-slate-600 w-16"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1415,7 +1432,7 @@ export default function BillingPage() {
                     if (quFilterCat !== 'all' && catItem?.category !== quFilterCat) return null
                     return (
                       <tr key={item.code} className="border-t border-slate-100 hover:bg-slate-50">
-                        <td className="px-3 py-1 font-mono text-xs text-slate-500">{item.code}</td>
+                        <td className="px-1 py-1 text-center text-xs text-slate-400 font-mono">{idx + 1}</td>
                         <td className="px-3 py-1 text-slate-700">{item.name}</td>
                         <td className="px-3 py-1 text-slate-500 text-xs">{catItem?.nameEn || ''}</td>
                         <td className="px-3 py-1 text-xs text-slate-400">{catItem ? getCategoryLabel(catItem.category) : ''}</td>
@@ -1431,8 +1448,18 @@ export default function BillingPage() {
                             className="w-24 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                         </td>
                         <td className="px-1 py-1 text-center">
-                          <button onClick={() => setQuItems(quItems.filter((_, i) => i !== idx))}
-                            className="text-slate-400 hover:text-red-500 p-1"><X className="w-3 h-3" /></button>
+                          <div className="flex items-center justify-center gap-0.5">
+                            <button type="button" onClick={() => moveQuItem(item.code, 'up')} disabled={idx === 0}
+                              className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-default transition-colors">
+                              <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                            </button>
+                            <button type="button" onClick={() => moveQuItem(item.code, 'down')} disabled={idx === quItems.length - 1}
+                              className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-default transition-colors">
+                              <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                            </button>
+                            <button type="button" onClick={() => setQuItems(quItems.filter((_, i) => i !== idx))}
+                              className="text-slate-400 hover:text-red-500 p-0.5"><X className="w-3 h-3" /></button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -1512,7 +1539,7 @@ export default function BillingPage() {
             )}
 
             <div className="flex justify-between pt-2">
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 {detailQuotation.status === 'draft' && (
                   <button onClick={() => updateQuotationStatus(detailQuotation.id, 'sent')}
                     className="text-sm px-3 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100">ส่งให้ลูกค้า</button>
@@ -1525,6 +1552,15 @@ export default function BillingPage() {
                       className="text-sm px-3 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100">ปฏิเสธ</button>
                   </>
                 )}
+                <button onClick={() => {
+                  if (confirm(`ลบใบเสนอราคา ${detailQuotation.quotationNumber}?`)) {
+                    deleteQuotation(detailQuotation.id)
+                    setShowQuDetail(null)
+                  }
+                }}
+                  className="text-sm px-3 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100 flex items-center gap-1">
+                  <Trash2 className="w-3.5 h-3.5" />ลบ
+                </button>
               </div>
               <button onClick={() => setShowQuPrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">

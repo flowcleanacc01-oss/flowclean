@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatCurrency, formatBranch } from '@/lib/utils'
 import type { BillingStatement, Customer, CompanyInfo } from '@/types'
 
 interface BillingPrintProps {
@@ -39,7 +39,7 @@ export default function BillingPrint({ billing, customer, company }: BillingPrin
         <p className="text-slate-500">เรียน:</p>
         <p className="font-medium text-slate-800">{customer.name}</p>
         <p className="text-slate-500">{customer.address}</p>
-        <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxId} ({customer.branch})</p>
+        <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxId} ({formatBranch(customer.branch)})</p>
       </div>
 
       {/* Billing Period */}

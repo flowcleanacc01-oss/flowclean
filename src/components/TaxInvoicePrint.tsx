@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatCurrency, formatBranch } from '@/lib/utils'
 import type { TaxInvoice, Customer, CompanyInfo } from '@/types'
 
 interface TaxInvoicePrintProps {
@@ -41,7 +41,7 @@ export default function TaxInvoicePrint({ invoice, customer, company, withholdin
           {customer.nameEn && <p className="text-slate-500">{customer.nameEn}</p>}
           <p className="text-slate-500 mt-1">{customer.address}</p>
           <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxId}</p>
-          <p className="text-slate-500">{customer.branch}</p>
+          <p className="text-slate-500">{formatBranch(customer.branch)}</p>
         </div>
         <div className="text-right">
           <p className="text-slate-500">เลขที่ / No:</p>

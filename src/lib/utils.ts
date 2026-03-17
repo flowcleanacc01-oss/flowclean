@@ -99,6 +99,18 @@ export function getAgingBucket(daysPast: number): string {
 /**
  * Sanitize numeric input: finite, non-negative, clamped to max.
  */
+/**
+ * Format branch code for display on documents.
+ * '00000' → 'สำนักงานใหญ่'  |  '00001' → 'สาขาที่ 00001'  |  text → text (backward compat)
+ */
+export function formatBranch(branch: string): string {
+  if (!branch) return ''
+  if (/^\d{5}$/.test(branch)) {
+    return branch === '00000' ? 'สำนักงานใหญ่' : `สาขาที่ ${branch}`
+  }
+  return branch
+}
+
 export function sanitizeNumber(value: string | number, max = 9_999_999): number {
   const n = typeof value === 'string' ? parseFloat(value) : value
   if (!Number.isFinite(n) || n < 0) return 0
