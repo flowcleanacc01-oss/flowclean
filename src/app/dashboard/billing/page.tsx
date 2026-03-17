@@ -7,7 +7,7 @@ import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber 
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
-import { Plus, Search, FileText, FileDown, X, ChevronRight, Printer, Check } from 'lucide-react'
+import { Plus, Search, FileText, FileDown, X, ChevronRight, Printer, Check, ExternalLink } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
@@ -61,6 +61,10 @@ export default function BillingPage() {
   const [showIvPrintList, setShowIvPrintList] = useState(false)
   const [showWbBulkPrint, setShowWbBulkPrint] = useState(false)
   const [showIvBulkPrint, setShowIvBulkPrint] = useState(false)
+
+  // IV creation confirm modal
+  const [showCreateIV, setShowCreateIV] = useState<string | null>(null) // billingId
+  const [ivIssueDate, setIvIssueDate] = useState(todayISO())
 
   // Quotation state
   const [showCreateQU, setShowCreateQU] = useState(false)
@@ -217,23 +221,30 @@ export default function BillingPage() {
   }
 
   const handleCreateTaxInvoice = (billingId: string) => {
-    const billing = billingStatements.find(b => b.id === billingId)
-    if (!billing) return
-    // Prevent duplicate
+    if (!billingStatements.find(b => b.id === billingId)) return
     if (taxInvoices.some(ti => ti.billingStatementId === billingId)) {
       alert('ใบกำกับภาษีของบิลนี้มีอยู่แล้ว')
       return
     }
+    setIvIssueDate(todayISO())
+    setShowCreateIV(billingId)
+  }
+
+  const handleConfirmCreateIV = () => {
+    if (!showCreateIV) return
+    const billing = billingStatements.find(b => b.id === showCreateIV)
+    if (!billing) return
     addTaxInvoice({
-      billingStatementId: billingId,
+      billingStatementId: showCreateIV,
       customerId: billing.customerId,
-      issueDate: todayISO(),
+      issueDate: ivIssueDate,
       lineItems: billing.lineItems,
       subtotal: billing.subtotal,
       vat: billing.vat,
       grandTotal: billing.grandTotal,
       notes: '',
     })
+    setShowCreateIV(null)
     setShowDetail(null)
   }
 
@@ -395,6 +406,25 @@ export default function BillingPage() {
     })
   }, [taxInvoices, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
 
+  // Map WB id → IV info (for badge in WB list/detail)
+  const wbInvoiceMap = useMemo(() => {
+    const map = new Map<string, { invoiceId: string; invoiceNumber: string }>()
+    for (const ti of taxInvoices) {
+      map.set(ti.billingStatementId, { invoiceId: ti.id, invoiceNumber: ti.invoiceNumber })
+    }
+    return map
+  }, [taxInvoices])
+
+  // Map IV id → WB info (for badge in IV list/detail)
+  const ivBillingMap = useMemo(() => {
+    const map = new Map<string, { billingId: string; billingNumber: string }>()
+    for (const ti of taxInvoices) {
+      const wb = billingStatements.find(b => b.id === ti.billingStatementId)
+      if (wb) map.set(ti.id, { billingId: wb.id, billingNumber: wb.billingNumber })
+    }
+    return map
+  }, [taxInvoices, billingStatements])
+
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { draft: 0, sent: 0, paid: 0, overdue: 0 }
     billingStatements.forEach(b => { counts[b.status] = (counts[b.status] || 0) + 1 })
@@ -509,12 +539,13 @@ export default function BillingPage() {
                   <SortableHeader label="ยอดรวม" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <SortableHeader label="จ่ายสุทธิ" sortKey="netPayable" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
+                  <th className="text-center px-4 py-3 font-medium text-slate-600">IV</th>
                   <th className="text-right px-4 py-3 font-medium text-slate-600 w-32"></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredBilling.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                  <tr><td colSpan={9} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                 ) : filteredBilling.map(b => {
                   const customer = getCustomer(b.customerId)
                   const cfg = BILLING_STATUS_CONFIG[b.status]
@@ -534,6 +565,20 @@ export default function BillingPage() {
                       <td className="px-4 py-3 text-right text-slate-700 font-medium">{formatCurrency(b.netPayable)}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>{cfg.label}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                        {(() => {
+                          const ivInfo = wbInvoiceMap.get(b.id)
+                          return ivInfo ? (
+                            <button onClick={() => setShowInvoiceDetail(ivInfo.invoiceId)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 hover:bg-purple-200">
+                              <span className="font-mono">{ivInfo.invoiceNumber}</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400">ยังไม่ออก</span>
+                          )
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-end">
@@ -573,13 +618,15 @@ export default function BillingPage() {
                   <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ยอดรวม VAT" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
+                  <th className="text-center px-4 py-3 font-medium text-slate-600">WB</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredInvoices.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-12 text-slate-400">ยังไม่มีใบกำกับภาษี — สร้างจากใบวางบิล</td></tr>
+                  <tr><td colSpan={6} className="text-center py-12 text-slate-400">ยังไม่มีใบกำกับภาษี — สร้างจากใบวางบิล</td></tr>
                 ) : filteredInvoices.map(inv => {
                   const customer = getCustomer(inv.customerId)
+                  const wbInfo = ivBillingMap.get(inv.id)
                   return (
                     <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                       onClick={() => setShowInvoiceDetail(inv.id)}>
@@ -593,6 +640,15 @@ export default function BillingPage() {
                       <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{formatDate(inv.issueDate)}</td>
                       <td className="px-4 py-3 text-right text-slate-700 font-medium">{formatCurrency(inv.grandTotal)}</td>
+                      <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                        {wbInfo ? (
+                          <button onClick={() => setShowDetail(wbInfo.billingId)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 hover:bg-orange-200">
+                            <span className="font-mono">{wbInfo.billingNumber}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </button>
+                        ) : <span className="text-xs text-slate-400">-</span>}
+                      </td>
                     </tr>
                   )
                 })}
@@ -873,6 +929,33 @@ export default function BillingPage() {
               )
             })()}
 
+            {/* IV Status Section */}
+            {(() => {
+              const ivInfo = wbInvoiceMap.get(detailBilling.id)
+              return (
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-purple-50 border border-purple-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-600 font-medium">ใบกำกับภาษี (IV):</span>
+                    {ivInfo ? (
+                      <button onClick={() => { setShowDetail(null); setShowInvoiceDetail(ivInfo.invoiceId) }}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-purple-700 hover:text-purple-900">
+                        <span className="font-mono">{ivInfo.invoiceNumber}</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                    ) : (
+                      <span className="text-sm text-slate-400">ยังไม่ออก IV</span>
+                    )}
+                  </div>
+                  {!ivInfo && (
+                    <button onClick={() => handleCreateTaxInvoice(detailBilling.id)}
+                      className="text-sm px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5" />ออกใบกำกับภาษี
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+
             <div className="border border-slate-200 rounded-lg overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
@@ -915,18 +998,10 @@ export default function BillingPage() {
             </div>
 
             <div className="flex justify-between pt-2">
-              <div className="flex gap-2">
-                <button onClick={() => setConfirmDeleteId(detailBilling.id)}
-                  className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1">
-                  <X className="w-3.5 h-3.5" />ลบ
-                </button>
-                {!taxInvoices.some(ti => ti.billingStatementId === detailBilling.id) && (
-                  <button onClick={() => handleCreateTaxInvoice(detailBilling.id)}
-                    className="text-sm px-3 py-1 bg-purple-50 text-purple-700 rounded hover:bg-purple-100">
-                    <FileText className="w-3 h-3 inline mr-1" />สร้างใบกำกับภาษี
-                  </button>
-                )}
-              </div>
+              <button onClick={() => setConfirmDeleteId(detailBilling.id)}
+                className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1">
+                <X className="w-3.5 h-3.5" />ลบ
+              </button>
               <button onClick={() => setShowPrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
                 <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
@@ -985,6 +1060,28 @@ export default function BillingPage() {
               <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailInvoiceCustomer.name}</strong></div>
               <div><span className="text-slate-500">วันที่ออก:</span> {formatDate(detailInvoice.issueDate)}</div>
             </div>
+
+            {/* WB Reference Section */}
+            {(() => {
+              const wbInfo = ivBillingMap.get(detailInvoice.id)
+              const wb = wbInfo ? billingStatements.find(b => b.id === wbInfo.billingId) : null
+              if (!wbInfo || !wb) return null
+              return (
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-orange-50 border border-orange-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-600 font-medium">ใบวางบิล (WB):</span>
+                    <button onClick={() => { setShowInvoiceDetail(null); setShowDetail(wbInfo.billingId) }}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-orange-700 hover:text-orange-900">
+                      <span className="font-mono">{wbInfo.billingNumber}</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    {formatDate(wb.issueDate)} · {formatCurrency(wb.netPayable)}
+                  </div>
+                </div>
+              )
+            })()}
 
             <div className="border border-slate-200 rounded-lg overflow-hidden">
               <table className="w-full text-sm">
@@ -1063,6 +1160,79 @@ export default function BillingPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* IV Creation Confirm Modal */}
+      <Modal open={!!showCreateIV} onClose={() => setShowCreateIV(null)} title="ยืนยันออกใบกำกับภาษี" size="lg">
+        {(() => {
+          const billing = showCreateIV ? billingStatements.find(b => b.id === showCreateIV) : null
+          const customer = billing ? getCustomer(billing.customerId) : null
+          if (!billing || !customer) return null
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div><span className="text-slate-500">โรงแรม:</span> <strong>{customer.name}</strong></div>
+                <div><span className="text-slate-500">ใบวางบิล:</span> <span className="font-mono font-medium">{billing.billingNumber}</span></div>
+                <div><span className="text-slate-500">เดือน:</span> {billing.billingMonth}</div>
+                <div>
+                  <label className="block text-slate-500 mb-1">วันที่ออกใบกำกับภาษี</label>
+                  <input type="date" value={ivIssueDate} onChange={e => setIvIssueDate(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                </div>
+              </div>
+
+              {/* WB line items preview */}
+              <div>
+                <h3 className="text-sm font-medium text-slate-700 mb-2">รายการจากใบวางบิล ({billing.deliveryNoteIds.length} ใบส่งของ)</h3>
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="text-left px-3 py-2 font-medium text-slate-600">รายการ</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">จำนวน</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">ราคา</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">รวม</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billing.lineItems.map(item => (
+                        <tr key={item.code} className="border-t border-slate-100">
+                          <td className="px-3 py-1.5">{item.name}</td>
+                          <td className="px-3 py-1.5 text-right">{item.quantity}</td>
+                          <td className="px-3 py-1.5 text-right">{formatCurrency(item.pricePerUnit)}</td>
+                          <td className="px-3 py-1.5 text-right">{formatCurrency(item.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-50 border-t">
+                        <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">รวมก่อน VAT</td>
+                        <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(billing.subtotal)}</td>
+                      </tr>
+                      <tr className="bg-slate-50">
+                        <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">VAT 7%</td>
+                        <td className="px-3 py-1.5 text-right">{formatCurrency(billing.vat)}</td>
+                      </tr>
+                      <tr className="bg-[#e8eef5]">
+                        <td colSpan={3} className="px-3 py-2 text-right font-semibold text-[#1B3A5C]">รวมทั้งสิ้น</td>
+                        <td className="px-3 py-2 text-right font-bold text-[#1B3A5C]">{formatCurrency(billing.grandTotal)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button onClick={() => setShowCreateIV(null)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+                <button onClick={handleConfirmCreateIV} disabled={!ivIssueDate}
+                  className="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors font-medium flex items-center gap-1">
+                  <FileText className="w-4 h-4" />ออกใบกำกับภาษี
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
 
       {/* Create Quotation Modal */}
