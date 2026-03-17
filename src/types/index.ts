@@ -237,6 +237,7 @@ export interface LinenForm {
   deptIroning: boolean
   deptFolding: boolean
   deptQc: boolean
+  isPrinted?: boolean  // auto-set when user prints/exports
 }
 
 // ============================================================

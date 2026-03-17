@@ -474,12 +474,12 @@ export default function BillingPage() {
             {selectedWbIds.length > 0 && (
               <button onClick={() => setShowWbBulkPrint(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
-                <FileDown className="w-4 h-4" />พิมพ์ที่เลือก ({selectedWbIds.length})
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกที่เลือก ({selectedWbIds.length})
               </button>
             )}
             <button onClick={() => setShowWbPrintList(true)} disabled={filteredBilling.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
-              <Printer className="w-4 h-4" />พิมพ์รายการ
+              <Printer className="w-4 h-4" />พิมพ์/ส่งออกรายการ
             </button>
             <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setBillingIssueDate(todayISO()) }}
               className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
@@ -492,12 +492,12 @@ export default function BillingPage() {
             {selectedIvIds.length > 0 && (
               <button onClick={() => setShowIvBulkPrint(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
-                <FileDown className="w-4 h-4" />พิมพ์ที่เลือก ({selectedIvIds.length})
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกที่เลือก ({selectedIvIds.length})
               </button>
             )}
             <button onClick={() => setShowIvPrintList(true)} disabled={filteredInvoices.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
-              <Printer className="w-4 h-4" />พิมพ์รายการ
+              <Printer className="w-4 h-4" />พิมพ์/ส่งออกรายการ
             </button>
           </div>
         )}
@@ -1662,7 +1662,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* WB Bulk Print Modal */}
-      <Modal open={showWbBulkPrint} onClose={() => setShowWbBulkPrint(false)} title={`พิมพ์ใบวางบิล (${selectedWbIds.length} ใบ)`} size="xl" className="print-target">
+      <Modal open={showWbBulkPrint} onClose={() => setShowWbBulkPrint(false)} title={`พิมพ์/ส่งออกใบวางบิล (${selectedWbIds.length} ใบ)`} size="xl" className="print-target">
         <div id="print-bulk-wb">
           {selectedWbIds.map((bId, idx) => {
             const b = billingStatements.find(x => x.id === bId)
@@ -1676,13 +1676,24 @@ export default function BillingPage() {
             )
           })}
         </div>
-        <div className="flex justify-end mt-4 no-print">
-          <ExportButtons targetId="print-bulk-wb" filename={`WB-bulk-${selectedWbIds.length}`} />
+        <div className="flex justify-between items-center mt-4 no-print">
+          <span className="text-xs text-slate-400">เมื่อส่งออก/พิมพ์ ระบบจะทำเครื่องหมาย "พิมพ์แล้ว" อัตโนมัติ</span>
+          <ExportButtons
+            targetId="print-bulk-wb"
+            filename={`WB-bulk-${selectedWbIds.length}`}
+            onExportCSV={() => handleWbListCSV(billingStatements.filter(b => selectedWbIds.includes(b.id)))}
+            onExport={() => {
+              for (const bId of selectedWbIds) {
+                const b = billingStatements.find(x => x.id === bId)
+                if (b && !b.isPrinted) updateBillingStatement(bId, { isPrinted: true })
+              }
+            }}
+          />
         </div>
       </Modal>
 
       {/* IV Bulk Print Modal */}
-      <Modal open={showIvBulkPrint} onClose={() => setShowIvBulkPrint(false)} title={`พิมพ์ใบกำกับภาษี (${selectedIvIds.length} ใบ)`} size="xl" className="print-target">
+      <Modal open={showIvBulkPrint} onClose={() => setShowIvBulkPrint(false)} title={`พิมพ์/ส่งออกใบกำกับภาษี (${selectedIvIds.length} ใบ)`} size="xl" className="print-target">
         <div id="print-bulk-iv">
           {selectedIvIds.map((ivId, idx) => {
             const inv = taxInvoices.find(x => x.id === ivId)
@@ -1697,8 +1708,19 @@ export default function BillingPage() {
             )
           })}
         </div>
-        <div className="flex justify-end mt-4 no-print">
-          <ExportButtons targetId="print-bulk-iv" filename={`IV-bulk-${selectedIvIds.length}`} />
+        <div className="flex justify-between items-center mt-4 no-print">
+          <span className="text-xs text-slate-400">เมื่อส่งออก/พิมพ์ ระบบจะทำเครื่องหมาย "พิมพ์แล้ว" อัตโนมัติ</span>
+          <ExportButtons
+            targetId="print-bulk-iv"
+            filename={`IV-bulk-${selectedIvIds.length}`}
+            onExportCSV={() => handleIvListCSV(taxInvoices.filter(i => selectedIvIds.includes(i.id)))}
+            onExport={() => {
+              for (const ivId of selectedIvIds) {
+                const inv = taxInvoices.find(x => x.id === ivId)
+                if (inv && !inv.isPrinted) updateTaxInvoice(ivId, { isPrinted: true })
+              }
+            }}
+          />
         </div>
       </Modal>
     </div>

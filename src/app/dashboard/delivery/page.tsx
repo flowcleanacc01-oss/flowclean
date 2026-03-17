@@ -237,6 +237,17 @@ export default function DeliveryPage() {
     }
   }
 
+  const handleDnListCSV = (items: typeof filtered) => {
+    const headers = ['ลำดับ', 'เลขที่ SD', 'ลูกค้า', 'วันที่', 'จำนวนชิ้น', 'ยอดรวม']
+    const rows = items.map((dn, idx) => {
+      const customer = getCustomer(dn.customerId)
+      const pieces = dn.items.reduce((s, i) => s + i.quantity, 0)
+      const amount = getDNTotalAmount(dn)
+      return [String(idx + 1), dn.noteNumber, customer?.name || '-', dn.date, String(pieces), String(amount)]
+    })
+    exportCSV(headers, rows, 'รายการใบส่งของ')
+  }
+
   const filterOptions: { key: DNFilter; label: string }[] = [
     { key: 'all', label: 'ทั้งหมด' },
     { key: 'not-printed', label: 'ยังไม่พิมพ์' },
@@ -258,14 +269,14 @@ export default function DeliveryPage() {
             <button onClick={() => setShowBulkPrint(true)}
               className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
               <FileDown className="w-4 h-4" />
-              พิมพ์เอกสารที่เลือก ({selectedDnIds.length})
+              พิมพ์/ส่งออกที่เลือก ({selectedDnIds.length})
             </button>
           )}
           <button onClick={() => setShowPrintList(true)}
             disabled={filtered.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
             <Printer className="w-4 h-4" />
-            พิมพ์รายการ
+            พิมพ์/ส่งออกรายการ
           </button>
           <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()) }}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
@@ -722,7 +733,7 @@ export default function DeliveryPage() {
                 </table>
               </div>
               <div className="flex justify-end mt-4 no-print">
-                <ExportButtons targetId="print-dn-list" filename="รายการใบส่งของ" />
+                <ExportButtons targetId="print-dn-list" filename="รายการใบส่งของ" onExportCSV={() => handleDnListCSV(printDNs)} />
               </div>
             </div>
           )
@@ -823,14 +834,18 @@ export default function DeliveryPage() {
           })}
         </div>
         <div className="flex justify-between items-center mt-4 no-print">
-          <button onClick={() => {
-            for (const dnId of selectedDnIds) {
-              const dn = deliveryNotes.find(d => d.id === dnId)
-              if (dn && !dn.isPrinted) updateDeliveryNote(dnId, { isPrinted: true })
-            }
-          }}
-            className="text-xs text-blue-600 hover:underline">ทำเครื่องหมาย "พิมพ์แล้ว" ทั้งหมด</button>
-          <ExportButtons targetId="print-bulk-dn" filename={`SD-bulk-${selectedDnIds.length}`} />
+          <span className="text-xs text-slate-400">เมื่อส่งออก/พิมพ์ ระบบจะทำเครื่องหมาย "พิมพ์แล้ว" อัตโนมัติ</span>
+          <ExportButtons
+            targetId="print-bulk-dn"
+            filename={`SD-bulk-${selectedDnIds.length}`}
+            onExportCSV={() => handleDnListCSV(deliveryNotes.filter(d => selectedDnIds.includes(d.id)))}
+            onExport={() => {
+              for (const dnId of selectedDnIds) {
+                const dn = deliveryNotes.find(d => d.id === dnId)
+                if (dn && !dn.isPrinted) updateDeliveryNote(dnId, { isPrinted: true })
+              }
+            }}
+          />
         </div>
       </Modal>
     </div>

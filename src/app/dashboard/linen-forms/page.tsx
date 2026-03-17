@@ -268,12 +268,12 @@ export default function LinenFormsPage() {
           {selectedLfIds.length > 0 && (
             <button onClick={() => setShowLfBulkPrint(true)}
               className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
-              <FileDown className="w-4 h-4" />พิมพ์ที่เลือก ({selectedLfIds.length})
+              <FileDown className="w-4 h-4" />พิมพ์/ส่งออกที่เลือก ({selectedLfIds.length})
             </button>
           )}
           <button onClick={() => setShowLfPrintList(true)} disabled={filtered.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
-            <Printer className="w-4 h-4" />พิมพ์รายการ
+            <Printer className="w-4 h-4" />พิมพ์/ส่งออกรายการ
           </button>
           <button onClick={handleCreateOpen}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
@@ -827,7 +827,7 @@ export default function LinenFormsPage() {
       </Modal>
 
       {/* LF Bulk Print Modal */}
-      <Modal open={showLfBulkPrint} onClose={() => setShowLfBulkPrint(false)} title={`พิมพ์ใบส่งรับผ้า (${selectedLfIds.length} ใบ)`} size="xl" className="print-target">
+      <Modal open={showLfBulkPrint} onClose={() => setShowLfBulkPrint(false)} title={`พิมพ์/ส่งออกใบส่งรับผ้า (${selectedLfIds.length} ใบ)`} size="xl" className="print-target">
         <div id="print-bulk-lf">
           {selectedLfIds.map((lfId, idx) => {
             const form = linenForms.find(f => f.id === lfId)
@@ -842,8 +842,19 @@ export default function LinenFormsPage() {
             )
           })}
         </div>
-        <div className="flex justify-end mt-4 no-print">
-          <ExportButtons targetId="print-bulk-lf" filename={`LF-bulk-${selectedLfIds.length}`} />
+        <div className="flex justify-between items-center mt-4 no-print">
+          <span className="text-xs text-slate-400">เมื่อส่งออก/พิมพ์ ระบบจะทำเครื่องหมาย "พิมพ์แล้ว" อัตโนมัติ</span>
+          <ExportButtons
+            targetId="print-bulk-lf"
+            filename={`LF-bulk-${selectedLfIds.length}`}
+            onExportCSV={() => handleLfListCSV(linenForms.filter(f => selectedLfIds.includes(f.id)))}
+            onExport={() => {
+              for (const lfId of selectedLfIds) {
+                const f = linenForms.find(x => x.id === lfId)
+                if (f && !f.isPrinted) updateLinenForm(lfId, { isPrinted: true })
+              }
+            }}
+          />
         </div>
       </Modal>
     </div>
