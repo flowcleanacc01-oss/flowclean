@@ -314,6 +314,7 @@ export interface BillingStatement {
   paidDate: string | null
   paidAmount: number
   notes: string
+  isPrinted?: boolean
 }
 
 // ============================================================
@@ -330,6 +331,8 @@ export interface TaxInvoice {
   vat: number
   grandTotal: number
   notes: string
+  isPrinted?: boolean
+  isPaid?: boolean
 }
 
 // ============================================================

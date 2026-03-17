@@ -25,6 +25,7 @@ export default function DeliveryPage() {
   const [showPrint, setShowPrint] = useState(false)
 
   const [search, setSearch] = useState('')
+  const [customerFilter, setCustomerFilter] = useState<string>('all')
   const [dnFilter, setDnFilter] = useState<DNFilter>('all')
   const [showCreate, setShowCreate] = useState(false)
   const searchParams = useSearchParams()
@@ -67,6 +68,7 @@ export default function DeliveryPage() {
 
   const filtered = useMemo(() => {
     return deliveryNotes.filter(dn => {
+      if (customerFilter !== 'all' && dn.customerId !== customerFilter) return false
       if (search) {
         const customer = getCustomer(dn.customerId)
         const q = search.toLowerCase()
@@ -100,7 +102,7 @@ export default function DeliveryPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [deliveryNotes, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter])
+  }, [deliveryNotes, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter])
 
   // Forms available for delivery (confirmed status)
   const availableForms = useMemo(() => {
@@ -278,9 +280,16 @@ export default function DeliveryPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="ค้นหาเลขที่ใบส่งของ, โรงแรม..."
+            placeholder="ค้นหาเลขที่ใบส่งของ, ชื่อลูกค้า..."
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
+        <select value={customerFilter} onChange={e => setCustomerFilter(e.target.value)}
+          className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+          <option value="all">ทุกลูกค้า</option>
+          {customers.filter(c => c.isActive).map(c => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
       </div>
 
       {/* Filter tabs */}
@@ -319,9 +328,9 @@ export default function DeliveryPage() {
                     className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                 </th>
                 <SortableHeader label="เลขที่" sortKey="noteNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                <SortableHeader label="ลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                <SortableHeader label="จำนวนชิ้น" sortKey="items" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
+                <SortableHeader label="จำนวน" sortKey="items" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="ยอดรวม" sortKey="amount" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="คนขับ" sortKey="driver" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>

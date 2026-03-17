@@ -212,20 +212,13 @@ export default function CustomersPage() {
                 placeholder="ค้นหาชื่อลูกค้า, รหัส..."
                 className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
-            <div className="flex gap-1.5 flex-wrap">
-              <button onClick={() => setFilterCat('all')}
-                className={cn('px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                  filterCat === 'all' ? 'bg-[#1B3A5C] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
-                ทั้งหมด
-              </button>
+            <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-white">
+              <option value="all">ทุกลูกค้า</option>
               {customerCategories.sort((a, b) => a.sortOrder - b.sortOrder).map(cat => (
-                <button key={cat.key} onClick={() => setFilterCat(cat.key)}
-                  className={cn('px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                    filterCat === cat.key ? 'bg-[#1B3A5C] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
-                  {cat.label}
-                </button>
+                <option key={cat.key} value={cat.key}>{cat.label}</option>
               ))}
-            </div>
+            </select>
           </div>
 
           {/* Table */}

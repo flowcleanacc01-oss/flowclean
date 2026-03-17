@@ -55,11 +55,13 @@ interface StoreContextType {
   billingStatements: BillingStatement[]
   addBillingStatement: (b: Omit<BillingStatement, 'id' | 'billingNumber'>) => BillingStatement
   updateBillingStatus: (id: string, status: BillingStatus, paidDate?: string) => void
+  updateBillingStatement: (id: string, updates: Partial<BillingStatement>) => void
   deleteBillingStatement: (id: string) => void
 
   // Tax Invoices
   taxInvoices: TaxInvoice[]
   addTaxInvoice: (t: Omit<TaxInvoice, 'id' | 'invoiceNumber'>) => TaxInvoice
+  updateTaxInvoice: (id: string, updates: Partial<TaxInvoice>) => void
   deleteTaxInvoice: (id: string) => void
 
   // Quotations
@@ -500,6 +502,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dbSave(db.updateBillingStatementDB(id, updates))
   }, [logAudit])
 
+  const updateBillingStatement = useCallback((id: string, updates: Partial<BillingStatement>) => {
+    setBillingStatements(prev => prev.map(bs => bs.id === id ? { ...bs, ...updates } : bs))
+    dbSave(db.updateBillingStatementDB(id, updates))
+  }, [])
+
   const deleteBillingStatement = useCallback((id: string) => {
     setBillingStatements(prev => {
       const old = prev.find(x => x.id === id)
@@ -519,6 +526,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     logAudit('create', 'tax_invoice', newTI.id, newTI.invoiceNumber)
     return newTI
   }, [logAudit])
+
+  const updateTaxInvoice = useCallback((id: string, updates: Partial<TaxInvoice>) => {
+    setTaxInvoices(prev => prev.map(ti => ti.id === id ? { ...ti, ...updates } : ti))
+    dbSave(db.updateTaxInvoiceDB(id, updates))
+  }, [])
 
   const deleteTaxInvoice = useCallback((id: string) => {
     setTaxInvoices(prev => {
@@ -830,8 +842,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       customers, addCustomer, updateCustomer, deleteCustomer, getCustomer,
       linenForms, addLinenForm, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
       deliveryNotes, addDeliveryNote, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
-      billingStatements, addBillingStatement, updateBillingStatus, deleteBillingStatement,
-      taxInvoices, addTaxInvoice, deleteTaxInvoice,
+      billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
+      taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
       quotations, addQuotation, updateQuotationStatus,
       expenses, addExpense, updateExpense, deleteExpense,
       users, addUser, updateUser, resetPassword,

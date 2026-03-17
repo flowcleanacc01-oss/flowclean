@@ -21,8 +21,8 @@ type TabKey = 'billing' | 'invoice' | 'quotation'
 
 export default function BillingPage() {
   const {
-    billingStatements, addBillingStatement, updateBillingStatus, deleteBillingStatement,
-    taxInvoices, addTaxInvoice, deleteTaxInvoice,
+    billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
+    taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
     quotations, addQuotation, updateQuotationStatus,
     deliveryNotes, updateDeliveryNote, customers, getCustomer, companyInfo, linenCatalog,
     linenCategories, getCategoryLabel,
@@ -53,6 +53,13 @@ export default function BillingPage() {
   const [showInvoiceDetail, setShowInvoiceDetail] = useState<string | null>(null)
   const [showInvoicePrint, setShowInvoicePrint] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  // Filter tabs for WB and IV
+  type WBFilter = 'all' | 'not-printed' | 'printed' | 'no-iv' | 'has-iv' | 'not-paid' | 'paid'
+  type IVFilter = 'all' | 'not-printed' | 'printed' | 'not-paid' | 'paid'
+  const [wbFilter, setWbFilter] = useState<WBFilter>('all')
+  const [ivFilter, setIvFilter] = useState<IVFilter>('all')
+  const [qtCustomerFilter, setQtCustomerFilter] = useState<string>('all')
 
   // Bulk select state (WB, IV)
   const [selectedWbIds, setSelectedWbIds] = useState<string[]>([])
@@ -123,6 +130,13 @@ export default function BillingPage() {
         if (!b.billingNumber.toLowerCase().includes(q) && !customer?.name.toLowerCase().includes(q)) return false
       }
       if (!matchesDateFilter(b.issueDate)) return false
+      // WB filter
+      if (wbFilter === 'not-printed' && b.isPrinted) return false
+      if (wbFilter === 'printed' && !b.isPrinted) return false
+      if (wbFilter === 'no-iv' && taxInvoices.some(ti => ti.billingStatementId === b.id)) return false
+      if (wbFilter === 'has-iv' && !taxInvoices.some(ti => ti.billingStatementId === b.id)) return false
+      if (wbFilter === 'not-paid' && b.status === 'paid') return false
+      if (wbFilter === 'paid' && b.status !== 'paid') return false
       return true
     }).sort((a, b) => {
       let va: string | number, vb: string | number
@@ -137,7 +151,7 @@ export default function BillingPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [billingStatements, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
+  }, [billingStatements, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, wbFilter, taxInvoices])
 
   // Preview for billing creation
   const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
@@ -362,8 +376,15 @@ export default function BillingPage() {
     }
   }
 
+  // Unique customer names from quotations (for QT customer filter)
+  const qtCustomerNames = useMemo(() => {
+    const names = new Set(quotations.map(q => q.customerName).filter(Boolean))
+    return Array.from(names).sort()
+  }, [quotations])
+
   const filteredQuotations = useMemo(() => {
     return quotations.filter(q => {
+      if (qtCustomerFilter !== 'all' && q.customerName !== qtCustomerFilter) return false
       if (search) {
         const s = search.toLowerCase()
         if (!q.quotationNumber.toLowerCase().includes(s) && !q.customerName.toLowerCase().includes(s)) return false
@@ -381,7 +402,7 @@ export default function BillingPage() {
       const cmp = String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [quotations, search, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
+  }, [quotations, qtCustomerFilter, search, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
 
   // Invoice list (filtered + sorted)
   const filteredInvoices = useMemo(() => {
@@ -392,6 +413,11 @@ export default function BillingPage() {
         if (!inv.invoiceNumber.toLowerCase().includes(q) && !customer?.name.toLowerCase().includes(q)) return false
       }
       if (!matchesDateFilter(inv.issueDate)) return false
+      // IV filter
+      if (ivFilter === 'not-printed' && inv.isPrinted) return false
+      if (ivFilter === 'printed' && !inv.isPrinted) return false
+      if (ivFilter === 'not-paid' && inv.isPaid) return false
+      if (ivFilter === 'paid' && !inv.isPaid) return false
       return true
     }).sort((a, b) => {
       let va: string | number, vb: string | number
@@ -404,7 +430,7 @@ export default function BillingPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [taxInvoices, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
+  }, [taxInvoices, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, ivFilter])
 
   // Map WB id → IV info (for badge in WB list/detail)
   const wbInvoiceMap = useMemo(() => {
@@ -440,7 +466,7 @@ export default function BillingPage() {
             {tab === 'billing' ? '3. ใบวางบิล (WB)' : tab === 'invoice' ? '4. ใบกำกับภาษี/ใบเสร็จ (IV)' : 'ใบเสนอราคา (QT)'}
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {tab === 'billing' ? `${billingStatements.length} รายการ` : tab === 'invoice' ? `${taxInvoices.length} รายการ` : `${quotations.length} รายการ`}
+            {tab === 'billing' ? 'จัดการใบวางบิลทั้งหมด' : tab === 'invoice' ? 'จัดการใบกำกับภาษี/ใบเสร็จ ทั้งหมด' : 'จัดการใบเสนอราคาทั้งหมด'}
           </p>
         </div>
         {tab === 'billing' && (
@@ -507,11 +533,22 @@ export default function BillingPage() {
       {/* Tab buttons removed — sidebar handles navigation */}
 
       {/* Search */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="ค้นหาเลขที่เอกสาร, โรงแรม..."
-          className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="ค้นหาเลขที่เอกสาร, ชื่อลูกค้า..."
+            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+        </div>
+        {tab === 'quotation' && (
+          <select value={qtCustomerFilter} onChange={e => setQtCustomerFilter(e.target.value)}
+            className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+            <option value="all">ทุกลูกค้า</option>
+            {qtCustomerNames.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="mb-4">
@@ -519,6 +556,46 @@ export default function BillingPage() {
           onModeChange={setDateFilterMode} onDateFromChange={setDateFrom}
           onDateToChange={setDateTo} onClear={() => { setDateFrom(''); setDateTo('') }} />
       </div>
+
+      {/* WB Filter tabs */}
+      {tab === 'billing' && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {([
+            { key: 'all' as WBFilter, label: 'ทั้งหมด' },
+            { key: 'not-printed' as WBFilter, label: 'ยังไม่พิมพ์' },
+            { key: 'printed' as WBFilter, label: 'พิมพ์แล้ว' },
+            { key: 'no-iv' as WBFilter, label: 'ยังไม่ออก IV' },
+            { key: 'has-iv' as WBFilter, label: 'ออก IV แล้ว' },
+            { key: 'not-paid' as WBFilter, label: 'ยังไม่ชำระ' },
+            { key: 'paid' as WBFilter, label: 'ชำระแล้ว' },
+          ]).map(f => (
+            <button key={f.key} onClick={() => setWbFilter(f.key)}
+              className={cn('px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                wbFilter === f.key ? 'bg-[#1B3A5C] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* IV Filter tabs */}
+      {tab === 'invoice' && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {([
+            { key: 'all' as IVFilter, label: 'ทั้งหมด' },
+            { key: 'not-printed' as IVFilter, label: 'ยังไม่พิมพ์' },
+            { key: 'printed' as IVFilter, label: 'พิมพ์แล้ว' },
+            { key: 'not-paid' as IVFilter, label: 'ยังไม่ชำระ' },
+            { key: 'paid' as IVFilter, label: 'ชำระแล้ว' },
+          ]).map(f => (
+            <button key={f.key} onClick={() => setIvFilter(f.key)}
+              className={cn('px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                ivFilter === f.key ? 'bg-[#1B3A5C] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Billing Tab */}
       {tab === 'billing' && (
@@ -538,17 +615,17 @@ export default function BillingPage() {
                   <SortableHeader label="เดือน" sortKey="billingMonth" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ยอดรวม" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <SortableHeader label="จ่ายสุทธิ" sortKey="netPayable" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
-                  <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
+                  <th className="text-center px-3 py-3 font-medium text-slate-600">พิมพ์</th>
                   <th className="text-center px-4 py-3 font-medium text-slate-600">IV</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600 w-32"></th>
+                  <th className="text-center px-3 py-3 font-medium text-slate-600">ชำระ</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-600 w-20"></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredBilling.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                  <tr><td colSpan={10} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                 ) : filteredBilling.map(b => {
                   const customer = getCustomer(b.customerId)
-                  const cfg = BILLING_STATUS_CONFIG[b.status]
                   return (
                     <tr key={b.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                       onClick={() => setShowDetail(b.id)}>
@@ -563,8 +640,13 @@ export default function BillingPage() {
                       <td className="px-4 py-3 text-slate-600">{b.billingMonth}</td>
                       <td className="px-4 py-3 text-right text-slate-700">{formatCurrency(b.grandTotal)}</td>
                       <td className="px-4 py-3 text-right text-slate-700 font-medium">{formatCurrency(b.netPayable)}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>{cfg.label}</span>
+                      <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => updateBillingStatement(b.id, { isPrinted: !b.isPrinted })}
+                          className={cn('px-2 py-0.5 rounded-full text-xs font-medium transition-colors',
+                            b.isPrinted ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
+                          {b.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                         {(() => {
@@ -580,15 +662,19 @@ export default function BillingPage() {
                           )
                         })()}
                       </td>
+                      <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => updateBillingStatus(b.id, b.status === 'paid' ? 'sent' : 'paid')}
+                          className={cn('px-2 py-0.5 rounded-full text-xs font-medium transition-colors',
+                            b.status === 'paid' ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
+                          {b.status === 'paid' ? 'ชำระแล้ว' : 'ยังไม่ชำระ'}
+                        </button>
+                      </td>
                       <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-end">
                           {b.status === 'draft' && (
                             <button onClick={() => updateBillingStatus(b.id, 'sent')}
                               className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100">วางบิล</button>
-                          )}
-                          {b.status === 'sent' && (
-                            <button onClick={() => updateBillingStatus(b.id, 'paid')}
-                              className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100">ชำระแล้ว</button>
                           )}
                         </div>
                       </td>
@@ -615,15 +701,17 @@ export default function BillingPage() {
                       className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                   </th>
                   <SortableHeader label="เลขที่" sortKey="invoiceNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                  <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="ลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ยอดรวม VAT" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
+                  <th className="text-center px-3 py-3 font-medium text-slate-600">พิมพ์</th>
                   <th className="text-center px-4 py-3 font-medium text-slate-600">WB</th>
+                  <th className="text-center px-3 py-3 font-medium text-slate-600">ชำระ</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredInvoices.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-12 text-slate-400">ยังไม่มีใบกำกับภาษี — สร้างจากใบวางบิล</td></tr>
+                  <tr><td colSpan={8} className="text-center py-12 text-slate-400">ยังไม่มีใบกำกับภาษี — สร้างจากใบวางบิล</td></tr>
                 ) : filteredInvoices.map(inv => {
                   const customer = getCustomer(inv.customerId)
                   const wbInfo = ivBillingMap.get(inv.id)
@@ -640,6 +728,14 @@ export default function BillingPage() {
                       <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{formatDate(inv.issueDate)}</td>
                       <td className="px-4 py-3 text-right text-slate-700 font-medium">{formatCurrency(inv.grandTotal)}</td>
+                      <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => updateTaxInvoice(inv.id, { isPrinted: !inv.isPrinted })}
+                          className={cn('px-2 py-0.5 rounded-full text-xs font-medium transition-colors',
+                            inv.isPrinted ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
+                          {inv.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
+                        </button>
+                      </td>
                       <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                         {wbInfo ? (
                           <button onClick={() => setShowDetail(wbInfo.billingId)}
@@ -648,6 +744,14 @@ export default function BillingPage() {
                             <ExternalLink className="w-3 h-3" />
                           </button>
                         ) : <span className="text-xs text-slate-400">-</span>}
+                      </td>
+                      <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => updateTaxInvoice(inv.id, { isPaid: !inv.isPaid })}
+                          className={cn('px-2 py-0.5 rounded-full text-xs font-medium transition-colors',
+                            inv.isPaid ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
+                          {inv.isPaid ? 'ชำระแล้ว' : 'ยังไม่ชำระ'}
+                        </button>
                       </td>
                     </tr>
                   )

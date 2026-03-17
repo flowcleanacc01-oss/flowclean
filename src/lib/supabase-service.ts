@@ -443,6 +443,10 @@ export async function insertTaxInvoice(ti: TaxInvoice): Promise<void> {
   await dbWrite({ table: 'tax_invoices', operation: 'insert', data: toSnakeCase(ti as unknown as Record<string, unknown>) })
 }
 
+export async function updateTaxInvoiceDB(id: string, updates: Partial<TaxInvoice>): Promise<void> {
+  await dbWrite({ table: 'tax_invoices', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
+}
+
 export async function deleteTaxInvoiceDB(id: string): Promise<void> {
   await dbWrite({ table: 'tax_invoices', operation: 'delete', match: { column: 'id', value: id } })
 }
