@@ -60,6 +60,7 @@ interface StoreContextType {
   // Tax Invoices
   taxInvoices: TaxInvoice[]
   addTaxInvoice: (t: Omit<TaxInvoice, 'id' | 'invoiceNumber'>) => TaxInvoice
+  deleteTaxInvoice: (id: string) => void
 
   // Quotations
   quotations: Quotation[]
@@ -519,6 +520,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return newTI
   }, [logAudit])
 
+  const deleteTaxInvoice = useCallback((id: string) => {
+    setTaxInvoices(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('delete', 'tax_invoice', id, old?.invoiceNumber || id)
+      return prev.filter(x => x.id !== id)
+    })
+    dbSave(db.deleteTaxInvoiceDB(id))
+  }, [logAudit])
+
   // ---- Quotations ----
   const addQuotation = useCallback((q: Omit<Quotation, 'id' | 'quotationNumber'>): Quotation => {
     const newQ: Quotation = { ...q, id: genId(), quotationNumber: genQuotationNumber() }
@@ -821,7 +831,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       linenForms, addLinenForm, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
       deliveryNotes, addDeliveryNote, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
       billingStatements, addBillingStatement, updateBillingStatus, deleteBillingStatement,
-      taxInvoices, addTaxInvoice,
+      taxInvoices, addTaxInvoice, deleteTaxInvoice,
       quotations, addQuotation, updateQuotationStatus,
       expenses, addExpense, updateExpense, deleteExpense,
       users, addUser, updateUser, resetPassword,

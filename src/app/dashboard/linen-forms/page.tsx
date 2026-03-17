@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
@@ -44,6 +44,11 @@ export default function LinenFormsPage() {
   const [showPrint, setShowPrint] = useState(false)
   const [alertFilter, setAlertFilter] = useState<'all' | 'alert' | 'no-sd'>('all')
 
+  // Bulk select state
+  const [selectedLfIds, setSelectedLfIds] = useState<string[]>([])
+  const [showLfPrintList, setShowLfPrintList] = useState(false)
+  const [showLfBulkPrint, setShowLfBulkPrint] = useState(false)
+
   // Map: lfId → deliveryNote (for SD badge)
   const linkedLFMap = useMemo(() => {
     const map = new Map<string, { dnId: string; noteNumber: string }>()
@@ -75,6 +80,16 @@ export default function LinenFormsPage() {
       ]
     })
     exportCSV(headers, rows, `${detailForm.formNumber}_${detailCustomer.name}`)
+  }
+
+  const handleLfListCSV = (items: typeof filtered) => {
+    const headers = ['ลำดับ', 'เลขที่ LF', 'โรงแรม', 'วันที่', 'จำนวนชิ้น', 'สถานะ']
+    const rows = items.map((f, idx) => {
+      const customer = getCustomer(f.customerId)
+      const pieces = f.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
+      return [String(idx + 1), f.formNumber, customer?.name || '-', f.date, String(pieces), LINEN_FORM_STATUS_CONFIG[f.status]?.label || f.status]
+    })
+    exportCSV(headers, rows, 'รายการใบส่งรับผ้า')
   }
 
   // Create form state
@@ -249,11 +264,22 @@ export default function LinenFormsPage() {
           <h1 className="text-2xl font-bold text-slate-800">1. ใบส่งรับผ้า (LF)</h1>
           <p className="text-sm text-slate-500 mt-0.5">จัดการใบส่งรับผ้าทั้งหมด</p>
         </div>
-        <button onClick={handleCreateOpen}
-          className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
-          <Plus className="w-4 h-4" />
-          สร้างใบส่งรับผ้าใหม่
-        </button>
+        <div className="flex items-center gap-2">
+          {selectedLfIds.length > 0 && (
+            <button onClick={() => setShowLfBulkPrint(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+              <FileDown className="w-4 h-4" />พิมพ์ที่เลือก ({selectedLfIds.length})
+            </button>
+          )}
+          <button onClick={() => setShowLfPrintList(true)} disabled={filtered.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
+            <Printer className="w-4 h-4" />พิมพ์รายการ
+          </button>
+          <button onClick={handleCreateOpen}
+            className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
+            <Plus className="w-4 h-4" />สร้างใบส่งรับผ้าใหม่
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -325,6 +351,12 @@ export default function LinenFormsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-2 py-3 w-10">
+                  <input type="checkbox"
+                    checked={filtered.length > 0 && selectedLfIds.length === filtered.length}
+                    onChange={e => { if (e.target.checked) setSelectedLfIds(filtered.map(f => f.id)); else setSelectedLfIds([]) }}
+                    className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                </th>
                 <SortableHeader label="เลขที่ฟอร์ม" sortKey="formNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
@@ -337,7 +369,7 @@ export default function LinenFormsPage() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
               ) : filtered.map(form => {
                 const customer = getCustomer(form.customerId)
                 const totalPieces = form.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
@@ -350,6 +382,12 @@ export default function LinenFormsPage() {
                 return (
                   <tr key={form.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                     onClick={() => setShowDetail(form.id)}>
+                    <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
+                      <input type="checkbox"
+                        checked={selectedLfIds.includes(form.id)}
+                        onChange={e => { if (e.target.checked) setSelectedLfIds(prev => [...prev, form.id]); else setSelectedLfIds(prev => prev.filter(id => id !== form.id)) }}
+                        className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs text-slate-600">{form.formNumber}</td>
                     <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
                     <td className="px-4 py-3 text-slate-600">{formatDate(form.date)}</td>
@@ -724,6 +762,88 @@ export default function LinenFormsPage() {
             <button onClick={() => { if (confirmDeleteId) { deleteLinenForm(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
               className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
           </div>
+        </div>
+      </Modal>
+
+      {/* LF Print List Modal */}
+      <Modal open={showLfPrintList} onClose={() => setShowLfPrintList(false)} title="รายการใบส่งรับผ้า" size="xl" className="print-target">
+        {(() => {
+          const printItems = selectedLfIds.length > 0
+            ? filtered.filter(f => selectedLfIds.includes(f.id))
+            : filtered
+          const totalPieces = printItems.reduce((s, f) => s + f.rows.reduce((ss, r) => ss + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0), 0)
+          return (
+            <div>
+              <div className="mb-2 text-sm text-slate-500 no-print">
+                {selectedLfIds.length > 0 ? `เลือก ${printItems.length} รายการ` : `ทั้งหมด ${printItems.length} รายการ`}
+              </div>
+              <div id="print-lf-list" className="border border-slate-200 rounded-lg overflow-hidden print:border-none">
+                <h2 className="hidden print:block text-lg font-bold text-center mb-2">{companyInfo.name} — รายการใบส่งรับผ้า</h2>
+                <table className="w-full text-sm print:text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">เลขที่ LF</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">โรงแรม</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">วันที่</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600">จำนวนชิ้น</th>
+                      <th className="text-center px-3 py-2 font-medium text-slate-600">สถานะ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printItems.map((f, idx) => {
+                      const customer = getCustomer(f.customerId)
+                      const pieces = f.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
+                      const cfg = LINEN_FORM_STATUS_CONFIG[f.status]
+                      return (
+                        <tr key={f.id} className="border-t border-slate-100">
+                          <td className="text-center px-3 py-1.5 text-slate-500">{idx + 1}</td>
+                          <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{f.formNumber}</td>
+                          <td className="px-3 py-1.5 text-slate-800">{customer?.name || '-'}</td>
+                          <td className="px-3 py-1.5 text-slate-600">{formatDate(f.date)}</td>
+                          <td className="px-3 py-1.5 text-right text-slate-700">{pieces}</td>
+                          <td className="px-3 py-1.5 text-center">
+                            <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>{cfg.label}</span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-100 font-bold border-t border-slate-300">
+                      <td className="px-3 py-2" colSpan={4}>ยอดรวมทั้งหมด</td>
+                      <td className="px-3 py-2 text-right">{totalPieces.toLocaleString()}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <div className="flex justify-end mt-4 no-print">
+                <ExportButtons targetId="print-lf-list" filename="รายการใบส่งรับผ้า" onExportCSV={() => handleLfListCSV(printItems)} />
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* LF Bulk Print Modal */}
+      <Modal open={showLfBulkPrint} onClose={() => setShowLfBulkPrint(false)} title={`พิมพ์ใบส่งรับผ้า (${selectedLfIds.length} ใบ)`} size="xl" className="print-target">
+        <div id="print-bulk-lf">
+          {selectedLfIds.map((lfId, idx) => {
+            const form = linenForms.find(f => f.id === lfId)
+            const cust = form ? getCustomer(form.customerId) : null
+            if (!form || !cust) return null
+            const carryOver = getCarryOver(form.customerId, form.date)
+            return (
+              <div key={lfId}>
+                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6" style={{ pageBreakBefore: 'always' }} />}
+                <LinenFormPrint form={form} customer={cust} company={companyInfo} catalog={linenCatalog} carryOver={carryOver} />
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex justify-end mt-4 no-print">
+          <ExportButtons targetId="print-bulk-lf" filename={`LF-bulk-${selectedLfIds.length}`} />
         </div>
       </Modal>
     </div>

@@ -5,9 +5,9 @@ import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { format } from 'date-fns'
-import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote } from '@/types'
+import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
-import { Plus, Search, FileText, FileDown, X, ChevronRight } from 'lucide-react'
+import { Plus, Search, FileText, FileDown, X, ChevronRight, Printer, Check } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
@@ -22,7 +22,7 @@ type TabKey = 'billing' | 'invoice' | 'quotation'
 export default function BillingPage() {
   const {
     billingStatements, addBillingStatement, updateBillingStatus, deleteBillingStatement,
-    taxInvoices, addTaxInvoice,
+    taxInvoices, addTaxInvoice, deleteTaxInvoice,
     quotations, addQuotation, updateQuotationStatus,
     deliveryNotes, updateDeliveryNote, customers, getCustomer, companyInfo, linenCatalog,
     linenCategories, getCategoryLabel,
@@ -53,6 +53,14 @@ export default function BillingPage() {
   const [showInvoiceDetail, setShowInvoiceDetail] = useState<string | null>(null)
   const [showInvoicePrint, setShowInvoicePrint] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  // Bulk select state (WB, IV)
+  const [selectedWbIds, setSelectedWbIds] = useState<string[]>([])
+  const [selectedIvIds, setSelectedIvIds] = useState<string[]>([])
+  const [showWbPrintList, setShowWbPrintList] = useState(false)
+  const [showIvPrintList, setShowIvPrintList] = useState(false)
+  const [showWbBulkPrint, setShowWbBulkPrint] = useState(false)
+  const [showIvBulkPrint, setShowIvBulkPrint] = useState(false)
 
   // Quotation state
   const [showCreateQU, setShowCreateQU] = useState(false)
@@ -288,6 +296,61 @@ export default function BillingPage() {
     exportCSV(headers, rows, detailQuotation.quotationNumber)
   }
 
+  // List CSV handlers for bulk export
+  const handleWbListCSV = (items: BillingStatement[]) => {
+    const headers = ['ลำดับ', 'เลขที่ WB', 'โรงแรม', 'เดือน', 'ยอดจ่ายสุทธิ', 'สถานะ']
+    const rows = items.map((b, idx) => [
+      String(idx + 1), b.billingNumber, getCustomer(b.customerId)?.name || '-',
+      b.billingMonth, String(b.netPayable), BILLING_STATUS_CONFIG[b.status]?.label || b.status,
+    ])
+    exportCSV(headers, rows, 'รายการใบวางบิล')
+  }
+
+  const handleIvListCSV = (items: TaxInvoice[]) => {
+    const headers = ['ลำดับ', 'เลขที่ IV', 'โรงแรม', 'วันที่ออก', 'ยอดรวม']
+    const rows = items.map((inv, idx) => [
+      String(idx + 1), inv.invoiceNumber, getCustomer(inv.customerId)?.name || '-',
+      inv.issueDate, String(inv.grandTotal),
+    ])
+    exportCSV(headers, rows, 'รายการใบกำกับภาษี')
+  }
+
+  // Reverse WB: block if IV exists, else mark SDs unbilled + delete WB
+  const handleReverseWB = (billingId: string) => {
+    const billing = billingStatements.find(b => b.id === billingId)
+    if (!billing) return
+    const hasIV = taxInvoices.some(ti => ti.billingStatementId === billingId)
+    if (hasIV) {
+      alert('ไม่สามารถย้อน WB ได้ เนื่องจากมีใบกำกับภาษี (IV) อยู่แล้ว\nกรุณาย้อน IV ก่อน')
+      return
+    }
+    const customer = getCustomer(billing.customerId)
+    const dnNumbers = billing.deliveryNoteIds
+      .map(id => deliveryNotes.find(d => d.id === id)?.noteNumber)
+      .filter(Boolean).join(', ')
+    if (confirm(`ยืนยันการลบใบวางบิล ${billing.billingNumber}?\n\nSD ที่จะถูกยกเลิกการวางบิล:\n${dnNumbers || '-'}\n\nlูกค้า: ${customer?.name || '-'}`)) {
+      // Mark linked SDs as isBilled=false
+      for (const dnId of billing.deliveryNoteIds) {
+        updateDeliveryNote(dnId, { isBilled: false })
+      }
+      deleteBillingStatement(billingId)
+      setShowDetail(null)
+      setShowPrint(false)
+    }
+  }
+
+  // Reverse IV: delete IV (unlocks WB reversal)
+  const handleReverseIV = (invoiceId: string) => {
+    const inv = taxInvoices.find(i => i.id === invoiceId)
+    if (!inv) return
+    const linkedWB = billingStatements.find(b => b.id === inv.billingStatementId)
+    if (confirm(`ยืนยันการลบใบกำกับภาษี ${inv.invoiceNumber}?\n\nใบวางบิลที่เกี่ยวข้อง: ${linkedWB?.billingNumber || '-'}`)) {
+      deleteTaxInvoice(invoiceId)
+      setShowInvoiceDetail(null)
+      setShowInvoicePrint(false)
+    }
+  }
+
   const filteredQuotations = useMemo(() => {
     return quotations.filter(q => {
       if (search) {
@@ -351,10 +414,36 @@ export default function BillingPage() {
           </p>
         </div>
         {tab === 'billing' && (
-          <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setBillingIssueDate(todayISO()) }}
-            className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
-            <Plus className="w-4 h-4" />สร้างใบวางบิล
-          </button>
+          <div className="flex items-center gap-2">
+            {selectedWbIds.length > 0 && (
+              <button onClick={() => setShowWbBulkPrint(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+                <FileDown className="w-4 h-4" />พิมพ์ที่เลือก ({selectedWbIds.length})
+              </button>
+            )}
+            <button onClick={() => setShowWbPrintList(true)} disabled={filteredBilling.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
+              <Printer className="w-4 h-4" />พิมพ์รายการ
+            </button>
+            <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setBillingIssueDate(todayISO()) }}
+              className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
+              <Plus className="w-4 h-4" />สร้างใบวางบิล
+            </button>
+          </div>
+        )}
+        {tab === 'invoice' && (
+          <div className="flex items-center gap-2">
+            {selectedIvIds.length > 0 && (
+              <button onClick={() => setShowIvBulkPrint(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+                <FileDown className="w-4 h-4" />พิมพ์ที่เลือก ({selectedIvIds.length})
+              </button>
+            )}
+            <button onClick={() => setShowIvPrintList(true)} disabled={filteredInvoices.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
+              <Printer className="w-4 h-4" />พิมพ์รายการ
+            </button>
+          </div>
         )}
         {tab === 'quotation' && (
           <button onClick={() => {
@@ -408,6 +497,12 @@ export default function BillingPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-2 py-3 w-10">
+                    <input type="checkbox"
+                      checked={filteredBilling.length > 0 && selectedWbIds.length === filteredBilling.length}
+                      onChange={e => { if (e.target.checked) setSelectedWbIds(filteredBilling.map(b => b.id)); else setSelectedWbIds([]) }}
+                      className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                  </th>
                   <SortableHeader label="เลขที่" sortKey="billingNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="เดือน" sortKey="billingMonth" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
@@ -419,13 +514,19 @@ export default function BillingPage() {
               </thead>
               <tbody>
                 {filteredBilling.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                  <tr><td colSpan={8} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                 ) : filteredBilling.map(b => {
                   const customer = getCustomer(b.customerId)
                   const cfg = BILLING_STATUS_CONFIG[b.status]
                   return (
                     <tr key={b.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                       onClick={() => setShowDetail(b.id)}>
+                      <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox"
+                          checked={selectedWbIds.includes(b.id)}
+                          onChange={e => { if (e.target.checked) setSelectedWbIds(prev => [...prev, b.id]); else setSelectedWbIds(prev => prev.filter(id => id !== b.id)) }}
+                          className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                      </td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">{b.billingNumber}</td>
                       <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{b.billingMonth}</td>
@@ -462,6 +563,12 @@ export default function BillingPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-2 py-3 w-10">
+                    <input type="checkbox"
+                      checked={filteredInvoices.length > 0 && selectedIvIds.length === filteredInvoices.length}
+                      onChange={e => { if (e.target.checked) setSelectedIvIds(filteredInvoices.map(i => i.id)); else setSelectedIvIds([]) }}
+                      className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                  </th>
                   <SortableHeader label="เลขที่" sortKey="invoiceNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
@@ -470,12 +577,18 @@ export default function BillingPage() {
               </thead>
               <tbody>
                 {filteredInvoices.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-12 text-slate-400">ยังไม่มีใบกำกับภาษี — สร้างจากใบวางบิล</td></tr>
+                  <tr><td colSpan={5} className="text-center py-12 text-slate-400">ยังไม่มีใบกำกับภาษี — สร้างจากใบวางบิล</td></tr>
                 ) : filteredInvoices.map(inv => {
                   const customer = getCustomer(inv.customerId)
                   return (
                     <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                       onClick={() => setShowInvoiceDetail(inv.id)}>
+                      <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox"
+                          checked={selectedIvIds.includes(inv.id)}
+                          onChange={e => { if (e.target.checked) setSelectedIvIds(prev => [...prev, inv.id]); else setSelectedIvIds(prev => prev.filter(id => id !== inv.id)) }}
+                          className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                      </td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">{inv.invoiceNumber}</td>
                       <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{formatDate(inv.issueDate)}</td>
@@ -840,6 +953,22 @@ export default function BillingPage() {
       <Modal open={showPrint && !!detailBilling} onClose={() => setShowPrint(false)} title="พิมพ์ใบวางบิล" size="xl" className="print-target">
         {detailBilling && detailCustomer && (
           <div>
+            {/* Reverse WB checkbox */}
+            <div className="flex items-center mb-2 no-print">
+              {taxInvoices.some(ti => ti.billingStatementId === detailBilling.id) ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-700">
+                  <span className="font-medium">⚠ ไม่สามารถย้อน WB ได้</span>
+                  <span>— มีใบกำกับภาษี (IV) อยู่แล้ว กรุณาย้อน IV ก่อน</span>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={true}
+                    onChange={() => handleReverseWB(detailBilling.id)}
+                    className="w-4 h-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500" />
+                  <span className="text-sm font-medium text-emerald-700">สถานะเปลี่ยนผ่านใบวางบิล WB</span>
+                </label>
+              )}
+            </div>
             <BillingPrint billing={detailBilling} customer={detailCustomer} company={companyInfo} />
             <div className="flex justify-end mt-4 no-print">
               <ExportButtons targetId="print-billing" filename={detailBilling.billingNumber} onExportCSV={handleBillingCSV} />
@@ -894,7 +1023,13 @@ export default function BillingPage() {
               </table>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-between pt-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={true}
+                  onChange={() => handleReverseIV(detailInvoice.id)}
+                  className="w-4 h-4 rounded border-purple-300 text-purple-600 focus:ring-purple-500" />
+                <span className="text-sm font-medium text-purple-700">สถานะเปลี่ยนผ่านใบกำกับภาษี IV</span>
+              </label>
               <button onClick={() => setShowInvoicePrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
                 <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
@@ -908,6 +1043,14 @@ export default function BillingPage() {
       <Modal open={showInvoicePrint && !!detailInvoice} onClose={() => setShowInvoicePrint(false)} title="พิมพ์ใบกำกับภาษี/ใบเสร็จรับเงิน" size="xl" className="print-target">
         {detailInvoice && detailInvoiceCustomer && (
           <div>
+            <div className="flex items-center mb-2 no-print">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={true}
+                  onChange={() => handleReverseIV(detailInvoice.id)}
+                  className="w-4 h-4 rounded border-purple-300 text-purple-600 focus:ring-purple-500" />
+                <span className="text-sm font-medium text-purple-700">สถานะเปลี่ยนผ่านใบกำกับภาษี IV</span>
+              </label>
+            </div>
             <TaxInvoicePrint
               invoice={detailInvoice}
               customer={detailInvoiceCustomer}
@@ -1128,6 +1271,161 @@ export default function BillingPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* WB Print List Modal */}
+      <Modal open={showWbPrintList} onClose={() => setShowWbPrintList(false)} title="รายการใบวางบิล" size="xl" className="print-target">
+        {(() => {
+          const printItems = selectedWbIds.length > 0
+            ? filteredBilling.filter(b => selectedWbIds.includes(b.id))
+            : filteredBilling
+          const grandTotal = printItems.reduce((s, b) => s + b.netPayable, 0)
+          return (
+            <div>
+              <div className="mb-2 text-sm text-slate-500 no-print">
+                {selectedWbIds.length > 0 ? `เลือก ${printItems.length} รายการ` : `ทั้งหมด ${printItems.length} รายการ`}
+              </div>
+              <div id="print-wb-list" className="border border-slate-200 rounded-lg overflow-hidden print:border-none">
+                <h2 className="hidden print:block text-lg font-bold text-center mb-2">{companyInfo.name} — รายการใบวางบิล</h2>
+                <table className="w-full text-sm print:text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">เลขที่ WB</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">โรงแรม</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">เดือน</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600">ยอดจ่ายสุทธิ</th>
+                      <th className="text-center px-3 py-2 font-medium text-slate-600">สถานะ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printItems.map((b, idx) => {
+                      const customer = getCustomer(b.customerId)
+                      const cfg = BILLING_STATUS_CONFIG[b.status]
+                      return (
+                        <tr key={b.id} className="border-t border-slate-100">
+                          <td className="text-center px-3 py-1.5 text-slate-500">{idx + 1}</td>
+                          <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{b.billingNumber}</td>
+                          <td className="px-3 py-1.5 text-slate-800">{customer?.name || '-'}</td>
+                          <td className="px-3 py-1.5 text-slate-600">{b.billingMonth}</td>
+                          <td className="px-3 py-1.5 text-right text-slate-700 font-medium">{formatCurrency(b.netPayable)}</td>
+                          <td className="px-3 py-1.5 text-center">
+                            <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>{cfg.label}</span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-100 font-bold border-t border-slate-300">
+                      <td className="px-3 py-2" colSpan={4}>ยอดรวมทั้งหมด</td>
+                      <td className="px-3 py-2 text-right text-[#1B3A5C]">{formatCurrency(grandTotal)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <div className="flex justify-end mt-4 no-print">
+                <ExportButtons targetId="print-wb-list" filename="รายการใบวางบิล" onExportCSV={() => handleWbListCSV(printItems)} />
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* IV Print List Modal */}
+      <Modal open={showIvPrintList} onClose={() => setShowIvPrintList(false)} title="รายการใบกำกับภาษี" size="xl" className="print-target">
+        {(() => {
+          const printItems = selectedIvIds.length > 0
+            ? filteredInvoices.filter(i => selectedIvIds.includes(i.id))
+            : filteredInvoices
+          const grandTotal = printItems.reduce((s, i) => s + i.grandTotal, 0)
+          return (
+            <div>
+              <div className="mb-2 text-sm text-slate-500 no-print">
+                {selectedIvIds.length > 0 ? `เลือก ${printItems.length} รายการ` : `ทั้งหมด ${printItems.length} รายการ`}
+              </div>
+              <div id="print-iv-list" className="border border-slate-200 rounded-lg overflow-hidden print:border-none">
+                <h2 className="hidden print:block text-lg font-bold text-center mb-2">{companyInfo.name} — รายการใบกำกับภาษี</h2>
+                <table className="w-full text-sm print:text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">เลขที่ IV</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">โรงแรม</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">วันที่ออก</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600">ยอดรวม VAT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printItems.map((inv, idx) => {
+                      const customer = getCustomer(inv.customerId)
+                      return (
+                        <tr key={inv.id} className="border-t border-slate-100">
+                          <td className="text-center px-3 py-1.5 text-slate-500">{idx + 1}</td>
+                          <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{inv.invoiceNumber}</td>
+                          <td className="px-3 py-1.5 text-slate-800">{customer?.name || '-'}</td>
+                          <td className="px-3 py-1.5 text-slate-600">{formatDate(inv.issueDate)}</td>
+                          <td className="px-3 py-1.5 text-right text-slate-700 font-medium">{formatCurrency(inv.grandTotal)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-100 font-bold border-t border-slate-300">
+                      <td className="px-3 py-2" colSpan={4}>ยอดรวมทั้งหมด</td>
+                      <td className="px-3 py-2 text-right text-[#1B3A5C]">{formatCurrency(grandTotal)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <div className="flex justify-end mt-4 no-print">
+                <ExportButtons targetId="print-iv-list" filename="รายการใบกำกับภาษี" onExportCSV={() => handleIvListCSV(printItems)} />
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* WB Bulk Print Modal */}
+      <Modal open={showWbBulkPrint} onClose={() => setShowWbBulkPrint(false)} title={`พิมพ์ใบวางบิล (${selectedWbIds.length} ใบ)`} size="xl" className="print-target">
+        <div id="print-bulk-wb">
+          {selectedWbIds.map((bId, idx) => {
+            const b = billingStatements.find(x => x.id === bId)
+            const cust = b ? getCustomer(b.customerId) : null
+            if (!b || !cust) return null
+            return (
+              <div key={bId}>
+                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6" style={{ pageBreakBefore: 'always' }} />}
+                <BillingPrint billing={b} customer={cust} company={companyInfo} />
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex justify-end mt-4 no-print">
+          <ExportButtons targetId="print-bulk-wb" filename={`WB-bulk-${selectedWbIds.length}`} />
+        </div>
+      </Modal>
+
+      {/* IV Bulk Print Modal */}
+      <Modal open={showIvBulkPrint} onClose={() => setShowIvBulkPrint(false)} title={`พิมพ์ใบกำกับภาษี (${selectedIvIds.length} ใบ)`} size="xl" className="print-target">
+        <div id="print-bulk-iv">
+          {selectedIvIds.map((ivId, idx) => {
+            const inv = taxInvoices.find(x => x.id === ivId)
+            const cust = inv ? getCustomer(inv.customerId) : null
+            if (!inv || !cust) return null
+            const wb = billingStatements.find(b => b.id === inv.billingStatementId)
+            return (
+              <div key={ivId}>
+                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6" style={{ pageBreakBefore: 'always' }} />}
+                <TaxInvoicePrint invoice={inv} customer={cust} company={companyInfo} withholdingTax={wb?.withholdingTax} netPayable={wb?.netPayable} />
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex justify-end mt-4 no-print">
+          <ExportButtons targetId="print-bulk-iv" filename={`IV-bulk-${selectedIvIds.length}`} />
+        </div>
       </Modal>
     </div>
   )

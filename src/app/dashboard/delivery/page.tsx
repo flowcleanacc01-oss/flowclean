@@ -726,6 +726,12 @@ export default function DeliveryPage() {
           <div>
             {/* SD linked status checkbox */}
             <div className="flex items-center justify-between mb-2 no-print">
+              {detailNote.isBilled ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-700">
+                  <span className="font-medium">⚠ ไม่สามารถย้อน SD ได้</span>
+                  <span>— SD นี้วางบิลแล้ว กรุณาย้อน WB ก่อน</span>
+                </div>
+              ) : (
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -763,6 +769,7 @@ export default function DeliveryPage() {
                 />
                 <span className="text-sm font-medium text-emerald-700">สถานะเปลี่ยนผ่านใบส่งของ SD</span>
               </label>
+              )}
             </div>
 
             {/* Printed checkbox */}
