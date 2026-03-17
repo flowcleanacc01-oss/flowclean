@@ -668,13 +668,11 @@ export default function BillingPage() {
                       <td className="px-4 py-3 text-slate-600">{b.billingMonth}</td>
                       <td className="px-4 py-3 text-right text-slate-700">{formatCurrency(b.grandTotal)}</td>
                       <td className="px-4 py-3 text-right text-slate-700 font-medium">{formatCurrency(b.netPayable)}</td>
-                      <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={() => updateBillingStatement(b.id, { isPrinted: !b.isPrinted })}
-                          className={cn('px-2 py-0.5 rounded-full text-xs font-medium transition-colors',
-                            b.isPrinted ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
+                      <td className="px-3 py-3 text-center">
+                        <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
+                          b.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
                           {b.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
-                        </button>
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                         {(() => {
@@ -756,13 +754,11 @@ export default function BillingPage() {
                       <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{formatDate(inv.issueDate)}</td>
                       <td className="px-4 py-3 text-right text-slate-700 font-medium">{formatCurrency(inv.grandTotal)}</td>
-                      <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={() => updateTaxInvoice(inv.id, { isPrinted: !inv.isPrinted })}
-                          className={cn('px-2 py-0.5 rounded-full text-xs font-medium transition-colors',
-                            inv.isPrinted ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
+                      <td className="px-3 py-3 text-center">
+                        <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
+                          inv.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
                           {inv.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
-                        </button>
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                         {wbInfo ? (
@@ -1163,7 +1159,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* Billing Print Preview Modal */}
-      <Modal open={showPrint && !!detailBilling} onClose={() => setShowPrint(false)} title="พิมพ์ใบวางบิล" size="xl" className="print-target">
+      <Modal open={showPrint && !!detailBilling} onClose={() => setShowPrint(false)} title="ตรวจสอบข้อมูลก่อนพิมพ์" size="xl" className="print-target">
         {detailBilling && detailCustomer && (
           <div>
             {/* Reverse WB checkbox */}

@@ -123,7 +123,9 @@ CREATE TABLE linen_forms (
   dept_drying BOOLEAN NOT NULL DEFAULT false,
   dept_ironing BOOLEAN NOT NULL DEFAULT false,
   dept_folding BOOLEAN NOT NULL DEFAULT false,
-  dept_qc BOOLEAN NOT NULL DEFAULT false
+  dept_qc BOOLEAN NOT NULL DEFAULT false,
+  is_printed BOOLEAN NOT NULL DEFAULT false,
+  is_exported BOOLEAN NOT NULL DEFAULT false
 );
 
 -- ============================================================
@@ -141,6 +143,7 @@ CREATE TABLE delivery_notes (
   receiver_name TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'pending',
   is_printed BOOLEAN NOT NULL DEFAULT false,
+  is_exported BOOLEAN NOT NULL DEFAULT false,
   is_billed BOOLEAN NOT NULL DEFAULT false,
   transport_fee_trip NUMERIC NOT NULL DEFAULT 0,
   transport_fee_month NUMERIC NOT NULL DEFAULT 0,
@@ -169,7 +172,9 @@ CREATE TABLE billing_statements (
   status TEXT NOT NULL DEFAULT 'draft',
   paid_date TEXT,
   paid_amount NUMERIC NOT NULL DEFAULT 0,
-  notes TEXT NOT NULL DEFAULT ''
+  notes TEXT NOT NULL DEFAULT '',
+  is_printed BOOLEAN NOT NULL DEFAULT false,
+  is_exported BOOLEAN NOT NULL DEFAULT false
 );
 
 -- ============================================================
@@ -185,7 +190,10 @@ CREATE TABLE tax_invoices (
   subtotal NUMERIC NOT NULL DEFAULT 0,
   vat NUMERIC NOT NULL DEFAULT 0,
   grand_total NUMERIC NOT NULL DEFAULT 0,
-  notes TEXT NOT NULL DEFAULT ''
+  notes TEXT NOT NULL DEFAULT '',
+  is_printed BOOLEAN NOT NULL DEFAULT false,
+  is_exported BOOLEAN NOT NULL DEFAULT false,
+  is_paid BOOLEAN NOT NULL DEFAULT false
 );
 
 -- ============================================================
