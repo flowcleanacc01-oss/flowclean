@@ -22,7 +22,7 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
   const totalCol4 = form.rows.reduce((s, r) => s + r.col4_factoryApproved, 0)
 
   return (
-    <div className="bg-white p-6 max-w-[210mm] mx-auto text-xs print:p-4 print:shadow-none print:max-w-none print:w-full print:mx-0" id="print-lf">
+    <div className="bg-white p-6 max-w-[210mm] mx-auto text-xs print:p-4 print:shadow-none print:max-w-none print:w-full print:mx-0" id="print-lf" style={{ breakInside: 'avoid-page' }}>
       {/* Header */}
       <div className="flex justify-between items-start mb-3 border-b border-slate-300 pb-2 print:mb-2 print:pb-1">
         <div className="flex items-start gap-2">
@@ -59,7 +59,7 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
       </div>
 
       {/* Items Table */}
-      <table className="w-full text-[11px] border border-slate-300" style={{ breakInside: 'avoid' }}>
+      <table className="w-full text-[11px] border border-slate-300">
         <thead>
           <tr className="bg-slate-100">
             <th className="px-1.5 py-1.5 border border-slate-300 text-left w-12">รหัส</th>
@@ -79,7 +79,7 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
             const co = carryOver[row.code] || 0
             const diff = (row.col6_factoryPackSend || 0) - row.col5_factoryClaimApproved
             return (
-              <tr key={row.code}>
+              <tr key={row.code} style={{ breakInside: 'avoid' }}>
                 <td className="px-1.5 py-1 border border-slate-300 font-mono text-[10px]">{row.code}</td>
                 <td className="px-1.5 py-1 border border-slate-300">{nameMap[row.code] || row.code}</td>
                 <td className="px-1.5 py-1 border border-slate-300 text-right">{co !== 0 ? formatNumber(co) : '-'}</td>
@@ -117,7 +117,7 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
       )}
 
       {/* Signatures */}
-      <div className="grid grid-cols-3 gap-8 mt-6 text-[11px] text-center print:mt-4">
+      <div className="grid grid-cols-3 gap-8 mt-6 text-[11px] text-center print:mt-4" style={{ breakInside: 'avoid', breakBefore: 'avoid' }}>
         <div>
           <div className="border-b border-slate-300 pb-6 mb-1"></div>
           <p className="text-slate-500">ผู้ส่ง</p>
