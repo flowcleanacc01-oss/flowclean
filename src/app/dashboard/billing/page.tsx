@@ -1745,6 +1745,26 @@ export default function BillingPage() {
 
       {/* WB Bulk Print Modal */}
       <Modal open={showWbBulkPrint} onClose={() => setShowWbBulkPrint(false)} title={`พิมพ์/ส่งออกใบวางบิล (${selectedWbIds.length} ใบ)`} size="xl" className="print-target">
+        {/* Select All row */}
+        <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 no-print">
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox"
+                checked={selectedWbIds.every(id => billingStatements.find(b => b.id === id)?.isPrinted)}
+                onChange={e => { for (const bId of selectedWbIds) updateBillingStatement(bId, { isPrinted: e.target.checked }) }}
+                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+              <span className="text-sm font-medium text-blue-700 flex items-center gap-1"><Check className="w-4 h-4" />พิมพ์แล้ว (ทุกรายการ)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox"
+                checked={selectedWbIds.every(id => billingStatements.find(b => b.id === id)?.isExported)}
+                onChange={e => { for (const bId of selectedWbIds) updateBillingStatement(bId, { isExported: e.target.checked }) }}
+                className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+              <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว (ทุกรายการ)</span>
+            </label>
+          </div>
+          <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกแล้ว"</p>
+        </div>
         <div id="print-bulk-wb">
           {selectedWbIds.map((bId, idx) => {
             const b = billingStatements.find(x => x.id === bId)
@@ -1752,43 +1772,61 @@ export default function BillingPage() {
             if (!b || !cust) return null
             return (
               <div key={bId}>
-                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6" style={{ pageBreakBefore: 'always' }} />}
+                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6 no-print" style={{ pageBreakBefore: 'always' }} />}
+                {/* Per-doc status row */}
+                <div className="flex items-center gap-4 mb-2 no-print">
+                  <span className="text-xs font-mono text-slate-400">{b.billingNumber}</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!b.isPrinted}
+                      onChange={e => updateBillingStatement(b.id, { isPrinted: e.target.checked })}
+                      className="w-3.5 h-3.5 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+                    <span className="text-xs font-medium text-blue-700">พิมพ์แล้ว</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!b.isExported}
+                      onChange={e => updateBillingStatement(b.id, { isExported: e.target.checked })}
+                      className="w-3.5 h-3.5 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+                    <span className="text-xs font-medium text-violet-700">ส่งออกแล้ว</span>
+                  </label>
+                </div>
                 <BillingPrint billing={b} customer={cust} company={companyInfo} />
               </div>
             )
           })}
         </div>
-        <div className="flex justify-between items-center mt-4 no-print">
-          <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={selectedWbIds.every(id => billingStatements.find(b => b.id === id)?.isPrinted)}
-                onChange={e => {
-                  for (const bId of selectedWbIds) updateBillingStatement(bId, { isPrinted: e.target.checked })
-                }}
-                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว (ทุกรายการ)</span>
-            </label>
-            <p className="text-xs text-slate-400">พิมพ์ → สถานะ "พิมพ์แล้ว" | ส่งออก JPG/PDF/CSV → สถานะ "ส่งออกแล้ว"</p>
-          </div>
+        <div className="flex justify-end mt-4 no-print">
           <ExportButtons
             targetId="print-bulk-wb"
             filename={`WB-bulk-${selectedWbIds.length}`}
             onExportCSV={() => handleWbListCSV(billingStatements.filter(b => selectedWbIds.includes(b.id)))}
-            onPrint={() => {
-              for (const bId of selectedWbIds) updateBillingStatement(bId, { isPrinted: true })
-            }}
-            onExportFile={() => {
-              for (const bId of selectedWbIds) updateBillingStatement(bId, { isExported: true })
-            }}
+            onPrint={() => { for (const bId of selectedWbIds) updateBillingStatement(bId, { isPrinted: true }) }}
+            onExportFile={() => { for (const bId of selectedWbIds) updateBillingStatement(bId, { isExported: true }) }}
           />
         </div>
       </Modal>
 
       {/* IV Bulk Print Modal */}
       <Modal open={showIvBulkPrint} onClose={() => setShowIvBulkPrint(false)} title={`พิมพ์/ส่งออกใบกำกับภาษี (${selectedIvIds.length} ใบ)`} size="xl" className="print-target">
+        {/* Select All row */}
+        <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 no-print">
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox"
+                checked={selectedIvIds.every(id => taxInvoices.find(i => i.id === id)?.isPrinted)}
+                onChange={e => { for (const ivId of selectedIvIds) updateTaxInvoice(ivId, { isPrinted: e.target.checked }) }}
+                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+              <span className="text-sm font-medium text-blue-700 flex items-center gap-1"><Check className="w-4 h-4" />พิมพ์แล้ว (ทุกรายการ)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox"
+                checked={selectedIvIds.every(id => taxInvoices.find(i => i.id === id)?.isExported)}
+                onChange={e => { for (const ivId of selectedIvIds) updateTaxInvoice(ivId, { isExported: e.target.checked }) }}
+                className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+              <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว (ทุกรายการ)</span>
+            </label>
+          </div>
+          <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกแล้ว"</p>
+        </div>
         <div id="print-bulk-iv">
           {selectedIvIds.map((ivId, idx) => {
             const inv = taxInvoices.find(x => x.id === ivId)
@@ -1797,37 +1835,35 @@ export default function BillingPage() {
             const wb = billingStatements.find(b => b.id === inv.billingStatementId)
             return (
               <div key={ivId}>
-                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6" style={{ pageBreakBefore: 'always' }} />}
+                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6 no-print" style={{ pageBreakBefore: 'always' }} />}
+                {/* Per-doc status row */}
+                <div className="flex items-center gap-4 mb-2 no-print">
+                  <span className="text-xs font-mono text-slate-400">{inv.invoiceNumber}</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!inv.isPrinted}
+                      onChange={e => updateTaxInvoice(inv.id, { isPrinted: e.target.checked })}
+                      className="w-3.5 h-3.5 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+                    <span className="text-xs font-medium text-blue-700">พิมพ์แล้ว</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!inv.isExported}
+                      onChange={e => updateTaxInvoice(inv.id, { isExported: e.target.checked })}
+                      className="w-3.5 h-3.5 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+                    <span className="text-xs font-medium text-violet-700">ส่งออกแล้ว</span>
+                  </label>
+                </div>
                 <TaxInvoicePrint invoice={inv} customer={cust} company={companyInfo} withholdingTax={wb?.withholdingTax} netPayable={wb?.netPayable} />
               </div>
             )
           })}
         </div>
-        <div className="flex justify-between items-center mt-4 no-print">
-          <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={selectedIvIds.every(id => taxInvoices.find(i => i.id === id)?.isPrinted)}
-                onChange={e => {
-                  for (const ivId of selectedIvIds) updateTaxInvoice(ivId, { isPrinted: e.target.checked })
-                }}
-                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว (ทุกรายการ)</span>
-            </label>
-            <p className="text-xs text-slate-400">พิมพ์ → สถานะ "พิมพ์แล้ว" | ส่งออก JPG/PDF/CSV → สถานะ "ส่งออกแล้ว"</p>
-          </div>
+        <div className="flex justify-end mt-4 no-print">
           <ExportButtons
             targetId="print-bulk-iv"
             filename={`IV-bulk-${selectedIvIds.length}`}
             onExportCSV={() => handleIvListCSV(taxInvoices.filter(i => selectedIvIds.includes(i.id)))}
-            onPrint={() => {
-              for (const ivId of selectedIvIds) updateTaxInvoice(ivId, { isPrinted: true })
-            }}
-            onExportFile={() => {
-              for (const ivId of selectedIvIds) updateTaxInvoice(ivId, { isExported: true })
-            }}
+            onPrint={() => { for (const ivId of selectedIvIds) updateTaxInvoice(ivId, { isPrinted: true }) }}
+            onExportFile={() => { for (const ivId of selectedIvIds) updateTaxInvoice(ivId, { isExported: true }) }}
           />
         </div>
       </Modal>

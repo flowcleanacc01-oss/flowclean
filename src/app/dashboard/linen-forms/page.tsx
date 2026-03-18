@@ -844,6 +844,26 @@ export default function LinenFormsPage() {
 
       {/* LF Bulk Print Modal */}
       <Modal open={showLfBulkPrint} onClose={() => setShowLfBulkPrint(false)} title={`พิมพ์/ส่งออกใบส่งรับผ้า (${selectedLfIds.length} ใบ)`} size="xl" className="print-target">
+        {/* Select All row */}
+        <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 no-print">
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox"
+                checked={selectedLfIds.every(id => linenForms.find(f => f.id === id)?.isPrinted)}
+                onChange={e => { for (const lfId of selectedLfIds) updateLinenForm(lfId, { isPrinted: e.target.checked }) }}
+                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+              <span className="text-sm font-medium text-blue-700 flex items-center gap-1"><Check className="w-4 h-4" />พิมพ์แล้ว (ทุกรายการ)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox"
+                checked={selectedLfIds.every(id => linenForms.find(f => f.id === id)?.isExported)}
+                onChange={e => { for (const lfId of selectedLfIds) updateLinenForm(lfId, { isExported: e.target.checked }) }}
+                className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+              <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว (ทุกรายการ)</span>
+            </label>
+          </div>
+          <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกแล้ว"</p>
+        </div>
         <div id="print-bulk-lf">
           {selectedLfIds.map((lfId, idx) => {
             const form = linenForms.find(f => f.id === lfId)
@@ -852,37 +872,35 @@ export default function LinenFormsPage() {
             const carryOver = getCarryOver(form.customerId, form.date)
             return (
               <div key={lfId}>
-                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6" style={{ pageBreakBefore: 'always' }} />}
+                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6 no-print" style={{ pageBreakBefore: 'always' }} />}
+                {/* Per-doc status row */}
+                <div className="flex items-center gap-4 mb-2 no-print">
+                  <span className="text-xs font-mono text-slate-400">{form.formNumber}</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!form.isPrinted}
+                      onChange={e => updateLinenForm(form.id, { isPrinted: e.target.checked })}
+                      className="w-3.5 h-3.5 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+                    <span className="text-xs font-medium text-blue-700">พิมพ์แล้ว</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!form.isExported}
+                      onChange={e => updateLinenForm(form.id, { isExported: e.target.checked })}
+                      className="w-3.5 h-3.5 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+                    <span className="text-xs font-medium text-violet-700">ส่งออกแล้ว</span>
+                  </label>
+                </div>
                 <LinenFormPrint form={form} customer={cust} company={companyInfo} catalog={linenCatalog} carryOver={carryOver} />
               </div>
             )
           })}
         </div>
-        <div className="flex justify-between items-center mt-4 no-print">
-          <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={selectedLfIds.every(id => linenForms.find(f => f.id === id)?.isPrinted)}
-                onChange={e => {
-                  for (const lfId of selectedLfIds) updateLinenForm(lfId, { isPrinted: e.target.checked })
-                }}
-                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว (ทุกรายการ)</span>
-            </label>
-            <p className="text-xs text-slate-400">พิมพ์ → สถานะ "พิมพ์แล้ว" | ส่งออก JPG/PDF/CSV → สถานะ "ส่งออกแล้ว"</p>
-          </div>
+        <div className="flex justify-end mt-4 no-print">
           <ExportButtons
             targetId="print-bulk-lf"
             filename={`LF-bulk-${selectedLfIds.length}`}
             onExportCSV={() => handleLfListCSV(linenForms.filter(f => selectedLfIds.includes(f.id)))}
-            onPrint={() => {
-              for (const lfId of selectedLfIds) updateLinenForm(lfId, { isPrinted: true })
-            }}
-            onExportFile={() => {
-              for (const lfId of selectedLfIds) updateLinenForm(lfId, { isExported: true })
-            }}
+            onPrint={() => { for (const lfId of selectedLfIds) updateLinenForm(lfId, { isPrinted: true }) }}
+            onExportFile={() => { for (const lfId of selectedLfIds) updateLinenForm(lfId, { isExported: true }) }}
           />
         </div>
       </Modal>
