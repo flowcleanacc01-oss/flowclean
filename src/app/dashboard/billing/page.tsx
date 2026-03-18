@@ -1178,22 +1178,22 @@ export default function BillingPage() {
                 </label>
               )}
             </div>
+            <div className="flex items-center gap-6 mb-4 no-print">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={!!detailBilling.isPrinted}
+                  onChange={e => updateBillingStatement(detailBilling.id, { isPrinted: e.target.checked })}
+                  className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+                <span className="text-sm font-medium text-blue-700 flex items-center gap-1"><Check className="w-4 h-4" />พิมพ์แล้ว</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={!!detailBilling.isExported}
+                  onChange={e => updateBillingStatement(detailBilling.id, { isExported: e.target.checked })}
+                  className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+                <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว</span>
+              </label>
+            </div>
             <BillingPrint billing={detailBilling} customer={detailCustomer} company={companyInfo} />
-            <div className="flex justify-between items-center mt-4 no-print">
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!detailBilling.isPrinted}
-                    onChange={e => updateBillingStatement(detailBilling.id, { isPrinted: e.target.checked })}
-                    className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
-                  <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!detailBilling.isExported}
-                    onChange={e => updateBillingStatement(detailBilling.id, { isExported: e.target.checked })}
-                    className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-                  <span className="text-sm font-medium text-violet-700">ส่งออกแล้ว</span>
-                </label>
-              </div>
+            <div className="flex justify-end mt-4 no-print">
               <ExportButtons targetId="print-billing" filename={detailBilling.billingNumber} onExportCSV={handleBillingCSV}
                 onPrint={() => { if (!detailBilling.isPrinted) updateBillingStatement(detailBilling.id, { isPrinted: true }) }}
                 onExportFile={() => { if (!detailBilling.isExported) updateBillingStatement(detailBilling.id, { isExported: true }) }} />
@@ -1298,6 +1298,20 @@ export default function BillingPage() {
                 <span className="text-sm font-medium text-purple-700">สถานะเปลี่ยนผ่านใบกำกับภาษี IV</span>
               </label>
             </div>
+            <div className="flex items-center gap-6 mb-4 no-print">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={!!detailInvoice.isPrinted}
+                  onChange={e => updateTaxInvoice(detailInvoice.id, { isPrinted: e.target.checked })}
+                  className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+                <span className="text-sm font-medium text-blue-700 flex items-center gap-1"><Check className="w-4 h-4" />พิมพ์แล้ว</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={!!detailInvoice.isExported}
+                  onChange={e => updateTaxInvoice(detailInvoice.id, { isExported: e.target.checked })}
+                  className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+                <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว</span>
+              </label>
+            </div>
             <TaxInvoicePrint
               invoice={detailInvoice}
               customer={detailInvoiceCustomer}
@@ -1305,21 +1319,7 @@ export default function BillingPage() {
               withholdingTax={billingStatements.find(b => b.id === detailInvoice.billingStatementId)?.withholdingTax}
               netPayable={billingStatements.find(b => b.id === detailInvoice.billingStatementId)?.netPayable}
             />
-            <div className="flex justify-between items-center mt-4 no-print">
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!detailInvoice.isPrinted}
-                    onChange={e => updateTaxInvoice(detailInvoice.id, { isPrinted: e.target.checked })}
-                    className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
-                  <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!detailInvoice.isExported}
-                    onChange={e => updateTaxInvoice(detailInvoice.id, { isExported: e.target.checked })}
-                    className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-                  <span className="text-sm font-medium text-violet-700">ส่งออกแล้ว</span>
-                </label>
-              </div>
+            <div className="flex justify-end mt-4 no-print">
               <ExportButtons targetId="print-tax-invoice" filename={detailInvoice.invoiceNumber} onExportCSV={handleInvoiceCSV}
                 onPrint={() => { if (!detailInvoice.isPrinted) updateTaxInvoice(detailInvoice.id, { isPrinted: true }) }}
                 onExportFile={() => { if (!detailInvoice.isExported) updateTaxInvoice(detailInvoice.id, { isExported: true }) }} />

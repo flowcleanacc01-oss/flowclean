@@ -744,22 +744,22 @@ export default function LinenFormsPage() {
       <Modal open={showPrint && !!detailForm} onClose={() => setShowPrint(false)} title="พิมพ์ใบส่งรับผ้า" size="xl" className="print-target">
         {detailForm && detailCustomer && (
           <div>
+            <div className="flex items-center gap-6 mb-4 no-print">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={!!detailForm.isPrinted}
+                  onChange={e => updateLinenForm(detailForm.id, { isPrinted: e.target.checked })}
+                  className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+                <span className="text-sm font-medium text-blue-700 flex items-center gap-1"><Check className="w-4 h-4" />พิมพ์แล้ว</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={!!detailForm.isExported}
+                  onChange={e => updateLinenForm(detailForm.id, { isExported: e.target.checked })}
+                  className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+                <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว</span>
+              </label>
+            </div>
             <LinenFormPrint form={detailForm} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} carryOver={detailCarryOver} />
-            <div className="flex justify-between items-center mt-4 no-print">
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!detailForm.isPrinted}
-                    onChange={e => updateLinenForm(detailForm.id, { isPrinted: e.target.checked })}
-                    className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
-                  <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!detailForm.isExported}
-                    onChange={e => updateLinenForm(detailForm.id, { isExported: e.target.checked })}
-                    className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-                  <span className="text-sm font-medium text-violet-700">ส่งออกแล้ว</span>
-                </label>
-              </div>
+            <div className="flex justify-end mt-4 no-print">
               <ExportButtons targetId="print-lf" filename={detailForm.formNumber} onExportCSV={handleExportCSV}
                 onPrint={() => { if (!detailForm.isPrinted) updateLinenForm(detailForm.id, { isPrinted: true }) }}
                 onExportFile={() => { if (!detailForm.isExported) updateLinenForm(detailForm.id, { isExported: true }) }} />
