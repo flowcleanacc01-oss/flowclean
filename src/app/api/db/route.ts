@@ -57,8 +57,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (result.error) {
-      console.error(`[API /db] ${operation} ${table}:`, result.error)
-      return NextResponse.json({ error: String(result.error) }, { status: 500 })
+      const errDetail = typeof result.error === 'object' && result.error !== null
+        ? JSON.stringify(result.error)
+        : String(result.error)
+      console.error(`[API /db] ${operation} ${table}:`, errDetail)
+      return NextResponse.json({ error: errDetail }, { status: 500 })
     }
 
     return NextResponse.json({ ok: true })

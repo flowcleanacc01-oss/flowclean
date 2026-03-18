@@ -269,7 +269,7 @@ export default function DeliveryPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">2. ใบส่งของชั่วคราว (SD)</h1>
-          <p className="text-sm text-slate-500 mt-0.5">จัดการใบส่งของชั่วคราว</p>
+          <p className="text-sm text-slate-500 mt-0.5">จัดการใบส่งของชั่วคราวทั้งหมด</p>
         </div>
         <div className="flex items-center gap-2">
           {selectedDnIds.length > 0 && (
@@ -288,7 +288,7 @@ export default function DeliveryPage() {
           <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()) }}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />
-            สร้างใบส่งของ
+            สร้างใบส่งของชั่วคราว
           </button>
         </div>
       </div>
@@ -351,16 +351,18 @@ export default function DeliveryPage() {
                 <SortableHeader label="จำนวน" sortKey="items" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="ยอดรวม" sortKey="amount" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="คนขับ" sortKey="driver" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
+                <th className="text-center px-3 py-3 font-medium text-slate-600">พิมพ์แล้ว</th>
+                <th className="text-center px-3 py-3 font-medium text-slate-600">WB</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
               ) : filtered.map(dn => {
                 const customer = getCustomer(dn.customerId)
                 const totalItems = dn.items.reduce((s, i) => s + i.quantity, 0)
                 const dnAmount = getDNTotalAmount(dn)
+                const wbInfo = dnBillingMap.get(dn.id)
                 return (
                   <tr key={dn.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                     onClick={() => setShowDetail(dn.id)}>
@@ -379,28 +381,25 @@ export default function DeliveryPage() {
                     <td className="px-4 py-3 text-right text-slate-700">{formatNumber(totalItems)}</td>
                     <td className="px-4 py-3 text-right text-slate-700">{dnAmount > 0 ? formatCurrency(dnAmount) : '-'}</td>
                     <td className="px-4 py-3 text-slate-600">{dn.driverName || '-'}</td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        {dn.isPrinted && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">พิมพ์แล้ว</span>
-                        )}
-                        {dn.isBilled && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700">วางบิลแล้ว</span>
-                        )}
-                        {dn.isBilled && dnBillingMap.has(dn.id) && (
-                          <button
-                            onClick={e => { e.stopPropagation(); window.location.href = `/dashboard/billing?detail=${dnBillingMap.get(dn.id)!.billingId}` }}
-                            className="px-1.5 py-0.5 rounded text-xs font-bold text-orange-600 hover:text-orange-800 hover:bg-orange-100 transition-colors flex items-center gap-0.5"
-                            title={`ไปที่ ${dnBillingMap.get(dn.id)!.billingNumber}`}
-                          >
-                            WB
-                            <ExternalLink className="w-3 h-3" />
-                          </button>
-                        )}
-                        {!dn.isPrinted && !dn.isBilled && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">รอดำเนินการ</span>
-                        )}
-                      </div>
+                    <td className="px-3 py-3 text-center">
+                      <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
+                        dn.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
+                        {dn.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                      {wbInfo ? (
+                        <button
+                          onClick={() => { window.location.href = `/dashboard/billing?detail=${wbInfo.billingId}` }}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors"
+                          title={`ไปที่ ${wbInfo.billingNumber}`}
+                        >
+                          <span className="font-mono">{wbInfo.billingNumber}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
                     </td>
                   </tr>
                 )
@@ -411,7 +410,7 @@ export default function DeliveryPage() {
       </div>
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งของ" size="lg">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งของชั่วคราว" size="lg">
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">โรงแรม</label>
@@ -547,7 +546,7 @@ export default function DeliveryPage() {
                   </a>
                 )}
                 {!detailNote.isPrinted && !detailNote.isBilled && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">รอดำเนินการ</span>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">ยังไม่พิมพ์</span>
                 )}
               </div>
             </div>

@@ -381,7 +381,7 @@ export default function BillingPage() {
     const dnNumbers = billing.deliveryNoteIds
       .map(id => deliveryNotes.find(d => d.id === id)?.noteNumber)
       .filter(Boolean).join(', ')
-    if (confirm(`ยืนยันการลบใบวางบิล ${billing.billingNumber}?\n\nSD ที่จะถูกยกเลิกการวางบิล:\n${dnNumbers || '-'}\n\nlูกค้า: ${customer?.name || '-'}`)) {
+    if (confirm(`ยืนยันการลบใบวางบิล ${billing.billingNumber}?\n\nSD ที่จะถูกยกเลิกการวางบิล:\n${dnNumbers || '-'}\n\nลูกค้า: ${customer?.name || '-'}`)) {
       // Mark linked SDs as isBilled=false
       for (const dnId of billing.deliveryNoteIds) {
         updateDeliveryNote(dnId, { isBilled: false })
@@ -679,7 +679,7 @@ export default function BillingPage() {
                           const ivInfo = wbInvoiceMap.get(b.id)
                           return ivInfo ? (
                             <button onClick={() => setShowInvoiceDetail(ivInfo.invoiceId)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 hover:bg-purple-200">
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
                               <span className="font-mono">{ivInfo.invoiceNumber}</span>
                               <ExternalLink className="w-3 h-3" />
                             </button>
