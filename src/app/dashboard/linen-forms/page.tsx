@@ -485,7 +485,13 @@ export default function LinenFormsPage() {
             </div>
           </div>
 
-          {newCustomerId && getCustomer(newCustomerId) && (
+          {newCustomerId && getCustomer(newCustomerId) && !getLinkedQT(getCustomer(newCustomerId)!.name) && (
+            <div className="bg-red-50 border border-red-300 rounded-lg px-4 py-3 text-sm text-red-700">
+              <strong>ไม่สามารถสร้างใบรับส่งผ้าได้</strong> — ลูกค้านี้ยังไม่มีใบเสนอราคา (QT) ที่มีสถานะ &quot;ตกลง&quot; กรุณาสร้างและยืนยัน QT ก่อน
+            </div>
+          )}
+
+          {newCustomerId && getCustomer(newCustomerId) && getLinkedQT(getCustomer(newCustomerId)!.name) && (
             <>
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                 <label className="block text-sm font-medium text-amber-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
@@ -521,7 +527,7 @@ export default function LinenFormsPage() {
             <span className={cn('px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap', LINEN_FORM_STATUS_CONFIG.draft.bgColor, LINEN_FORM_STATUS_CONFIG.draft.color)}>
               {LINEN_FORM_STATUS_CONFIG.draft.todoLabel}
             </span>
-            <button onClick={handleCreate} disabled={!newCustomerId || newRows.length === 0}
+            <button onClick={handleCreate} disabled={!newCustomerId || newRows.length === 0 || !getLinkedQT(getCustomer(newCustomerId)?.name || '')}
               className="px-3 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 font-medium transition-colors flex items-center gap-1">
               {LINEN_FORM_STATUS_CONFIG.draft.label}
               <ChevronRight className="w-4 h-4" />

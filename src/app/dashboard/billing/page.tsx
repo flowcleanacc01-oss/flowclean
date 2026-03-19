@@ -1682,15 +1682,7 @@ export default function BillingPage() {
                     return (
                       <tr key={item.code} className="border-t border-slate-100 hover:bg-slate-50">
                         <td className="px-1 py-1 text-center text-xs text-slate-400 font-mono">{idx + 1}</td>
-                        <td className="px-2 py-1">
-                          <input type="text" value={item.name}
-                            onChange={e => {
-                              const updated = [...quItems]
-                              updated[idx] = { ...item, name: e.target.value }
-                              setQuItems(updated)
-                            }}
-                            className="w-full px-2 py-0.5 border border-slate-200 rounded text-sm text-slate-700 focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                        </td>
+                        <td className="px-3 py-1 text-slate-700">{item.name}</td>
                         <td className="px-3 py-1 text-slate-500 text-xs">{catItem?.nameEn || ''}</td>
                         <td className="px-3 py-1 text-xs text-slate-400">{catItem ? getCategoryLabel(catItem.category) : ''}</td>
                         <td className="px-3 py-1 text-xs text-slate-400">{catItem?.unit || 'ชิ้น'}</td>
