@@ -149,7 +149,7 @@ export default function DeliveryPage() {
       }
     }
     const items: DeliveryNoteItem[] = Object.entries(qtyMap)
-      .map(([code, quantity]) => ({ code, quantity, isClaim: false }))
+      .map(([code, quantity]) => ({ code, quantity, isClaim: false, displayName: 'ค่าบริการซัก ' + (itemNameMap[code] || code) }))
     items.sort((a, b) => {
       const ai = linenCatalog.findIndex(i => i.code === a.code)
       const bi = linenCatalog.findIndex(i => i.code === b.code)
@@ -578,13 +578,20 @@ export default function DeliveryPage() {
                         return (
                           <tr key={`${item.code}-${idx}`} className="border-t border-slate-100">
                             <td className="px-3 py-1.5 font-mono text-xs">{item.code}</td>
-                            <td className="px-3 py-1.5">
-                              {itemNameMap[item.code] || item.code}
+                            <td className="px-2 py-1">
+                              <input
+                                value={item.displayName ?? ('ค่าบริการซัก ' + (itemNameMap[item.code] || item.code))}
+                                onChange={e => {
+                                  const updated = detailNote.items.map((di, i) => i === idx ? { ...di, displayName: e.target.value } : di)
+                                  updateDeliveryNote(detailNote.id, { items: updated })
+                                }}
+                                className="w-full px-2 py-0.5 border border-transparent hover:border-slate-200 focus:border-[#3DD8D8] rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-transparent"
+                              />
                               {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
                             </td>
                             <td className="px-3 py-1.5 text-right">{formatNumber(item.quantity)}</td>
-                            {isPer && <td className="px-3 py-1.5 text-right">{formatNumber(price)}</td>}
-                            {isPer && <td className="px-3 py-1.5 text-right">{formatNumber(item.quantity * price)}</td>}
+                            {isPer && <td className="px-3 py-1.5 text-right">{formatCurrency(price)}</td>}
+                            {isPer && <td className="px-3 py-1.5 text-right">{formatCurrency(item.quantity * price)}</td>}
                           </tr>
                         )
                       })}
@@ -593,7 +600,7 @@ export default function DeliveryPage() {
                         <td className="px-3 py-2" colSpan={2}>รวมค่าซัก</td>
                         <td className="px-3 py-2 text-right">{formatNumber(detailNote.items.reduce((s, i) => s + i.quantity, 0))}</td>
                         {isPer && <td className="px-3 py-2"></td>}
-                        {isPer && <td className="px-3 py-2 text-right">{formatNumber(itemSubtotal)}</td>}
+                        {isPer && <td className="px-3 py-2 text-right">{formatCurrency(itemSubtotal)}</td>}
                       </tr>
                       {/* ค่ารถ (ครั้ง) */}
                       {isPer && tripFee > 0 && (
@@ -627,7 +634,7 @@ export default function DeliveryPage() {
                       {isPer && (tripFee > 0 || monthFee > 0) && (
                         <tr className="bg-slate-100 font-bold">
                           <td className="px-3 py-2" colSpan={4}>ยอดรวมทั้งหมด</td>
-                          <td className="px-3 py-2 text-right text-[#1B3A5C]">{formatNumber(grandTotal)}</td>
+                          <td className="px-3 py-2 text-right text-[#1B3A5C]">{formatCurrency(grandTotal)}</td>
                         </tr>
                       )}
                     </tbody>

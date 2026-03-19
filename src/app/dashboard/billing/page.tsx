@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
-import { aggregateDeliveryItems, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
+import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
@@ -23,8 +23,8 @@ export default function BillingPage() {
   const {
     billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
     taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
-    quotations, addQuotation, updateQuotationStatus, deleteQuotation,
-    deliveryNotes, updateDeliveryNote, customers, getCustomer, companyInfo, linenCatalog,
+    quotations, addQuotation, updateQuotation, updateQuotationStatus, deleteQuotation,
+    deliveryNotes, updateDeliveryNote, updateCustomer, customers, getCustomer, companyInfo, linenCatalog,
     linenCategories, getCategoryLabel,
   } = useStore()
 
@@ -87,6 +87,15 @@ export default function BillingPage() {
   const [quItems, setQuItems] = useState<QuotationItem[]>([])
   const [quSearch, setQuSearch] = useState('')
   const [quFilterCat, setQuFilterCat] = useState<string>('all')
+  // Option B: QT billing conditions
+  const [quCustomerId, setQuCustomerId] = useState('')
+  const [quEnablePerPiece, setQuEnablePerPiece] = useState(true)
+  const [quEnableMinPerTrip, setQuEnableMinPerTrip] = useState(false)
+  const [quMinPerTrip, setQuMinPerTrip] = useState(0)
+  const [quEnableWaive, setQuEnableWaive] = useState(false)
+  const [quMinPerTripThreshold, setQuMinPerTripThreshold] = useState(0)
+  const [quEnableMinPerMonth, setQuEnableMinPerMonth] = useState(false)
+  const [quMonthlyFlatRate, setQuMonthlyFlatRate] = useState(0)
 
   // Option A: Customer → QT shortcut (newqt=customerId in URL)
   useEffect(() => {
@@ -95,9 +104,18 @@ export default function BillingPage() {
     const cust = customers.find(c => c.id === newqt)
     if (!cust) return
     setTab('quotation')
+    setQuCustomerId(cust.id)
     setQuCustomerName(cust.name)
     setQuCustomerContact(cust.contactName ? `${cust.contactName}${cust.contactPhone ? ` (${cust.contactPhone})` : ''}` : '')
     setQuDate(todayISO())
+    // Pre-fill billing conditions from existing customer
+    setQuEnablePerPiece(cust.enablePerPiece ?? true)
+    setQuEnableMinPerTrip(cust.enableMinPerTrip ?? false)
+    setQuMinPerTrip(cust.minPerTrip ?? 0)
+    setQuEnableWaive(cust.enableWaive ?? false)
+    setQuMinPerTripThreshold(cust.minPerTripThreshold ?? 0)
+    setQuEnableMinPerMonth(cust.enableMinPerMonth ?? false)
+    setQuMonthlyFlatRate(cust.monthlyFlatRate ?? 0)
     setQuValidDays(30)
     setQuConditions('1. ราคายังไม่รวมภาษีมูลค่าเพิ่ม 7%\n2. ระยะเวลาเครดิต 30 วัน\n3. บริการรับ-ส่งผ้าทุกวัน')
     setQuItems(linenCatalog.map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice })))
@@ -108,6 +126,9 @@ export default function BillingPage() {
   const sortedCategories = useMemo(() =>
     [...linenCategories].sort((a, b) => a.sortOrder - b.sortOrder)
   , [linenCategories])
+
+  // Billing mode (5.1)
+  const [billingMode, setBillingMode] = useState<'by_date' | 'by_item'>('by_date')
 
   // Create billing state
   const [selCustomerId, setSelCustomerId] = useState('')
@@ -220,9 +241,11 @@ export default function BillingPage() {
     // per-piece: use only selected DNs
     const selectedNotes = deliveryNotes.filter(dn => selDnIds.includes(dn.id))
     if (selectedNotes.length === 0) return null
-    const lineItems = aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog)
+    const lineItems = billingMode === 'by_date'
+      ? aggregateDeliveryItemsByDate(selectedNotes, selCustomer)
+      : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog)
     return { lineItems, ...calculateBillingTotals(lineItems) }
-  }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists])
+  }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists, billingMode])
 
   const handleCreateBilling = () => {
     if (!selCustomer || !previewBilling) return
@@ -245,6 +268,7 @@ export default function BillingPage() {
       paidDate: null,
       paidAmount: 0,
       notes: '',
+      billingMode,
     })
 
     // Mark selected delivery notes as billed
@@ -269,11 +293,36 @@ export default function BillingPage() {
     if (!showCreateIV) return
     const billing = billingStatements.find(b => b.id === showCreateIV)
     if (!billing) return
+
+    // 5.4.1: by_date WB → collapse service lines to single "ค่าบริการซักวันที่ start - end"
+    let ivLineItems = billing.lineItems
+    if (billing.billingMode === 'by_date') {
+      const transportCodes = new Set(['TRANSPORT_TRIP', 'TRANSPORT_MONTH'])
+      const serviceLines = billing.lineItems.filter(i => !transportCodes.has(i.code))
+      const transportLines = billing.lineItems.filter(i => transportCodes.has(i.code))
+      if (serviceLines.length > 0) {
+        const serviceTotal = serviceLines.reduce((s, i) => s + i.amount, 0)
+        const dnDates = billing.deliveryNoteIds
+          .map(id => deliveryNotes.find(d => d.id === id)?.date)
+          .filter(Boolean)
+          .sort() as string[]
+        const dateLabel = dnDates.length > 0
+          ? (dnDates[0] === dnDates[dnDates.length - 1]
+            ? `${dnDates[0]}`
+            : `${dnDates[0]} - ${dnDates[dnDates.length - 1]}`)
+          : billing.billingMonth
+        ivLineItems = [
+          { code: 'SERVICE', name: `ค่าบริการซักวันที่ ${dateLabel}`, quantity: 1, pricePerUnit: serviceTotal, amount: serviceTotal },
+          ...transportLines,
+        ]
+      }
+    }
+
     addTaxInvoice({
       billingStatementId: showCreateIV,
       customerId: billing.customerId,
       issueDate: ivIssueDate,
-      lineItems: billing.lineItems,
+      lineItems: ivLineItems,
       subtotal: billing.subtotal,
       vat: billing.vat,
       grandTotal: billing.grandTotal,
@@ -296,6 +345,14 @@ export default function BillingPage() {
       conditions: quConditions,
       status: 'draft',
       notes: quNotes,
+      customerId: quCustomerId || undefined,
+      enablePerPiece: quEnablePerPiece,
+      enableMinPerTrip: quEnableMinPerTrip,
+      minPerTrip: quMinPerTrip,
+      enableWaive: quEnableWaive,
+      minPerTripThreshold: quMinPerTripThreshold,
+      enableMinPerMonth: quEnableMinPerMonth,
+      monthlyFlatRate: quMonthlyFlatRate,
     })
     setShowCreateQU(false)
   }
@@ -537,6 +594,7 @@ export default function BillingPage() {
         )}
         {tab === 'quotation' && (
           <button onClick={() => {
+            setQuCustomerId('')
             setQuCustomerName('')
             setQuCustomerContact('')
             setQuDate(todayISO())
@@ -546,6 +604,13 @@ export default function BillingPage() {
             setQuItems(linenCatalog.map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice })))
             setQuSearch('')
             setQuFilterCat('all')
+            setQuEnablePerPiece(true)
+            setQuEnableMinPerTrip(false)
+            setQuMinPerTrip(0)
+            setQuEnableWaive(false)
+            setQuMinPerTripThreshold(0)
+            setQuEnableMinPerMonth(false)
+            setQuMonthlyFlatRate(0)
             setShowCreateQU(true)
           }}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
@@ -933,6 +998,23 @@ export default function BillingPage() {
             </div>
           )}
 
+          {/* 5.1: Billing mode toggle */}
+          {selCustomer && (selCustomer.enablePerPiece ?? true) && selDnIds.length > 0 && (
+            <div className="flex items-center gap-4 py-2 px-3 bg-slate-50 rounded-lg border border-slate-200">
+              <span className="text-sm font-medium text-slate-600">รูปแบบวางบิล:</span>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="billingMode" value="by_date" checked={billingMode === 'by_date'}
+                  onChange={() => setBillingMode('by_date')} className="text-[#1B3A5C]" />
+                <span className="text-sm text-slate-700">ตามวันที่ใบส่งของ</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="billingMode" value="by_item" checked={billingMode === 'by_item'}
+                  onChange={() => setBillingMode('by_item')} className="text-[#1B3A5C]" />
+                <span className="text-sm text-slate-700">แยกตามรายการผ้า</span>
+              </label>
+            </div>
+          )}
+
           {previewBilling && (
             <div>
               <h3 className="text-sm font-medium text-slate-700 mb-2">รายการ</h3>
@@ -1107,9 +1189,18 @@ export default function BillingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {detailBilling.lineItems.map(item => (
+                  {detailBilling.lineItems.map((item, idx) => (
                     <tr key={item.code} className="border-t border-slate-100">
-                      <td className="px-3 py-1.5">{item.name}</td>
+                      <td className="px-2 py-1">
+                        <input
+                          value={item.name}
+                          onChange={e => {
+                            const updated = detailBilling.lineItems.map((li, i) => i === idx ? { ...li, name: e.target.value } : li)
+                            updateBillingStatement(detailBilling.id, { lineItems: updated })
+                          }}
+                          className="w-full px-2 py-0.5 border border-transparent hover:border-slate-200 focus:border-[#3DD8D8] rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-transparent"
+                        />
+                      </td>
                       <td className="px-3 py-1.5 text-right">{item.quantity}</td>
                       <td className="px-3 py-1.5 text-right">{formatCurrency(item.pricePerUnit)}</td>
                       <td className="px-3 py-1.5 text-right">{formatCurrency(item.amount)}</td>
@@ -1250,9 +1341,18 @@ export default function BillingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {detailInvoice.lineItems.map(item => (
+                  {detailInvoice.lineItems.map((item, idx) => (
                     <tr key={item.code} className="border-t border-slate-100">
-                      <td className="px-3 py-1.5">{item.name}</td>
+                      <td className="px-2 py-1">
+                        <input
+                          value={item.name}
+                          onChange={e => {
+                            const updated = detailInvoice.lineItems.map((li, i) => i === idx ? { ...li, name: e.target.value } : li)
+                            updateTaxInvoice(detailInvoice.id, { lineItems: updated })
+                          }}
+                          className="w-full px-2 py-0.5 border border-transparent hover:border-slate-200 focus:border-[#3DD8D8] rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-transparent"
+                        />
+                      </td>
                       <td className="px-3 py-1.5 text-right">{item.quantity}</td>
                       <td className="px-3 py-1.5 text-right">{formatCurrency(item.pricePerUnit)}</td>
                       <td className="px-3 py-1.5 text-right">{formatCurrency(item.amount)}</td>
@@ -1412,17 +1512,36 @@ export default function BillingPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">ชื่อลูกค้า / โรงแรม</label>
-              <input value={quCustomerName} onChange={e => setQuCustomerName(e.target.value)}
-                placeholder="กรอกชื่อ หรือเลือกจากลูกค้าเดิม"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-              {customers.filter(c => c.isActive).length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {customers.filter(c => c.isActive).map(c => (
-                    <button key={c.id} onClick={() => { setQuCustomerName(c.name); setQuCustomerContact(c.contactName) }}
-                      className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200">{c.name}</button>
-                  ))}
-                </div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">โรงแรม / ลูกค้า</label>
+              <select value={quCustomerId} onChange={e => {
+                const cust = customers.find(c => c.id === e.target.value)
+                setQuCustomerId(e.target.value)
+                setQuCustomerName(cust?.name || '')
+                setQuCustomerContact(cust?.contactName ? `${cust.contactName}${cust.contactPhone ? ` (${cust.contactPhone})` : ''}` : '')
+                if (cust) {
+                  setQuEnablePerPiece(cust.enablePerPiece ?? true)
+                  setQuEnableMinPerTrip(cust.enableMinPerTrip ?? false)
+                  setQuMinPerTrip(cust.minPerTrip ?? 0)
+                  setQuEnableWaive(cust.enableWaive ?? false)
+                  setQuMinPerTripThreshold(cust.minPerTripThreshold ?? 0)
+                  setQuEnableMinPerMonth(cust.enableMinPerMonth ?? false)
+                  setQuMonthlyFlatRate(cust.monthlyFlatRate ?? 0)
+                  setQuItems(cust.priceList.map(p => {
+                    const cat = linenCatalog.find(i => i.code === p.code)
+                    return { code: p.code, name: cat?.name || p.code, pricePerUnit: p.price }
+                  }))
+                }
+              }}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+                <option value="">— เลือกจากลูกค้าในระบบ —</option>
+                {customers.filter(c => c.isActive).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              {!quCustomerId && (
+                <input value={quCustomerName} onChange={e => setQuCustomerName(e.target.value)}
+                  placeholder="หรือพิมพ์ชื่อลูกค้าใหม่..."
+                  className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               )}
             </div>
             <div>
@@ -1521,6 +1640,51 @@ export default function BillingPage() {
             </div>
           </div>
 
+          {/* Option B: Billing conditions */}
+          <div className="border border-slate-200 rounded-lg p-3 space-y-3">
+            <p className="text-sm font-medium text-slate-700">รูปแบบคิดเงิน</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={quEnablePerPiece} onChange={e => setQuEnablePerPiece(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+              <span className="text-sm text-slate-700">คิดตามหน่วย (per piece)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={quEnableMinPerTrip} onChange={e => setQuEnableMinPerTrip(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+              <span className="text-sm text-slate-700">มีขั้นต่ำ/ครั้ง</span>
+            </label>
+            {quEnableMinPerTrip && (
+              <div className="ml-6 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-600 w-24">ขั้นต่ำ/ครั้ง (฿)</span>
+                  <input type="number" min={0} value={quMinPerTrip || ''} onChange={e => setQuMinPerTrip(sanitizeNumber(e.target.value))}
+                    className="w-28 px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={quEnableWaive} onChange={e => setQuEnableWaive(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                  <span className="text-sm text-slate-600">เวฟขั้นต่ำถ้ายอดถึง (฿)</span>
+                  {quEnableWaive && (
+                    <input type="number" min={0} value={quMinPerTripThreshold || ''} onChange={e => setQuMinPerTripThreshold(sanitizeNumber(e.target.value))}
+                      className="w-24 px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  )}
+                </label>
+              </div>
+            )}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={quEnableMinPerMonth} onChange={e => setQuEnableMinPerMonth(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+              <span className="text-sm text-slate-700">มีขั้นต่ำ/เดือน</span>
+            </label>
+            {quEnableMinPerMonth && (
+              <div className="ml-6 flex items-center gap-2">
+                <span className="text-sm text-slate-600 w-24">ขั้นต่ำ/เดือน (฿)</span>
+                <input type="number" min={0} value={quMonthlyFlatRate || ''} onChange={e => setQuMonthlyFlatRate(sanitizeNumber(e.target.value))}
+                  className="w-28 px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">เงื่อนไข</label>
             <textarea value={quConditions} onChange={e => setQuConditions(e.target.value)} rows={3}
@@ -1591,7 +1755,7 @@ export default function BillingPage() {
             )}
 
             <div className="flex justify-between pt-2">
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center flex-wrap">
                 {detailQuotation.status === 'draft' && (
                   <button onClick={() => updateQuotationStatus(detailQuotation.id, 'sent')}
                     className="text-sm px-3 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100">ส่งให้ลูกค้า</button>
@@ -1604,6 +1768,27 @@ export default function BillingPage() {
                       className="text-sm px-3 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100">ปฏิเสธ</button>
                   </>
                 )}
+                {detailQuotation.status === 'accepted' && detailQuotation.customerId && (() => {
+                  const cust = getCustomer(detailQuotation.customerId!)
+                  return cust ? (
+                    <button onClick={() => {
+                      updateCustomer(cust.id, {
+                        enablePerPiece: detailQuotation.enablePerPiece ?? true,
+                        enableMinPerTrip: detailQuotation.enableMinPerTrip ?? false,
+                        minPerTrip: detailQuotation.minPerTrip ?? 0,
+                        enableWaive: detailQuotation.enableWaive ?? false,
+                        minPerTripThreshold: detailQuotation.minPerTripThreshold ?? 0,
+                        enableMinPerMonth: detailQuotation.enableMinPerMonth ?? false,
+                        monthlyFlatRate: detailQuotation.monthlyFlatRate ?? 0,
+                        priceList: detailQuotation.items.map(i => ({ code: i.code, price: i.pricePerUnit })),
+                      })
+                      if (confirm(`อัปเดตรูปแบบคิดเงิน + ราคาให้ ${cust.name} แล้ว`)) {}
+                    }}
+                      className="text-sm px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" />นำไปใช้กับลูกค้า
+                    </button>
+                  ) : null
+                })()}
                 <button onClick={() => {
                   if (confirm(`ลบใบเสนอราคา ${detailQuotation.quotationNumber}?`)) {
                     deleteQuotation(detailQuotation.id)

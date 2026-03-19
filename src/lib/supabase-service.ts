@@ -109,6 +109,7 @@ const FIELD_MAP: Record<string, string> = {
   deptIroning: 'dept_ironing',
   deptFolding: 'dept_folding',
   deptQc: 'dept_qc',
+  billingMode: 'billing_mode',
   // Audit log fields
   userId: 'user_id',
   userName: 'user_name',

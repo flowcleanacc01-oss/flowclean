@@ -474,74 +474,30 @@ export default function CustomersPage() {
             </div>
           </div>
 
-          {/* Billing Conditions — 3 independent checkboxes */}
+          {/* Billing Conditions — read-only display */}
           <div className="bg-slate-50 rounded-lg p-4">
-            <label className="block font-medium text-slate-700 mb-3">รูปแบบการคิดเงิน</label>
-            <div className="space-y-3">
-              {/* 1. คิดตามหน่วย */}
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.enablePerPiece}
-                  onChange={e => setForm({ ...form, enablePerPiece: e.target.checked })}
-                  className="rounded accent-[#1B3A5C]" />
-                <span className="text-sm font-medium text-slate-700">คิดตามหน่วย</span>
-              </label>
-
-              {/* 2. ขั้นต่ำ/ครั้ง */}
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.enableMinPerTrip}
-                    onChange={e => setForm({ ...form, enableMinPerTrip: e.target.checked })}
-                    className="rounded accent-[#1B3A5C]" />
-                  <span className="text-sm font-medium text-slate-700">ขั้นต่ำ/ครั้ง (บาท)</span>
-                </label>
-                {form.enableMinPerTrip && (
-                  <div className="ml-6 mt-2 space-y-3">
-                    <div className="max-w-xs">
-                      <label className="block text-xs text-slate-500 mb-1">ขั้นต่ำ/ครั้ง (บาท)</label>
-                      <input type="number" value={form.minPerTrip}
-                        onChange={e => setForm({ ...form, minPerTrip: sanitizeNumber(e.target.value) })}
-                        placeholder="0"
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={form.enableWaive}
-                          onChange={e => setForm({ ...form, enableWaive: e.target.checked })}
-                          className="rounded accent-[#1B3A5C]" />
-                        <span className="text-xs text-slate-600">เวฟ (ถ้าเท่ากับหรือเกินค่านี้เวฟให้)</span>
-                      </label>
-                      {form.enableWaive && (
-                        <div className="mt-1.5 max-w-xs">
-                          <label className="block text-xs text-slate-500 mb-1">เวฟเมื่อยอดถึง (บาท)</label>
-                          <input type="number" value={form.minPerTripThreshold}
-                            onChange={e => setForm({ ...form, minPerTripThreshold: sanitizeNumber(e.target.value) })}
-                            placeholder="0"
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 3. ขั้นต่ำ/เดือน */}
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.enableMinPerMonth}
-                    onChange={e => setForm({ ...form, enableMinPerMonth: e.target.checked })}
-                    className="rounded accent-[#1B3A5C]" />
-                  <span className="text-sm font-medium text-slate-700">ขั้นต่ำ/เดือน (บาท)</span>
-                </label>
-                {form.enableMinPerMonth && (
-                  <div className="ml-6 mt-2 max-w-xs">
-                    <label className="block text-xs text-slate-500 mb-1">ขั้นต่ำ/เดือน (บาท)</label>
-                    <input type="number" value={form.monthlyFlatRate}
-                      onChange={e => setForm({ ...form, monthlyFlatRate: sanitizeNumber(e.target.value) })}
-                      placeholder="0"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                  </div>
-                )}
-              </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-medium text-slate-700">รูปแบบการคิดเงิน (ปัจจุบัน)</span>
+              <span className="text-xs text-slate-400">แก้ไขผ่านใบเสนอราคา (QT)</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {form.enablePerPiece && (
+                <span className="px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700">คิดตามหน่วย</span>
+              )}
+              {form.enableMinPerTrip && (
+                <span className="px-2 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700">
+                  ขั้นต่ำ/ครั้ง {form.minPerTrip > 0 ? `฿${form.minPerTrip}` : ''}
+                  {form.enableWaive && form.minPerTripThreshold > 0 ? ` (เวฟถ้า ≥ ฿${form.minPerTripThreshold})` : ''}
+                </span>
+              )}
+              {form.enableMinPerMonth && (
+                <span className="px-2 py-0.5 rounded-full text-xs bg-purple-50 text-purple-700">
+                  ขั้นต่ำ/เดือน {form.monthlyFlatRate > 0 ? `฿${form.monthlyFlatRate}` : ''}
+                </span>
+              )}
+              {!form.enablePerPiece && !form.enableMinPerTrip && !form.enableMinPerMonth && (
+                <span className="text-xs text-slate-400">ยังไม่ได้ตั้งค่า</span>
+              )}
             </div>
           </div>
 

@@ -256,6 +256,7 @@ export interface DeliveryNoteItem {
   code: string
   quantity: number
   isClaim: boolean // เคลม = true → ราคา 0 ไม่คิดเงิน
+  displayName?: string // user-editable display name (default: "ค่าบริการซัก " + catalogName)
 }
 
 export interface DeliveryNote {
@@ -319,6 +320,7 @@ export interface BillingStatement {
   notes: string
   isPrinted?: boolean
   isExported?: boolean
+  billingMode?: 'by_date' | 'by_item' // how line items were grouped
 }
 
 // ============================================================
@@ -361,6 +363,7 @@ export interface QuotationItem {
 export interface Quotation {
   id: string
   quotationNumber: string // QT-YYYYMM-XXX
+  customerId?: string // link to Customer (optional for backward compat)
   customerName: string
   customerContact: string
   date: string
@@ -369,6 +372,14 @@ export interface Quotation {
   conditions: string
   status: QuotationStatus
   notes: string
+  // Billing conditions — moved here from customer edit (apply to customer on accept)
+  enablePerPiece?: boolean
+  enableMinPerTrip?: boolean
+  minPerTrip?: number
+  enableWaive?: boolean
+  minPerTripThreshold?: number
+  enableMinPerMonth?: boolean
+  monthlyFlatRate?: number
 }
 
 // ============================================================

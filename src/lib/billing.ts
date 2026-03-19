@@ -1,4 +1,5 @@
 import type { Customer, DeliveryNote, BillingLineItem, LinenItemDef } from '@/types'
+import { formatDate } from './utils'
 
 /**
  * Aggregate delivery note items into billing line items with pricing
@@ -26,7 +27,7 @@ export function aggregateDeliveryItems(
       const pricePerUnit = priceMap[code] ?? 0
       return {
         code,
-        name: itemNameMap[code] || code,
+        name: 'ค่าบริการซัก ' + (itemNameMap[code] || code),
         quantity,
         pricePerUnit,
         amount: quantity * pricePerUnit,
@@ -62,6 +63,49 @@ export function aggregateDeliveryItems(
       pricePerUnit: totalTransportMonth,
       amount: totalTransportMonth,
     })
+  }
+
+  return result
+}
+
+/**
+ * Aggregate delivery notes into billing line items grouped by date (by_date mode)
+ * Each DN = one line: "ค่าบริการซักวันที่ {date}" with total value of all items
+ */
+export function aggregateDeliveryItemsByDate(
+  notes: DeliveryNote[],
+  customer: Customer,
+): BillingLineItem[] {
+  const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+  const result: BillingLineItem[] = []
+
+  for (const note of notes) {
+    let total = 0
+    for (const item of note.items) {
+      if (item.isClaim) continue
+      total += item.quantity * (priceMap[item.code] ?? 0)
+    }
+    result.push({
+      code: `DATE_${note.date}`,
+      name: `ค่าบริการซักวันที่ ${formatDate(note.date)}`,
+      quantity: 1,
+      pricePerUnit: total,
+      amount: total,
+    })
+  }
+
+  // Transport fees
+  let totalTransportTrip = 0
+  let totalTransportMonth = 0
+  for (const note of notes) {
+    totalTransportTrip += note.transportFeeTrip || 0
+    totalTransportMonth += note.transportFeeMonth || 0
+  }
+  if (totalTransportTrip > 0) {
+    result.push({ code: 'TRANSPORT_TRIP', name: 'ค่ารถ (ครั้ง)', quantity: 1, pricePerUnit: totalTransportTrip, amount: totalTransportTrip })
+  }
+  if (totalTransportMonth > 0) {
+    result.push({ code: 'TRANSPORT_MONTH', name: 'ค่ารถ (เดือน)', quantity: 1, pricePerUnit: totalTransportMonth, amount: totalTransportMonth })
   }
 
   return result

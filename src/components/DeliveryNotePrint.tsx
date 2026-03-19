@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { formatDate, formatNumber } from '@/lib/utils'
+import { formatDate, formatNumber, formatCurrency } from '@/lib/utils'
 import type { DeliveryNote, Customer, CompanyInfo, LinenItemDef } from '@/types'
 
 interface DeliveryNotePrintProps {
@@ -77,12 +77,12 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
                 <td className="text-center px-3 py-1.5 border border-slate-300">{idx + 1}</td>
                 <td className="px-3 py-1.5 border border-slate-300 font-mono text-xs">{item.code}</td>
                 <td className="px-3 py-1.5 border border-slate-300">
-                  {itemNameMap[item.code] || item.code}
+                  {item.displayName ?? ('ค่าบริการซัก ' + (itemNameMap[item.code] || item.code))}
                   {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
                 </td>
                 <td className="text-right px-3 py-1.5 border border-slate-300">{formatNumber(item.quantity)}</td>
-                {isPer && <td className="text-right px-3 py-1.5 border border-slate-300">{formatNumber(price)}</td>}
-                {isPer && <td className="text-right px-3 py-1.5 border border-slate-300">{formatNumber(amount)}</td>}
+                {isPer && <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(price)}</td>}
+                {isPer && <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(amount)}</td>}
               </tr>
             )
           })}
@@ -93,27 +93,27 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
             </td>
             <td className="text-right px-3 py-2 border border-slate-300">{formatNumber(totalItems)}</td>
             {isPer && <td className="border border-slate-300"></td>}
-            {isPer && <td className="text-right px-3 py-2 border border-slate-300 font-bold">{formatNumber(itemSubtotal)}</td>}
+            {isPer && <td className="text-right px-3 py-2 border border-slate-300 font-bold">{formatCurrency(itemSubtotal)}</td>}
           </tr>
           {/* ค่ารถ (ครั้ง) */}
           {isPer && tripFee > 0 && (
             <tr>
               <td colSpan={isPer ? 5 : 3} className="text-right px-3 py-1.5 border border-slate-300">ค่ารถ (ครั้ง)</td>
-              <td className="text-right px-3 py-1.5 border border-slate-300">{formatNumber(tripFee)}</td>
+              <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(tripFee)}</td>
             </tr>
           )}
           {/* ค่ารถ (เดือน) */}
           {isPer && monthFee > 0 && (
             <tr>
               <td colSpan={isPer ? 5 : 3} className="text-right px-3 py-1.5 border border-slate-300">ค่ารถ (เดือน)</td>
-              <td className="text-right px-3 py-1.5 border border-slate-300">{formatNumber(monthFee)}</td>
+              <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(monthFee)}</td>
             </tr>
           )}
           {/* ยอดรวมทั้งหมด (with transport fees) */}
           {isPer && (tripFee > 0 || monthFee > 0) && (
             <tr className="bg-slate-100 font-bold">
               <td colSpan={isPer ? 5 : 3} className="text-right px-3 py-2 border border-slate-300">ยอดรวมทั้งหมด</td>
-              <td className="text-right px-3 py-2 border border-slate-300">{formatNumber(totalAmount)}</td>
+              <td className="text-right px-3 py-2 border border-slate-300">{formatCurrency(totalAmount)}</td>
             </tr>
           )}
         </tbody>

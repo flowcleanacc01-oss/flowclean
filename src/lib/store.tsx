@@ -67,6 +67,7 @@ interface StoreContextType {
   // Quotations
   quotations: Quotation[]
   addQuotation: (q: Omit<Quotation, 'id' | 'quotationNumber'>) => Quotation
+  updateQuotation: (id: string, updates: Partial<Quotation>) => void
   updateQuotationStatus: (id: string, status: QuotationStatus) => void
   deleteQuotation: (id: string) => void
 
@@ -553,6 +554,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return newQ
   }, [logAudit])
 
+  const updateQuotation = useCallback((id: string, updates: Partial<Quotation>) => {
+    setQuotations(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    dbSave(db.updateQuotationDB(id, updates as Record<string, unknown>))
+  }, [])
+
   const updateQuotationStatus = useCallback((id: string, status: QuotationStatus) => {
     setQuotations(prev => {
       const old = prev.find(x => x.id === id)
@@ -854,7 +860,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deliveryNotes, addDeliveryNote, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
       billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
       taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
-      quotations, addQuotation, updateQuotationStatus, deleteQuotation,
+      quotations, addQuotation, updateQuotation, updateQuotationStatus, deleteQuotation,
       expenses, addExpense, updateExpense, deleteExpense,
       users, addUser, updateUser, resetPassword,
       defaultPrices, updateDefaultPrice,
