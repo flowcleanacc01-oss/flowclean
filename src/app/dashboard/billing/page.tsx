@@ -7,7 +7,7 @@ import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber 
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
-import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2 } from 'lucide-react'
+import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
@@ -951,8 +951,8 @@ export default function BillingPage() {
                           )}
                           <button onClick={() => handleEditQT(q)}
                             title="แก้ไข (ย้อนสถานะกลับเป็นร่าง)"
-                            className="p-1 text-slate-400 hover:text-[#1B3A5C] hover:bg-slate-100 rounded">
-                            <FileText className="w-3.5 h-3.5" />
+                            className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 inline-flex items-center gap-0.5">
+                            <Edit2 className="w-3 h-3" />แก้ไข
                           </button>
                           <button onClick={() => {
                             if (confirm(`ลบใบเสนอราคา ${q.quotationNumber}?`)) deleteQuotation(q.id)
