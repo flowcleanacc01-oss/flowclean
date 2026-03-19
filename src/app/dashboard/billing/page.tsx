@@ -100,10 +100,10 @@ export default function BillingPage() {
     setQuDate(todayISO())
     setQuValidDays(30)
     setQuConditions('1. ราคายังไม่รวมภาษีมูลค่าเพิ่ม 7%\n2. ระยะเวลาเครดิต 30 วัน\n3. บริการรับ-ส่งผ้าทุกวัน')
-    setQuItems([])
+    setQuItems(linenCatalog.map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice })))
     setShowCreateQU(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, customers])
+  }, [searchParams, customers, linenCatalog])
 
   const sortedCategories = useMemo(() =>
     [...linenCategories].sort((a, b) => a.sortOrder - b.sortOrder)
