@@ -9,6 +9,7 @@ interface LinenFormGridProps {
   rows: LinenFormRow[]
   onChange: (rows: LinenFormRow[]) => void
   catalog: LinenItemDef[]
+  itemCodes?: string[]  // override customer.enabledItems (e.g. from accepted QT)
   carryOver?: Record<string, number>
   formDate?: string
   readOnly?: boolean
@@ -32,6 +33,7 @@ export default function LinenFormGrid({
   rows,
   onChange,
   catalog,
+  itemCodes,
   carryOver = {},
   formDate,
   readOnly = false,
@@ -39,7 +41,7 @@ export default function LinenFormGrid({
   formStatus,
 }: LinenFormGridProps) {
   const enabledItems = catalog.filter(item =>
-    customer.enabledItems.includes(item.code)
+    itemCodes ? itemCodes.includes(item.code) : customer.enabledItems.includes(item.code)
   )
 
   const [localRows, setLocalRows] = useState<LinenFormRow[]>(rows)

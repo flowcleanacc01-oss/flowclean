@@ -506,6 +506,7 @@ export default function LinenFormsPage() {
                 rows={newRows}
                 onChange={setNewRows}
                 catalog={linenCatalog}
+                itemCodes={getLinkedQT(getCustomer(newCustomerId)?.name || '')?.items.map(i => i.code)}
                 carryOver={getCarryOver(newCustomerId, newDate)}
                 editableColumns={['col2', 'col3', 'note']}
                 formStatus="draft"

@@ -914,8 +914,8 @@ export default function BillingPage() {
                   <SortableHeader label="เลขที่" sortKey="quotationNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ลูกค้า" sortKey="customerName" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                  <SortableHeader label="ใช้ได้ถึง" sortKey="validUntil" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <th className="text-center px-4 py-3 font-medium text-slate-600">รายการ</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">หมายเหตุ</th>
                   <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
                   <th className="text-right px-4 py-3 font-medium text-slate-600 w-32"></th>
                 </tr>
@@ -932,8 +932,8 @@ export default function BillingPage() {
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">{q.quotationNumber}</td>
                       <td className="px-4 py-3 text-slate-800 font-medium">{q.customerName}</td>
                       <td className="px-4 py-3 text-slate-600">{formatDate(q.date)}</td>
-                      <td className="px-4 py-3 text-slate-600">{formatDate(q.validUntil)}</td>
                       <td className="px-4 py-3 text-center text-slate-500">{q.items.length}</td>
+                      <td className="px-4 py-3 text-slate-500 text-sm max-w-[160px] truncate">{q.notes || '-'}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>{cfg.label}</span>
                       </td>
@@ -1603,11 +1603,6 @@ export default function BillingPage() {
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">วันที่</label>
               <input type="date" value={quDate} onChange={e => setQuDate(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">ใช้ได้ (วัน)</label>
-              <input type="number" min={1} value={quValidDays} onChange={e => setQuValidDays(sanitizeNumber(e.target.value, 365) || 30)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
           </div>
