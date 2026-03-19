@@ -21,7 +21,7 @@ export default function BillingPrint({ billing, customer, company }: BillingPrin
             <h1 className="text-xl font-bold text-[#1B3A5C]">{company.name}</h1>
             <p className="text-xs text-slate-500">{company.nameEn}</p>
             <p className="text-xs text-slate-500 mt-1">{company.address}</p>
-            <p className="text-xs text-slate-500">เลขผู้เสียภาษี: {company.taxId}</p>
+            <p className="text-xs text-slate-500">เลขผู้เสียภาษี: {company.taxId}{company.branch ? ` | ${formatBranch(company.branch)}` : ''}</p>
             <p className="text-xs text-slate-500">โทร: {company.phone}</p>
           </div>
         </div>

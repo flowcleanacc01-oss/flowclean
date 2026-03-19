@@ -72,6 +72,7 @@ export default function SettingsPage() {
   const [companyDraft, setCompanyDraft] = useState(companyInfo)
   const companyDirty = useRef(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [savedMsg, setSavedMsg] = useState(false)
 
   useEffect(() => { setCompanyDraft(companyInfo) }, [companyInfo])
 
@@ -92,10 +93,10 @@ export default function SettingsPage() {
 
   const handleCompanySaveNow = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    if (companyDirty.current) {
-      updateCompanyInfo(companyDraft)
-      companyDirty.current = false
-    }
+    updateCompanyInfo(companyDraft)
+    companyDirty.current = false
+    setSavedMsg(true)
+    setTimeout(() => setSavedMsg(false), 2000)
   }, [companyDraft, updateCompanyInfo])
 
   // Audit logs
@@ -297,10 +298,13 @@ export default function SettingsPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-medium text-slate-700">ข้อมูลบริษัท (สำหรับใบกำกับภาษี)</h3>
-            <button onClick={handleCompanySaveNow}
-              className="px-4 py-1.5 bg-[#1B3A5C] text-white text-sm rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
-              <Check className="w-3.5 h-3.5" />บันทึก
-            </button>
+            <div className="flex items-center gap-2">
+              {savedMsg && <span className="text-sm text-emerald-600 font-medium">บันทึกแล้ว ✓</span>}
+              <button onClick={handleCompanySaveNow}
+                className="px-4 py-1.5 bg-[#1B3A5C] text-white text-sm rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" />บันทึก
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>

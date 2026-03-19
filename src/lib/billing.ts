@@ -69,8 +69,9 @@ export function aggregateDeliveryItems(
 }
 
 /**
- * Aggregate delivery notes into billing line items grouped by date (by_date mode)
- * Each DN = one line: "ค่าบริการซักวันที่ {date}" with total value of all items
+ * Aggregate delivery notes into billing line items grouped by DN (by_date mode)
+ * Each DN = one line: "ค่าบริการซักวันที่ {date}" with total = item costs + transport fees
+ * Transport fees (trip + month) are embedded in each DN's total — no separate rows.
  */
 export function aggregateDeliveryItemsByDate(
   notes: DeliveryNote[],
@@ -85,27 +86,16 @@ export function aggregateDeliveryItemsByDate(
       if (item.isClaim) continue
       total += item.quantity * (priceMap[item.code] ?? 0)
     }
+    // Include transport fees in each DN's total (trip fee per trip; month fee on last DN)
+    total += note.transportFeeTrip || 0
+    total += note.transportFeeMonth || 0
     result.push({
-      code: `DATE_${note.date}`,
+      code: `DATE_${note.id}`,  // use id for uniqueness (avoids duplicate-key bug on same-date DNs)
       name: `ค่าบริการซักวันที่ ${formatDate(note.date)}`,
       quantity: 1,
       pricePerUnit: total,
       amount: total,
     })
-  }
-
-  // Transport fees
-  let totalTransportTrip = 0
-  let totalTransportMonth = 0
-  for (const note of notes) {
-    totalTransportTrip += note.transportFeeTrip || 0
-    totalTransportMonth += note.transportFeeMonth || 0
-  }
-  if (totalTransportTrip > 0) {
-    result.push({ code: 'TRANSPORT_TRIP', name: 'ค่ารถ (ครั้ง)', quantity: 1, pricePerUnit: totalTransportTrip, amount: totalTransportTrip })
-  }
-  if (totalTransportMonth > 0) {
-    result.push({ code: 'TRANSPORT_MONTH', name: 'ค่ารถ (เดือน)', quantity: 1, pricePerUnit: totalTransportMonth, amount: totalTransportMonth })
   }
 
   return result
