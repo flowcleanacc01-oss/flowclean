@@ -164,6 +164,9 @@ export default function BillingPage() {
         case 'billingMonth': va = a.billingMonth; vb = b.billingMonth; break
         case 'grandTotal': va = a.grandTotal; vb = b.grandTotal; break
         case 'netPayable': va = a.netPayable; vb = b.netPayable; break
+        case 'isPrinted': va = a.isPrinted ? 1 : 0; vb = b.isPrinted ? 1 : 0; break
+        case 'iv': va = taxInvoices.find(ti => ti.billingStatementId === a.id)?.invoiceNumber || ''; vb = taxInvoices.find(ti => ti.billingStatementId === b.id)?.invoiceNumber || ''; break
+        case 'paid': va = a.status === 'paid' ? 1 : 0; vb = b.status === 'paid' ? 1 : 0; break
         default: va = a.issueDate; vb = b.issueDate
       }
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
@@ -453,12 +456,15 @@ export default function BillingPage() {
         case 'invoiceNumber': va = a.invoiceNumber; vb = b.invoiceNumber; break
         case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
         case 'grandTotal': va = a.grandTotal; vb = b.grandTotal; break
+        case 'isPrinted': va = a.isPrinted ? 1 : 0; vb = b.isPrinted ? 1 : 0; break
+        case 'wb': va = billingStatements.find(bs => bs.id === a.billingStatementId)?.billingNumber || ''; vb = billingStatements.find(bs => bs.id === b.billingStatementId)?.billingNumber || ''; break
+        case 'isPaid': va = a.isPaid ? 1 : 0; vb = b.isPaid ? 1 : 0; break
         default: va = a.issueDate; vb = b.issueDate
       }
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [taxInvoices, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, ivFilter])
+  }, [taxInvoices, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, ivFilter, billingStatements])
 
   // Map WB id → IV info (for badge in WB list/detail)
   const wbInvoiceMap = useMemo(() => {
@@ -643,9 +649,9 @@ export default function BillingPage() {
                   <SortableHeader label="เดือน" sortKey="billingMonth" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ยอดรวม" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <SortableHeader label="จ่ายสุทธิ" sortKey="netPayable" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
-                  <th className="text-center px-3 py-3 font-medium text-slate-600">พิมพ์</th>
-                  <th className="text-center px-4 py-3 font-medium text-slate-600">IV</th>
-                  <th className="text-center px-3 py-3 font-medium text-slate-600">ชำระ</th>
+                  <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                  <SortableHeader label="IV" sortKey="iv" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                  <SortableHeader label="ชำระ" sortKey="paid" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                   <th className="text-right px-4 py-3 font-medium text-slate-600 w-20"></th>
                 </tr>
               </thead>
@@ -730,9 +736,9 @@ export default function BillingPage() {
                   <SortableHeader label="ลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ยอดรวม VAT" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
-                  <th className="text-center px-3 py-3 font-medium text-slate-600">พิมพ์</th>
-                  <th className="text-center px-4 py-3 font-medium text-slate-600">WB</th>
-                  <th className="text-center px-3 py-3 font-medium text-slate-600">ชำระ</th>
+                  <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                  <SortableHeader label="WB" sortKey="wb" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                  <SortableHeader label="ชำระ" sortKey="isPaid" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                 </tr>
               </thead>
               <tbody>

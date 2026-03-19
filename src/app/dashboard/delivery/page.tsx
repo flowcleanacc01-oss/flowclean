@@ -97,12 +97,14 @@ export default function DeliveryPage() {
         case 'items': va = a.items.reduce((s, i) => s + i.quantity, 0); vb = b.items.reduce((s, i) => s + i.quantity, 0); break
         case 'amount': va = getDNTotalAmount(a); vb = getDNTotalAmount(b); break
         case 'driver': va = a.driverName || ''; vb = b.driverName || ''; break
+        case 'isPrinted': va = a.isPrinted ? 1 : 0; vb = b.isPrinted ? 1 : 0; break
+        case 'wb': va = billingStatements.find(bs => bs.deliveryNoteIds?.includes(a.id))?.billingNumber || ''; vb = billingStatements.find(bs => bs.deliveryNoteIds?.includes(b.id))?.billingNumber || ''; break
         default: va = a.date; vb = b.date
       }
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [deliveryNotes, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter])
+  }, [deliveryNotes, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter, billingStatements])
 
   // Forms available for delivery (confirmed status)
   const availableForms = useMemo(() => {
@@ -351,8 +353,8 @@ export default function DeliveryPage() {
                 <SortableHeader label="จำนวน" sortKey="items" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="ยอดรวม" sortKey="amount" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="คนขับ" sortKey="driver" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                <th className="text-center px-3 py-3 font-medium text-slate-600">พิมพ์แล้ว</th>
-                <th className="text-center px-3 py-3 font-medium text-slate-600">WB</th>
+                <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                <SortableHeader label="WB" sortKey="wb" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
               </tr>
             </thead>
             <tbody>
