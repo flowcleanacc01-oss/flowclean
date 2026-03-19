@@ -6,8 +6,9 @@ import { useStore } from '@/lib/store'
 import { formatCurrency, formatNumber, cn } from '@/lib/utils'
 import {
   ArrowLeft, Building2, Phone, Mail, MapPin, FileText, CreditCard,
-  Truck, Receipt, ClipboardCheck, TrendingUp, Package, AlertTriangle,
+  Truck, Receipt, ClipboardCheck, TrendingUp, Package, AlertTriangle, Link2, ExternalLink,
 } from 'lucide-react'
+import Link from 'next/link'
 import {
   LINEN_FORM_STATUS_CONFIG, BILLING_STATUS_CONFIG,
 } from '@/types'
@@ -18,7 +19,7 @@ export default function CustomerDetailPage() {
   const router = useRouter()
   const {
     getCustomer, linenForms, deliveryNotes, billingStatements,
-    taxInvoices, checklists, getCarryOver, linenCatalog, getCustomerCategoryLabel,
+    taxInvoices, checklists, getCarryOver, linenCatalog, quotations, getCustomerCategoryLabel,
   } = useStore()
 
   const customer = getCustomer(id)
@@ -72,6 +73,11 @@ export default function CustomerDetailPage() {
     Object.fromEntries(linenCatalog.map(i => [i.code, i.name])),
     [linenCatalog])
 
+  // Linked accepted QT for this customer (matched by customerName, only 1 allowed)
+  const linkedQT = useMemo(() =>
+    customer ? quotations.find(q => q.status === 'accepted' && q.customerName === customer.name) || null : null,
+    [quotations, customer])
+
   if (!customer) {
     return (
       <div className="text-center py-20">
@@ -121,6 +127,17 @@ export default function CustomerDetailPage() {
           {customer.enableMinPerMonth && (
             <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">ขั้นต่ำ/ด. {formatCurrency(customer.monthlyFlatRate)}</span>
           )}
+          {linkedQT ? (
+            <Link href="/dashboard/billing?tab=quotation"
+              className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
+              <Link2 className="w-3 h-3" />{linkedQT.quotationNumber}
+            </Link>
+          ) : (
+            <Link href={`/dashboard/billing?tab=quotation&newqt=${id}`}
+              className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">
+              <Link2 className="w-3 h-3" />ยังไม่มี QT
+            </Link>
+          )}
         </div>
       </div>
 
@@ -160,6 +177,60 @@ export default function CustomerDetailPage() {
               )}
               <div className="text-xs text-slate-400 pt-1">เครดิต {customer.creditDays} วัน</div>
             </div>
+          </div>
+
+          {/* QT Link Status Card */}
+          <div className={cn('rounded-xl border p-5', linkedQT ? 'bg-white border-emerald-200' : 'bg-amber-50 border-amber-200')}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className={cn('font-semibold flex items-center gap-2', linkedQT ? 'text-emerald-800' : 'text-amber-800')}>
+                <Link2 className="w-4 h-4" />ใบเสนอราคา (QT ราคา)
+              </h3>
+              {linkedQT ? (
+                <Link href="/dashboard/billing?tab=quotation"
+                  className="text-xs text-emerald-600 hover:underline flex items-center gap-1">
+                  ดู QT <ExternalLink className="w-3 h-3" />
+                </Link>
+              ) : (
+                <Link href={`/dashboard/billing?tab=quotation&newqt=${id}`}
+                  className="text-xs text-amber-600 hover:underline flex items-center gap-1">
+                  สร้าง QT <ExternalLink className="w-3 h-3" />
+                </Link>
+              )}
+            </div>
+            {linkedQT ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-mono font-semibold text-emerald-700">{linkedQT.quotationNumber}</span>
+                  <span className="text-slate-500">•</span>
+                  <span className="text-slate-600">{linkedQT.date}</span>
+                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">ตกลง</span>
+                </div>
+                <div className="border border-emerald-100 rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-emerald-50">
+                        <th className="text-left px-3 py-1.5 font-medium text-emerald-700">รายการ</th>
+                        <th className="text-right px-3 py-1.5 font-medium text-emerald-700">ราคา/หน่วย</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {linkedQT.items.map(item => (
+                        <tr key={item.code} className="border-t border-emerald-50">
+                          <td className="px-3 py-1 text-slate-600">
+                            <span className="font-mono text-slate-400 mr-1">{item.code}</span>{item.name}
+                          </td>
+                          <td className="px-3 py-1 text-right text-slate-700 font-medium">
+                            {item.pricePerUnit > 0 ? formatCurrency(item.pricePerUnit) : <span className="text-slate-300">-</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-amber-700">ยังไม่มีใบเสนอราคาที่มีสถานะ "ตกลง" — รายการผ้าและราคาของลูกค้านี้จะถูกกำหนดผ่าน QT</p>
+            )}
           </div>
 
           {/* Price List */}

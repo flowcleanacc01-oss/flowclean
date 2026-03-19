@@ -76,6 +76,8 @@ export default function BillingPage() {
 
   // Quotation state
   const [showCreateQU, setShowCreateQU] = useState(false)
+  const [editQuId, setEditQuId] = useState<string | null>(null)
+  const [showLoadFromQT, setShowLoadFromQT] = useState(false)
   const [showQuDetail, setShowQuDetail] = useState<string | null>(null)
   const [showQuPrint, setShowQuPrint] = useState(false)
   const [quCustomerName, setQuCustomerName] = useState('')
@@ -336,14 +338,14 @@ export default function BillingPage() {
     if (!quCustomerName) return
     const validDate = new Date(quDate)
     validDate.setDate(validDate.getDate() + quValidDays)
-    addQuotation({
+    const qtData = {
       customerName: quCustomerName,
       customerContact: quCustomerContact,
       date: quDate,
       validUntil: format(validDate, 'yyyy-MM-dd'),
       items: quItems.filter(i => i.pricePerUnit > 0),
       conditions: quConditions,
-      status: 'draft',
+      status: 'draft' as const,
       notes: quNotes,
       customerId: quCustomerId || undefined,
       enablePerPiece: quEnablePerPiece,
@@ -353,8 +355,52 @@ export default function BillingPage() {
       minPerTripThreshold: quMinPerTripThreshold,
       enableMinPerMonth: quEnableMinPerMonth,
       monthlyFlatRate: quMonthlyFlatRate,
-    })
+    }
+    if (editQuId) {
+      updateQuotation(editQuId, qtData)
+    } else {
+      addQuotation(qtData)
+    }
+    setEditQuId(null)
     setShowCreateQU(false)
+  }
+
+  // Open create modal with data from existing QT (edit mode — resets to draft)
+  const handleEditQT = (q: typeof quotations[0]) => {
+    setEditQuId(q.id)
+    setQuCustomerId(q.customerId || '')
+    setQuCustomerName(q.customerName)
+    setQuCustomerContact(q.customerContact)
+    setQuDate(q.date)
+    const d1 = new Date(q.date)
+    const d2 = new Date(q.validUntil)
+    const diffDays = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24))
+    setQuValidDays(diffDays > 0 ? diffDays : 30)
+    setQuConditions(q.conditions)
+    setQuNotes(q.notes)
+    setQuItems([...q.items])
+    setQuSearch('')
+    setQuFilterCat('all')
+    setQuEnablePerPiece(q.enablePerPiece ?? true)
+    setQuEnableMinPerTrip(q.enableMinPerTrip ?? false)
+    setQuMinPerTrip(q.minPerTrip ?? 0)
+    setQuEnableWaive(q.enableWaive ?? false)
+    setQuMinPerTripThreshold(q.minPerTripThreshold ?? 0)
+    setQuEnableMinPerMonth(q.enableMinPerMonth ?? false)
+    setQuMonthlyFlatRate(q.monthlyFlatRate ?? 0)
+    setShowCreateQU(true)
+  }
+
+  // Validate only one accepted QT per customerName (6.2.4)
+  const handleAcceptQT = (qtId: string) => {
+    const qt = quotations.find(q => q.id === qtId)
+    if (!qt) return
+    const conflicting = quotations.find(q => q.id !== qtId && q.status === 'accepted' && q.customerName === qt.customerName)
+    if (conflicting) {
+      alert(`ลูกค้า "${qt.customerName}" มีใบเสนอราคาที่ตกลงแล้ว (${conflicting.quotationNumber}) อยู่แล้ว\nสามารถมีสถานะ "ตกลง" ได้เพียง 1 ใบต่อลูกค้าเท่านั้น`)
+      return
+    }
+    updateQuotationStatus(qtId, 'accepted')
   }
 
   const moveQuItem = (code: string, dir: 'up' | 'down') => {
@@ -594,6 +640,7 @@ export default function BillingPage() {
         )}
         {tab === 'quotation' && (
           <button onClick={() => {
+            setEditQuId(null)
             setQuCustomerId('')
             setQuCustomerName('')
             setQuCustomerContact('')
@@ -893,7 +940,7 @@ export default function BillingPage() {
                       <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-end items-center">
                           {nextStatus && (
-                            <button onClick={() => updateQuotationStatus(q.id, nextStatus)}
+                            <button onClick={() => nextStatus === 'accepted' ? handleAcceptQT(q.id) : updateQuotationStatus(q.id, nextStatus)}
                               className="text-xs px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] rounded font-medium hover:bg-[#2bb8b8] inline-flex items-center gap-0.5">
                               {QUOTATION_STATUS_CONFIG[nextStatus].label} <ChevronRight className="w-3 h-3" />
                             </button>
@@ -902,6 +949,11 @@ export default function BillingPage() {
                             <button onClick={() => updateQuotationStatus(q.id, 'rejected')}
                               className="text-xs px-2 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100">ปฏิเสธ</button>
                           )}
+                          <button onClick={() => handleEditQT(q)}
+                            title="แก้ไข (ย้อนสถานะกลับเป็นร่าง)"
+                            className="p-1 text-slate-400 hover:text-[#1B3A5C] hover:bg-slate-100 rounded">
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
                           <button onClick={() => {
                             if (confirm(`ลบใบเสนอราคา ${q.quotationNumber}?`)) deleteQuotation(q.id)
                           }}
@@ -1507,8 +1559,8 @@ export default function BillingPage() {
         })()}
       </Modal>
 
-      {/* Create Quotation Modal */}
-      <Modal open={showCreateQU} onClose={() => setShowCreateQU(false)} title="สร้างใบเสนอราคา" size="xl">
+      {/* Create/Edit Quotation Modal */}
+      <Modal open={showCreateQU} onClose={() => { setShowCreateQU(false); setEditQuId(null); setShowLoadFromQT(false) }} title={editQuId ? 'แก้ไขใบเสนอราคา (ย้อนกลับเป็นร่าง)' : 'สร้างใบเสนอราคา'} size="xl">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -1526,10 +1578,9 @@ export default function BillingPage() {
                   setQuMinPerTripThreshold(cust.minPerTripThreshold ?? 0)
                   setQuEnableMinPerMonth(cust.enableMinPerMonth ?? false)
                   setQuMonthlyFlatRate(cust.monthlyFlatRate ?? 0)
-                  setQuItems(cust.priceList.map(p => {
-                    const cat = linenCatalog.find(i => i.code === p.code)
-                    return { code: p.code, name: cat?.name || p.code, pricePerUnit: p.price }
-                  }))
+                  // Auto-load from linked accepted QT if exists, else keep current items (full catalog default)
+                  const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerName === cust.name)
+                  if (linkedQT) setQuItems([...linkedQT.items])
                 }
               }}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
@@ -1562,7 +1613,34 @@ export default function BillingPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">รายการผ้า + ราคา ({quItems.length} รายการ)</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium text-slate-600">รายการผ้า + ราคา ({quItems.length} รายการ)</label>
+              <div className="relative">
+                <button type="button" onClick={() => setShowLoadFromQT(!showLoadFromQT)}
+                  className="flex items-center gap-1 text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
+                  <FileText className="w-3.5 h-3.5" />โหลดจากใบเสนอราคา
+                </button>
+                {showLoadFromQT && (
+                  <div className="absolute z-20 mt-1 right-0 w-80 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                    {quotations.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-slate-400">ไม่มีใบเสนอราคา</div>
+                    ) : quotations.map(q => (
+                      <button key={q.id} type="button" onClick={() => { setQuItems([...q.items]); setShowLoadFromQT(false) }}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0 flex items-center gap-2">
+                        <span className="font-mono font-medium text-slate-700">{q.quotationNumber}</span>
+                        <span className="text-slate-500">{q.customerName}</span>
+                        <span className={cn('ml-auto px-1.5 py-0.5 rounded text-[10px]', q.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500')}>
+                          {q.items.length} รายการ
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 mb-2">
+              การแก้ไขชื่อ ราคา และลำดับที่นี่มีผลกับใบเสนอราคานี้เท่านั้น — หากต้องการแก้ฐานข้อมูลรายการผ้า ไปที่เมนู "รายการผ้า"
+            </div>
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <div className="relative flex-1 min-w-[150px]">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1604,7 +1682,15 @@ export default function BillingPage() {
                     return (
                       <tr key={item.code} className="border-t border-slate-100 hover:bg-slate-50">
                         <td className="px-1 py-1 text-center text-xs text-slate-400 font-mono">{idx + 1}</td>
-                        <td className="px-3 py-1 text-slate-700">{item.name}</td>
+                        <td className="px-2 py-1">
+                          <input type="text" value={item.name}
+                            onChange={e => {
+                              const updated = [...quItems]
+                              updated[idx] = { ...item, name: e.target.value }
+                              setQuItems(updated)
+                            }}
+                            className="w-full px-2 py-0.5 border border-slate-200 rounded text-sm text-slate-700 focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                        </td>
                         <td className="px-3 py-1 text-slate-500 text-xs">{catItem?.nameEn || ''}</td>
                         <td className="px-3 py-1 text-xs text-slate-400">{catItem ? getCategoryLabel(catItem.category) : ''}</td>
                         <td className="px-3 py-1 text-xs text-slate-400">{catItem?.unit || 'ชิ้น'}</td>
@@ -1762,7 +1848,7 @@ export default function BillingPage() {
                 )}
                 {detailQuotation.status === 'sent' && (
                   <>
-                    <button onClick={() => updateQuotationStatus(detailQuotation.id, 'accepted')}
+                    <button onClick={() => handleAcceptQT(detailQuotation.id)}
                       className="text-sm px-3 py-1 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100">ตกลง</button>
                     <button onClick={() => updateQuotationStatus(detailQuotation.id, 'rejected')}
                       className="text-sm px-3 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100">ปฏิเสธ</button>

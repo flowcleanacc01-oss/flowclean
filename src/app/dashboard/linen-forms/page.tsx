@@ -19,7 +19,7 @@ import { exportCSV } from '@/lib/export'
 export default function LinenFormsPage() {
   const {
     linenForms, addLinenForm, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
-    customers, getCustomer, getCarryOver, linenCatalog, deliveryNotes, companyInfo,
+    customers, getCustomer, getCarryOver, linenCatalog, quotations, deliveryNotes, companyInfo,
   } = useStore()
 
   const router = useRouter()
@@ -152,22 +152,30 @@ export default function LinenFormsPage() {
 
   const statuses: (LinenFormStatus | 'all')[] = ['all', ...ALL_LINEN_STATUSES]
 
+  // Helper: get the linked accepted QT for a customer (match by customerName)
+  const getLinkedQT = (custName: string) =>
+    quotations.find(q => q.status === 'accepted' && q.customerName === custName) || null
+
+  const buildRows = (codes: string[]) => codes.map(code => ({
+    code,
+    col1_carryOver: 0,
+    col2_hotelCountIn: 0,
+    col3_hotelClaimCount: 0,
+    col4_factoryApproved: 0,
+    col5_factoryClaimApproved: 0,
+    col6_factoryPackSend: 0,
+    note: '',
+  }))
+
   const handleCreateOpen = () => {
     const firstCustomer = customers.filter(c => c.isActive)[0]
     setNewCustomerId(firstCustomer?.id || '')
     setNewDate(todayISO())
-    // Init rows from first customer's enabled items
     if (firstCustomer) {
-      setNewRows(firstCustomer.enabledItems.map(code => ({
-        code,
-        col1_carryOver: 0,
-        col2_hotelCountIn: 0,
-        col3_hotelClaimCount: 0,
-        col4_factoryApproved: 0,
-        col5_factoryClaimApproved: 0,
-        col6_factoryPackSend: 0,
-        note: '',
-      })))
+      // Use linked accepted QT items if available, else fall back to customer's enabledItems
+      const linkedQT = getLinkedQT(firstCustomer.name)
+      const codes = linkedQT ? linkedQT.items.map(i => i.code) : firstCustomer.enabledItems
+      setNewRows(buildRows(codes))
     } else {
       setNewRows([])
     }
@@ -180,16 +188,9 @@ export default function LinenFormsPage() {
     setNewCustomerId(custId)
     const cust = getCustomer(custId)
     if (cust) {
-      setNewRows(cust.enabledItems.map(code => ({
-        code,
-        col1_carryOver: 0,
-        col2_hotelCountIn: 0,
-        col3_hotelClaimCount: 0,
-        col4_factoryApproved: 0,
-        col5_factoryClaimApproved: 0,
-        col6_factoryPackSend: 0,
-        note: '',
-      })))
+      const linkedQT = getLinkedQT(cust.name)
+      const codes = linkedQT ? linkedQT.items.map(i => i.code) : cust.enabledItems
+      setNewRows(buildRows(codes))
     }
   }
 

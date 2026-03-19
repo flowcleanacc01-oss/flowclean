@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { cn, formatCurrency, sanitizeNumber } from '@/lib/utils'
 import type { Customer, CustomerCategoryDef } from '@/types'
-import { Plus, Search, Edit2, Trash2, Check, ChevronUp, ChevronDown, FileText, Users, Eye, X, ArrowUpDown } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Check, FileText, Eye, X, Link2 } from 'lucide-react'
 import Link from 'next/link'
 import Modal from '@/components/Modal'
 import SortableHeader from '@/components/SortableHeader'
@@ -24,7 +24,7 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
 
 export default function CustomersPage() {
   const {
-    customers, addCustomer, updateCustomer, deleteCustomer, defaultPrices, linenCatalog,
+    customers, addCustomer, updateCustomer, deleteCustomer,
     quotations, linenForms, deliveryNotes, billingStatements, checklists, taxInvoices, companyInfo,
     customerCategories, addCustomerCategory, updateCustomerCategory, deleteCustomerCategory, getCustomerCategoryLabel,
   } = useStore()
@@ -45,8 +45,6 @@ export default function CustomersPage() {
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_CUSTOMER)
-  const [showQuotationSelect, setShowQuotationSelect] = useState(false)
-  const [showCustomerSelect, setShowCustomerSelect] = useState(false)
 
   // Category tab state
   const [showAddCat, setShowAddCat] = useState(false)
@@ -122,49 +120,16 @@ export default function CustomersPage() {
     setShowForm(false)
   }
 
-  const toggleItem = (code: string) => {
-    const enabled = form.enabledItems.includes(code)
-    const newEnabled = enabled
-      ? form.enabledItems.filter(c => c !== code)
-      : [...form.enabledItems, code]
-    const newPriceList = enabled
-      ? form.priceList.filter(p => p.code !== code)
-      : [...form.priceList, { code, price: defaultPrices[code] || 0 }]
-    setForm({ ...form, enabledItems: newEnabled, priceList: newPriceList })
-  }
-
-  const updatePrice = (code: string, price: number) => {
-    setForm({ ...form, priceList: form.priceList.map(p => p.code === code ? { ...p, price } : p) })
-  }
-
-  const moveItem = (code: string, direction: 'up' | 'down') => {
-    const idx = form.enabledItems.indexOf(code)
-    if (idx < 0) return
-    const newIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (newIdx < 0 || newIdx >= form.enabledItems.length) return
-    const arr = [...form.enabledItems]
-    ;[arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]]
-    setForm({ ...form, enabledItems: arr })
-  }
-
-  const loadFromQuotation = (quotationId: string) => {
-    const q = quotations.find(x => x.id === quotationId)
-    if (!q) return
-    setForm({ ...form, enabledItems: q.items.map(i => i.code), priceList: q.items.map(i => ({ code: i.code, price: i.pricePerUnit })) })
-    setShowQuotationSelect(false)
-  }
-
-  const loadFromCustomer = (customerId: string) => {
-    const c = customers.find(x => x.id === customerId)
-    if (!c) return
-    setForm({ ...form, enabledItems: [...c.enabledItems], priceList: [...c.priceList] })
-    setShowCustomerSelect(false)
-  }
-
-  const enabledItemsList = form.enabledItems
-    .map(code => linenCatalog.find(i => i.code === code))
-    .filter((i): i is NonNullable<typeof i> => !!i)
-  const uncheckedItems = linenCatalog.filter(i => !form.enabledItems.includes(i.code))
+  // Map customer name → linked accepted QT (only one allowed per customerName)
+  const linkedQTMap = useMemo(() => {
+    const map = new Map<string, { id: string; quotationNumber: string }>()
+    for (const q of quotations) {
+      if (q.status === 'accepted') {
+        map.set(q.customerName, { id: q.id, quotationNumber: q.quotationNumber })
+      }
+    }
+    return map
+  }, [quotations])
 
   // Category CRUD
   const handleAddCategory = () => {
@@ -232,6 +197,7 @@ export default function CustomersPage() {
                     <SortableHeader label="รูปแบบบิล" sortKey="billingModel" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                     <SortableHeader label="เครดิต" sortKey="creditDays" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                     <SortableHeader label="รายการผ้า" sortKey="enabledItems" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
+                    <th className="px-4 py-3 font-medium text-slate-600 text-center">QT ราคา</th>
                     <th className="px-4 py-3 font-medium text-slate-600 text-left">ผู้ติดต่อ</th>
                     <SortableHeader label="สถานะ" sortKey="isActive" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                     <th className="px-4 py-3 font-medium text-slate-600 w-28"></th>
@@ -239,7 +205,7 @@ export default function CustomersPage() {
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={8} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                    <tr><td colSpan={9} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                   ) : filtered.map(c => (
                     <tr key={c.id} className={cn('border-b border-slate-100 hover:bg-slate-50',
                       !c.isActive && 'bg-red-50/30')}>
@@ -266,6 +232,18 @@ export default function CustomersPage() {
                       </td>
                       <td className="px-4 py-3 text-right text-slate-600">{c.creditDays} วัน</td>
                       <td className="px-4 py-3 text-right text-slate-600">{c.enabledItems.length}</td>
+                      <td className="px-4 py-3 text-center">
+                        {(() => {
+                          const qt = linkedQTMap.get(c.name)
+                          return qt ? (
+                            <Link href="/dashboard/billing?tab=quotation"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                              title={`Link กับ ${qt.quotationNumber}`}>
+                              <Link2 className="w-3 h-3" />{qt.quotationNumber}
+                            </Link>
+                          ) : <span className="text-xs text-slate-300">-</span>
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-slate-600 text-xs">
                         {c.contactName && <span>{c.contactName}</span>}
                         {c.contactPhone && <span className="ml-1 text-slate-400">{c.contactPhone}</span>}
@@ -516,117 +494,26 @@ export default function CustomersPage() {
             </div>
           )}
 
-          {/* Load from Quotation / Customer */}
-          <div className="flex flex-wrap gap-2">
-            <div className="relative">
-              <button type="button" onClick={() => { setShowQuotationSelect(!showQuotationSelect); setShowCustomerSelect(false) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors">
-                <FileText className="w-3.5 h-3.5" />โหลดจากใบเสนอราคา
-              </button>
-              {showQuotationSelect && (
-                <div className="absolute z-20 mt-1 left-0 w-72 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {quotations.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-slate-400">ไม่มีใบเสนอราคา</div>
-                  ) : quotations.map(q => (
-                    <button key={q.id} type="button" onClick={() => loadFromQuotation(q.id)}
-                      className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0">
-                      <span className="font-medium">{q.quotationNumber}</span>
-                      <span className="text-slate-400 ml-2">{q.customerName}</span>
-                      <span className="text-slate-400 ml-1">({q.items.length} รายการ)</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="relative">
-              <button type="button" onClick={() => { setShowCustomerSelect(!showCustomerSelect); setShowQuotationSelect(false) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors">
-                <Users className="w-3.5 h-3.5" />โหลดจากลูกค้าอื่น
-              </button>
-              {showCustomerSelect && (
-                <div className="absolute z-20 mt-1 left-0 w-64 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {customers.filter(c => c.id !== editId && c.enabledItems.length > 0).length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-slate-400">ไม่มีลูกค้าอื่น</div>
-                  ) : customers.filter(c => c.id !== editId && c.enabledItems.length > 0).map(c => (
-                    <button key={c.id} type="button" onClick={() => loadFromCustomer(c.id)}
-                      className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0">
-                      <span className="font-medium">{c.name}</span>
-                      <span className="text-slate-400 ml-2">({c.enabledItems.length} รายการ)</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Enabled Items */}
-          <div>
-            <label className="block font-medium text-slate-700 mb-2">รายการผ้าที่ลูกค้านี้ใช้</label>
-            <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-slate-50">
-                  <tr>
-                    <th className="w-10 px-3 py-2"></th>
-                    <th className="w-16 px-1 py-2"></th>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">รหัส</th>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">รายการ</th>
-                    {form.enablePerPiece && (
-                      <th className="text-right px-3 py-2 font-medium text-slate-600 w-28">ราคา/ชิ้น</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {enabledItemsList.map((item, idx) => {
-                    const priceItem = form.priceList.find(p => p.code === item.code)
-                    return (
-                      <tr key={item.code} className="border-t border-slate-100 bg-blue-50/30">
-                        <td className="px-3 py-1.5 text-center">
-                          <input type="checkbox" checked onChange={() => toggleItem(item.code)} className="rounded" />
-                        </td>
-                        <td className="px-1 py-1.5 text-center">
-                          <div className="flex items-center justify-center gap-0.5">
-                            <button type="button" onClick={() => moveItem(item.code, 'up')} disabled={idx === 0}
-                              className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-default transition-colors">
-                              <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
-                            </button>
-                            <button type="button" onClick={() => moveItem(item.code, 'down')} disabled={idx === enabledItemsList.length - 1}
-                              className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-default transition-colors">
-                              <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
-                        <td className="px-3 py-1.5">{item.name}</td>
-                        {form.enablePerPiece && (
-                          <td className="px-3 py-1.5 text-right">
-                            <input type="number" min={0} step={0.5} value={priceItem?.price ?? 0}
-                              onChange={e => updatePrice(item.code, sanitizeNumber(e.target.value))}
-                              className="w-20 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                          </td>
-                        )}
-                      </tr>
-                    )
-                  })}
-                  {enabledItemsList.length > 0 && uncheckedItems.length > 0 && (
-                    <tr><td colSpan={form.enablePerPiece ? 5 : 4} className="border-t-2 border-slate-200"></td></tr>
-                  )}
-                  {uncheckedItems.map(item => (
-                    <tr key={item.code} className="border-t border-slate-100">
-                      <td className="px-3 py-1.5 text-center">
-                        <input type="checkbox" checked={false} onChange={() => toggleItem(item.code)} className="rounded" />
-                      </td>
-                      <td className="px-1 py-1.5"></td>
-                      <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
-                      <td className="px-3 py-1.5 text-slate-400">{item.name}</td>
-                      {form.enablePerPiece && (
-                        <td className="px-3 py-1.5 text-right"><span className="text-slate-300">-</span></td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {/* QT Link Status */}
+          {editId && (() => {
+            const qt = linkedQTMap.get(form.name)
+            return (
+              <div className={cn('px-3 py-2.5 rounded-lg text-sm flex items-center gap-2', qt ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200')}>
+                <Link2 className={cn('w-4 h-4 flex-shrink-0', qt ? 'text-emerald-600' : 'text-amber-500')} />
+                {qt ? (
+                  <span className="text-emerald-700 flex-1">
+                    ใช้รายการผ้าและราคาจาก <strong>{qt.quotationNumber}</strong>
+                  </span>
+                ) : (
+                  <span className="text-amber-700 flex-1 text-xs">ยังไม่มีใบเสนอราคา (QT) ที่ตกลงแล้ว — รายการผ้าและราคาจะถูกกำหนดผ่าน QT</span>
+                )}
+                <Link href={qt ? `/dashboard/billing?tab=quotation` : `/dashboard/billing?tab=quotation&newqt=${editId}`}
+                  className={cn('text-xs underline ml-auto flex-shrink-0', qt ? 'text-emerald-600' : 'text-amber-600')}>
+                  {qt ? 'ดู QT' : 'สร้าง QT'}
+                </Link>
+              </div>
+            )
+          })()}
 
           <div>
             <label className="block font-medium text-slate-600 mb-1">หมายเหตุ</label>
