@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
@@ -136,9 +136,11 @@ export default function LinenFormsPage() {
           const bScore = (hasType1Discrepancy(b) ? 1 : 0) + (hasType2Discrepancy(b) ? 2 : 0)
           va = aScore; vb = bScore; break
         }
+        case 'isExported': va = a.isExported ? 1 : 0; vb = b.isExported ? 1 : 0; break
+        case 'isPrinted': va = a.isPrinted ? 1 : 0; vb = b.isPrinted ? 1 : 0; break
         case 'sd': {
-          va = linkedLFMap.has(a.id) ? 1 : 0
-          vb = linkedLFMap.has(b.id) ? 1 : 0
+          va = linkedLFMap.get(a.id)?.noteNumber || ''
+          vb = linkedLFMap.get(b.id)?.noteNumber || ''
           break
         }
         default: va = a.date; vb = b.date
@@ -363,13 +365,15 @@ export default function LinenFormsPage() {
                 <SortableHeader label="จำนวน" sortKey="pieces" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="สถานะ" sortKey="status" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                 <SortableHeader label="⚠" sortKey="alert" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center w-12" />
-                <SortableHeader label="SD" sortKey="sd" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center w-14" />
+                <SortableHeader label="ส่งออก" sortKey="isExported" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                <SortableHeader label="SD" sortKey="sd" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                 <th className="text-right px-4 py-3 font-medium text-slate-600 w-28"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={11} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
               ) : filtered.map(form => {
                 const customer = getCustomer(form.customerId)
                 const totalPieces = form.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
@@ -402,15 +406,29 @@ export default function LinenFormsPage() {
                       {disc1 && <span title="โรงซักนับเข้า ≠ นับส่ง+เคลม"><AlertTriangle className="w-4 h-4 text-amber-500 inline" /></span>}
                       {disc2 && <span title="ลูกค้านับกลับ ≠ แพคส่ง"><AlertTriangle className="w-4 h-4 text-red-500 inline" /></span>}
                     </td>
-                    <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
-                      {linkedDNInfo && (
+                    <td className="px-3 py-3 text-center">
+                      <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
+                        form.isExported ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-400')}>
+                        {form.isExported ? 'ส่งออกแล้ว' : 'ยังไม่ส่งออก'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
+                        form.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
+                        {form.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                      {linkedDNInfo ? (
                         <button
                           onClick={() => router.push(`/dashboard/delivery?detail=${linkedDNInfo.dnId}`)}
-                          title={`ใบส่งของ ${linkedDNInfo.noteNumber}`}
-                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-semibold hover:bg-blue-200 transition-colors"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
                         >
-                          <FileText className="w-3 h-3" />SD
+                          <span className="font-mono">{linkedDNInfo.noteNumber}</span>
+                          <ExternalLink className="w-3 h-3" />
                         </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
