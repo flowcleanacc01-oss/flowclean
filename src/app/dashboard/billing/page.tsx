@@ -184,6 +184,7 @@ export default function BillingPage() {
       switch (sortKey) {
         case 'billingNumber': va = a.billingNumber; vb = b.billingNumber; break
         case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
+        case 'issueDate': va = a.issueDate; vb = b.issueDate; break
         case 'billingMonth': va = a.billingMonth; vb = b.billingMonth; break
         case 'grandTotal': va = a.grandTotal; vb = b.grandTotal; break
         case 'netPayable': va = a.netPayable; vb = b.netPayable; break
@@ -530,7 +531,9 @@ export default function BillingPage() {
       switch (sortKey) {
         case 'quotationNumber': va = a.quotationNumber; vb = b.quotationNumber; break
         case 'customerName': va = a.customerName; vb = b.customerName; break
-        case 'validUntil': va = a.validUntil; vb = b.validUntil; break
+        case 'items': va = a.items.length; vb = b.items.length; break
+        case 'notes': va = a.notes || ''; vb = b.notes || ''; break
+        case 'status': { const order = ['draft', 'sent', 'accepted', 'rejected']; va = order.indexOf(a.status); vb = order.indexOf(b.status); break }
         default: va = a.date; vb = b.date
       }
       const cmp = String(va).localeCompare(String(vb))
@@ -757,7 +760,8 @@ export default function BillingPage() {
                       className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                   </th>
                   <SortableHeader label="เลขที่" sortKey="billingNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                  <SortableHeader label="โรงแรม" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="ลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="วันที่" sortKey="issueDate" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="เดือน" sortKey="billingMonth" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ยอดรวม" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <SortableHeader label="จ่ายสุทธิ" sortKey="netPayable" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
@@ -769,7 +773,7 @@ export default function BillingPage() {
               </thead>
               <tbody>
                 {filteredBilling.length === 0 ? (
-                  <tr><td colSpan={10} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                  <tr><td colSpan={11} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                 ) : filteredBilling.map(b => {
                   const customer = getCustomer(b.customerId)
                   return (
@@ -783,6 +787,7 @@ export default function BillingPage() {
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">{b.billingNumber}</td>
                       <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
+                      <td className="px-4 py-3 text-slate-600">{formatDate(b.issueDate)}</td>
                       <td className="px-4 py-3 text-slate-600">{b.billingMonth}</td>
                       <td className="px-4 py-3 text-right text-slate-700">{formatCurrency(b.grandTotal)}</td>
                       <td className="px-4 py-3 text-right text-slate-700 font-medium">{formatCurrency(b.netPayable)}</td>
@@ -914,9 +919,9 @@ export default function BillingPage() {
                   <SortableHeader label="เลขที่" sortKey="quotationNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ลูกค้า" sortKey="customerName" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                  <th className="text-center px-4 py-3 font-medium text-slate-600">รายการ</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">หมายเหตุ</th>
-                  <th className="text-center px-4 py-3 font-medium text-slate-600">สถานะ</th>
+                  <SortableHeader label="รายการ" sortKey="items" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                  <SortableHeader label="หมายเหตุ" sortKey="notes" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="สถานะ" sortKey="status" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                   <th className="text-right px-4 py-3 font-medium text-slate-600 w-32"></th>
                 </tr>
               </thead>

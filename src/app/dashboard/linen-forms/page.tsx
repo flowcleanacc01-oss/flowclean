@@ -152,9 +152,12 @@ export default function LinenFormsPage() {
 
   const statuses: (LinenFormStatus | 'all')[] = ['all', ...ALL_LINEN_STATUSES]
 
-  // Helper: get the linked accepted QT for a customer (match by customerName)
-  const getLinkedQT = (custName: string) =>
-    quotations.find(q => q.status === 'accepted' && q.customerName === custName) || null
+  // Helper: get the linked accepted QT for a customer (match by customerId first, then customerName)
+  const getLinkedQT = (custName: string, custId?: string) =>
+    quotations.find(q =>
+      q.status === 'accepted' &&
+      ((custId && q.customerId === custId) || q.customerName === custName)
+    ) || null
 
   const buildRows = (codes: string[]) => codes.map(code => ({
     code,
@@ -172,8 +175,7 @@ export default function LinenFormsPage() {
     setNewCustomerId(firstCustomer?.id || '')
     setNewDate(todayISO())
     if (firstCustomer) {
-      // Use linked accepted QT items if available, else fall back to customer's enabledItems
-      const linkedQT = getLinkedQT(firstCustomer.name)
+      const linkedQT = getLinkedQT(firstCustomer.name, firstCustomer.id)
       const codes = linkedQT ? linkedQT.items.map(i => i.code) : firstCustomer.enabledItems
       setNewRows(buildRows(codes))
     } else {
@@ -188,7 +190,7 @@ export default function LinenFormsPage() {
     setNewCustomerId(custId)
     const cust = getCustomer(custId)
     if (cust) {
-      const linkedQT = getLinkedQT(cust.name)
+      const linkedQT = getLinkedQT(cust.name, custId)
       const codes = linkedQT ? linkedQT.items.map(i => i.code) : cust.enabledItems
       setNewRows(buildRows(codes))
     }
@@ -485,13 +487,13 @@ export default function LinenFormsPage() {
             </div>
           </div>
 
-          {newCustomerId && getCustomer(newCustomerId) && !getLinkedQT(getCustomer(newCustomerId)!.name) && (
+          {newCustomerId && getCustomer(newCustomerId) && !getLinkedQT(getCustomer(newCustomerId)!.name, newCustomerId) && (
             <div className="bg-red-50 border border-red-300 rounded-lg px-4 py-3 text-sm text-red-700">
               <strong>ไม่สามารถสร้างใบรับส่งผ้าได้</strong> — ลูกค้านี้ยังไม่มีใบเสนอราคา (QT) ที่มีสถานะ &quot;ตกลง&quot; กรุณาสร้างและยืนยัน QT ก่อน
             </div>
           )}
 
-          {newCustomerId && getCustomer(newCustomerId) && getLinkedQT(getCustomer(newCustomerId)!.name) && (
+          {newCustomerId && getCustomer(newCustomerId) && getLinkedQT(getCustomer(newCustomerId)!.name, newCustomerId) && (
             <>
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                 <label className="block text-sm font-medium text-amber-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
@@ -528,7 +530,7 @@ export default function LinenFormsPage() {
             <span className={cn('px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap', LINEN_FORM_STATUS_CONFIG.draft.bgColor, LINEN_FORM_STATUS_CONFIG.draft.color)}>
               {LINEN_FORM_STATUS_CONFIG.draft.todoLabel}
             </span>
-            <button onClick={handleCreate} disabled={!newCustomerId || newRows.length === 0 || !getLinkedQT(getCustomer(newCustomerId)?.name || '')}
+            <button onClick={handleCreate} disabled={!newCustomerId || newRows.length === 0 || !getLinkedQT(getCustomer(newCustomerId)?.name || '', newCustomerId)}
               className="px-3 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 font-medium transition-colors flex items-center gap-1">
               {LINEN_FORM_STATUS_CONFIG.draft.label}
               <ChevronRight className="w-4 h-4" />

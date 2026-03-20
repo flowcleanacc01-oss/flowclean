@@ -10,7 +10,7 @@ import Modal from '@/components/Modal'
 import SortableHeader from '@/components/SortableHeader'
 
 type PageTab = 'customers' | 'categories'
-type SortKey = 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'enabledItems' | 'isActive'
+type SortKey = 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'enabledItems' | 'qt' | 'contact' | 'isActive'
 
 const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   customerCode: '', customerType: 'hotel',
@@ -76,6 +76,8 @@ export default function CustomersPage() {
         case 'billingModel': va = a.billingModel; vb = b.billingModel; break
         case 'creditDays': va = a.creditDays; vb = b.creditDays; break
         case 'enabledItems': va = a.enabledItems.length; vb = b.enabledItems.length; break
+        case 'qt': va = linkedQTMap.has(a.name) ? 1 : 0; vb = linkedQTMap.has(b.name) ? 1 : 0; break
+        case 'contact': va = a.contactName || ''; vb = b.contactName || ''; break
         case 'isActive': va = a.isActive ? 0 : 1; vb = b.isActive ? 0 : 1; break
         default: va = a.name; vb = b.name
       }
@@ -197,8 +199,8 @@ export default function CustomersPage() {
                     <SortableHeader label="รูปแบบบิล" sortKey="billingModel" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                     <SortableHeader label="เครดิต" sortKey="creditDays" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                     <SortableHeader label="รายการผ้า" sortKey="enabledItems" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
-                    <th className="px-4 py-3 font-medium text-slate-600 text-center">QT ราคา</th>
-                    <th className="px-4 py-3 font-medium text-slate-600 text-left">ผู้ติดต่อ</th>
+                    <SortableHeader label="QT" sortKey="qt" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                    <SortableHeader label="ผู้ติดต่อ" sortKey="contact" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                     <SortableHeader label="สถานะ" sortKey="isActive" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                     <th className="px-4 py-3 font-medium text-slate-600 w-28"></th>
                   </tr>
