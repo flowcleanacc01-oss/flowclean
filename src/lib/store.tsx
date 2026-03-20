@@ -388,7 +388,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const newForm: LinenForm = {
       bagsSentCount: 0, bagsPackCount: 0,
       deptDrying: false, deptIroning: false, deptFolding: false, deptQc: false,
-      ...f, id: genId(), formNumber: genLinenFormNumber(),
+      ...f, id: genId(), formNumber: genLinenFormNumber(linenForms.map(x => x.formNumber)),
       createdBy: currentUserRef.current?.id || 'unknown', updatedAt: todayISO(),
     }
     setLinenForms(prev => [newForm, ...prev])
@@ -397,7 +397,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
     logAudit('create', 'linen_form', newForm.id, newForm.formNumber)
     return newForm
-  }, [logAudit])
+  }, [logAudit, linenForms])
 
   const updateLinenForm = useCallback((id: string, f: Partial<LinenForm>) => {
     const updates = { ...f, updatedAt: todayISO() }
@@ -431,7 +431,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // ---- Delivery Notes ----
   const addDeliveryNote = useCallback((d: Omit<DeliveryNote, 'id' | 'noteNumber' | 'createdBy' | 'updatedAt'>): DeliveryNote => {
     const newDN: DeliveryNote = {
-      ...d, id: genId(), noteNumber: genDeliveryNoteNumber(),
+      ...d, id: genId(), noteNumber: genDeliveryNoteNumber(deliveryNotes.map(x => x.noteNumber)),
       createdBy: currentUserRef.current?.id || 'unknown', updatedAt: todayISO(),
     }
     setDeliveryNotes(prev => [newDN, ...prev])
@@ -440,7 +440,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
     logAudit('create', 'delivery_note', newDN.id, newDN.noteNumber)
     return newDN
-  }, [logAudit])
+  }, [logAudit, deliveryNotes])
 
   const updateDeliveryNote = useCallback((id: string, d: Partial<DeliveryNote>) => {
     const updates = { ...d, updatedAt: todayISO() }
@@ -475,14 +475,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // ---- Billing Statements ----
   const addBillingStatement = useCallback((b: Omit<BillingStatement, 'id' | 'billingNumber'>): BillingStatement => {
-    const newBS: BillingStatement = { ...b, id: genId(), billingNumber: genBillingNumber() }
+    const newBS: BillingStatement = { ...b, id: genId(), billingNumber: genBillingNumber(billingStatements.map(x => x.billingNumber)) }
     setBillingStatements(prev => [newBS, ...prev])
     dbSave(db.insertBillingStatement(newBS), () => {
       setBillingStatements(prev => prev.filter(x => x.id !== newBS.id))
     })
     logAudit('create', 'billing', newBS.id, newBS.billingNumber)
     return newBS
-  }, [logAudit])
+  }, [logAudit, billingStatements])
 
   const updateBillingStatus = useCallback((id: string, status: BillingStatus, paidDate?: string) => {
     let resolvedPaidAmount: number | undefined
@@ -520,14 +520,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // ---- Tax Invoices ----
   const addTaxInvoice = useCallback((t: Omit<TaxInvoice, 'id' | 'invoiceNumber'>): TaxInvoice => {
-    const newTI: TaxInvoice = { ...t, id: genId(), invoiceNumber: genTaxInvoiceNumber() }
+    const newTI: TaxInvoice = { ...t, id: genId(), invoiceNumber: genTaxInvoiceNumber(taxInvoices.map(x => x.invoiceNumber)) }
     setTaxInvoices(prev => [newTI, ...prev])
     dbSave(db.insertTaxInvoice(newTI), () => {
       setTaxInvoices(prev => prev.filter(x => x.id !== newTI.id))
     })
     logAudit('create', 'tax_invoice', newTI.id, newTI.invoiceNumber)
     return newTI
-  }, [logAudit])
+  }, [logAudit, taxInvoices])
 
   const updateTaxInvoice = useCallback((id: string, updates: Partial<TaxInvoice>) => {
     setTaxInvoices(prev => prev.map(ti => ti.id === id ? { ...ti, ...updates } : ti))
@@ -545,14 +545,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // ---- Quotations ----
   const addQuotation = useCallback((q: Omit<Quotation, 'id' | 'quotationNumber'>): Quotation => {
-    const newQ: Quotation = { ...q, id: genId(), quotationNumber: genQuotationNumber() }
+    const newQ: Quotation = { ...q, id: genId(), quotationNumber: genQuotationNumber(quotations.map(x => x.quotationNumber)) }
     setQuotations(prev => [newQ, ...prev])
     dbSave(db.insertQuotation(newQ), () => {
       setQuotations(prev => prev.filter(x => x.id !== newQ.id))
     })
     logAudit('create', 'quotation', newQ.id, newQ.quotationNumber)
     return newQ
-  }, [logAudit])
+  }, [logAudit, quotations])
 
   const updateQuotation = useCallback((id: string, updates: Partial<Quotation>) => {
     setQuotations(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
@@ -757,7 +757,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // ---- Checklists ----
   const addChecklist = useCallback((c: Omit<ProductChecklist, 'id' | 'checklistNumber' | 'createdBy' | 'updatedAt'>): ProductChecklist => {
     const newCL: ProductChecklist = {
-      ...c, id: genId(), checklistNumber: genChecklistNumber(),
+      ...c, id: genId(), checklistNumber: genChecklistNumber(checklists.map(x => x.checklistNumber)),
       createdBy: currentUserRef.current?.id || 'unknown', updatedAt: todayISO(),
     }
     setChecklists(prev => [newCL, ...prev])
@@ -766,7 +766,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
     logAudit('create', 'checklist', newCL.id, newCL.checklistNumber)
     return newCL
-  }, [logAudit])
+  }, [logAudit, checklists])
 
   const updateChecklist = useCallback((id: string, c: Partial<ProductChecklist>) => {
     const updates = { ...c, updatedAt: todayISO() }

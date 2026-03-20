@@ -11,39 +11,50 @@ export function genId(): string {
 }
 
 // ============================================================
-// Document Number Generators — timestamp-based to avoid collision
+// Document Number Generators — sequential running numbers
+// Format: PREFIX-YYYYMMDD-001 (daily) or PREFIX-YYYYMM-001 (monthly)
 // ============================================================
-let _seqCounter = 0
 
-function nextSeq(): string {
-  // Use last 3 digits of timestamp + counter for uniqueness
-  const ts = Date.now() % 1000
-  _seqCounter = (_seqCounter + 1) % 100
-  return String(ts).padStart(3, '0') + String(_seqCounter).padStart(2, '0')
+/** หา running number ถัดไป จาก existing numbers ที่มี prefix เดียวกัน */
+function nextRunning(prefix: string, existingNumbers: string[]): string {
+  let max = 0
+  for (const num of existingNumbers) {
+    if (num.startsWith(prefix)) {
+      const seq = parseInt(num.slice(prefix.length), 10)
+      if (!isNaN(seq) && seq > max) max = seq
+    }
+  }
+  return String(max + 1).padStart(3, '0')
 }
 
-export function genLinenFormNumber(): string {
-  return `LF-${format(new Date(), 'yyyyMMdd')}-${nextSeq()}`
+export function genLinenFormNumber(existingNumbers: string[]): string {
+  const prefix = `LF-${format(new Date(), 'yyyyMMdd')}-`
+  return prefix + nextRunning(prefix, existingNumbers)
 }
 
-export function genDeliveryNoteNumber(): string {
-  return `SD-${format(new Date(), 'yyyyMMdd')}-${nextSeq()}`
+export function genDeliveryNoteNumber(existingNumbers: string[]): string {
+  const prefix = `SD-${format(new Date(), 'yyyyMMdd')}-`
+  return prefix + nextRunning(prefix, existingNumbers)
 }
 
-export function genBillingNumber(): string {
-  return `WB-${format(new Date(), 'yyyyMM')}-${nextSeq()}`
+export function genBillingNumber(existingNumbers: string[]): string {
+  const prefix = `WB-${format(new Date(), 'yyyyMM')}-`
+  return prefix + nextRunning(prefix, existingNumbers)
 }
 
-export function genTaxInvoiceNumber(): string {
-  return `IV-${format(new Date(), 'yyyyMM')}-${nextSeq()}`
+export function genTaxInvoiceNumber(existingNumbers: string[]): string {
+  const prefix = `IV-${format(new Date(), 'yyyyMM')}-`
+  return prefix + nextRunning(prefix, existingNumbers)
 }
 
-export function genQuotationNumber(): string {
-  return `QT-${format(new Date(), 'yyyyMM')}-${nextSeq()}`
+export function genQuotationNumber(existingNumbers: string[]): string {
+  const prefix = `QT-${format(new Date(), 'yyyyMM')}-`
+  return prefix + nextRunning(prefix, existingNumbers)
 }
 
-export function genChecklistNumber(): string {
-  return `CK-${format(new Date(), 'yyyyMMdd')}-${nextSeq()}`
+export function genChecklistNumber(existingNumbers: string[]): string {
+  const prefix = `CK-${format(new Date(), 'yyyyMMdd')}-`
+  return prefix + nextRunning(prefix, existingNumbers)
 }
 
 // ============================================================
