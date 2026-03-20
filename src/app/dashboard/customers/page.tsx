@@ -57,6 +57,7 @@ export default function CustomersPage() {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
   }
+  const sortedBg = (key: string) => sortKey === key ? 'bg-[#1B3A5C]/[0.04]' : ''
 
   const filtered = useMemo(() => {
     let list = [...customers]
@@ -211,12 +212,12 @@ export default function CustomersPage() {
                   ) : filtered.map(c => (
                     <tr key={c.id} className={cn('border-b border-slate-100 hover:bg-slate-50',
                       !c.isActive && 'bg-red-50/30')}>
-                      <td className="px-4 py-3">
+                      <td className={cn("px-4 py-3", sortedBg('name'))}>
                         <Link href={`/dashboard/customers/${c.id}`} className="font-medium text-slate-800 hover:text-[#1B3A5C] hover:underline">{c.name}</Link>
                         {c.nameEn && <p className="text-[10px] text-slate-400">{c.nameEn}</p>}
                       </td>
-                      <td className="px-4 py-3 text-slate-600 text-xs">{getCustomerCategoryLabel(c.customerType)}</td>
-                      <td className="px-4 py-3 text-center">
+                      <td className={cn("px-4 py-3 text-slate-600 text-xs", sortedBg('customerType'))}>{getCustomerCategoryLabel(c.customerType)}</td>
+                      <td className={cn("px-4 py-3 text-center", sortedBg('billingModel'))}>
                         <div className="flex flex-wrap justify-center gap-1">
                           {(c.enablePerPiece ?? true) && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700">ตามหน่วย</span>
@@ -232,9 +233,9 @@ export default function CustomersPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right text-slate-600">{c.creditDays} วัน</td>
-                      <td className="px-4 py-3 text-right text-slate-600">{c.enabledItems.length}</td>
-                      <td className="px-4 py-3 text-center">
+                      <td className={cn("px-4 py-3 text-right text-slate-600", sortedBg('creditDays'))}>{c.creditDays} วัน</td>
+                      <td className={cn("px-4 py-3 text-right text-slate-600", sortedBg('enabledItems'))}>{c.enabledItems.length}</td>
+                      <td className={cn("px-4 py-3 text-center", sortedBg('qt'))}>
                         {(() => {
                           const qt = linkedQTMap.get(c.name)
                           return qt ? (
@@ -246,11 +247,11 @@ export default function CustomersPage() {
                           ) : <span className="text-xs text-slate-300">-</span>
                         })()}
                       </td>
-                      <td className="px-4 py-3 text-slate-600 text-xs">
+                      <td className={cn("px-4 py-3 text-slate-600 text-xs", sortedBg('contact'))}>
                         {c.contactName && <span>{c.contactName}</span>}
                         {c.contactPhone && <span className="ml-1 text-slate-400">{c.contactPhone}</span>}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className={cn("px-4 py-3 text-center", sortedBg('isActive'))}>
                         <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-medium',
                           c.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
                           {c.isActive ? 'ใช้งาน' : 'ปิด'}

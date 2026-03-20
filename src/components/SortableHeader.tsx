@@ -21,7 +21,10 @@ export default function SortableHeader({
     <th
       onClick={() => onSort(sortKey)}
       className={cn(
-        'px-4 py-3 font-medium text-slate-600 cursor-pointer select-none hover:bg-slate-100 transition-colors',
+        'px-4 py-3 font-medium cursor-pointer select-none transition-colors',
+        isActive
+          ? 'bg-[#1B3A5C]/10 text-[#1B3A5C] hover:bg-[#1B3A5C]/15'
+          : 'text-slate-600 hover:bg-slate-100',
         className,
       )}
     >

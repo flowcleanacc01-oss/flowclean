@@ -153,6 +153,7 @@ export default function BillingPage() {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
   }
+  const sortedBg = (key: string) => sortKey === key ? 'bg-[#1B3A5C]/[0.04]' : ''
 
   const matchesDateFilter = (date: string) => {
     if (!dateFrom) return true
@@ -244,11 +245,12 @@ export default function BillingPage() {
     // per-piece: use only selected DNs
     const selectedNotes = deliveryNotes.filter(dn => selDnIds.includes(dn.id))
     if (selectedNotes.length === 0) return null
+    const linkedQT = quotations.find(q => q.status === 'accepted' && ((selCustomer.id && q.customerId === selCustomer.id) || q.customerName === selCustomer.name))
     const lineItems = billingMode === 'by_date'
       ? aggregateDeliveryItemsByDate(selectedNotes, selCustomer)
-      : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog)
+      : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog, linkedQT?.items)
     return { lineItems, ...calculateBillingTotals(lineItems) }
-  }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists, billingMode])
+  }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists, billingMode, quotations])
 
   const handleCreateBilling = () => {
     if (!selCustomer || !previewBilling) return
@@ -785,19 +787,19 @@ export default function BillingPage() {
                           onChange={e => { if (e.target.checked) setSelectedWbIds(prev => [...prev, b.id]); else setSelectedWbIds(prev => prev.filter(id => id !== b.id)) }}
                           className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-600">{b.billingNumber}</td>
-                      <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
-                      <td className="px-4 py-3 text-slate-600">{formatDate(b.issueDate)}</td>
-                      <td className="px-4 py-3 text-slate-600">{b.billingMonth}</td>
-                      <td className="px-4 py-3 text-right text-slate-700">{formatCurrency(b.grandTotal)}</td>
-                      <td className="px-4 py-3 text-right text-slate-700 font-medium">{formatCurrency(b.netPayable)}</td>
-                      <td className="px-3 py-3 text-center">
+                      <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('billingNumber'))}>{b.billingNumber}</td>
+                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.name || '-'}</td>
+                      <td className={cn("px-4 py-3 text-slate-600", sortedBg('issueDate'))}>{formatDate(b.issueDate)}</td>
+                      <td className={cn("px-4 py-3 text-slate-600", sortedBg('billingMonth'))}>{b.billingMonth}</td>
+                      <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('grandTotal'))}>{formatCurrency(b.grandTotal)}</td>
+                      <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('netPayable'))}>{formatCurrency(b.netPayable)}</td>
+                      <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                           b.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
                           {b.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                      <td className={cn("px-4 py-3 text-center", sortedBg('iv'))} onClick={e => e.stopPropagation()}>
                         {(() => {
                           const ivInfo = wbInvoiceMap.get(b.id)
                           return ivInfo ? (
@@ -811,7 +813,7 @@ export default function BillingPage() {
                           )
                         })()}
                       </td>
-                      <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                      <td className={cn("px-3 py-3 text-center", sortedBg('paid'))} onClick={e => e.stopPropagation()}>
                         <button
                           onClick={() => updateBillingStatus(b.id, b.status === 'paid' ? 'sent' : 'paid')}
                           className={cn('px-2 py-0.5 rounded-full text-xs font-medium transition-colors',
@@ -873,17 +875,17 @@ export default function BillingPage() {
                           onChange={e => { if (e.target.checked) setSelectedIvIds(prev => [...prev, inv.id]); else setSelectedIvIds(prev => prev.filter(id => id !== inv.id)) }}
                           className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-600">{inv.invoiceNumber}</td>
-                      <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
-                      <td className="px-4 py-3 text-slate-600">{formatDate(inv.issueDate)}</td>
-                      <td className="px-4 py-3 text-right text-slate-700 font-medium">{formatCurrency(inv.grandTotal)}</td>
-                      <td className="px-3 py-3 text-center">
+                      <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('invoiceNumber'))}>{inv.invoiceNumber}</td>
+                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.name || '-'}</td>
+                      <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(inv.issueDate)}</td>
+                      <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('grandTotal'))}>{formatCurrency(inv.grandTotal)}</td>
+                      <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                           inv.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
                           {inv.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                      <td className={cn("px-4 py-3 text-center", sortedBg('wb'))} onClick={e => e.stopPropagation()}>
                         {wbInfo ? (
                           <button onClick={() => setShowDetail(wbInfo.billingId)}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 hover:bg-orange-200">
@@ -892,7 +894,7 @@ export default function BillingPage() {
                           </button>
                         ) : <span className="text-xs text-slate-400">-</span>}
                       </td>
-                      <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                      <td className={cn("px-3 py-3 text-center", sortedBg('isPaid'))} onClick={e => e.stopPropagation()}>
                         <button
                           onClick={() => updateTaxInvoice(inv.id, { isPaid: !inv.isPaid })}
                           className={cn('px-2 py-0.5 rounded-full text-xs font-medium transition-colors',
@@ -934,12 +936,12 @@ export default function BillingPage() {
                   return (
                     <tr key={q.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                       onClick={() => setShowQuDetail(q.id)}>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-600">{q.quotationNumber}</td>
-                      <td className="px-4 py-3 text-slate-800 font-medium">{q.customerName}</td>
-                      <td className="px-4 py-3 text-slate-600">{formatDate(q.date)}</td>
-                      <td className="px-4 py-3 text-center text-slate-500">{q.items.length}</td>
-                      <td className="px-4 py-3 text-slate-500 text-sm max-w-[160px] truncate">{q.notes || '-'}</td>
-                      <td className="px-4 py-3 text-center">
+                      <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('quotationNumber'))}>{q.quotationNumber}</td>
+                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customerName'))}>{q.customerName}</td>
+                      <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(q.date)}</td>
+                      <td className={cn("px-4 py-3 text-center text-slate-500", sortedBg('items'))}>{q.items.length}</td>
+                      <td className={cn("px-4 py-3 text-slate-500 text-sm max-w-[160px] truncate", sortedBg('notes'))}>{q.notes || '-'}</td>
+                      <td className={cn("px-4 py-3 text-center", sortedBg('status'))}>
                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>{cfg.label}</span>
                       </td>
                       <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>

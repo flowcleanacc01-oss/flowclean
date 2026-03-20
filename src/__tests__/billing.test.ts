@@ -81,8 +81,8 @@ describe('aggregateDeliveryItems', () => {
     const result = aggregateDeliveryItems(notes, customer, CATALOG)
 
     expect(result).toHaveLength(2)
-    expect(result[0]).toEqual({ code: 'B/T', name: 'Bath Towel', quantity: 100, pricePerUnit: 8, amount: 800 })
-    expect(result[1]).toEqual({ code: 'B/H', name: 'Hand Towel', quantity: 50, pricePerUnit: 5, amount: 250 })
+    expect(result[0]).toEqual({ code: 'B/T', name: 'ค่าบริการซัก Bath Towel', quantity: 100, pricePerUnit: 8, amount: 800 })
+    expect(result[1]).toEqual({ code: 'B/H', name: 'ค่าบริการซัก Hand Towel', quantity: 50, pricePerUnit: 5, amount: 250 })
   })
 
   it('aggregates items from multiple delivery notes', () => {

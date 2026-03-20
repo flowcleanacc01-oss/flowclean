@@ -56,6 +56,7 @@ export default function DeliveryPage() {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
   }
+  const sortedBg = (key: string) => sortKey === key ? 'bg-[#1B3A5C]/[0.04]' : ''
 
   // Calculate total amount for a DN (items subtotal + transport fees)
   const getDNTotalAmount = (dn: typeof deliveryNotes[number]): number => {
@@ -377,19 +378,19 @@ export default function DeliveryPage() {
                         }}
                         className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{dn.noteNumber}</td>
-                    <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
-                    <td className="px-4 py-3 text-slate-600">{formatDate(dn.date)}</td>
-                    <td className="px-4 py-3 text-right text-slate-700">{formatNumber(totalItems)}</td>
-                    <td className="px-4 py-3 text-right text-slate-700">{dnAmount > 0 ? formatCurrency(dnAmount) : '-'}</td>
-                    <td className="px-4 py-3 text-slate-600">{dn.driverName || '-'}</td>
-                    <td className="px-3 py-3 text-center">
+                    <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('noteNumber'))}>{dn.noteNumber}</td>
+                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.name || '-'}</td>
+                    <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(dn.date)}</td>
+                    <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('items'))}>{formatNumber(totalItems)}</td>
+                    <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('amount'))}>{dnAmount > 0 ? formatCurrency(dnAmount) : '-'}</td>
+                    <td className={cn("px-4 py-3 text-slate-600", sortedBg('driver'))}>{dn.driverName || '-'}</td>
+                    <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                         dn.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
                         {dn.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                    <td className={cn("px-3 py-3 text-center", sortedBg('wb'))} onClick={e => e.stopPropagation()}>
                       {wbInfo ? (
                         <button
                           onClick={() => { window.location.href = `/dashboard/billing?detail=${wbInfo.billingId}` }}

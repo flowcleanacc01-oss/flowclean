@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { formatDate, formatNumber } from '@/lib/utils'
-import type { LinenForm, Customer, CompanyInfo, LinenItemDef } from '@/types'
+import type { LinenForm, Customer, CompanyInfo, LinenItemDef, QuotationItem } from '@/types'
 
 interface LinenFormPrintProps {
   form: LinenForm
@@ -10,10 +10,14 @@ interface LinenFormPrintProps {
   company: CompanyInfo
   catalog: LinenItemDef[]
   carryOver: Record<string, number>
+  qtItems?: QuotationItem[]
 }
 
-export default function LinenFormPrint({ form, customer, company, catalog, carryOver }: LinenFormPrintProps) {
-  const nameMap = Object.fromEntries(catalog.map(i => [i.code, i.name]))
+export default function LinenFormPrint({ form, customer, company, catalog, carryOver, qtItems }: LinenFormPrintProps) {
+  // ใช้ชื่อจาก QT ถ้ามี, fallback ไป catalog
+  const qtNameMap = qtItems ? Object.fromEntries(qtItems.map(i => [i.code, i.name])) : null
+  const catalogNameMap = Object.fromEntries(catalog.map(i => [i.code, i.name]))
+  const nameMap = qtNameMap || catalogNameMap
 
   const totalCol2 = form.rows.reduce((s, r) => s + r.col2_hotelCountIn, 0)
   const totalCol3 = form.rows.reduce((s, r) => s + r.col3_hotelClaimCount, 0)
@@ -75,7 +79,10 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
           </tr>
         </thead>
         <tbody>
-          {form.rows.map(row => {
+          {(qtItems
+            ? qtItems.map(qi => form.rows.find(r => r.code === qi.code)).filter(Boolean) as typeof form.rows
+            : form.rows
+          ).map(row => {
             const co = carryOver[row.code] || 0
             const diff = (row.col6_factoryPackSend || 0) - row.col5_factoryClaimApproved
             return (

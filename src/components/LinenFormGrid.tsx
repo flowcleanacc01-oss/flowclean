@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { LinenFormRow, Customer, LinenItemDef, LinenFormStatus } from '@/types'
+import type { LinenFormRow, Customer, LinenItemDef, LinenFormStatus, QuotationItem } from '@/types'
 import { cn, sanitizeNumber } from '@/lib/utils'
 
 interface LinenFormGridProps {
@@ -10,6 +10,7 @@ interface LinenFormGridProps {
   onChange: (rows: LinenFormRow[]) => void
   catalog: LinenItemDef[]
   itemCodes?: string[]  // override customer.enabledItems (e.g. from accepted QT)
+  qtItems?: QuotationItem[]  // QT items — ใช้ลำดับ + ชื่อจาก QT แทน catalog
   carryOver?: Record<string, number>
   formDate?: string
   readOnly?: boolean
@@ -34,15 +35,30 @@ export default function LinenFormGrid({
   onChange,
   catalog,
   itemCodes,
+  qtItems,
   carryOver = {},
   formDate,
   readOnly = false,
   editableColumns = ['col2', 'col3', 'col4', 'col5', 'col6', 'note'],
   formStatus,
 }: LinenFormGridProps) {
-  const enabledItems = catalog.filter(item =>
-    itemCodes ? itemCodes.includes(item.code) : customer.enabledItems.includes(item.code)
-  )
+  // ถ้ามี qtItems → ใช้ลำดับ + ชื่อจาก QT, fallback ไป catalog
+  const enabledItems: LinenItemDef[] = qtItems
+    ? qtItems.map(qi => {
+        const catItem = catalog.find(c => c.code === qi.code)
+        return {
+          code: qi.code,
+          name: qi.name, // ใช้ชื่อจาก QT (custom name)
+          nameEn: catItem?.nameEn || '',
+          category: catItem?.category || 'other',
+          unit: catItem?.unit || 'ชิ้น',
+          defaultPrice: qi.pricePerUnit,
+          sortOrder: 0, // ไม่ใช้ — ลำดับตาม array position ของ QT
+        }
+      })
+    : catalog.filter(item =>
+        itemCodes ? itemCodes.includes(item.code) : customer.enabledItems.includes(item.code)
+      )
 
   const [localRows, setLocalRows] = useState<LinenFormRow[]>(rows)
 

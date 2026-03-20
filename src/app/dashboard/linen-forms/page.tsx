@@ -64,6 +64,7 @@ export default function LinenFormsPage() {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
   }
+  const sortedBg = (key: string) => sortKey === key ? 'bg-[#1B3A5C]/[0.04]' : ''
 
   const handleExportCSV = () => {
     if (!detailForm || !detailCustomer) return
@@ -395,33 +396,33 @@ export default function LinenFormsPage() {
                         onChange={e => { if (e.target.checked) setSelectedLfIds(prev => [...prev, form.id]); else setSelectedLfIds(prev => prev.filter(id => id !== form.id)) }}
                         className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{form.formNumber}</td>
-                    <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
-                    <td className="px-4 py-3 text-slate-600">{formatDate(form.date)}</td>
-                    <td className="px-4 py-3 text-right text-slate-700">{totalPieces}</td>
-                    <td className="px-4 py-3 text-center">
+                    <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('formNumber'))}>{form.formNumber}</td>
+                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.name || '-'}</td>
+                    <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(form.date)}</td>
+                    <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('pieces'))}>{totalPieces}</td>
+                    <td className={cn("px-4 py-3 text-center", sortedBg('status'))}>
                       <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>
                         <span className={cn('w-1.5 h-1.5 rounded-full', cfg.dotColor)} />
                         {cfg.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className={cn("px-4 py-3 text-center", sortedBg('alert'))}>
                       {disc1 && <span title="โรงซักนับเข้า ≠ นับส่ง+เคลม"><AlertTriangle className="w-4 h-4 text-amber-500 inline" /></span>}
                       {disc2 && <span title="ลูกค้านับกลับ ≠ แพคส่ง"><AlertTriangle className="w-4 h-4 text-red-500 inline" /></span>}
                     </td>
-                    <td className="px-3 py-3 text-center">
+                    <td className={cn("px-3 py-3 text-center", sortedBg('isExported'))}>
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                         form.isExported ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-400')}>
                         {form.isExported ? 'ส่งออกแล้ว' : 'ยังไม่ส่งออก'}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-center">
+                    <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                         form.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
                         {form.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                    <td className={cn("px-3 py-3 text-center", sortedBg('sd'))} onClick={e => e.stopPropagation()}>
                       {linkedDNInfo ? (
                         <button
                           onClick={() => router.push(`/dashboard/delivery?detail=${linkedDNInfo.dnId}`)}
@@ -508,7 +509,7 @@ export default function LinenFormsPage() {
                 rows={newRows}
                 onChange={setNewRows}
                 catalog={linenCatalog}
-                itemCodes={newRows.map(r => r.code)}
+                qtItems={getLinkedQT(getCustomer(newCustomerId)!.name, newCustomerId)?.items}
                 carryOver={getCarryOver(newCustomerId, newDate)}
                 editableColumns={['col2', 'col3', 'note']}
                 formStatus="draft"
@@ -613,6 +614,7 @@ export default function LinenFormsPage() {
               rows={detailForm.rows}
               onChange={(rows) => updateLinenForm(detailForm.id, { rows })}
               catalog={linenCatalog}
+              qtItems={getLinkedQT(detailCustomer.name, detailForm.customerId)?.items}
               carryOver={detailCarryOver}
               formDate={detailForm.date}
               formStatus={detailForm.status}
@@ -786,7 +788,7 @@ export default function LinenFormsPage() {
                 <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว</span>
               </label>
             </div>
-            <LinenFormPrint form={detailForm} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} carryOver={detailCarryOver} />
+            <LinenFormPrint form={detailForm} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} carryOver={detailCarryOver} qtItems={getLinkedQT(detailCustomer.name, detailForm.customerId)?.items} />
             <div className="flex justify-end mt-4 no-print">
               <ExportButtons targetId="print-lf" filename={detailForm.formNumber} onExportCSV={handleExportCSV}
                 onPrint={() => { if (!detailForm.isPrinted) updateLinenForm(detailForm.id, { isPrinted: true }) }}
@@ -917,7 +919,7 @@ export default function LinenFormsPage() {
                     <span className="text-xs font-medium text-violet-700">ส่งออกแล้ว</span>
                   </label>
                 </div>
-                <LinenFormPrint form={form} customer={cust} company={companyInfo} catalog={linenCatalog} carryOver={carryOver} />
+                <LinenFormPrint form={form} customer={cust} company={companyInfo} catalog={linenCatalog} carryOver={carryOver} qtItems={getLinkedQT(cust.name, form.customerId)?.items} />
               </div>
             )
           })}

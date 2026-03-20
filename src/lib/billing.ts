@@ -1,15 +1,20 @@
-import type { Customer, DeliveryNote, BillingLineItem, LinenItemDef } from '@/types'
+import type { Customer, DeliveryNote, BillingLineItem, LinenItemDef, QuotationItem } from '@/types'
 import { formatDate } from './utils'
 
 /**
  * Aggregate delivery note items into billing line items with pricing
+ * ถ้ามี qtItems → ใช้ชื่อ + ลำดับจาก QT, fallback ไป catalog
  */
 export function aggregateDeliveryItems(
   notes: DeliveryNote[],
   customer: Customer,
-  catalog: LinenItemDef[] = []
+  catalog: LinenItemDef[] = [],
+  qtItems?: QuotationItem[]
 ): BillingLineItem[] {
-  const itemNameMap = Object.fromEntries(catalog.map(i => [i.code, i.name]))
+  // ใช้ชื่อจาก QT ถ้ามี, fallback ไป catalog
+  const itemNameMap = qtItems
+    ? Object.fromEntries(qtItems.map(i => [i.code, i.name]))
+    : Object.fromEntries(catalog.map(i => [i.code, i.name]))
   const qtyMap: Record<string, number> = {}
 
   for (const note of notes) {
@@ -34,8 +39,10 @@ export function aggregateDeliveryItems(
       }
     })
     .sort((a, b) => {
-      const aIdx = catalog.findIndex(i => i.code === a.code)
-      const bIdx = catalog.findIndex(i => i.code === b.code)
+      // เรียงตาม QT order ถ้ามี, fallback ไป catalog order
+      const orderSource = qtItems || catalog
+      const aIdx = orderSource.findIndex(i => i.code === a.code)
+      const bIdx = orderSource.findIndex(i => i.code === b.code)
       return aIdx - bIdx
     })
 
