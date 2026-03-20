@@ -37,9 +37,9 @@ export default function BillingPrint({ billing, customer, company }: BillingPrin
       {/* Customer Info */}
       <div className="mb-6 text-xs">
         <p className="text-slate-500">เรียน:</p>
-        <p className="font-medium text-slate-800">{customer.name}</p>
-        <p className="text-slate-500">{customer.address}</p>
-        <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxId} ({formatBranch(customer.branch)})</p>
+        <p className="font-medium text-slate-800">{customer.taxGroupName || customer.name}</p>
+        <p className="text-slate-500">{customer.taxGroupAddress || customer.address}</p>
+        <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxGroupTaxId || customer.taxId} ({formatBranch(customer.taxGroupBranch || customer.branch)})</p>
       </div>
 
       {/* Billing Period */}

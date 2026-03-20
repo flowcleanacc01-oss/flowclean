@@ -37,11 +37,11 @@ export default function TaxInvoicePrint({ invoice, customer, company, withholdin
       <div className="grid grid-cols-2 gap-4 mb-6 text-xs">
         <div>
           <p className="text-slate-500">ลูกค้า / Customer:</p>
-          <p className="font-medium text-slate-800">{customer.name}</p>
-          {customer.nameEn && <p className="text-slate-500">{customer.nameEn}</p>}
-          <p className="text-slate-500 mt-1">{customer.address}</p>
-          <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxId}</p>
-          <p className="text-slate-500">{formatBranch(customer.branch)}</p>
+          <p className="font-medium text-slate-800">{customer.taxGroupName || customer.name}</p>
+          {!customer.taxGroupName && customer.nameEn && <p className="text-slate-500">{customer.nameEn}</p>}
+          <p className="text-slate-500 mt-1">{customer.taxGroupAddress || customer.address}</p>
+          <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxGroupTaxId || customer.taxId}</p>
+          <p className="text-slate-500">{formatBranch(customer.taxGroupBranch || customer.branch)}</p>
         </div>
         <div className="text-right">
           <p className="text-slate-500">เลขที่ / No:</p>

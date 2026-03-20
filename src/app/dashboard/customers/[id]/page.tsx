@@ -176,6 +176,13 @@ export default function CustomerDetailPage() {
                 </div>
               )}
               <div className="text-xs text-slate-400 pt-1">เครดิต {customer.creditDays} วัน</div>
+              {customer.taxGroupName && (
+                <div className="mt-2 pt-2 border-t border-slate-100">
+                  <p className="text-xs font-medium text-slate-500 mb-1">ออกใบกำกับภาษีในชื่อ:</p>
+                  <p className="text-sm font-medium text-slate-700">{customer.taxGroupName}</p>
+                  {customer.taxGroupTaxId && <p className="text-xs text-slate-400">เลขภาษี: {customer.taxGroupTaxId}</p>}
+                </div>
+              )}
             </div>
           </div>
 

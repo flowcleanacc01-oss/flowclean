@@ -146,6 +146,11 @@ export interface Customer {
   notes: string
   createdAt: string
   isActive: boolean
+  // Tax Group — สำหรับลูกค้าที่เป็นแผนกย่อยของบริษัทเดียวกัน (ออก IV ชื่อบริษัทเดียวกัน)
+  taxGroupName?: string    // ชื่อบริษัทสำหรับออกใบกำกับภาษี
+  taxGroupTaxId?: string   // เลขผู้เสียภาษีสำหรับออกใบกำกับภาษี
+  taxGroupAddress?: string // ที่อยู่สำหรับออกใบกำกับภาษี
+  taxGroupBranch?: string  // สาขาสำหรับออกใบกำกับภาษี
 }
 
 // ============================================================

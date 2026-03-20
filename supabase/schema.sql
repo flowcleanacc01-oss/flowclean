@@ -102,7 +102,11 @@ CREATE TABLE customers (
   price_history JSONB NOT NULL DEFAULT '[]',
   notes TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT '',
-  is_active BOOLEAN NOT NULL DEFAULT true
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  tax_group_name TEXT,
+  tax_group_tax_id TEXT,
+  tax_group_address TEXT,
+  tax_group_branch TEXT
 );
 
 -- ============================================================
