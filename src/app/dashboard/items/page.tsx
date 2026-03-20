@@ -92,6 +92,8 @@ export default function ItemsPage() {
       setSortDir('asc')
     }
   }
+  const sortedBg = (col: string) => sortCol === col ? 'bg-[#1B3A5C]/[0.04]' : ''
+  const sortedThBg = (col: string) => sortCol === col ? 'bg-[#1B3A5C]/10 text-[#1B3A5C]' : 'text-slate-600'
 
   // ---- Item handlers ----
   const handleAddItem = () => {
@@ -284,22 +286,22 @@ export default function ItemsPage() {
                 <thead>
                   <tr className="bg-slate-50">
                     <th className="w-10 px-2 py-2"></th>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600 cursor-pointer select-none" onClick={() => handleSort('code')}>
+                    <th className={cn("text-left px-4 py-2 font-medium cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('code'))} onClick={() => handleSort('code')}>
                       <span className="flex items-center">รหัส<SortIcon col="code" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600 cursor-pointer select-none" onClick={() => handleSort('name')}>
+                    <th className={cn("text-left px-4 py-2 font-medium cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('name'))} onClick={() => handleSort('name')}>
                       <span className="flex items-center">ชื่อ (ไทย)<SortIcon col="name" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600 cursor-pointer select-none" onClick={() => handleSort('nameEn')}>
+                    <th className={cn("text-left px-4 py-2 font-medium cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('nameEn'))} onClick={() => handleSort('nameEn')}>
                       <span className="flex items-center">ชื่อ (EN)<SortIcon col="nameEn" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600 cursor-pointer select-none" onClick={() => handleSort('category')}>
+                    <th className={cn("text-left px-4 py-2 font-medium cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('category'))} onClick={() => handleSort('category')}>
                       <span className="flex items-center">หมวด<SortIcon col="category" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600 cursor-pointer select-none" onClick={() => handleSort('unit')}>
+                    <th className={cn("text-left px-4 py-2 font-medium cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('unit'))} onClick={() => handleSort('unit')}>
                       <span className="flex items-center">หน่วย<SortIcon col="unit" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
-                    <th className="text-right px-4 py-2 font-medium text-slate-600 w-28 cursor-pointer select-none" onClick={() => handleSort('defaultPrice')}>
+                    <th className={cn("text-right px-4 py-2 font-medium w-28 cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('defaultPrice'))} onClick={() => handleSort('defaultPrice')}>
                       <span className="flex items-center justify-end">ราคา default<SortIcon col="defaultPrice" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
                     <th className="text-right px-4 py-2 font-medium text-slate-600 w-20"></th>
@@ -321,22 +323,22 @@ export default function ItemsPage() {
                           </button>
                         </div>
                       </td>
-                      <td className="px-4 py-2 font-mono text-xs text-slate-500">{item.code}</td>
-                      <td className="px-4 py-2 text-slate-700">
+                      <td className={cn("px-4 py-2 font-mono text-xs text-slate-500", sortedBg('code'))}>{item.code}</td>
+                      <td className={cn("px-4 py-2 text-slate-700", sortedBg('name'))}>
                         {editingCode === item.code ? (
                           <input value={editItem.name ?? item.name}
                             onChange={e => setEditItem({ ...editItem, name: e.target.value })}
                             className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                         ) : item.name}
                       </td>
-                      <td className="px-4 py-2 text-slate-500 text-xs">
+                      <td className={cn("px-4 py-2 text-slate-500 text-xs", sortedBg('nameEn'))}>
                         {editingCode === item.code ? (
                           <input value={editItem.nameEn ?? item.nameEn}
                             onChange={e => setEditItem({ ...editItem, nameEn: e.target.value })}
                             className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                         ) : item.nameEn}
                       </td>
-                      <td className="px-4 py-2 text-xs text-slate-400">
+                      <td className={cn("px-4 py-2 text-xs text-slate-400", sortedBg('category'))}>
                         {editingCode === item.code ? (
                           <select value={editItem.category ?? item.category}
                             onChange={e => setEditItem({ ...editItem, category: e.target.value })}
@@ -347,14 +349,14 @@ export default function ItemsPage() {
                           </select>
                         ) : getCategoryLabel(item.category)}
                       </td>
-                      <td className="px-4 py-2 text-xs text-slate-400">
+                      <td className={cn("px-4 py-2 text-xs text-slate-400", sortedBg('unit'))}>
                         {editingCode === item.code ? (
                           <input value={editItem.unit ?? item.unit}
                             onChange={e => setEditItem({ ...editItem, unit: e.target.value })}
                             className="w-16 px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                         ) : item.unit}
                       </td>
-                      <td className="px-4 py-2 text-right">
+                      <td className={cn("px-4 py-2 text-right", sortedBg('defaultPrice'))}>
                         <input type="number" min={0} step={0.5}
                           value={defaultPrices[item.code] ?? item.defaultPrice}
                           onChange={e => updateDefaultPrice(item.code, sanitizeNumber(e.target.value))}
