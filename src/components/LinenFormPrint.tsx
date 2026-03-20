@@ -50,7 +50,7 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
       <div className="grid grid-cols-2 gap-3 mb-3 text-[11px] print:mb-2">
         <div>
           <p className="text-slate-500">ลูกค้า:</p>
-          <p className="font-medium text-slate-800">{customer.name}</p>
+          <p className="font-medium text-slate-800">{customer.shortName || customer.name}</p>
         </div>
         <div className="text-right">
           {form.bagsSentCount > 0 && (

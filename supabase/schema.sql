@@ -79,6 +79,7 @@ CREATE TABLE customers (
   id TEXT PRIMARY KEY,
   customer_code TEXT NOT NULL DEFAULT '',
   customer_type TEXT NOT NULL DEFAULT 'hotel',
+  short_name TEXT NOT NULL DEFAULT '',
   name TEXT NOT NULL,
   name_en TEXT NOT NULL DEFAULT '',
   address TEXT NOT NULL DEFAULT '',

@@ -4,7 +4,7 @@ import type { Customer, DeliveryNote } from '@/types'
 
 function makeCustomer(overrides: Partial<Customer> = {}): Customer {
   return {
-    id: 'cust-1', customerCode: 'HT0001', customerType: 'hotel',
+    id: 'cust-1', customerCode: 'HT0001', customerType: 'hotel', shortName: '',
     name: 'Test Hotel', nameEn: 'Test Hotel', address: '', taxId: '', branch: '',
     contactName: '', contactPhone: '', contactEmail: '',
     creditDays: 30, billingModel: 'per_piece', monthlyFlatRate: 0,

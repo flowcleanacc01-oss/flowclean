@@ -46,7 +46,7 @@ export default function ChecklistPage() {
         .map(f => ({
           id: f.id,
           number: f.formNumber,
-          customerName: getCustomer(f.customerId)?.name || '-',
+          customerName: (() => { const c = getCustomer(f.customerId); return c?.shortName || c?.name || '-' })(),
           customerId: f.customerId,
           date: f.date,
         }))
@@ -54,7 +54,7 @@ export default function ChecklistPage() {
     return deliveryNotes.map(dn => ({
       id: dn.id,
       number: dn.noteNumber,
-      customerName: getCustomer(dn.customerId)?.name || '-',
+      customerName: (() => { const c = getCustomer(dn.customerId); return c?.shortName || c?.name || '-' })(),
       customerId: dn.customerId,
       date: dn.date,
     }))
@@ -233,7 +233,7 @@ export default function ChecklistPage() {
                         {cl.type === 'qc' ? 'QC' : 'Loading'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-800 font-medium">{customer?.name || '-'}</td>
+                    <td className="px-4 py-3 text-slate-800 font-medium">{customer?.shortName || customer?.name || '-'}</td>
                     <td className="px-4 py-3 font-mono text-xs text-slate-500">{cl.linkedDocumentNumber}</td>
                     <td className="px-4 py-3 text-slate-600">{formatDate(cl.date)}</td>
                     <td className="px-4 py-3 text-center">
@@ -377,7 +377,7 @@ export default function ChecklistPage() {
         {detailCL && detailCustomer && (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-4 text-sm">
-              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.name}</strong></div>
+              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
               <div><span className="text-slate-500">ประเภท:</span> {CHECKLIST_TYPE_CONFIG[detailCL.type].label}</div>
               <div><span className="text-slate-500">อ้างอิง:</span> <span className="font-mono text-xs">{detailCL.linkedDocumentNumber}</span></div>
               <div><span className="text-slate-500">วันที่:</span> {formatDate(detailCL.date)}</div>
@@ -510,7 +510,7 @@ export default function ChecklistPage() {
                 {customers.filter(c => c.isActive).map(c => (
                   <button key={c.id} onClick={() => setBlankCustomerId(c.id)}
                     className="text-left px-4 py-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-                    <span className="font-medium text-slate-800">{c.name}</span>
+                    <span className="font-medium text-slate-800">{c.shortName || c.name}</span>
                     <span className="text-xs text-slate-500 ml-2">({c.enabledItems.length} รายการ)</span>
                   </button>
                 ))}

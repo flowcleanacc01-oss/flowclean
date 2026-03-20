@@ -37,6 +37,7 @@ async function dbWrite(params: {
 
 // Map of camelCase TS field names → snake_case DB column names
 const FIELD_MAP: Record<string, string> = {
+  shortName: 'short_name',
   nameEn: 'name_en',
   customerCode: 'customer_code',
   customerType: 'customer_type',

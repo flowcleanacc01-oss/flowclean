@@ -132,7 +132,7 @@ export default function ReportsPage() {
               className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
               <option value="">ทุกลูกค้า</option>
               {customers.filter(c => c.isActive).map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
               ))}
             </select>
             {selCustomerId && (
@@ -160,7 +160,7 @@ export default function ReportsPage() {
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
             <h3 className="font-semibold text-slate-800">
-              สรุปรายเดือน — {selCustomer.name} ({selMonth})
+              สรุปรายเดือน — {selCustomer.shortName || selCustomer.name} ({selMonth})
             </h3>
           </div>
           <MonthlySummaryGrid
@@ -177,7 +177,7 @@ export default function ReportsPage() {
       {tab === 'revenue' && (
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h3 className="font-semibold text-slate-800 mb-4">
-            รายได้{selCustomer ? ` — ${selCustomer.name}` : ''} ({selMonth})
+            รายได้{selCustomer ? ` — ${selCustomer.shortName || selCustomer.name}` : ''} ({selMonth})
           </h3>
           <div className="text-3xl font-bold text-[#1B3A5C] mb-4">
             {formatCurrency(revenueByCustomer.reduce((s, r) => s + r.amount, 0))}
@@ -185,7 +185,7 @@ export default function ReportsPage() {
           <div className="space-y-2">
             {revenueByCustomer.map(r => (
               <div key={r.customer!.id} className="flex items-center justify-between py-2 border-b border-slate-100">
-                <Link href={`/dashboard/customers/${r.customer!.id}`} className="text-sm text-slate-700 hover:text-[#1B3A5C] hover:underline">{r.customer!.name}</Link>
+                <Link href={`/dashboard/customers/${r.customer!.id}`} className="text-sm text-slate-700 hover:text-[#1B3A5C] hover:underline">{r.customer!.shortName || r.customer!.name}</Link>
                 <span className="text-sm font-medium text-slate-800">{formatCurrency(r.amount)}</span>
               </div>
             ))}
@@ -211,7 +211,7 @@ export default function ReportsPage() {
                 return (
                   <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <Link href={`/dashboard/customers/${c.id}`} className="font-medium text-slate-800 hover:text-[#1B3A5C] hover:underline">{c.name}</Link>
+                      <Link href={`/dashboard/customers/${c.id}`} className="font-medium text-slate-800 hover:text-[#1B3A5C] hover:underline">{c.shortName || c.name}</Link>
                     </td>
                     <td className="px-4 py-3 text-right">{formatCurrency(total)}</td>
                     <td className="px-4 py-3 text-center">{bills.length}</td>
@@ -289,7 +289,7 @@ export default function ReportsPage() {
               ) : carryOverReport.map(r => (
                 <tr key={r.customer.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-3">
-                    <Link href={`/dashboard/customers/${r.customer.id}`} className="font-medium text-slate-800 hover:text-[#1B3A5C] hover:underline">{r.customer.name}</Link>
+                    <Link href={`/dashboard/customers/${r.customer.id}`} className="font-medium text-slate-800 hover:text-[#1B3A5C] hover:underline">{r.customer.shortName || r.customer.name}</Link>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
@@ -313,7 +313,7 @@ export default function ReportsPage() {
         <div className="no-print">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold text-slate-800">
-              รายงานส่งสินค้า — {selCustomer.name} ({selMonth})
+              รายงานส่งสินค้า — {selCustomer.shortName || selCustomer.name} ({selMonth})
             </h3>
             <button onClick={() => { setPrintOrientation('landscape'); setPrintMargin('narrow'); setShowDeliveryPrint(true) }}
               className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
@@ -337,7 +337,7 @@ export default function ReportsPage() {
         <div className="no-print">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-semibold text-slate-800">
-              สต็อกรายเดือน — {selCustomer.name} ({selMonth})
+              สต็อกรายเดือน — {selCustomer.shortName || selCustomer.name} ({selMonth})
             </h3>
             <button onClick={() => { setPrintOrientation('landscape'); setPrintMargin('narrow'); setShowStockPrint(true) }}
               className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
@@ -406,7 +406,7 @@ export default function ReportsPage() {
               company={companyInfo}
             />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-delivery-report" filename={`delivery-report-${selCustomer.name}-${selMonth}`} showPrint={true} />
+              <ExportButtons targetId="print-delivery-report" filename={`delivery-report-${selCustomer.shortName || selCustomer.name}-${selMonth}`} showPrint={true} />
             </div>
           </div>
         )}
@@ -462,7 +462,7 @@ export default function ReportsPage() {
               getCarryOver={getCarryOver}
             />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-stock-report" filename={`stock-report-${selCustomer.name}-${selMonth}`} showPrint={true} />
+              <ExportButtons targetId="print-stock-report" filename={`stock-report-${selCustomer.shortName || selCustomer.name}-${selMonth}`} showPrint={true} />
             </div>
           </div>
         )}

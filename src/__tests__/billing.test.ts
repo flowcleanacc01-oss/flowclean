@@ -10,6 +10,7 @@ function makeCustomer(overrides: Partial<Customer> = {}): Customer {
     id: 'cust-1',
     customerCode: 'HT0001',
     customerType: 'hotel',
+    shortName: '',
     name: 'Test Hotel',
     nameEn: 'Test Hotel',
     address: '123 Test',

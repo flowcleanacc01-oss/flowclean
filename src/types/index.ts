@@ -122,7 +122,8 @@ export interface Customer {
   id: string
   customerCode: string // e.g. "HT0001" — 2 uppercase letters + 4 digits
   customerType: CustomerType
-  name: string
+  shortName: string // ชื่อย่อ (WOV, Bell, SWD) — ใช้ในงานประจำวัน LF/SD/ตาราง
+  name: string // ชื่อบริษัทเต็ม (ใช้ในเอกสารทางการ WB/IV)
   nameEn: string
   address: string
   taxId: string

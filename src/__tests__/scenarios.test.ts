@@ -84,6 +84,7 @@ describe('S1: Happy Path — Per-Piece Billing', () => {
     id: 'cust-hotel-a',
     customerCode: 'HT0001',
     customerType: 'hotel',
+    shortName: 'GHA',
     name: 'Grand Hotel A',
     nameEn: 'Grand Hotel A',
     address: '123 Bangkok',
@@ -282,6 +283,7 @@ describe('S2: Happy Path — Flat-Rate Billing', () => {
     id: 'cust-hotel-b',
     customerCode: 'HT0002',
     customerType: 'hotel',
+    shortName: 'BHB',
     name: 'Budget Hotel B',
     nameEn: 'Budget Hotel B',
     address: '456 Bangkok',
@@ -330,6 +332,7 @@ describe('S3: Claim Items — Free, Not Billed', () => {
     id: 'cust-hotel-c',
     customerCode: 'HT0003',
     customerType: 'hotel',
+    shortName: 'LHC',
     name: 'Luxury Hotel C',
     nameEn: 'Luxury Hotel C',
     address: '789 Bangkok',
@@ -629,7 +632,7 @@ describe('S5: Discrepancy Detection', () => {
 // ============================================================
 describe('S6: Mixed Billing — Multi-Customer, Multi-Delivery', () => {
   const customerA: Customer = {
-    id: 'cust-mix-a', customerCode: 'HT0010', customerType: 'hotel',
+    id: 'cust-mix-a', customerCode: 'HT0010', customerType: 'hotel', shortName: 'HA',
     name: 'Hotel Alpha', nameEn: 'Hotel Alpha', address: 'A',
     taxId: '1111111111111', branch: 'head', contactName: '', contactPhone: '', contactEmail: '',
     creditDays: 30, billingModel: 'per_piece', monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',
@@ -640,7 +643,7 @@ describe('S6: Mixed Billing — Multi-Customer, Multi-Delivery', () => {
   }
 
   const customerB: Customer = {
-    id: 'cust-mix-b', customerCode: 'HT0020', customerType: 'hotel',
+    id: 'cust-mix-b', customerCode: 'HT0020', customerType: 'hotel', shortName: 'HB',
     name: 'Hotel Beta', nameEn: 'Hotel Beta', address: 'B',
     taxId: '2222222222222', branch: 'head', contactName: '', contactPhone: '', contactEmail: '',
     creditDays: 15, billingModel: 'per_piece', monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',
@@ -733,7 +736,7 @@ describe('S6: Mixed Billing — Multi-Customer, Multi-Delivery', () => {
 // ============================================================
 describe('S7: Edge Cases', () => {
   const customer: Customer = {
-    id: 'cust-edge', customerCode: 'HT9999', customerType: 'hotel',
+    id: 'cust-edge', customerCode: 'HT9999', customerType: 'hotel', shortName: '',
     name: 'Edge Hotel', nameEn: 'Edge Hotel', address: 'Edge',
     taxId: '9999999999999', branch: 'head', contactName: '', contactPhone: '', contactEmail: '',
     creditDays: 30, billingModel: 'per_piece', monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',
@@ -887,7 +890,7 @@ describe('S7: Edge Cases', () => {
 describe('S8: Full Lifecycle — Realistic 3-Day Operation', () => {
   const customerId = 'cust-lifecycle'
   const customer: Customer = {
-    id: customerId, customerCode: 'HT0050', customerType: 'hotel',
+    id: customerId, customerCode: 'HT0050', customerType: 'hotel', shortName: 'RR',
     name: 'Riverside Resort', nameEn: 'Riverside Resort', address: 'Riverside',
     taxId: '5555555555555', branch: 'head', contactName: '', contactPhone: '', contactEmail: '',
     creditDays: 30, billingModel: 'per_piece', monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',

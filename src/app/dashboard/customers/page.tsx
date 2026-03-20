@@ -14,7 +14,7 @@ type SortKey = 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'enable
 
 const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   customerCode: '', customerType: 'hotel',
-  name: '', nameEn: '', address: '', taxId: '', branch: 'สำนักงานใหญ่',
+  shortName: '', name: '', nameEn: '', address: '', taxId: '', branch: 'สำนักงานใหญ่',
   contactName: '', contactPhone: '', contactEmail: '',
   creditDays: 30, billingModel: 'per_piece', monthlyFlatRate: 0, minPerTrip: 0, selectedBankAccountId: '',
   enablePerPiece: true, enableMinPerTrip: false, enableWaive: false, minPerTripThreshold: 0, enableMinPerMonth: false,
@@ -65,14 +65,14 @@ export default function CustomersPage() {
     if (search) {
       const q = search.toLowerCase()
       list = list.filter(c =>
-        c.name.toLowerCase().includes(q) || c.nameEn.toLowerCase().includes(q) ||
+        (c.shortName || '').toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || c.nameEn.toLowerCase().includes(q) ||
         c.contactName.toLowerCase().includes(q) || c.customerCode.toLowerCase().includes(q)
       )
     }
     return list.sort((a, b) => {
       let va: string | number, vb: string | number
       switch (sortKey) {
-        case 'name': va = a.name; vb = b.name; break
+        case 'name': va = a.shortName || a.name; vb = b.shortName || b.name; break
         case 'customerType': va = getCustomerCategoryLabel(a.customerType); vb = getCustomerCategoryLabel(b.customerType); break
         case 'billingModel': va = a.billingModel; vb = b.billingModel; break
         case 'creditDays': va = a.creditDays; vb = b.creditDays; break
@@ -91,7 +91,7 @@ export default function CustomersPage() {
     setEditId(c.id)
     setForm({
       customerCode: c.customerCode, customerType: c.customerType,
-      name: c.name, nameEn: c.nameEn, address: c.address, taxId: c.taxId, branch: c.branch,
+      shortName: c.shortName || '', name: c.name, nameEn: c.nameEn, address: c.address, taxId: c.taxId, branch: c.branch,
       contactName: c.contactName, contactPhone: c.contactPhone, contactEmail: c.contactEmail,
       creditDays: c.creditDays, billingModel: c.billingModel, monthlyFlatRate: c.monthlyFlatRate, minPerTrip: c.minPerTrip ?? 0, selectedBankAccountId: c.selectedBankAccountId ?? '',
       enablePerPiece: c.enablePerPiece ?? true, enableMinPerTrip: c.enableMinPerTrip ?? false,
@@ -213,8 +213,8 @@ export default function CustomersPage() {
                     <tr key={c.id} className={cn('border-b border-slate-100 hover:bg-slate-50',
                       !c.isActive && 'bg-red-50/30')}>
                       <td className={cn("px-4 py-3", sortedBg('name'))}>
-                        <Link href={`/dashboard/customers/${c.id}`} className="font-medium text-slate-800 hover:text-[#1B3A5C] hover:underline">{c.name}</Link>
-                        {c.nameEn && <p className="text-[10px] text-slate-400">{c.nameEn}</p>}
+                        <Link href={`/dashboard/customers/${c.id}`} className="font-medium text-slate-800 hover:text-[#1B3A5C] hover:underline">{c.shortName || c.name}</Link>
+                        <p className="text-[10px] text-slate-400">{c.shortName ? c.name : c.nameEn}</p>
                       </td>
                       <td className={cn("px-4 py-3 text-slate-600 text-xs", sortedBg('customerType'))}>{getCustomerCategoryLabel(c.customerType)}</td>
                       <td className={cn("px-4 py-3 text-center", sortedBg('billingModel'))}>
@@ -379,14 +379,20 @@ export default function CustomersPage() {
       {/* Form Modal */}
       <Modal open={showForm} onClose={() => setShowForm(false)} title={editId ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า'} size="xl">
         <div className="space-y-4 text-sm">
+          <div>
+            <label className="block font-medium text-slate-600 mb-1">ชื่อย่อ * <span className="text-xs text-slate-400 font-normal">(ใช้ในงานประจำวัน เช่น WOV, Bell, SWD)</span></label>
+            <input value={form.shortName} onChange={e => setForm({ ...form, shortName: e.target.value.toUpperCase() })}
+              placeholder="เช่น WOV, Bell"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none font-medium text-lg tracking-wider" />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-medium text-slate-600 mb-1">ชื่อ (ไทย) *</label>
+              <label className="block font-medium text-slate-600 mb-1">ชื่อบริษัท (ไทย) *</label>
               <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <div>
-              <label className="block font-medium text-slate-600 mb-1">ชื่อ (อังกฤษ)</label>
+              <label className="block font-medium text-slate-600 mb-1">ชื่อบริษัท (อังกฤษ)</label>
               <input value={form.nameEn} onChange={e => setForm({ ...form, nameEn: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
@@ -562,7 +568,7 @@ export default function CustomersPage() {
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setShowForm(false)}
               className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={handleSave} disabled={!form.name}
+            <button onClick={handleSave} disabled={!form.shortName || !form.name}
               className="px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium flex items-center gap-1">
               <Check className="w-4 h-4" />บันทึก
             </button>

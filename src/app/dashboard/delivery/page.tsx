@@ -73,7 +73,7 @@ export default function DeliveryPage() {
       if (search) {
         const customer = getCustomer(dn.customerId)
         const q = search.toLowerCase()
-        if (!dn.noteNumber.toLowerCase().includes(q) && !customer?.name.toLowerCase().includes(q)) return false
+        if (!dn.noteNumber.toLowerCase().includes(q) && !(customer?.shortName || '').toLowerCase().includes(q) && !(customer?.name || '').toLowerCase().includes(q)) return false
       }
       if (dateFrom) {
         if (dateFilterMode === 'single') {
@@ -93,7 +93,7 @@ export default function DeliveryPage() {
       let va: string | number, vb: string | number
       switch (sortKey) {
         case 'noteNumber': va = a.noteNumber; vb = b.noteNumber; break
-        case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
+        case 'customer': { const ca = getCustomer(a.customerId); va = ca?.shortName || ca?.name || ''; const cb = getCustomer(b.customerId); vb = cb?.shortName || cb?.name || ''; break }
         case 'date': va = a.date; vb = b.date; break
         case 'items': va = a.items.reduce((s, i) => s + i.quantity, 0); vb = b.items.reduce((s, i) => s + i.quantity, 0); break
         case 'amount': va = getDNTotalAmount(a); vb = getDNTotalAmount(b); break
@@ -253,7 +253,7 @@ export default function DeliveryPage() {
       const customer = getCustomer(dn.customerId)
       const pieces = dn.items.reduce((s, i) => s + i.quantity, 0)
       const amount = getDNTotalAmount(dn)
-      return [String(idx + 1), dn.noteNumber, customer?.name || '-', dn.date, String(pieces), String(amount)]
+      return [String(idx + 1), dn.noteNumber, customer?.shortName || customer?.name || '-', dn.date, String(pieces), String(amount)]
     })
     exportCSV(headers, rows, 'รายการใบส่งของ')
   }
@@ -308,7 +308,7 @@ export default function DeliveryPage() {
           className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
           <option value="all">ทุกลูกค้า</option>
           {customers.filter(c => c.isActive).map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
           ))}
         </select>
       </div>
@@ -379,7 +379,7 @@ export default function DeliveryPage() {
                         className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                     </td>
                     <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('noteNumber'))}>{dn.noteNumber}</td>
-                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.name || '-'}</td>
+                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
                     <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(dn.date)}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('items'))}>{formatNumber(totalItems)}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('amount'))}>{dnAmount > 0 ? formatCurrency(dnAmount) : '-'}</td>
@@ -421,7 +421,7 @@ export default function DeliveryPage() {
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
               <option value="">เลือกโรงแรม</option>
               {customers.filter(c => c.isActive).map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
               ))}
             </select>
           </div>
@@ -529,7 +529,7 @@ export default function DeliveryPage() {
         {detailNote && detailCustomer && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.name}</strong></div>
+              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
               <div><span className="text-slate-500">วันที่:</span> {formatDate(detailNote.date)}</div>
               <div><span className="text-slate-500">คนขับ:</span> {detailNote.driverName || '-'}</div>
               <div><span className="text-slate-500">ทะเบียน:</span> {detailNote.vehiclePlate || '-'}</div>
@@ -731,7 +731,7 @@ export default function DeliveryPage() {
                         <tr key={dn.id} className="border-t border-slate-100">
                           <td className="text-center px-3 py-1.5 text-slate-500">{idx + 1}</td>
                           <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{dn.noteNumber}</td>
-                          <td className="px-3 py-1.5 text-slate-800">{customer?.name || '-'}</td>
+                          <td className="px-3 py-1.5 text-slate-800">{customer?.shortName || customer?.name || '-'}</td>
                           <td className="px-3 py-1.5 text-slate-600">{formatDate(dn.date)}</td>
                           <td className="px-3 py-1.5 text-right text-slate-700">{formatNumber(pieces)}</td>
                           <td className="px-3 py-1.5 text-right text-slate-700">{amount > 0 ? formatCurrency(amount) : '-'}</td>

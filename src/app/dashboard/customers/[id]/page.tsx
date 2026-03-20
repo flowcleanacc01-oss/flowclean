@@ -102,8 +102,8 @@ export default function CustomerDetailPage() {
               <Building2 className="w-6 h-6 text-[#1B3A5C]" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">{customer.name}</h1>
-              <p className="text-sm text-slate-400">{customer.nameEn} {customer.customerCode && `• ${customer.customerCode}`}</p>
+              <h1 className="text-2xl font-bold text-slate-800">{customer.shortName || customer.name}</h1>
+              <p className="text-sm text-slate-400">{customer.shortName ? customer.name : customer.nameEn} {customer.customerCode && `• ${customer.customerCode}`}</p>
             </div>
           </div>
         </div>

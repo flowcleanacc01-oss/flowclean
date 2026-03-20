@@ -169,7 +169,7 @@ export default function BillingPage() {
       if (search) {
         const customer = getCustomer(b.customerId)
         const q = search.toLowerCase()
-        if (!b.billingNumber.toLowerCase().includes(q) && !customer?.name.toLowerCase().includes(q)) return false
+        if (!b.billingNumber.toLowerCase().includes(q) && !(customer?.shortName || '').toLowerCase().includes(q) && !(customer?.name || '').toLowerCase().includes(q)) return false
       }
       if (!matchesDateFilter(b.issueDate)) return false
       // WB filter
@@ -184,7 +184,7 @@ export default function BillingPage() {
       let va: string | number, vb: string | number
       switch (sortKey) {
         case 'billingNumber': va = a.billingNumber; vb = b.billingNumber; break
-        case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
+        case 'customer': { const ca = getCustomer(a.customerId); va = ca?.shortName || ca?.name || ''; const cb = getCustomer(b.customerId); vb = cb?.shortName || cb?.name || ''; break }
         case 'issueDate': va = a.issueDate; vb = b.issueDate; break
         case 'billingMonth': va = a.billingMonth; vb = b.billingMonth; break
         case 'grandTotal': va = a.grandTotal; vb = b.grandTotal; break
@@ -549,7 +549,7 @@ export default function BillingPage() {
       if (search) {
         const customer = getCustomer(inv.customerId)
         const q = search.toLowerCase()
-        if (!inv.invoiceNumber.toLowerCase().includes(q) && !customer?.name.toLowerCase().includes(q)) return false
+        if (!inv.invoiceNumber.toLowerCase().includes(q) && !(customer?.shortName || '').toLowerCase().includes(q) && !(customer?.name || '').toLowerCase().includes(q)) return false
       }
       if (!matchesDateFilter(inv.issueDate)) return false
       // IV filter
@@ -562,7 +562,7 @@ export default function BillingPage() {
       let va: string | number, vb: string | number
       switch (sortKey) {
         case 'invoiceNumber': va = a.invoiceNumber; vb = b.invoiceNumber; break
-        case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
+        case 'customer': { const ca = getCustomer(a.customerId); va = ca?.shortName || ca?.name || ''; const cb = getCustomer(b.customerId); vb = cb?.shortName || cb?.name || ''; break }
         case 'grandTotal': va = a.grandTotal; vb = b.grandTotal; break
         case 'isPrinted': va = a.isPrinted ? 1 : 0; vb = b.isPrinted ? 1 : 0; break
         case 'wb': va = billingStatements.find(bs => bs.id === a.billingStatementId)?.billingNumber || ''; vb = billingStatements.find(bs => bs.id === b.billingStatementId)?.billingNumber || ''; break
@@ -788,7 +788,7 @@ export default function BillingPage() {
                           className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                       </td>
                       <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('billingNumber'))}>{b.billingNumber}</td>
-                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.name || '-'}</td>
+                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
                       <td className={cn("px-4 py-3 text-slate-600", sortedBg('issueDate'))}>{formatDate(b.issueDate)}</td>
                       <td className={cn("px-4 py-3 text-slate-600", sortedBg('billingMonth'))}>{b.billingMonth}</td>
                       <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('grandTotal'))}>{formatCurrency(b.grandTotal)}</td>
@@ -876,7 +876,7 @@ export default function BillingPage() {
                           className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                       </td>
                       <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('invoiceNumber'))}>{inv.invoiceNumber}</td>
-                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.name || '-'}</td>
+                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
                       <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(inv.issueDate)}</td>
                       <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('grandTotal'))}>{formatCurrency(inv.grandTotal)}</td>
                       <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
@@ -988,7 +988,7 @@ export default function BillingPage() {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
                 <option value="">เลือกโรงแรม</option>
                 {customers.filter(c => c.isActive).map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
                 ))}
               </select>
             </div>
@@ -1162,7 +1162,7 @@ export default function BillingPage() {
         {detailBilling && detailCustomer && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.name}</strong></div>
+              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
               <div><span className="text-slate-500">เดือน:</span> {detailBilling.billingMonth}</div>
               <div><span className="text-slate-500">วันที่ออก:</span> {formatDate(detailBilling.issueDate)}</div>
               <div><span className="text-slate-500">ครบกำหนด:</span> {formatDate(detailBilling.dueDate)}</div>
@@ -1363,7 +1363,7 @@ export default function BillingPage() {
         {detailInvoice && detailInvoiceCustomer && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailInvoiceCustomer.name}</strong></div>
+              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailInvoiceCustomer.shortName || detailInvoiceCustomer.name}</strong></div>
               <div><span className="text-slate-500">วันที่ออก:</span> {formatDate(detailInvoice.issueDate)}</div>
             </div>
 
@@ -1593,7 +1593,7 @@ export default function BillingPage() {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
                 <option value="">— เลือกจากลูกค้าในระบบ —</option>
                 {customers.filter(c => c.isActive).map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
                 ))}
               </select>
               {!quCustomerId && (
@@ -1933,7 +1933,7 @@ export default function BillingPage() {
                         <tr key={b.id} className="border-t border-slate-100">
                           <td className="text-center px-3 py-1.5 text-slate-500">{idx + 1}</td>
                           <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{b.billingNumber}</td>
-                          <td className="px-3 py-1.5 text-slate-800">{customer?.name || '-'}</td>
+                          <td className="px-3 py-1.5 text-slate-800">{customer?.shortName || customer?.name || '-'}</td>
                           <td className="px-3 py-1.5 text-slate-600">{b.billingMonth}</td>
                           <td className="px-3 py-1.5 text-right text-slate-700 font-medium">{formatCurrency(b.netPayable)}</td>
                           <td className="px-3 py-1.5 text-center">
@@ -1991,7 +1991,7 @@ export default function BillingPage() {
                         <tr key={inv.id} className="border-t border-slate-100">
                           <td className="text-center px-3 py-1.5 text-slate-500">{idx + 1}</td>
                           <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{inv.invoiceNumber}</td>
-                          <td className="px-3 py-1.5 text-slate-800">{customer?.name || '-'}</td>
+                          <td className="px-3 py-1.5 text-slate-800">{customer?.shortName || customer?.name || '-'}</td>
                           <td className="px-3 py-1.5 text-slate-600">{formatDate(inv.issueDate)}</td>
                           <td className="px-3 py-1.5 text-right text-slate-700 font-medium">{formatCurrency(inv.grandTotal)}</td>
                         </tr>

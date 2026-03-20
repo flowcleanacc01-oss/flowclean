@@ -90,6 +90,7 @@ export function migrateCustomer(oldCustomer: V2Customer, index: number): Custome
   const customerType: CustomerType = oldCustomer.customerType || 'hotel'
   return {
     ...oldCustomer,
+    shortName: (oldCustomer as unknown as { shortName?: string }).shortName || '',
     customerCode: oldCustomer.customerCode || generateCustomerCode(index, customerType),
     customerType,
     priceHistory: oldCustomer.priceHistory || [],

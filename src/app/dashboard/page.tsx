@@ -177,7 +177,7 @@ export default function DashboardPage() {
                   return (
                     <tr key={form.id} className="border-t border-slate-100">
                       <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{form.formNumber}</td>
-                      <td className="px-4 py-2.5 text-slate-700">{customer?.name || '-'}</td>
+                      <td className="px-4 py-2.5 text-slate-700">{customer?.shortName || customer?.name || '-'}</td>
                       <td className="px-4 py-2.5 text-slate-500 text-xs">{formatDateShort(form.date)}</td>
                       <td className="px-4 py-2.5 text-right text-slate-700">{totalPieces}</td>
                       <td className="px-4 py-2.5 text-center">
@@ -208,7 +208,7 @@ export default function DashboardPage() {
                   <Link key={form.id} href={`/dashboard/linen-forms?detail=${form.id}`}
                     className="block text-xs bg-orange-50 rounded-lg px-3 py-2 hover:bg-orange-100 transition-colors">
                     <span className="font-mono text-orange-600">{form.formNumber}</span>
-                    <span className="text-slate-500 ml-2">{getCustomer(form.customerId)?.name}</span>
+                    <span className="text-slate-500 ml-2">{(() => { const c = getCustomer(form.customerId); return c?.shortName || c?.name })()}</span>
                   </Link>
                 ))}
               </div>

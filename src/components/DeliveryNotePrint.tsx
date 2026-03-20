@@ -46,7 +46,7 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
       <div className="grid grid-cols-2 gap-4 mb-4 text-xs print:mb-3">
         <div>
           <p className="text-slate-500">ลูกค้า:</p>
-          <p className="font-medium text-slate-800">{customer.name}</p>
+          <p className="font-medium text-slate-800">{customer.shortName || customer.name}</p>
           <p className="text-slate-500">{customer.address}</p>
         </div>
         <div className="text-right">

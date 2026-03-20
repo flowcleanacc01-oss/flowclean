@@ -88,7 +88,7 @@ export default function LinenFormsPage() {
     const rows = items.map((f, idx) => {
       const customer = getCustomer(f.customerId)
       const pieces = f.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
-      return [String(idx + 1), f.formNumber, customer?.name || '-', f.date, String(pieces), LINEN_FORM_STATUS_CONFIG[f.status]?.label || f.status]
+      return [String(idx + 1), f.formNumber, customer?.shortName || customer?.name || '-', f.date, String(pieces), LINEN_FORM_STATUS_CONFIG[f.status]?.label || f.status]
     })
     exportCSV(headers, rows, 'รายการใบส่งรับผ้า')
   }
@@ -107,7 +107,7 @@ export default function LinenFormsPage() {
       if (search) {
         const customer = getCustomer(f.customerId)
         const q = search.toLowerCase()
-        if (!f.formNumber.toLowerCase().includes(q) && !customer?.name.toLowerCase().includes(q)) return false
+        if (!f.formNumber.toLowerCase().includes(q) && !(customer?.shortName || '').toLowerCase().includes(q) && !(customer?.name || '').toLowerCase().includes(q)) return false
       }
       if (dateFrom) {
         if (dateFilterMode === 'single') {
@@ -128,7 +128,7 @@ export default function LinenFormsPage() {
       let va: string | number, vb: string | number
       switch (sortKey) {
         case 'formNumber': va = a.formNumber; vb = b.formNumber; break
-        case 'customer': va = getCustomer(a.customerId)?.name || ''; vb = getCustomer(b.customerId)?.name || ''; break
+        case 'customer': { const ca = getCustomer(a.customerId); va = ca?.shortName || ca?.name || ''; const cb = getCustomer(b.customerId); vb = cb?.shortName || cb?.name || ''; break }
         case 'date': va = a.date; vb = b.date; break
         case 'pieces': va = a.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0); vb = b.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0); break
         case 'status': va = ALL_LINEN_STATUSES.indexOf(a.status); vb = ALL_LINEN_STATUSES.indexOf(b.status); break
@@ -302,7 +302,7 @@ export default function LinenFormsPage() {
           className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
           <option value="all">ทุกลูกค้า</option>
           {customers.filter(c => c.isActive).map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
           ))}
         </select>
       </div>
@@ -397,7 +397,7 @@ export default function LinenFormsPage() {
                         className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                     </td>
                     <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('formNumber'))}>{form.formNumber}</td>
-                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.name || '-'}</td>
+                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
                     <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(form.date)}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('pieces'))}>{totalPieces}</td>
                     <td className={cn("px-4 py-3 text-center", sortedBg('status'))}>
@@ -477,7 +477,7 @@ export default function LinenFormsPage() {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
                 <option value="">เลือกโรงแรม</option>
                 {customers.filter(c => c.isActive).map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
                 ))}
               </select>
             </div>
@@ -546,7 +546,7 @@ export default function LinenFormsPage() {
           <div className="space-y-4">
             <div id="linen-form-detail" className="space-y-4 bg-white p-2">
             <div className="flex flex-wrap gap-4 text-sm">
-              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.name}</strong></div>
+              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
               <div><span className="text-slate-500">วันที่:</span> {formatDate(detailForm.date)}</div>
               <div>
                 <span className={cn(
@@ -845,7 +845,7 @@ export default function LinenFormsPage() {
                         <tr key={f.id} className="border-t border-slate-100">
                           <td className="text-center px-3 py-1.5 text-slate-500">{idx + 1}</td>
                           <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{f.formNumber}</td>
-                          <td className="px-3 py-1.5 text-slate-800">{customer?.name || '-'}</td>
+                          <td className="px-3 py-1.5 text-slate-800">{customer?.shortName || customer?.name || '-'}</td>
                           <td className="px-3 py-1.5 text-slate-600">{formatDate(f.date)}</td>
                           <td className="px-3 py-1.5 text-right text-slate-700">{pieces}</td>
                           <td className="px-3 py-1.5 text-center">
