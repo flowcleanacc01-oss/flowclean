@@ -7,7 +7,7 @@ import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber 
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
-import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2 } from 'lucide-react'
+import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2, RefreshCw } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
@@ -404,6 +404,20 @@ export default function BillingPage() {
       return
     }
     updateQuotationStatus(qtId, 'accepted')
+    // Auto sync: อัปเดต priceList + billing conditions ให้ลูกค้าอัตโนมัติ
+    const cust = qt.customerId ? customers.find(c => c.id === qt.customerId) : customers.find(c => c.name === qt.customerName)
+    if (cust) {
+      updateCustomer(cust.id, {
+        enablePerPiece: qt.enablePerPiece ?? true,
+        enableMinPerTrip: qt.enableMinPerTrip ?? false,
+        minPerTrip: qt.minPerTrip ?? 0,
+        enableWaive: qt.enableWaive ?? false,
+        minPerTripThreshold: qt.minPerTripThreshold ?? 0,
+        enableMinPerMonth: qt.enableMinPerMonth ?? false,
+        monthlyFlatRate: qt.monthlyFlatRate ?? 0,
+        priceList: qt.items.map(i => ({ code: i.code, price: i.pricePerUnit })),
+      })
+    }
   }
 
   const moveQuItem = (code: string, dir: 'up' | 'down') => {
@@ -1862,10 +1876,11 @@ export default function BillingPage() {
                         monthlyFlatRate: detailQuotation.monthlyFlatRate ?? 0,
                         priceList: detailQuotation.items.map(i => ({ code: i.code, price: i.pricePerUnit })),
                       })
-                      if (confirm(`อัปเดตรูปแบบคิดเงิน + ราคาให้ ${cust.name} แล้ว`)) {}
+                      alert(`Sync ราคาให้ ${cust.shortName || cust.name} แล้ว`)
                     }}
-                      className="text-sm px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5" />นำไปใช้กับลูกค้า
+                      className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 flex items-center gap-1"
+                      title="Sync ราคาอีกครั้ง (ปกติ auto sync ตอนกดตกลงแล้ว)">
+                      <RefreshCw className="w-3 h-3" />Sync ราคาซ้ำ
                     </button>
                   ) : null
                 })()}
