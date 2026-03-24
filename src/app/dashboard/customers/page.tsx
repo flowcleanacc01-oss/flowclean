@@ -10,7 +10,7 @@ import Modal from '@/components/Modal'
 import SortableHeader from '@/components/SortableHeader'
 
 type PageTab = 'customers' | 'categories'
-type SortKey = 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'enabledItems' | 'qt' | 'contact' | 'isActive'
+type SortKey = 'shortName' | 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'enabledItems' | 'qt' | 'contact' | 'isActive'
 
 const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   customerCode: '', customerType: 'hotel',
@@ -20,6 +20,7 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   enablePerPiece: true, enableMinPerTrip: false, enableWaive: false, minPerTripThreshold: 0, enableMinPerMonth: false,
   enabledItems: [], priceList: [], priceHistory: [],
   notes: '', isActive: true,
+  enableVat: true, enableWithholding: true,
 }
 
 export default function CustomersPage() {
@@ -40,7 +41,7 @@ export default function CustomersPage() {
   const [pageTab, setPageTab] = useState<PageTab>('customers')
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState<string>('all')
-  const [sortKey, setSortKey] = useState<string>('name')
+  const [sortKey, setSortKey] = useState<string>('shortName')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -72,7 +73,8 @@ export default function CustomersPage() {
     return list.sort((a, b) => {
       let va: string | number, vb: string | number
       switch (sortKey) {
-        case 'name': va = a.shortName || a.name; vb = b.shortName || b.name; break
+        case 'shortName': va = a.shortName || ''; vb = b.shortName || ''; break
+        case 'name': va = a.name; vb = b.name; break
         case 'customerType': va = getCustomerCategoryLabel(a.customerType); vb = getCustomerCategoryLabel(b.customerType); break
         case 'billingModel': va = a.billingModel; vb = b.billingModel; break
         case 'creditDays': va = a.creditDays; vb = b.creditDays; break
@@ -98,6 +100,7 @@ export default function CustomersPage() {
       enableWaive: c.enableWaive ?? false, minPerTripThreshold: c.minPerTripThreshold ?? 0, enableMinPerMonth: c.enableMinPerMonth ?? false,
       enabledItems: [...c.enabledItems], priceList: [...c.priceList], priceHistory: [...c.priceHistory],
       notes: c.notes, isActive: c.isActive,
+      enableVat: c.enableVat !== false, enableWithholding: c.enableWithholding !== false,
     })
     setShowForm(true)
   }
@@ -195,7 +198,8 @@ export default function CustomersPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <SortableHeader label="ชื่อลูกค้า" sortKey="name" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                    <SortableHeader label="ชื่อย่อลูกค้า" sortKey="shortName" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                    <SortableHeader label="ชื่อบริษัท" sortKey="name" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                     <SortableHeader label="หมวด" sortKey="customerType" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                     <SortableHeader label="รูปแบบบิล" sortKey="billingModel" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                     <SortableHeader label="เครดิต" sortKey="creditDays" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
@@ -208,13 +212,16 @@ export default function CustomersPage() {
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={9} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                    <tr><td colSpan={10} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                   ) : filtered.map(c => (
                     <tr key={c.id} className={cn('border-b border-slate-100 hover:bg-slate-50',
                       !c.isActive && 'bg-red-50/30')}>
+                      <td className={cn("px-4 py-3", sortedBg('shortName'))}>
+                        <Link href={`/dashboard/customers/${c.id}`} className="font-bold text-[#1B3A5C] hover:underline tracking-wide">{c.shortName || '-'}</Link>
+                      </td>
                       <td className={cn("px-4 py-3", sortedBg('name'))}>
-                        <Link href={`/dashboard/customers/${c.id}`} className="font-medium text-slate-800 hover:text-[#1B3A5C] hover:underline">{c.shortName || c.name}</Link>
-                        <p className="text-[10px] text-slate-400">{c.shortName ? c.name : c.nameEn}</p>
+                        <span className="text-slate-800">{c.name}</span>
+                        {c.nameEn && <p className="text-[10px] text-slate-400">{c.nameEn}</p>}
                       </td>
                       <td className={cn("px-4 py-3 text-slate-600 text-xs", sortedBg('customerType'))}>{getCustomerCategoryLabel(c.customerType)}</td>
                       <td className={cn("px-4 py-3 text-center", sortedBg('billingModel'))}>
@@ -380,10 +387,15 @@ export default function CustomersPage() {
       <Modal open={showForm} onClose={() => setShowForm(false)} title={editId ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า'} size="xl">
         <div className="space-y-4 text-sm">
           <div>
-            <label className="block font-medium text-slate-600 mb-1">ชื่อย่อ * <span className="text-xs text-slate-400 font-normal">(ใช้ในงานประจำวัน เช่น WOV, Bell, SWD)</span></label>
+            <label className="block font-medium text-slate-600 mb-1">ชื่อย่อลูกค้า * <span className="text-xs text-slate-400 font-normal">(ใช้ในงานประจำวัน เช่น WOV, Bell, SWD)</span></label>
             <input value={form.shortName} onChange={e => setForm({ ...form, shortName: e.target.value.toUpperCase() })}
               placeholder="เช่น WOV, Bell"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none font-medium text-lg tracking-wider" />
+              className={cn("w-full px-3 py-2 border rounded-lg focus:ring-1 focus:outline-none font-medium text-lg tracking-wider",
+                form.shortName && customers.some(c => c.shortName.toUpperCase() === form.shortName.toUpperCase() && c.id !== editId)
+                  ? 'border-red-400 focus:ring-red-300' : 'border-slate-200 focus:ring-[#3DD8D8]')} />
+            {form.shortName && customers.some(c => c.shortName.toUpperCase() === form.shortName.toUpperCase() && c.id !== editId) && (
+              <p className="text-red-600 text-xs mt-1">ชื่อย่อลูกค้าซ้ำ — กรุณาใช้ชื่อย่ออื่น</p>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -530,45 +542,28 @@ export default function CustomersPage() {
               className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
           </div>
 
-          {/* Tax Group — กรณีบริษัทเดียวกันแต่แยกแผนก */}
-          <details className="border border-slate-200 rounded-lg">
-            <summary className="px-4 py-2 cursor-pointer text-sm font-medium text-slate-600 hover:bg-slate-50 select-none">
-              ข้อมูลออกใบกำกับภาษี (กรณีแยกแผนก)
-              {form.taxGroupName && <span className="ml-2 text-xs text-emerald-600 font-normal">• มีข้อมูล</span>}
-            </summary>
-            <div className="px-4 pb-4 pt-2 space-y-3 border-t border-slate-100">
-              <p className="text-xs text-slate-400">กรอกเฉพาะลูกค้าที่เป็นแผนกย่อยของบริษัทเดียวกัน — ข้อมูลนี้จะใช้แทนชื่อ/ที่อยู่ปกติในใบวางบิลและใบกำกับภาษี</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">ชื่อบริษัท (สำหรับ IV)</label>
-                  <input value={form.taxGroupName || ''} onChange={e => setForm({ ...form, taxGroupName: e.target.value || undefined })}
-                    placeholder="เช่น บริษัท ABC จำกัด"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">เลขผู้เสียภาษี (สำหรับ IV)</label>
-                  <input value={form.taxGroupTaxId || ''} onChange={e => setForm({ ...form, taxGroupTaxId: e.target.value || undefined })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">สาขา (สำหรับ IV)</label>
-                  <input value={form.taxGroupBranch || ''} onChange={e => setForm({ ...form, taxGroupBranch: e.target.value || undefined })}
-                    placeholder="00000"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">ที่อยู่ (สำหรับ IV)</label>
-                  <textarea value={form.taxGroupAddress || ''} onChange={e => setForm({ ...form, taxGroupAddress: e.target.value || undefined })} rows={2}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                </div>
-              </div>
+          {/* VAT & หัก ณ ที่จ่าย */}
+          <div className="bg-slate-50 rounded-lg p-4">
+            <span className="font-medium text-slate-700 block mb-2">ภาษี</span>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.enableVat} onChange={e => setForm({ ...form, enableVat: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                <span className="text-slate-700">คิด VAT</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.enableWithholding} onChange={e => setForm({ ...form, enableWithholding: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                <span className="text-slate-700">หัก ณ ที่จ่าย</span>
+              </label>
             </div>
-          </details>
+          </div>
 
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setShowForm(false)}
               className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={handleSave} disabled={!form.shortName || !form.name}
+            <button onClick={handleSave}
+              disabled={!form.shortName || !form.name || customers.some(c => c.shortName.toUpperCase() === form.shortName.toUpperCase() && c.id !== editId)}
               className="px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium flex items-center gap-1">
               <Check className="w-4 h-4" />บันทึก
             </button>

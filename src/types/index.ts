@@ -147,11 +147,9 @@ export interface Customer {
   notes: string
   createdAt: string
   isActive: boolean
-  // Tax Group — สำหรับลูกค้าที่เป็นแผนกย่อยของบริษัทเดียวกัน (ออก IV ชื่อบริษัทเดียวกัน)
-  taxGroupName?: string    // ชื่อบริษัทสำหรับออกใบกำกับภาษี
-  taxGroupTaxId?: string   // เลขผู้เสียภาษีสำหรับออกใบกำกับภาษี
-  taxGroupAddress?: string // ที่อยู่สำหรับออกใบกำกับภาษี
-  taxGroupBranch?: string  // สาขาสำหรับออกใบกำกับภาษี
+  // VAT & WHT toggles — ลูกค้าบางรายไม่ต้องคิด VAT หรือไม่หัก ณ ที่จ่าย
+  enableVat: boolean       // คิด VAT (default true)
+  enableWithholding: boolean // หัก ณ ที่จ่าย (default true)
 }
 
 // ============================================================
@@ -472,6 +470,8 @@ export interface CompanyInfo {
   bankAccountName: string
   bankAccountNumber: string
   bankAccounts: BankAccount[]
+  vatRate: number           // % VAT (default 7)
+  withholdingRate: number   // % หัก ณ ที่จ่าย (default 3)
 }
 
 // ============================================================

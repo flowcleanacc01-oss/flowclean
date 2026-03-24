@@ -101,6 +101,8 @@ export function migrateCustomer(oldCustomer: V2Customer, index: number): Custome
     enableWaive: (oldCustomer as unknown as { enableWaive?: boolean }).enableWaive ?? false,
     minPerTripThreshold: (oldCustomer as unknown as { minPerTripThreshold?: number }).minPerTripThreshold ?? 0,
     enableMinPerMonth: (oldCustomer as unknown as { enableMinPerMonth?: boolean }).enableMinPerMonth ?? (oldCustomer.billingModel === 'monthly_flat'),
+    enableVat: (oldCustomer as unknown as { enableVat?: boolean }).enableVat ?? true,
+    enableWithholding: (oldCustomer as unknown as { enableWithholding?: boolean }).enableWithholding ?? true,
   }
 }
 

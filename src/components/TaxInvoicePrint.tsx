@@ -37,11 +37,11 @@ export default function TaxInvoicePrint({ invoice, customer, company, withholdin
       <div className="grid grid-cols-2 gap-4 mb-6 text-xs">
         <div>
           <p className="text-slate-500">ลูกค้า / Customer:</p>
-          <p className="font-medium text-slate-800">{customer.taxGroupName || customer.name}</p>
-          {!customer.taxGroupName && customer.nameEn && <p className="text-slate-500">{customer.nameEn}</p>}
-          <p className="text-slate-500 mt-1">{customer.taxGroupAddress || customer.address}</p>
-          <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxGroupTaxId || customer.taxId}</p>
-          <p className="text-slate-500">{formatBranch(customer.taxGroupBranch || customer.branch)}</p>
+          <p className="font-medium text-slate-800">{customer.name}</p>
+          {customer.nameEn && <p className="text-slate-500">{customer.nameEn}</p>}
+          <p className="text-slate-500 mt-1">{customer.address}</p>
+          <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxId}</p>
+          <p className="text-slate-500">{formatBranch(customer.branch)}</p>
         </div>
         <div className="text-right">
           <p className="text-slate-500">เลขที่ / No:</p>
@@ -75,21 +75,25 @@ export default function TaxInvoicePrint({ invoice, customer, company, withholdin
         </tbody>
         <tfoot>
           <tr className="bg-slate-50">
-            <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300 font-medium">รวมก่อน VAT</td>
+            <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300 font-medium">{invoice.vat > 0 ? 'รวมก่อน VAT' : 'รวม'}</td>
             <td className="text-right px-3 py-1.5 border border-slate-300 font-medium">{formatCurrency(invoice.subtotal)}</td>
           </tr>
-          <tr className="bg-slate-50">
-            <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300">ภาษีมูลค่าเพิ่ม 7%</td>
-            <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(invoice.vat)}</td>
-          </tr>
+          {invoice.vat > 0 && (
+            <tr className="bg-slate-50">
+              <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300">ภาษีมูลค่าเพิ่ม {invoice.subtotal > 0 ? `${Math.round(invoice.vat / invoice.subtotal * 100)}%` : ''}</td>
+              <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(invoice.vat)}</td>
+            </tr>
+          )}
           <tr className="bg-slate-50">
             <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300 font-medium">รวมทั้งสิ้น</td>
             <td className="text-right px-3 py-1.5 border border-slate-300 font-medium">{formatCurrency(invoice.grandTotal)}</td>
           </tr>
-          <tr>
-            <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300 text-red-600">หัก ณ ที่จ่าย 3%</td>
-            <td className="text-right px-3 py-1.5 border border-slate-300 text-red-600">-{formatCurrency(wht)}</td>
-          </tr>
+          {wht > 0 && (
+            <tr>
+              <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300 text-red-600">หัก ณ ที่จ่าย {invoice.subtotal > 0 ? `${Math.round(wht / invoice.subtotal * 100)}%` : ''}</td>
+              <td className="text-right px-3 py-1.5 border border-slate-300 text-red-600">-{formatCurrency(wht)}</td>
+            </tr>
+          )}
           <tr className="bg-[#e8eef5]">
             <td colSpan={4} className="text-right px-3 py-2 border border-slate-300 font-bold text-[#1B3A5C]">ยอดชำระสุทธิ / Net Payable</td>
             <td className="text-right px-3 py-2 border border-slate-300 font-bold text-[#1B3A5C] text-base">{formatCurrency(net)}</td>

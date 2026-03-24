@@ -22,6 +22,8 @@ export const DEFAULT_COMPANY_INFO: CompanyInfo = {
   bankAccountName: 'บจก. คราฟท์ แอนด์ มอร์',
   bankAccountNumber: '123-4-56789-0',
   bankAccounts: [],
+  vatRate: 7,
+  withholdingRate: 3,
 }
 
 // ============================================================
@@ -60,6 +62,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     notes: 'ลูกค้า VIP - ส่งทุกวัน',
     createdAt: '2025-01-15',
     isActive: true,
+    enableVat: true, enableWithholding: true,
   },
   {
     id: 'cust-02',
@@ -89,6 +92,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     notes: '',
     createdAt: '2025-02-01',
     isActive: true,
+    enableVat: true, enableWithholding: true,
   },
   {
     id: 'cust-03',
@@ -117,6 +121,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     notes: 'สาขาข้าวสาร',
     createdAt: '2025-03-10',
     isActive: true,
+    enableVat: true, enableWithholding: true,
   },
   {
     id: 'cust-04',
@@ -145,6 +150,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     notes: '',
     createdAt: '2025-04-20',
     isActive: true,
+    enableVat: true, enableWithholding: true,
   },
   {
     id: 'cust-05',
@@ -169,6 +175,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     notes: 'เหมาจ่ายรายเดือน 25,000 บาท',
     createdAt: '2025-05-01',
     isActive: true,
+    enableVat: true, enableWithholding: true,
   },
   {
     id: 'cust-06',
@@ -193,6 +200,7 @@ export const SAMPLE_CUSTOMERS: Customer[] = [
     notes: 'เหมาจ่ายรายเดือน 18,000 บาท — ผ้าอุตสาหกรรม',
     createdAt: '2026-01-15',
     isActive: true,
+    enableVat: true, enableWithholding: true,
   },
 ]
 

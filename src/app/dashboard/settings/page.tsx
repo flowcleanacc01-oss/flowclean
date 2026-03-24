@@ -76,7 +76,7 @@ export default function SettingsPage() {
 
   useEffect(() => { setCompanyDraft(companyInfo) }, [companyInfo])
 
-  const handleCompanyChange = useCallback((field: string, value: string) => {
+  const handleCompanyChange = useCallback((field: string, value: string | number) => {
     setCompanyDraft(prev => ({ ...prev, [field]: value }))
     companyDirty.current = true
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -339,6 +339,29 @@ export default function SettingsPage() {
               <label className="block font-medium text-slate-600 mb-1">โทรศัพท์</label>
               <input value={companyDraft.phone} onChange={e => handleCompanyChange('phone', e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+            </div>
+          </div>
+
+          {/* VAT & WHT Rates */}
+          <div className="border-t border-slate-200 pt-4 mt-4">
+            <h4 className="font-medium text-slate-700 mb-3">อัตราภาษี</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              <div>
+                <label className="block font-medium text-slate-600 mb-1">VAT (%)</label>
+                <input type="number" value={companyDraft.vatRate ?? 7}
+                  onChange={e => handleCompanyChange('vatRate', parseFloat(e.target.value) || 0)}
+                  min={0} max={100} step={0.01}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                <p className="text-[11px] text-slate-400 mt-0.5">ค่าเริ่มต้น 7%</p>
+              </div>
+              <div>
+                <label className="block font-medium text-slate-600 mb-1">หัก ณ ที่จ่าย (%)</label>
+                <input type="number" value={companyDraft.withholdingRate ?? 3}
+                  onChange={e => handleCompanyChange('withholdingRate', parseFloat(e.target.value) || 0)}
+                  min={0} max={100} step={0.01}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                <p className="text-[11px] text-slate-400 mt-0.5">ค่าเริ่มต้น 3%</p>
+              </div>
             </div>
           </div>
 

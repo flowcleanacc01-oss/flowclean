@@ -236,11 +236,15 @@ export default function BillingPage() {
     setSelDnIds(availableDNs.map(dn => dn.id))
   }, [availableDNs])
 
+  // VAT / WHT rates (from company settings + customer toggle)
+  const custVatRate = (selCustomer?.enableVat !== false) ? (companyInfo.vatRate ?? 7) : 0
+  const custWhtRate = (selCustomer?.enableWithholding !== false) ? (companyInfo.withholdingRate ?? 3) : 0
+
   const previewBilling = useMemo(() => {
     if (!selCustomer) return null
     if (!(selCustomer.enablePerPiece ?? true)) {
       if (flatRateBillExists) return null
-      return createFlatRateBilling(selCustomer, selMonth)
+      return createFlatRateBilling(selCustomer, selMonth, custVatRate, custWhtRate)
     }
     // per-piece: use only selected DNs
     const selectedNotes = deliveryNotes.filter(dn => selDnIds.includes(dn.id))
@@ -249,8 +253,8 @@ export default function BillingPage() {
     const lineItems = billingMode === 'by_date'
       ? aggregateDeliveryItemsByDate(selectedNotes, selCustomer)
       : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog, linkedQT?.items)
-    return { lineItems, ...calculateBillingTotals(lineItems) }
-  }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists, billingMode, quotations])
+    return { lineItems, ...calculateBillingTotals(lineItems, custVatRate, custWhtRate) }
+  }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists, billingMode, quotations, custVatRate, custWhtRate])
 
   const handleCreateBilling = () => {
     if (!selCustomer || !previewBilling) return
@@ -444,9 +448,10 @@ export default function BillingPage() {
     const rows = detailBilling.lineItems.map(item => [
       item.code, item.name, String(item.quantity), String(item.pricePerUnit), String(item.amount),
     ])
-    rows.push(['', '', '', 'รวมก่อน VAT', String(detailBilling.subtotal)])
-    rows.push(['', '', '', 'VAT 7%', String(detailBilling.vat)])
-    rows.push(['', '', '', 'หัก ณ ที่จ่าย 3%', String(detailBilling.withholdingTax)])
+    rows.push(['', '', '', 'รวม', String(detailBilling.subtotal)])
+    if (detailBilling.vat > 0) rows.push(['', '', '', `VAT ${detailBilling.subtotal > 0 ? Math.round(detailBilling.vat / detailBilling.subtotal * 100) : 0}%`, String(detailBilling.vat)])
+    rows.push(['', '', '', 'รวมทั้งสิ้น', String(detailBilling.grandTotal)])
+    if (detailBilling.withholdingTax > 0) rows.push(['', '', '', `หัก ณ ที่จ่าย ${detailBilling.subtotal > 0 ? Math.round(detailBilling.withholdingTax / detailBilling.subtotal * 100) : 0}%`, String(detailBilling.withholdingTax)])
     rows.push(['', '', '', 'ยอดจ่ายสุทธิ', String(detailBilling.netPayable)])
     exportCSV(headers, rows, detailBilling.billingNumber)
   }
@@ -457,8 +462,8 @@ export default function BillingPage() {
     const rows = detailInvoice.lineItems.map(item => [
       item.name, String(item.quantity), String(item.pricePerUnit), String(item.amount),
     ])
-    rows.push(['', '', 'รวมก่อน VAT', String(detailInvoice.subtotal)])
-    rows.push(['', '', 'VAT 7%', String(detailInvoice.vat)])
+    rows.push(['', '', detailInvoice.vat > 0 ? 'รวมก่อน VAT' : 'รวม', String(detailInvoice.subtotal)])
+    if (detailInvoice.vat > 0) rows.push(['', '', `VAT ${detailInvoice.subtotal > 0 ? Math.round(detailInvoice.vat / detailInvoice.subtotal * 100) : 0}%`, String(detailInvoice.vat)])
     rows.push(['', '', 'รวมทั้งสิ้น', String(detailInvoice.grandTotal)])
     exportCSV(headers, rows, detailInvoice.invoiceNumber)
   }
@@ -1116,18 +1121,22 @@ export default function BillingPage() {
                       <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">รวม</td>
                       <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(previewBilling.subtotal)}</td>
                     </tr>
+                    {previewBilling.vat > 0 && (
+                      <tr className="bg-slate-50">
+                        <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">VAT {custVatRate}%</td>
+                        <td className="px-3 py-1.5 text-right">{formatCurrency(previewBilling.vat)}</td>
+                      </tr>
+                    )}
                     <tr className="bg-slate-50">
-                      <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">VAT 7%</td>
-                      <td className="px-3 py-1.5 text-right">{formatCurrency(previewBilling.vat)}</td>
-                    </tr>
-                    <tr className="bg-slate-50">
-                      <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">รวม VAT</td>
+                      <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">รวมทั้งสิ้น</td>
                       <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(previewBilling.grandTotal)}</td>
                     </tr>
-                    <tr className="bg-slate-50">
-                      <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">หัก ณ ที่จ่าย 3%</td>
-                      <td className="px-3 py-1.5 text-right text-red-600">-{formatCurrency(previewBilling.withholdingTax)}</td>
-                    </tr>
+                    {previewBilling.withholdingTax > 0 && (
+                      <tr className="bg-slate-50">
+                        <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">หัก ณ ที่จ่าย {custWhtRate}%</td>
+                        <td className="px-3 py-1.5 text-right text-red-600">-{formatCurrency(previewBilling.withholdingTax)}</td>
+                      </tr>
+                    )}
                     <tr className="bg-[#e8eef5]">
                       <td colSpan={3} className="px-3 py-2 text-right font-semibold text-[#1B3A5C]">ยอดจ่ายสุทธิ</td>
                       <td className="px-3 py-2 text-right font-bold text-[#1B3A5C]">{formatCurrency(previewBilling.netPayable)}</td>
@@ -1285,14 +1294,18 @@ export default function BillingPage() {
                     <td colSpan={3} className="px-3 py-1.5 text-right">รวม</td>
                     <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(detailBilling.subtotal)}</td>
                   </tr>
-                  <tr className="bg-slate-50">
-                    <td colSpan={3} className="px-3 py-1.5 text-right">VAT 7%</td>
-                    <td className="px-3 py-1.5 text-right">{formatCurrency(detailBilling.vat)}</td>
-                  </tr>
-                  <tr className="bg-slate-50">
-                    <td colSpan={3} className="px-3 py-1.5 text-right">หัก ณ ที่จ่าย 3%</td>
-                    <td className="px-3 py-1.5 text-right text-red-600">-{formatCurrency(detailBilling.withholdingTax)}</td>
-                  </tr>
+                  {detailBilling.vat > 0 && (
+                    <tr className="bg-slate-50">
+                      <td colSpan={3} className="px-3 py-1.5 text-right">VAT {detailBilling.subtotal > 0 ? `${Math.round(detailBilling.vat / detailBilling.subtotal * 100)}%` : ''}</td>
+                      <td className="px-3 py-1.5 text-right">{formatCurrency(detailBilling.vat)}</td>
+                    </tr>
+                  )}
+                  {detailBilling.withholdingTax > 0 && (
+                    <tr className="bg-slate-50">
+                      <td colSpan={3} className="px-3 py-1.5 text-right">หัก ณ ที่จ่าย {detailBilling.subtotal > 0 ? `${Math.round(detailBilling.withholdingTax / detailBilling.subtotal * 100)}%` : ''}</td>
+                      <td className="px-3 py-1.5 text-right text-red-600">-{formatCurrency(detailBilling.withholdingTax)}</td>
+                    </tr>
+                  )}
                   <tr className="bg-[#e8eef5]">
                     <td colSpan={3} className="px-3 py-2 text-right font-semibold text-[#1B3A5C]">ยอดจ่ายสุทธิ</td>
                     <td className="px-3 py-2 text-right font-bold text-[#1B3A5C]">{formatCurrency(detailBilling.netPayable)}</td>
@@ -1434,13 +1447,15 @@ export default function BillingPage() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-50 border-t">
-                    <td colSpan={3} className="px-3 py-1.5 text-right">รวมก่อน VAT</td>
+                    <td colSpan={3} className="px-3 py-1.5 text-right">{detailInvoice.vat > 0 ? 'รวมก่อน VAT' : 'รวม'}</td>
                     <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(detailInvoice.subtotal)}</td>
                   </tr>
-                  <tr className="bg-slate-50">
-                    <td colSpan={3} className="px-3 py-1.5 text-right">VAT 7%</td>
-                    <td className="px-3 py-1.5 text-right">{formatCurrency(detailInvoice.vat)}</td>
-                  </tr>
+                  {detailInvoice.vat > 0 && (
+                    <tr className="bg-slate-50">
+                      <td colSpan={3} className="px-3 py-1.5 text-right">VAT {detailInvoice.subtotal > 0 ? `${Math.round(detailInvoice.vat / detailInvoice.subtotal * 100)}%` : ''}</td>
+                      <td className="px-3 py-1.5 text-right">{formatCurrency(detailInvoice.vat)}</td>
+                    </tr>
+                  )}
                   <tr className="bg-[#e8eef5]">
                     <td colSpan={3} className="px-3 py-2 text-right font-semibold text-[#1B3A5C]">รวมทั้งสิ้น</td>
                     <td className="px-3 py-2 text-right font-bold text-[#1B3A5C]">{formatCurrency(detailInvoice.grandTotal)}</td>
@@ -1551,13 +1566,15 @@ export default function BillingPage() {
                     </tbody>
                     <tfoot>
                       <tr className="bg-slate-50 border-t">
-                        <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">รวมก่อน VAT</td>
+                        <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">{billing.vat > 0 ? 'รวมก่อน VAT' : 'รวม'}</td>
                         <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(billing.subtotal)}</td>
                       </tr>
-                      <tr className="bg-slate-50">
-                        <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">VAT 7%</td>
-                        <td className="px-3 py-1.5 text-right">{formatCurrency(billing.vat)}</td>
-                      </tr>
+                      {billing.vat > 0 && (
+                        <tr className="bg-slate-50">
+                          <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">VAT {billing.subtotal > 0 ? `${Math.round(billing.vat / billing.subtotal * 100)}%` : ''}   </td>
+                          <td className="px-3 py-1.5 text-right">{formatCurrency(billing.vat)}</td>
+                        </tr>
+                      )}
                       <tr className="bg-[#e8eef5]">
                         <td colSpan={3} className="px-3 py-2 text-right font-semibold text-[#1B3A5C]">รวมทั้งสิ้น</td>
                         <td className="px-3 py-2 text-right font-bold text-[#1B3A5C]">{formatCurrency(billing.grandTotal)}</td>

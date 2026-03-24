@@ -176,13 +176,14 @@ export default function CustomerDetailPage() {
                 </div>
               )}
               <div className="text-xs text-slate-400 pt-1">เครดิต {customer.creditDays} วัน</div>
-              {customer.taxGroupName && (
-                <div className="mt-2 pt-2 border-t border-slate-100">
-                  <p className="text-xs font-medium text-slate-500 mb-1">ออกใบกำกับภาษีในชื่อ:</p>
-                  <p className="text-sm font-medium text-slate-700">{customer.taxGroupName}</p>
-                  {customer.taxGroupTaxId && <p className="text-xs text-slate-400">เลขภาษี: {customer.taxGroupTaxId}</p>}
-                </div>
-              )}
+              <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-slate-100">
+                <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-medium', customer.enableVat !== false ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500')}>
+                  {customer.enableVat !== false ? 'คิด VAT' : 'ไม่คิด VAT'}
+                </span>
+                <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-medium', customer.enableWithholding !== false ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500')}>
+                  {customer.enableWithholding !== false ? 'หัก ณ ที่จ่าย' : 'ไม่หัก ณ ที่จ่าย'}
+                </span>
+              </div>
             </div>
           </div>
 

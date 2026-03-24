@@ -69,7 +69,9 @@ CREATE TABLE company_info (
   phone TEXT NOT NULL DEFAULT '',
   bank_name TEXT NOT NULL DEFAULT '',
   bank_account_name TEXT NOT NULL DEFAULT '',
-  bank_account_number TEXT NOT NULL DEFAULT ''
+  bank_account_number TEXT NOT NULL DEFAULT '',
+  vat_rate NUMERIC NOT NULL DEFAULT 7,
+  withholding_rate NUMERIC NOT NULL DEFAULT 3
 );
 
 -- ============================================================
@@ -104,10 +106,8 @@ CREATE TABLE customers (
   notes TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT '',
   is_active BOOLEAN NOT NULL DEFAULT true,
-  tax_group_name TEXT,
-  tax_group_tax_id TEXT,
-  tax_group_address TEXT,
-  tax_group_branch TEXT
+  enable_vat BOOLEAN NOT NULL DEFAULT true,
+  enable_withholding BOOLEAN NOT NULL DEFAULT true
 );
 
 -- ============================================================

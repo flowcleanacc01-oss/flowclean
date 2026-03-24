@@ -37,9 +37,9 @@ export default function BillingPrint({ billing, customer, company }: BillingPrin
       {/* Customer Info */}
       <div className="mb-6 text-xs">
         <p className="text-slate-500">เรียน:</p>
-        <p className="font-medium text-slate-800">{customer.taxGroupName || customer.name}</p>
-        <p className="text-slate-500">{customer.taxGroupAddress || customer.address}</p>
-        <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxGroupTaxId || customer.taxId} ({formatBranch(customer.taxGroupBranch || customer.branch)})</p>
+        <p className="font-medium text-slate-800">{customer.name}</p>
+        <p className="text-slate-500">{customer.address}</p>
+        <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxId} ({formatBranch(customer.branch)})</p>
       </div>
 
       {/* Billing Period */}
@@ -77,18 +77,22 @@ export default function BillingPrint({ billing, customer, company }: BillingPrin
             <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300 font-medium">รวม</td>
             <td className="text-right px-3 py-1.5 border border-slate-300 font-medium">{formatCurrency(billing.subtotal)}</td>
           </tr>
-          <tr className="bg-slate-50">
-            <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300">ภาษีมูลค่าเพิ่ม 7%</td>
-            <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(billing.vat)}</td>
-          </tr>
+          {billing.vat > 0 && (
+            <tr className="bg-slate-50">
+              <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300">ภาษีมูลค่าเพิ่ม {billing.subtotal > 0 ? `${Math.round(billing.vat / billing.subtotal * 100)}%` : ''}</td>
+              <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(billing.vat)}</td>
+            </tr>
+          )}
           <tr className="bg-slate-50">
             <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300 font-medium">รวมทั้งสิ้น</td>
             <td className="text-right px-3 py-1.5 border border-slate-300 font-bold">{formatCurrency(billing.grandTotal)}</td>
           </tr>
-          <tr>
-            <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300 text-red-600">หัก ณ ที่จ่าย 3%</td>
-            <td className="text-right px-3 py-1.5 border border-slate-300 text-red-600">-{formatCurrency(billing.withholdingTax)}</td>
-          </tr>
+          {billing.withholdingTax > 0 && (
+            <tr>
+              <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300 text-red-600">หัก ณ ที่จ่าย {billing.subtotal > 0 ? `${Math.round(billing.withholdingTax / billing.subtotal * 100)}%` : ''}</td>
+              <td className="text-right px-3 py-1.5 border border-slate-300 text-red-600">-{formatCurrency(billing.withholdingTax)}</td>
+            </tr>
+          )}
           <tr className="bg-[#e8eef5]">
             <td colSpan={4} className="text-right px-3 py-2 border border-slate-300 font-bold text-[#1B3A5C]">ยอดจ่ายสุทธิ</td>
             <td className="text-right px-3 py-2 border border-slate-300 font-bold text-[#1B3A5C] text-base">{formatCurrency(billing.netPayable)}</td>

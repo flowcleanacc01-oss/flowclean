@@ -110,12 +110,13 @@ export function aggregateDeliveryItemsByDate(
 
 /**
  * Calculate billing totals from line items
+ * vatRate / whtRate: percent (e.g. 7, 3). Pass 0 to disable.
  */
-export function calculateBillingTotals(lineItems: BillingLineItem[]) {
+export function calculateBillingTotals(lineItems: BillingLineItem[], vatRate = 7, whtRate = 3) {
   const subtotal = lineItems.reduce((s, i) => s + i.amount, 0)
-  const vat = Math.round(subtotal * 0.07 * 100) / 100
+  const vat = Math.round(subtotal * (vatRate / 100) * 100) / 100
   const grandTotal = Math.round((subtotal + vat) * 100) / 100
-  const withholdingTax = Math.round(subtotal * 0.03 * 100) / 100
+  const withholdingTax = Math.round(subtotal * (whtRate / 100) * 100) / 100
   const netPayable = Math.round((grandTotal - withholdingTax) * 100) / 100
 
   return { subtotal, vat, grandTotal, withholdingTax, netPayable }
@@ -124,7 +125,7 @@ export function calculateBillingTotals(lineItems: BillingLineItem[]) {
 /**
  * For flat-rate billing
  */
-export function createFlatRateBilling(customer: Customer, month: string): {
+export function createFlatRateBilling(customer: Customer, month: string, vatRate = 7, whtRate = 3): {
   lineItems: BillingLineItem[]
   subtotal: number
   vat: number
@@ -140,5 +141,5 @@ export function createFlatRateBilling(customer: Customer, month: string): {
     amount: customer.monthlyFlatRate,
   }]
 
-  return { lineItems, ...calculateBillingTotals(lineItems) }
+  return { lineItems, ...calculateBillingTotals(lineItems, vatRate, whtRate) }
 }
