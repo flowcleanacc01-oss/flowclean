@@ -26,15 +26,14 @@ export default function DeliveryPage() {
 
   const [search, setSearch] = useState('')
   const [customerFilter, setCustomerFilter] = useState<string>('all')
-  const [dnFilter, setDnFilter] = useState<DNFilter>(() => {
-    const p = searchParams.get('preselect')
-    return p ? 'preselected' : 'all'
-  })
   const [showCreate, setShowCreate] = useState(false)
   const searchParams = useSearchParams()
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-
+  const [dnFilter, setDnFilter] = useState<DNFilter>(() => {
+    const p = searchParams.get('preselect')
+    return p ? 'preselected' : 'all'
+  })
   const [selectedDnIds, setSelectedDnIds] = useState<string[]>(() => {
     const p = searchParams.get('preselect')
     return p ? p.split(',').filter(Boolean) : []
