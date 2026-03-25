@@ -63,7 +63,9 @@ export default function BillingPrint({ billing, customer, company }: BillingPrin
             <tr key={item.code}>
               <td className="text-center px-3 py-1.5 border border-slate-300">{idx + 1}</td>
               <td className="px-3 py-1.5 border border-slate-300">
-                <span className="font-mono text-xs text-slate-400 mr-1">{item.code}</span>
+                {!item.code.startsWith('DATE_') && !item.code.startsWith('TRANSPORT_') && item.code !== 'FLAT' && (
+                  <span className="font-mono text-xs text-slate-400 mr-1">{item.code}</span>
+                )}
                 {item.name}
               </td>
               <td className="text-right px-3 py-1.5 border border-slate-300">{item.quantity}</td>

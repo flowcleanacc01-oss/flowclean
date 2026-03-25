@@ -86,8 +86,9 @@ export function aggregateDeliveryItemsByDate(
 ): BillingLineItem[] {
   const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
   const result: BillingLineItem[] = []
+  const sortedNotes = [...notes].sort((a, b) => a.date.localeCompare(b.date))
 
-  for (const note of notes) {
+  for (const note of sortedNotes) {
     let total = 0
     for (const item of note.items) {
       if (item.isClaim) continue
