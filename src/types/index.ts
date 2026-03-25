@@ -367,7 +367,7 @@ export interface QuotationItem {
 export interface Quotation {
   id: string
   quotationNumber: string // QT-YYYYMM-XXX
-  customerId?: string // link to Customer (optional for backward compat)
+  customerId: string // FK → customers.id (required)
   customerName: string
   customerContact: string
   date: string

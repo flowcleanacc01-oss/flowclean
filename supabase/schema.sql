@@ -207,6 +207,7 @@ CREATE TABLE tax_invoices (
 CREATE TABLE quotations (
   id TEXT PRIMARY KEY,
   quotation_number TEXT NOT NULL DEFAULT '' UNIQUE,
+  customer_id TEXT REFERENCES customers(id) ON DELETE SET NULL,
   customer_name TEXT NOT NULL DEFAULT '',
   customer_contact TEXT NOT NULL DEFAULT '',
   date TEXT NOT NULL DEFAULT '',

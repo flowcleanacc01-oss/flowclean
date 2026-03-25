@@ -254,7 +254,7 @@ export default function BillingPage() {
     // per-piece: use only selected DNs
     const selectedNotes = deliveryNotes.filter(dn => selDnIds.includes(dn.id))
     if (selectedNotes.length === 0) return null
-    const linkedQT = quotations.find(q => q.status === 'accepted' && ((selCustomer.id && q.customerId === selCustomer.id) || q.customerName === selCustomer.name))
+    const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerId === selCustomer.id)
     const lineItems = billingMode === 'by_date'
       ? aggregateDeliveryItemsByDate(selectedNotes, selCustomer)
       : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog, linkedQT?.items)
@@ -347,7 +347,7 @@ export default function BillingPage() {
   }
 
   const handleCreateQuotation = () => {
-    if (!quCustomerName) return
+    if (!quCustomerId) return
     const validDate = new Date(quDate)
     validDate.setDate(validDate.getDate() + quValidDays)
     const qtData = {
@@ -359,7 +359,7 @@ export default function BillingPage() {
       conditions: quConditions,
       status: 'draft' as const,
       notes: quNotes,
-      customerId: quCustomerId || undefined,
+      customerId: quCustomerId,
       enablePerPiece: quEnablePerPiece,
       enableMinPerTrip: quEnableMinPerTrip,
       minPerTrip: quMinPerTrip,
@@ -380,7 +380,7 @@ export default function BillingPage() {
   // Open create modal with data from existing QT (edit mode — resets to draft)
   const handleEditQT = (q: typeof quotations[0]) => {
     setEditQuId(q.id)
-    setQuCustomerId(q.customerId || '')
+    setQuCustomerId(q.customerId)
     setQuCustomerName(q.customerName)
     setQuCustomerContact(q.customerContact)
     setQuDate(q.date)
@@ -407,14 +407,14 @@ export default function BillingPage() {
   const handleAcceptQT = (qtId: string) => {
     const qt = quotations.find(q => q.id === qtId)
     if (!qt) return
-    const conflicting = quotations.find(q => q.id !== qtId && q.status === 'accepted' && q.customerName === qt.customerName)
+    const conflicting = quotations.find(q => q.id !== qtId && q.status === 'accepted' && q.customerId === qt.customerId)
     if (conflicting) {
       alert(`ลูกค้า "${qt.customerName}" มีใบเสนอราคาที่ตกลงแล้ว (${conflicting.quotationNumber}) อยู่แล้ว\nสามารถมีสถานะ "ตกลง" ได้เพียง 1 ใบต่อลูกค้าเท่านั้น`)
       return
     }
     updateQuotationStatus(qtId, 'accepted')
     // Auto sync: อัปเดต priceList + billing conditions ให้ลูกค้าอัตโนมัติ
-    const cust = qt.customerId ? customers.find(c => c.id === qt.customerId) : customers.find(c => c.name === qt.customerName)
+    const cust = customers.find(c => c.id === qt.customerId)
     if (cust) {
       updateCustomer(cust.id, {
         enablePerPiece: qt.enablePerPiece ?? true,
@@ -1648,7 +1648,7 @@ export default function BillingPage() {
                   setQuEnableMinPerMonth(cust.enableMinPerMonth ?? false)
                   setQuMonthlyFlatRate(cust.monthlyFlatRate ?? 0)
                   // Auto-load from linked accepted QT if exists, else keep current items (full catalog default)
-                  const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerName === cust.name)
+                  const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerId === cust.id)
                   if (linkedQT) setQuItems([...linkedQT.items])
                 }
               }}
@@ -1658,11 +1658,6 @@ export default function BillingPage() {
                   <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
                 ))}
               </select>
-              {!quCustomerId && (
-                <input value={quCustomerName} onChange={e => setQuCustomerName(e.target.value)}
-                  placeholder="หรือพิมพ์ชื่อลูกค้าใหม่..."
-                  className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">ผู้ติดต่อ</label>
@@ -1842,7 +1837,7 @@ export default function BillingPage() {
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setShowCreateQU(false)}
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={handleCreateQuotation} disabled={!quCustomerName || quItems.filter(i => i.pricePerUnit > 0).length === 0}
+            <button onClick={handleCreateQuotation} disabled={!quCustomerId || quItems.filter(i => i.pricePerUnit > 0).length === 0}
               className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
               บันทึก
             </button>
