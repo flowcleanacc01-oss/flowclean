@@ -44,6 +44,8 @@ export default function LinenFormsPage() {
   const [showPrint, setShowPrint] = useState(false)
   const [alertFilter, setAlertFilter] = useState<'all' | 'alert' | 'no-sd'>('all')
 
+  const [activeRowId, setActiveRowId] = useState<string | null>(null)
+
   // Bulk select state
   const [selectedLfIds, setSelectedLfIds] = useState<string[]>([])
   const [showLfPrintList, setShowLfPrintList] = useState(false)
@@ -364,7 +366,7 @@ export default function LinenFormsPage() {
                     className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                 </th>
                 <SortableHeader label="เลขที่ฟอร์ม" sortKey="formNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                <SortableHeader label="ลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                <SortableHeader label="ชื่อย่อลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="จำนวน" sortKey="pieces" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="สถานะ" sortKey="status" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
@@ -388,8 +390,9 @@ export default function LinenFormsPage() {
                 const linkedDNInfo = linkedLFMap.get(form.id)
 
                 return (
-                  <tr key={form.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
-                    onClick={() => setShowDetail(form.id)}>
+                  <tr key={form.id}
+                    className={cn("border-b border-slate-100 cursor-pointer", activeRowId === form.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
+                    onClick={() => { setActiveRowId(form.id); setShowDetail(form.id) }}>
                     <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
                       <input type="checkbox"
                         checked={selectedLfIds.includes(form.id)}

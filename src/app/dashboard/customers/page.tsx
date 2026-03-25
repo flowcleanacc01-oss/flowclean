@@ -43,6 +43,7 @@ export default function CustomersPage() {
   const [filterCat, setFilterCat] = useState<string>('all')
   const [sortKey, setSortKey] = useState<string>('shortName')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [activeCustomerId, setActiveCustomerId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_CUSTOMER)
@@ -214,8 +215,11 @@ export default function CustomersPage() {
                   {filtered.length === 0 ? (
                     <tr><td colSpan={10} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                   ) : filtered.map(c => (
-                    <tr key={c.id} className={cn('border-b border-slate-100 hover:bg-slate-50',
-                      !c.isActive && 'bg-red-50/30')}>
+                    <tr key={c.id}
+                      className={cn('border-b border-slate-100 cursor-pointer',
+                        activeCustomerId === c.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50',
+                        !c.isActive && 'bg-red-50/30')}
+                      onClick={() => setActiveCustomerId(c.id)}>
                       <td className={cn("px-4 py-3", sortedBg('shortName'))}>
                         <Link href={`/dashboard/customers/${c.id}`} className="font-bold text-[#1B3A5C] hover:underline tracking-wide">{c.shortName || '-'}</Link>
                       </td>

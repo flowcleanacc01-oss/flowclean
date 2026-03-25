@@ -67,6 +67,11 @@ export default function BillingPage() {
   // Post-reverse toast
   const [reversedDnInfo, setReversedDnInfo] = useState<{ dnIds: string[]; wbNumber: string } | null>(null)
 
+  // Row highlight
+  const [activeWbId, setActiveWbId] = useState<string | null>(null)
+  const [activeIvId, setActiveIvId] = useState<string | null>(null)
+  const [activeQtId, setActiveQtId] = useState<string | null>(null)
+
   // Bulk select state (WB, IV)
   const [selectedWbIds, setSelectedWbIds] = useState<string[]>([])
   const [selectedIvIds, setSelectedIvIds] = useState<string[]>([])
@@ -812,7 +817,7 @@ export default function BillingPage() {
                       className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                   </th>
                   <SortableHeader label="เลขที่" sortKey="billingNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                  <SortableHeader label="ลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="ชื่อย่อลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="วันที่" sortKey="issueDate" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="เดือน" sortKey="billingMonth" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ยอดรวม" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
@@ -829,8 +834,9 @@ export default function BillingPage() {
                 ) : filteredBilling.map(b => {
                   const customer = getCustomer(b.customerId)
                   return (
-                    <tr key={b.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => setShowDetail(b.id)}>
+                    <tr key={b.id}
+                      className={cn("border-b border-slate-100 cursor-pointer", activeWbId === b.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
+                      onClick={() => { setActiveWbId(b.id); setShowDetail(b.id) }}>
                       <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
                         <input type="checkbox"
                           checked={selectedWbIds.includes(b.id)}
@@ -902,7 +908,7 @@ export default function BillingPage() {
                       className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                   </th>
                   <SortableHeader label="เลขที่" sortKey="invoiceNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                  <SortableHeader label="ลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="ชื่อย่อลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ยอดรวม VAT" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
@@ -917,8 +923,9 @@ export default function BillingPage() {
                   const customer = getCustomer(inv.customerId)
                   const wbInfo = ivBillingMap.get(inv.id)
                   return (
-                    <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => setShowInvoiceDetail(inv.id)}>
+                    <tr key={inv.id}
+                      className={cn("border-b border-slate-100 cursor-pointer", activeIvId === inv.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
+                      onClick={() => { setActiveIvId(inv.id); setShowInvoiceDetail(inv.id) }}>
                       <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
                         <input type="checkbox"
                           checked={selectedIvIds.includes(inv.id)}
@@ -969,7 +976,7 @@ export default function BillingPage() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <SortableHeader label="เลขที่" sortKey="quotationNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                  <SortableHeader label="ลูกค้า" sortKey="customerName" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="ชื่อย่อลูกค้า" sortKey="customerName" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="รายการ" sortKey="items" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                   <SortableHeader label="หมายเหตุ" sortKey="notes" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
@@ -984,10 +991,11 @@ export default function BillingPage() {
                   const cfg = QUOTATION_STATUS_CONFIG[q.status]
                   const nextStatus: QuotationStatus | null = q.status === 'draft' ? 'sent' : q.status === 'sent' ? 'accepted' : null
                   return (
-                    <tr key={q.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => setShowQuDetail(q.id)}>
+                    <tr key={q.id}
+                      className={cn("border-b border-slate-100 cursor-pointer", activeQtId === q.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
+                      onClick={() => { setActiveQtId(q.id); setShowQuDetail(q.id) }}>
                       <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('quotationNumber'))}>{q.quotationNumber}</td>
-                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customerName'))}>{q.customerName}</td>
+                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customerName'))}>{getCustomer(q.customerId)?.shortName || q.customerName}</td>
                       <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(q.date)}</td>
                       <td className={cn("px-4 py-3 text-center text-slate-500", sortedBg('items'))}>{q.items.length}</td>
                       <td className={cn("px-4 py-3 text-slate-500 text-sm max-w-[160px] truncate", sortedBg('notes'))}>{q.notes || '-'}</td>
