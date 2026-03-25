@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { format } from 'date-fns'
@@ -61,6 +61,11 @@ export default function BillingPage() {
   const [wbFilter, setWbFilter] = useState<WBFilter>('all')
   const [ivFilter, setIvFilter] = useState<IVFilter>('all')
   const [qtCustomerFilter, setQtCustomerFilter] = useState<string>('all')
+
+  const router = useRouter()
+
+  // Post-reverse toast
+  const [reversedDnInfo, setReversedDnInfo] = useState<{ dnIds: string[]; wbNumber: string } | null>(null)
 
   // Bulk select state (WB, IV)
   const [selectedWbIds, setSelectedWbIds] = useState<string[]>([])
@@ -510,13 +515,15 @@ export default function BillingPage() {
       .map(id => deliveryNotes.find(d => d.id === id)?.noteNumber)
       .filter(Boolean).join(', ')
     if (confirm(`ยืนยันการลบใบวางบิล ${billing.billingNumber}?\n\nSD ที่จะถูกยกเลิกการวางบิล:\n${dnNumbers || '-'}\n\nลูกค้า: ${customer?.name || '-'}`)) {
-      // Mark linked SDs as isBilled=false
+      const dnIds = [...billing.deliveryNoteIds]
+      const wbNumber = billing.billingNumber
       for (const dnId of billing.deliveryNoteIds) {
         updateDeliveryNote(dnId, { isBilled: false })
       }
       deleteBillingStatement(billingId)
       setShowDetail(null)
       setShowPrint(false)
+      setReversedDnInfo({ dnIds, wbNumber })
     }
   }
 
@@ -620,6 +627,30 @@ export default function BillingPage() {
 
   return (
     <div>
+      {/* Post-Reverse WB Toast */}
+      {reversedDnInfo && (
+        <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm">
+          <div className="flex items-center gap-2 text-emerald-800">
+            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>ย้อน <span className="font-semibold">{reversedDnInfo.wbNumber}</span> สำเร็จ — SD {reversedDnInfo.dnIds.length} ใบ พร้อมวางบิลใหม่แล้ว</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                const ids = reversedDnInfo.dnIds.join(',')
+                setReversedDnInfo(null)
+                router.push(`/dashboard/delivery?preselect=${ids}`)
+              }}
+              className="px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1">
+              ดู SD ที่เกี่ยวข้อง →
+            </button>
+            <button onClick={() => setReversedDnInfo(null)} className="text-emerald-500 hover:text-emerald-700 p-0.5">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>

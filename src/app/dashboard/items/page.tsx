@@ -39,6 +39,8 @@ export default function ItemsPage() {
   const [newItem, setNewItem] = useState<LinenItemDef>(EMPTY_NEW_ITEM)
   const [editingCode, setEditingCode] = useState<string | null>(null)
   const [editItem, setEditItem] = useState<Partial<LinenItemDef>>({})
+  const [selectedCodes, setSelectedCodes] = useState<string[]>([])
+  const [activeCode, setActiveCode] = useState<string | null>(null)
 
   // ---- Categories state ----
   const [showAddCat, setShowAddCat] = useState(false)
@@ -122,7 +124,18 @@ export default function ItemsPage() {
   const handleDeleteItem = (code: string, name: string) => {
     if (confirm(`ลบรายการ "${name}" (${code})?\nรายการที่ถูกใช้ในฟอร์มเดิมจะยังอยู่ แต่จะไม่แสดงในรายการเลือกใหม่`)) {
       deleteLinenItem(code)
+      if (activeCode === code) setActiveCode(null)
+      setSelectedCodes(prev => prev.filter(c => c !== code))
     }
+  }
+
+  const handleBulkDeleteItems = () => {
+    if (!confirm(`ลบรายการผ้าที่เลือกทั้งหมด ${selectedCodes.length} รายการ?\nรายการที่ถูกใช้ในฟอร์มเดิมจะยังอยู่ แต่จะไม่แสดงในรายการเลือกใหม่`)) return
+    for (const code of selectedCodes) {
+      deleteLinenItem(code)
+    }
+    if (activeCode && selectedCodes.includes(activeCode)) setActiveCode(null)
+    setSelectedCodes([])
   }
 
   const handleMoveItem = useCallback((code: string, direction: 'up' | 'down') => {
@@ -234,6 +247,12 @@ export default function ItemsPage() {
                   <option key={c.key} value={c.key}>{c.label}</option>
                 ))}
               </select>
+              {selectedCodes.length > 0 && (
+                <button onClick={handleBulkDeleteItems}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 text-xs rounded-lg hover:bg-red-100 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />ลบที่เลือก ({selectedCodes.length})
+                </button>
+              )}
               <button onClick={() => { setShowAddItem(true); setNewItem(EMPTY_NEW_ITEM) }}
                 className="flex items-center gap-1 px-3 py-1.5 bg-[#1B3A5C] text-white text-xs rounded-lg hover:bg-[#122740] transition-colors">
                 <Plus className="w-3.5 h-3.5" />เพิ่มรายการ
@@ -285,6 +304,12 @@ export default function ItemsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50">
+                    <th className="w-8 px-2 py-2">
+                      <input type="checkbox"
+                        checked={filteredItems.length > 0 && selectedCodes.length === filteredItems.length}
+                        onChange={e => setSelectedCodes(e.target.checked ? filteredItems.map(i => i.code) : [])}
+                        className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                    </th>
                     <th className="w-10 px-2 py-2"></th>
                     <th className={cn("text-left px-4 py-2 font-medium cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('code'))} onClick={() => handleSort('code')}>
                       <span className="flex items-center">รหัส<SortIcon col="code" sortCol={sortCol} sortDir={sortDir} /></span>
@@ -309,9 +334,24 @@ export default function ItemsPage() {
                 </thead>
                 <tbody>
                   {filteredItems.map((item, idx) => (
-                    <tr key={item.code} className="border-t border-slate-100 hover:bg-slate-50">
+                    <tr key={item.code}
+                      onClick={() => setActiveCode(item.code)}
+                      className={cn(
+                        'border-t border-slate-100 transition-colors cursor-pointer',
+                        activeCode === item.code
+                          ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]'
+                          : 'hover:bg-slate-50'
+                      )}>
+                      <td className="px-2 py-2" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox"
+                          checked={selectedCodes.includes(item.code)}
+                          onChange={e => setSelectedCodes(prev =>
+                            e.target.checked ? [...prev, item.code] : prev.filter(c => c !== item.code)
+                          )}
+                          className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                      </td>
                       {/* Sort arrows */}
-                      <td className="px-1 py-2 text-center">
+                      <td className="px-1 py-2 text-center" onClick={() => setActiveCode(item.code)}>
                         <div className="flex flex-col items-center gap-0.5">
                           <button onClick={() => handleMoveItem(item.code, 'up')} disabled={idx === 0 && sortCol === 'sortOrder'}
                             className="text-slate-300 hover:text-slate-600 disabled:opacity-30 p-0.5">

@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { type DeliveryNoteItem } from '@/types'
 import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal } from '@/lib/transport-fee'
-import { Plus, Search, X, FileDown, Check, ExternalLink, Printer } from 'lucide-react'
+import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import ExportButtons from '@/components/ExportButtons'
@@ -14,7 +14,7 @@ import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
 import { exportCSV } from '@/lib/export'
 
-type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed'
+type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed' | 'preselected'
 
 export default function DeliveryPage() {
   const {
@@ -26,13 +26,21 @@ export default function DeliveryPage() {
 
   const [search, setSearch] = useState('')
   const [customerFilter, setCustomerFilter] = useState<string>('all')
-  const [dnFilter, setDnFilter] = useState<DNFilter>('all')
+  const [dnFilter, setDnFilter] = useState<DNFilter>(() => {
+    const p = searchParams.get('preselect')
+    return p ? 'preselected' : 'all'
+  })
   const [showCreate, setShowCreate] = useState(false)
   const searchParams = useSearchParams()
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  const [selectedDnIds, setSelectedDnIds] = useState<string[]>([])
+  const [selectedDnIds, setSelectedDnIds] = useState<string[]>(() => {
+    const p = searchParams.get('preselect')
+    return p ? p.split(',').filter(Boolean) : []
+  })
+  const [activeRowId, setActiveRowId] = useState<string | null>(null)
+  const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false)
   const [showPrintList, setShowPrintList] = useState(false)
   const [showBulkPrint, setShowBulkPrint] = useState(false)
 
@@ -88,6 +96,7 @@ export default function DeliveryPage() {
       if (dnFilter === 'printed' && !dn.isPrinted) return false
       if (dnFilter === 'not-billed' && dn.isBilled) return false
       if (dnFilter === 'billed' && !dn.isBilled) return false
+      if (dnFilter === 'preselected' && !selectedDnIds.includes(dn.id)) return false
       return true
     }).sort((a, b) => {
       let va: string | number, vb: string | number
@@ -105,7 +114,7 @@ export default function DeliveryPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [deliveryNotes, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter, billingStatements])
+  }, [deliveryNotes, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter, billingStatements, selectedDnIds])
 
   // Forms available for delivery (confirmed status)
   const availableForms = useMemo(() => {
@@ -258,6 +267,20 @@ export default function DeliveryPage() {
     exportCSV(headers, rows, 'รายการใบส่งของ')
   }
 
+  const handleBulkDelete = () => {
+    const billedCount = selectedDnIds.filter(id => deliveryNotes.find(d => d.id === id)?.isBilled).length
+    if (billedCount > 0) {
+      alert(`ไม่สามารถลบได้ — มี SD ที่วางบิลแล้ว ${billedCount} ใบ\nกรุณายกเลิกการเลือก SD ที่วางบิลแล้วก่อน`)
+      return
+    }
+    for (const id of selectedDnIds) {
+      deleteDeliveryNote(id)
+    }
+    setSelectedDnIds([])
+    setConfirmBulkDeleteOpen(false)
+    if (dnFilter === 'preselected') setDnFilter('all')
+  }
+
   const filterOptions: { key: DNFilter; label: string }[] = [
     { key: 'all', label: 'ทั้งหมด' },
     { key: 'not-printed', label: 'ยังไม่พิมพ์' },
@@ -276,11 +299,18 @@ export default function DeliveryPage() {
         </div>
         <div className="flex items-center gap-2">
           {selectedDnIds.length > 0 && (
-            <button onClick={() => setShowBulkPrint(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
-              <FileDown className="w-4 h-4" />
-              พิมพ์/ส่งออกที่เลือก ({selectedDnIds.length})
-            </button>
+            <>
+              <button onClick={() => setShowBulkPrint(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+                <FileDown className="w-4 h-4" />
+                พิมพ์/ส่งออกที่เลือก ({selectedDnIds.length})
+              </button>
+              <button onClick={() => setConfirmBulkDeleteOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium">
+                <Trash2 className="w-4 h-4" />
+                ลบที่เลือก ({selectedDnIds.length})
+              </button>
+            </>
           )}
           <button onClick={() => setShowPrintList(true)}
             disabled={filtered.length === 0}
@@ -324,7 +354,27 @@ export default function DeliveryPage() {
             {f.label}
           </button>
         ))}
+        {selectedDnIds.length > 0 && (
+          <button onClick={() => setDnFilter('preselected')}
+            className={cn(
+              'px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1',
+              dnFilter === 'preselected' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+            )}>
+            ที่เลือก ({selectedDnIds.length})
+          </button>
+        )}
       </div>
+
+      {/* Preselect banner — shown when navigated from WB reverse */}
+      {searchParams.get('preselect') && selectedDnIds.length > 0 && (
+        <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700">
+          <Check className="w-3.5 h-3.5 shrink-0" />
+          <span>SD {selectedDnIds.length} ใบนี้มาจาก WB ที่ย้อนสถานะแล้ว — พร้อมวางบิลใหม่</span>
+          <button onClick={() => { setSelectedDnIds([]); setDnFilter('all') }} className="ml-auto text-emerald-500 hover:text-emerald-700">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Date Filter */}
       <div className="mb-4">
@@ -367,8 +417,14 @@ export default function DeliveryPage() {
                 const dnAmount = getDNTotalAmount(dn)
                 const wbInfo = dnBillingMap.get(dn.id)
                 return (
-                  <tr key={dn.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
-                    onClick={() => setShowDetail(dn.id)}>
+                  <tr key={dn.id}
+                    className={cn(
+                      'border-b border-slate-100 cursor-pointer transition-colors',
+                      activeRowId === dn.id
+                        ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]'
+                        : 'hover:bg-slate-50'
+                    )}
+                    onClick={() => { setShowDetail(dn.id); setActiveRowId(dn.id) }}>
                     <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
                       <input type="checkbox"
                         checked={selectedDnIds.includes(dn.id)}
@@ -656,6 +712,26 @@ export default function DeliveryPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Bulk Delete Confirmation Modal */}
+      <Modal open={confirmBulkDeleteOpen} onClose={() => setConfirmBulkDeleteOpen(false)} title="ยืนยันการลบ">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            ต้องการลบใบส่งของที่เลือกทั้งหมด <span className="font-semibold text-red-600">{selectedDnIds.length} ใบ</span> หรือไม่?
+          </p>
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            ⚠️ SD ที่วางบิลแล้วจะไม่ถูกลบ — ระบบจะข้ามรายการนั้นอัตโนมัติ
+          </p>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setConfirmBulkDeleteOpen(false)}
+              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+            <button onClick={handleBulkDelete}
+              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-1">
+              <Trash2 className="w-4 h-4" />ลบ {selectedDnIds.length} ใบ
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Delete Confirmation Modal */}
