@@ -397,9 +397,9 @@ export default function DeliveryPage() {
                     }}
                     className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                 </th>
-                <SortableHeader label="เลขที่" sortKey="noteNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                <SortableHeader label="ชื่อย่อลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                <SortableHeader label="ชื่อย่อลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                <SortableHeader label="เลขที่" sortKey="noteNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="จำนวน" sortKey="items" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="ยอดรวม" sortKey="amount" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="คนขับ" sortKey="driver" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
@@ -433,9 +433,9 @@ export default function DeliveryPage() {
                         }}
                         className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                     </td>
-                    <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('noteNumber'))}>{dn.noteNumber}</td>
-                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
                     <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(dn.date)}</td>
+                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
+                    <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('noteNumber'))}>{dn.noteNumber}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('items'))}>{formatNumber(totalItems)}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('amount'))}>{dnAmount > 0 ? formatCurrency(dnAmount) : '-'}</td>
                     <td className={cn("px-4 py-3 text-slate-600", sortedBg('driver'))}>{dn.driverName || '-'}</td>
