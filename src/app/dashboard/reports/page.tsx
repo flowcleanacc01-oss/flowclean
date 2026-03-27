@@ -9,15 +9,17 @@ import Link from 'next/link'
 import MonthlySummaryGrid from '@/components/MonthlySummaryGrid'
 import MonthlyDeliveryReportPrint from '@/components/MonthlyDeliveryReportPrint'
 import MonthlyStockReportPrint from '@/components/MonthlyStockReportPrint'
+import MonthlyConsolidationPrint from '@/components/MonthlyConsolidationPrint'
 import Modal from '@/components/Modal'
 
-type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'carryover' | 'delivery' | 'stock'
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'carryover' | 'delivery' | 'stock' | 'consolidation'
 
 export default function ReportsPage() {
   const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo } = useStore()
   const [tab, setTab] = useState<TabKey>('monthly')
   const [showDeliveryPrint, setShowDeliveryPrint] = useState(false)
   const [showStockPrint, setShowStockPrint] = useState(false)
+  const [showConsolidationPrint, setShowConsolidationPrint] = useState(false)
   const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('landscape')
   const [printMargin, setPrintMargin] = useState<'normal' | 'narrow'>('narrow')
   const [selCustomerIdRaw, setSelCustomerId] = useState('')
@@ -32,7 +34,7 @@ export default function ReportsPage() {
     ? selCustomerIdRaw
     : ''
   // For per-customer tabs, auto-select first customer
-  const perCustomerTabs: TabKey[] = ['monthly', 'delivery', 'stock']
+  const perCustomerTabs: TabKey[] = ['monthly', 'delivery', 'stock', 'consolidation']
   const needsCustomer = perCustomerTabs.includes(tab) && !selCustomerId
 
   const tabs: { key: TabKey; label: string }[] = [
@@ -44,6 +46,7 @@ export default function ReportsPage() {
     { key: 'carryover', label: 'ผ้าค้าง' },
     { key: 'delivery', label: 'รายงานส่งของ' },
     { key: 'stock', label: 'สต็อกรายเดือน' },
+    { key: 'consolidation', label: 'รวบเดือน' },
   ]
 
   const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
@@ -126,7 +129,7 @@ export default function ReportsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
-        {(tab === 'monthly' || tab === 'delivery' || tab === 'stock' || tab === 'revenue' || tab === 'carryover') && (
+        {(tab === 'monthly' || tab === 'delivery' || tab === 'stock' || tab === 'consolidation' || tab === 'revenue' || tab === 'carryover') && (
           <div className="flex items-center gap-2">
             <select value={selCustomerId} onChange={e => setSelCustomerId(e.target.value)}
               className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
@@ -357,6 +360,30 @@ export default function ReportsPage() {
         </div>
       )}
 
+      {/* Consolidation Tab (รวบเดือน) */}
+      {tab === 'consolidation' && selCustomer && (
+        <div className="no-print">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold text-slate-800">
+              รวบเดือน — {selCustomer.shortName || selCustomer.name} ({selMonth})
+            </h3>
+            <button onClick={() => { setPrintOrientation('landscape'); setPrintMargin('narrow'); setShowConsolidationPrint(true) }}
+              className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
+              <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
+            </button>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+            <MonthlyConsolidationPrint
+              customer={selCustomer}
+              month={selMonth}
+              deliveryNotes={deliveryNotes}
+              catalog={linenCatalog}
+              company={companyInfo}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Delivery Report Print Modal */}
       <Modal open={showDeliveryPrint} onClose={() => setShowDeliveryPrint(false)} title="พิมพ์รายงานส่งสินค้า" size="full" className="print-target">
         {selCustomer && (
@@ -407,6 +434,59 @@ export default function ReportsPage() {
             />
             <div className="flex justify-end mt-4 no-print">
               <ExportButtons targetId="print-delivery-report" filename={`delivery-report-${selCustomer.shortName || selCustomer.name}-${selMonth}`} showPrint={true} />
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Consolidation Print Modal */}
+      <Modal open={showConsolidationPrint} onClose={() => setShowConsolidationPrint(false)} title="พิมพ์รวบเดือน" size="full" className="print-target">
+        {selCustomer && (
+          <div>
+            <style>{`@media print { @page { size: A4 ${printOrientation}; margin: ${printMargin === 'narrow' ? '5mm' : '10mm'}; } }`}</style>
+
+            <div className="no-print flex flex-wrap items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">แนวกระดาษ:</span>
+                <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
+                  <button onClick={() => setPrintOrientation('portrait')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printOrientation === 'portrait' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    แนวตั้ง
+                  </button>
+                  <button onClick={() => setPrintOrientation('landscape')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printOrientation === 'landscape' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    แนวนอน
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">ขอบกระดาษ:</span>
+                <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
+                  <button onClick={() => setPrintMargin('normal')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printMargin === 'normal' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    ปกติ (10mm)
+                  </button>
+                  <button onClick={() => setPrintMargin('narrow')}
+                    className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
+                      printMargin === 'narrow' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                    แคบ (5mm)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <MonthlyConsolidationPrint
+              customer={selCustomer}
+              month={selMonth}
+              deliveryNotes={deliveryNotes}
+              catalog={linenCatalog}
+              company={companyInfo}
+            />
+            <div className="flex justify-end mt-4 no-print">
+              <ExportButtons targetId="print-consolidation" filename={`รวบเดือน-${selCustomer.shortName || selCustomer.name}-${selMonth}`} showPrint={true} />
             </div>
           </div>
         )}
