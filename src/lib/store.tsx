@@ -610,11 +610,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const addUser = useCallback(async (u: Omit<AppUser, 'id'>, password: string): Promise<AppUser> => {
     const hash = await hashPassword(password)
     const newUser: AppUser = { ...u, id: genId(), passwordHash: hash }
-    // Store without hash in React state
+    try {
+      await db.insertUser(newUser)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('23505') || msg.includes('duplicate key') || msg.includes('already exists')) {
+        throw new Error('อีเมลนี้มีในระบบแล้ว กรุณาใช้อีเมลอื่น')
+      }
+      throw err
+    }
     setUsers(prev => [...prev, stripHash(newUser)])
-    dbSave(db.insertUser(newUser), () => {
-      setUsers(prev => prev.filter(x => x.id !== newUser.id))
-    })
     logAudit('create', 'user', newUser.id, newUser.name)
     return stripHash(newUser)
   }, [logAudit])

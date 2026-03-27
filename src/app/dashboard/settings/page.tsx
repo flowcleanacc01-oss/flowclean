@@ -133,11 +133,15 @@ export default function SettingsPage() {
     if (!newName || !newEmail) { setAddUserError('กรุณากรอกชื่อและอีเมล'); return }
     const pwError = validatePassword(newPassword)
     if (pwError) { setAddUserError(pwError); return }
-    await addUser({ name: newName, email: newEmail, passwordHash: '', role: newRole, isActive: true }, newPassword)
-    setNewName('')
-    setNewEmail('')
-    setNewPassword('')
-    setNewRole('staff')
+    try {
+      await addUser({ name: newName, email: newEmail, passwordHash: '', role: newRole, isActive: true }, newPassword)
+      setNewName('')
+      setNewEmail('')
+      setNewPassword('')
+      setNewRole('staff')
+    } catch (err) {
+      setAddUserError(err instanceof Error ? err.message : 'บันทึกข้อมูลไม่สำเร็จ')
+    }
   }
 
   const handleResetPassword = async () => {
