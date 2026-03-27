@@ -242,7 +242,7 @@ export async function deleteLinenItemDB(code: string): Promise<void> {
 export async function fetchUsers(): Promise<AppUser[]> {
   const { data, error } = await supabase
     .from('app_users')
-    .select('id, name, email, role, is_active, created_at')
+    .select('id, name, email, role, is_active')
   if (error) throw error
   return toCamelCaseArray<AppUser>(data || [])
 }
