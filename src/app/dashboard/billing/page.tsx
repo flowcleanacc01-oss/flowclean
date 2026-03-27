@@ -708,7 +708,7 @@ export default function BillingPage() {
             setQuValidDays(30)
             setQuConditions('1. ราคายังไม่รวมภาษีมูลค่าเพิ่ม 7%\n2. ระยะเวลาเครดิต 30 วัน\n3. บริการรับ-ส่งผ้าทุกวัน')
             setQuNotes('')
-            setQuItems(linenCatalog.map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice })))
+            setQuItems([...linenCatalog].sort((a, b) => a.sortOrder - b.sortOrder).map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice })))
             setQuSearch('')
             setQuFilterCat('all')
             setQuEnablePerPiece(true)
@@ -1748,7 +1748,8 @@ export default function BillingPage() {
                     if (quFilterCat !== 'all' && catItem?.category !== quFilterCat) return null
                     return (
                       <tr key={item.code} className="border-t border-slate-100 hover:bg-slate-50">
-                        <td className="px-1 py-1 text-center text-xs text-slate-400 font-mono">{idx + 1}</td>
+                        <td className="px-3 py-1 font-mono text-xs text-slate-600">{item.code}</td>
+                        <td className="px-1 py-1 text-center text-xs text-slate-400">{idx + 1}</td>
                         <td className="px-3 py-1 text-slate-700">{item.name}</td>
                         <td className="px-3 py-1 text-slate-500 text-xs">{catItem?.nameEn || ''}</td>
                         <td className="px-3 py-1 text-xs text-slate-400">{catItem ? getCategoryLabel(catItem.category) : ''}</td>
