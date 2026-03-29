@@ -122,7 +122,8 @@ export default function CustomersPage() {
     if (editId) {
       updateCustomer(editId, derived)
     } else {
-      addCustomer(derived)
+      const newCust = addCustomer(derived)
+      setActiveCustomerId(newCust.id)
     }
     setShowForm(false)
   }

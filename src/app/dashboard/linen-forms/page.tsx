@@ -201,7 +201,7 @@ export default function LinenFormsPage() {
 
   const handleCreate = () => {
     if (!newCustomerId || newRows.length === 0) return
-    addLinenForm({
+    const newLF = addLinenForm({
       customerId: newCustomerId,
       date: newDate,
       status: 'draft',
@@ -209,6 +209,7 @@ export default function LinenFormsPage() {
       notes: newNotes,
       bagsSentCount: newBagsSent,
     })
+    setActiveRowId(newLF.id)
     setShowCreate(false)
   }
 

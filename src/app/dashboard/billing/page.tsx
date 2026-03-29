@@ -273,7 +273,7 @@ export default function BillingPage() {
     const dueDate = new Date(billingIssueDate)
     dueDate.setDate(dueDate.getDate() + selCustomer.creditDays)
 
-    addBillingStatement({
+    const newWB = addBillingStatement({
       customerId: selCustomerId,
       deliveryNoteIds: selDnIds,
       billingMonth: selMonth,
@@ -291,6 +291,7 @@ export default function BillingPage() {
       notes: '',
       billingMode,
     })
+    setActiveWbId(newWB.id)
 
     // Mark selected delivery notes as billed
     for (const dnId of selDnIds) {
@@ -339,7 +340,7 @@ export default function BillingPage() {
       }
     }
 
-    addTaxInvoice({
+    const newIV = addTaxInvoice({
       billingStatementId: showCreateIV,
       customerId: billing.customerId,
       issueDate: ivIssueDate,
@@ -349,6 +350,7 @@ export default function BillingPage() {
       grandTotal: billing.grandTotal,
       notes: '',
     })
+    setActiveIvId(newIV.id)
     setShowCreateIV(null)
     setShowDetail(null)
   }
@@ -377,8 +379,10 @@ export default function BillingPage() {
     }
     if (editQuId) {
       updateQuotation(editQuId, qtData)
+      setActiveQtId(editQuId)
     } else {
-      addQuotation(qtData)
+      const newQT = addQuotation(qtData)
+      setActiveQtId(newQT.id)
     }
     setEditQuId(null)
     setShowCreateQU(false)

@@ -192,7 +192,7 @@ export default function DeliveryPage() {
       monthFee = calculateTransportFeeMonth(monthDNs, customer, itemSubtotal, tripFee)
     }
 
-    addDeliveryNote({
+    const newDN = addDeliveryNote({
       customerId: selCustomerId,
       linenFormIds: selFormIds,
       date: dnDate,
@@ -208,6 +208,7 @@ export default function DeliveryPage() {
       transportFeeMonth: monthFee,
       notes: dnNotes,
     })
+    setActiveRowId(newDN.id)
     setShowCreate(false)
   }
 

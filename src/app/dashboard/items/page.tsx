@@ -106,6 +106,7 @@ export default function ItemsPage() {
     }
     const maxOrder = linenCatalog.reduce((max, i) => Math.max(max, i.sortOrder), 0)
     addLinenItem({ ...newItem, sortOrder: maxOrder + 1 })
+    setActiveCode(newItem.code)
     setNewItem(EMPTY_NEW_ITEM)
     setShowAddItem(false)
   }
