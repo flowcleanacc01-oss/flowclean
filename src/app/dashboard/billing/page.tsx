@@ -1404,15 +1404,44 @@ export default function BillingPage() {
 
       {/* Delete Confirmation Modal */}
       <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">ต้องการลบใบวางบิลนี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
-          <div className="flex justify-end gap-3">
-            <button onClick={() => setConfirmDeleteId(null)}
-              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={() => { if (confirmDeleteId) { deleteBillingStatement(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
-              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
-          </div>
-        </div>
+        {(() => {
+          const hasLinkedIV = taxInvoices.some(ti => ti.billingStatementId === confirmDeleteId)
+          const wbToDelete = billingStatements.find(b => b.id === confirmDeleteId)
+          return (
+            <div className="space-y-4">
+              {hasLinkedIV ? (
+                <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-700">
+                  <span className="font-medium">⚠ ไม่สามารถลบได้</span> — มีใบกำกับภาษี (IV) อยู่แล้ว<br />
+                  กรุณาย้อน IV ก่อน แล้วค่อยลบ WB
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm text-slate-600">ต้องการลบใบวางบิลนี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
+                  {(wbToDelete?.deliveryNoteIds?.length ?? 0) > 0 && (
+                    <p className="mt-1 text-xs text-orange-600">SD {wbToDelete!.deliveryNoteIds.length} ใบที่เกี่ยวข้องจะถูกยกเลิกการวางบิลโดยอัตโนมัติ</p>
+                  )}
+                </div>
+              )}
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setConfirmDeleteId(null)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+                {!hasLinkedIV && (
+                  <button onClick={() => {
+                    if (confirmDeleteId && wbToDelete) {
+                      for (const dnId of wbToDelete.deliveryNoteIds) {
+                        updateDeliveryNote(dnId, { isBilled: false })
+                      }
+                      deleteBillingStatement(confirmDeleteId)
+                      setConfirmDeleteId(null)
+                      setShowDetail(null)
+                    }
+                  }}
+                    className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
+                )}
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
 
       {/* Billing Print Preview Modal */}

@@ -838,7 +838,7 @@ export default function DeliveryPage() {
           <div>
             {/* SD linked status checkbox */}
             <div className="flex items-center justify-between mb-2 no-print">
-              {detailNote.isBilled ? (
+              {detailNote.isBilled && billingStatements.some(b => b.deliveryNoteIds.includes(detailNote.id)) ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-700">
                   <span className="font-medium">⚠ ไม่สามารถย้อน SD ได้</span>
                   <span>— SD นี้วางบิลแล้ว กรุณาย้อน WB ก่อน</span>
