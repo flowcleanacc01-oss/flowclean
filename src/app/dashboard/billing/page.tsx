@@ -155,6 +155,9 @@ export default function BillingPage() {
   const [dnSortDir, setDnSortDir] = useState<'asc' | 'desc'>('asc')
   const [billingIssueDate, setBillingIssueDate] = useState(todayISO())
   const [billingDiscount, setBillingDiscount] = useState(0)
+  const [billingDiscountNote, setBillingDiscountNote] = useState('')
+  const [billingExtraCharge, setBillingExtraCharge] = useState(0)
+  const [billingExtraChargeNote, setBillingExtraChargeNote] = useState('')
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'billing', label: 'ใบวางบิล (WB)' },
@@ -268,11 +271,15 @@ export default function BillingPage() {
         ? aggregateDeliveryItemsByDate(selectedNotes, selCustomer)
         : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog, linkedQT?.items)
     }
-    const lineItems = billingDiscount > 0
-      ? [...baseItems, { code: 'DISCOUNT', name: 'ส่วนลด', quantity: 1, pricePerUnit: -billingDiscount, amount: -billingDiscount }]
-      : baseItems
+    let lineItems = [...baseItems]
+    if (billingExtraCharge > 0) {
+      lineItems.push({ code: 'EXTRA_CHARGE', name: `ค่าใช้จ่ายเพิ่มเติม${billingExtraChargeNote ? ` (${billingExtraChargeNote})` : ''}`, quantity: 1, pricePerUnit: billingExtraCharge, amount: billingExtraCharge })
+    }
+    if (billingDiscount > 0) {
+      lineItems.push({ code: 'DISCOUNT', name: `ส่วนลด${billingDiscountNote ? ` (${billingDiscountNote})` : ''}`, quantity: 1, pricePerUnit: -billingDiscount, amount: -billingDiscount })
+    }
     return { lineItems, ...calculateBillingTotals(lineItems, custVatRate, custWhtRate) }
-  }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists, billingMode, quotations, custVatRate, custWhtRate, billingDiscount])
+  }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists, billingMode, quotations, custVatRate, custWhtRate, billingDiscount, billingDiscountNote, billingExtraCharge, billingExtraChargeNote])
 
   const handleCreateBilling = () => {
     if (!selCustomer || !previewBilling) return
@@ -1050,7 +1057,7 @@ export default function BillingPage() {
       )}
 
       {/* Create Billing Modal */}
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); setBillingDiscount(0) }} title="สร้างใบวางบิล" size="lg">
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setBillingDiscount(0); setBillingDiscountNote(''); setBillingExtraCharge(0); setBillingExtraChargeNote('') }} title="สร้างใบวางบิล" size="lg">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -1170,25 +1177,41 @@ export default function BillingPage() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-slate-200 bg-slate-50">
-                      <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">ยอดรวมก่อนส่วนลด</td>
+                      <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">ยอดรวมก่อนปรับ</td>
                       <td className="px-3 py-1.5 text-right font-medium">
-                        {formatCurrency(billingDiscount > 0
-                          ? previewBilling.lineItems.filter(i => i.code !== 'DISCOUNT').reduce((s, i) => s + i.amount, 0)
-                          : previewBilling.subtotal)}
+                        {formatCurrency(previewBilling.lineItems
+                          .filter(i => i.code !== 'DISCOUNT' && i.code !== 'EXTRA_CHARGE')
+                          .reduce((s, i) => s + i.amount, 0))}
                       </td>
                     </tr>
                     <tr className="bg-slate-50">
-                      <td colSpan={3} className="px-3 py-1.5 text-right text-orange-600">ส่วนลด</td>
-                      <td className="px-3 py-1.5 text-right">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={billingDiscount || ''}
+                      <td colSpan={2} className="px-3 py-1.5 text-right text-blue-600">ค่าใช้จ่ายเพิ่มเติม</td>
+                      <td className="px-3 py-1 text-right">
+                        <input type="text" value={billingExtraChargeNote}
+                          onChange={e => setBillingExtraChargeNote(e.target.value)}
+                          placeholder="หมายเหตุ..."
+                          className="w-full text-right border border-slate-200 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]" />
+                      </td>
+                      <td className="px-3 py-1 text-right">
+                        <input type="number" min="0" step="0.01" value={billingExtraCharge || ''}
+                          onChange={e => setBillingExtraCharge(Math.max(0, parseFloat(e.target.value) || 0))}
+                          placeholder="0.00"
+                          className="w-28 text-right border border-slate-200 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]" />
+                      </td>
+                    </tr>
+                    <tr className="bg-slate-50">
+                      <td colSpan={2} className="px-3 py-1.5 text-right text-orange-600">ส่วนลด</td>
+                      <td className="px-3 py-1 text-right">
+                        <input type="text" value={billingDiscountNote}
+                          onChange={e => setBillingDiscountNote(e.target.value)}
+                          placeholder="หมายเหตุ..."
+                          className="w-full text-right border border-slate-200 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-300" />
+                      </td>
+                      <td className="px-3 py-1 text-right">
+                        <input type="number" min="0" step="0.01" value={billingDiscount || ''}
                           onChange={e => setBillingDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
                           placeholder="0.00"
-                          className="w-28 text-right border border-slate-200 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-300"
-                        />
+                          className="w-28 text-right border border-slate-200 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-300" />
                       </td>
                     </tr>
                     <tr className="border-t border-slate-200 bg-slate-50">
@@ -1244,7 +1267,7 @@ export default function BillingPage() {
           )}
 
           <div className="flex justify-end gap-3 pt-2">
-            <button onClick={() => { setShowCreate(false); setBillingDiscount(0) }}
+            <button onClick={() => { setShowCreate(false); setBillingDiscount(0); setBillingDiscountNote(''); setBillingExtraCharge(0); setBillingExtraChargeNote('') }}
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
             <button onClick={handleCreateBilling} disabled={!previewBilling}
               className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">

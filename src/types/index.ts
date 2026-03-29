@@ -279,6 +279,10 @@ export interface DeliveryNote {
   isBilled: boolean     // auto-set when included in billing statement
   transportFeeTrip: number   // ค่ารถ (ครั้ง) — auto-calc, editable
   transportFeeMonth: number  // ค่ารถ (เดือน) — on last DN of month, editable
+  discount?: number          // ส่วนลดพิเศษ (default 0)
+  discountNote?: string      // หมายเหตุส่วนลด
+  extraCharge?: number       // ค่าใช้จ่ายเพิ่มเติม (default 0)
+  extraChargeNote?: string   // หมายเหตุค่าใช้จ่ายเพิ่มเติม
   notes: string
   createdBy: string
   updatedAt: string

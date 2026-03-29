@@ -58,6 +58,10 @@ export default function DeliveryPage() {
   const [receiverName, setReceiverName] = useState('')
   const [dnNotes, setDnNotes] = useState('')
   const [dnDate, setDnDate] = useState(todayISO())
+  const [dnDiscount, setDnDiscount] = useState(0)
+  const [dnDiscountNote, setDnDiscountNote] = useState('')
+  const [dnExtraCharge, setDnExtraCharge] = useState(0)
+  const [dnExtraChargeNote, setDnExtraChargeNote] = useState('')
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -206,6 +210,10 @@ export default function DeliveryPage() {
       isBilled: false,
       transportFeeTrip: tripFee,
       transportFeeMonth: monthFee,
+      discount: dnDiscount,
+      discountNote: dnDiscountNote,
+      extraCharge: dnExtraCharge,
+      extraChargeNote: dnExtraChargeNote,
       notes: dnNotes,
     })
     setActiveRowId(newDN.id)
@@ -320,7 +328,7 @@ export default function DeliveryPage() {
             <Printer className="w-4 h-4" />
             พิมพ์/ส่งออกรายการ
           </button>
-          <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()) }}
+          <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()); setDnDiscount(0); setDnDiscountNote(''); setDnExtraCharge(0); setDnExtraChargeNote('') }}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />
             สร้างใบส่งของชั่วคราว
@@ -571,6 +579,41 @@ export default function DeliveryPage() {
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
           </div>
 
+          {/* ค่าใช้จ่ายเพิ่มเติม + ส่วนลด */}
+          <div className="border border-slate-200 rounded-lg p-3 space-y-3 bg-slate-50">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">การปรับยอด (ถ้ามี)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">ค่าใช้จ่ายเพิ่มเติม (บาท)</label>
+                <input type="number" min={0} step={0.01} value={dnExtraCharge || ''}
+                  onChange={e => setDnExtraCharge(Math.max(0, parseFloat(e.target.value) || 0))}
+                  placeholder="0.00"
+                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุค่าใช้จ่าย</label>
+                <input type="text" value={dnExtraChargeNote} onChange={e => setDnExtraChargeNote(e.target.value)}
+                  placeholder="เช่น ค่าส่งพิเศษ"
+                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">ส่วนลด (บาท)</label>
+                <input type="number" min={0} step={0.01} value={dnDiscount || ''}
+                  onChange={e => setDnDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
+                  placeholder="0.00"
+                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-orange-300 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุส่วนลด</label>
+                <input type="text" value={dnDiscountNote} onChange={e => setDnDiscountNote(e.target.value)}
+                  placeholder="เช่น หักค่าเสียหาย"
+                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setShowCreate(false)}
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
@@ -618,7 +661,9 @@ export default function DeliveryPage() {
               const itemSubtotal = isPer ? detailNote.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0) : 0
               const tripFee = detailNote.transportFeeTrip || 0
               const monthFee = detailNote.transportFeeMonth || 0
-              const grandTotal = itemSubtotal + tripFee + monthFee
+              const dnDiscount = detailNote.discount || 0
+              const dnExtraCharge = detailNote.extraCharge || 0
+              const grandTotal = itemSubtotal + tripFee + monthFee + dnExtraCharge - dnDiscount
               return (
                 <div className="border border-slate-200 rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
@@ -689,8 +734,30 @@ export default function DeliveryPage() {
                           </td>
                         </tr>
                       )}
+                      {/* ค่าใช้จ่ายเพิ่มเติม */}
+                      {isPer && dnExtraCharge > 0 && (
+                        <tr className="border-t border-blue-200 bg-blue-50/50">
+                          <td className="px-3 py-1.5" colSpan={2}>
+                            <span className="text-blue-700 font-medium">ค่าใช้จ่ายเพิ่มเติม</span>
+                            {detailNote.extraChargeNote && <span className="ml-1 text-xs text-blue-500">({detailNote.extraChargeNote})</span>}
+                          </td>
+                          <td className="px-3 py-1.5" colSpan={2}></td>
+                          <td className="px-3 py-1.5 text-right text-blue-700">{formatCurrency(dnExtraCharge)}</td>
+                        </tr>
+                      )}
+                      {/* ส่วนลด */}
+                      {isPer && dnDiscount > 0 && (
+                        <tr className="border-t border-orange-200 bg-orange-50/50">
+                          <td className="px-3 py-1.5" colSpan={2}>
+                            <span className="text-orange-700 font-medium">ส่วนลด</span>
+                            {detailNote.discountNote && <span className="ml-1 text-xs text-orange-500">({detailNote.discountNote})</span>}
+                          </td>
+                          <td className="px-3 py-1.5" colSpan={2}></td>
+                          <td className="px-3 py-1.5 text-right text-orange-700">-{formatCurrency(dnDiscount)}</td>
+                        </tr>
+                      )}
                       {/* ยอดรวมทั้งหมด */}
-                      {isPer && (tripFee > 0 || monthFee > 0) && (
+                      {isPer && (tripFee > 0 || monthFee > 0 || dnExtraCharge > 0 || dnDiscount > 0) && (
                         <tr className="bg-slate-100 font-bold">
                           <td className="px-3 py-2" colSpan={4}>ยอดรวมทั้งหมด</td>
                           <td className="px-3 py-2 text-right text-[#1B3A5C]">{formatCurrency(grandTotal)}</td>

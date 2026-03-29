@@ -113,6 +113,10 @@ export function migrateDeliveryNote(oldNote: DeliveryNote & { items: V2DeliveryN
     isBilled: (oldNote as unknown as { isBilled?: boolean }).isBilled ?? false,
     transportFeeTrip: (oldNote as unknown as { transportFeeTrip?: number }).transportFeeTrip ?? 0,
     transportFeeMonth: (oldNote as unknown as { transportFeeMonth?: number }).transportFeeMonth ?? 0,
+    discount: (oldNote as unknown as { discount?: number }).discount ?? 0,
+    discountNote: (oldNote as unknown as { discountNote?: string }).discountNote ?? '',
+    extraCharge: (oldNote as unknown as { extraCharge?: number }).extraCharge ?? 0,
+    extraChargeNote: (oldNote as unknown as { extraChargeNote?: string }).extraChargeNote ?? '',
     items: oldNote.items.map(item => ({
       code: item.code,
       quantity: item.quantity,

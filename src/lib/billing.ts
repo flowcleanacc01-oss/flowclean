@@ -46,30 +46,34 @@ export function aggregateDeliveryItems(
       return aIdx - bIdx
     })
 
-  // Aggregate transport fees from delivery notes
+  // Aggregate transport fees + adjustments from delivery notes
   let totalTransportTrip = 0
   let totalTransportMonth = 0
+  let totalDiscount = 0
+  let totalExtraCharge = 0
+  const discountNotes: string[] = []
+  const extraChargeNotes: string[] = []
   for (const note of notes) {
     totalTransportTrip += note.transportFeeTrip || 0
     totalTransportMonth += note.transportFeeMonth || 0
+    totalDiscount += note.discount || 0
+    totalExtraCharge += note.extraCharge || 0
+    if ((note.discount || 0) > 0 && note.discountNote) discountNotes.push(note.discountNote)
+    if ((note.extraCharge || 0) > 0 && note.extraChargeNote) extraChargeNotes.push(note.extraChargeNote)
   }
   if (totalTransportTrip > 0) {
-    result.push({
-      code: 'TRANSPORT_TRIP',
-      name: 'ค่ารถ (ครั้ง)',
-      quantity: 1,
-      pricePerUnit: totalTransportTrip,
-      amount: totalTransportTrip,
-    })
+    result.push({ code: 'TRANSPORT_TRIP', name: 'ค่ารถ (ครั้ง)', quantity: 1, pricePerUnit: totalTransportTrip, amount: totalTransportTrip })
   }
   if (totalTransportMonth > 0) {
-    result.push({
-      code: 'TRANSPORT_MONTH',
-      name: 'ค่ารถ (เดือน)',
-      quantity: 1,
-      pricePerUnit: totalTransportMonth,
-      amount: totalTransportMonth,
-    })
+    result.push({ code: 'TRANSPORT_MONTH', name: 'ค่ารถ (เดือน)', quantity: 1, pricePerUnit: totalTransportMonth, amount: totalTransportMonth })
+  }
+  if (totalExtraCharge > 0) {
+    const note = extraChargeNotes.length > 0 ? ` (${extraChargeNotes.join(', ')})` : ''
+    result.push({ code: 'EXTRA_CHARGE', name: `ค่าใช้จ่ายเพิ่มเติม${note}`, quantity: 1, pricePerUnit: totalExtraCharge, amount: totalExtraCharge })
+  }
+  if (totalDiscount > 0) {
+    const note = discountNotes.length > 0 ? ` (${discountNotes.join(', ')})` : ''
+    result.push({ code: 'DISCOUNT', name: `ส่วนลด${note}`, quantity: 1, pricePerUnit: -totalDiscount, amount: -totalDiscount })
   }
 
   return result
@@ -94,12 +98,18 @@ export function aggregateDeliveryItemsByDate(
       if (item.isClaim) continue
       total += item.quantity * (priceMap[item.code] ?? 0)
     }
-    // Include transport fees in each DN's total (trip fee per trip; month fee on last DN)
+    // Include transport fees + adjustments in each DN's total
     total += note.transportFeeTrip || 0
     total += note.transportFeeMonth || 0
+    total += note.extraCharge || 0
+    total -= note.discount || 0
+    const adjNotes: string[] = []
+    if ((note.extraCharge || 0) > 0 && note.extraChargeNote) adjNotes.push(`+${note.extraChargeNote}`)
+    if ((note.discount || 0) > 0 && note.discountNote) adjNotes.push(`-${note.discountNote}`)
+    const nameSuffix = adjNotes.length > 0 ? ` [${adjNotes.join(', ')}]` : ''
     result.push({
       code: `DATE_${note.id}`,  // use id for uniqueness (avoids duplicate-key bug on same-date DNs)
-      name: `ค่าบริการซักวันที่ ${formatDate(note.date)}`,
+      name: `ค่าบริการซักวันที่ ${formatDate(note.date)}${nameSuffix}`,
       quantity: 1,
       pricePerUnit: total,
       amount: total,

@@ -19,7 +19,10 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
   const itemSubtotal = isPer ? note.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0) : 0
   const tripFee = note.transportFeeTrip || 0
   const monthFee = note.transportFeeMonth || 0
-  const totalAmount = itemSubtotal + tripFee + monthFee
+  const extraCharge = note.extraCharge || 0
+  const discount = note.discount || 0
+  const totalAmount = itemSubtotal + tripFee + monthFee + extraCharge - discount
+  const hasAdjustments = tripFee > 0 || monthFee > 0 || extraCharge > 0 || discount > 0
 
   return (
     <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-4 print:shadow-none print:max-w-none print:w-full print:mx-0" id="print-delivery">
@@ -89,7 +92,7 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
           {/* รวมค่าซัก */}
           <tr className="bg-slate-50 font-medium">
             <td colSpan={isPer ? 3 : 3} className="text-right px-3 py-2 border border-slate-300">
-              {(tripFee > 0 || monthFee > 0) ? 'รวมค่าซัก' : 'รวมทั้งหมด'}
+              {hasAdjustments ? 'รวมค่าซัก' : 'รวมทั้งหมด'}
             </td>
             <td className="text-right px-3 py-2 border border-slate-300">{formatNumber(totalItems)}</td>
             {isPer && <td className="border border-slate-300"></td>}
@@ -109,8 +112,26 @@ export default function DeliveryNotePrint({ note, customer, company, catalog }: 
               <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(monthFee)}</td>
             </tr>
           )}
-          {/* ยอดรวมทั้งหมด (with transport fees) */}
-          {isPer && (tripFee > 0 || monthFee > 0) && (
+          {/* ค่าใช้จ่ายเพิ่มเติม */}
+          {isPer && extraCharge > 0 && (
+            <tr>
+              <td colSpan={isPer ? 5 : 3} className="text-right px-3 py-1.5 border border-slate-300">
+                ค่าใช้จ่ายเพิ่มเติม{note.extraChargeNote ? ` (${note.extraChargeNote})` : ''}
+              </td>
+              <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(extraCharge)}</td>
+            </tr>
+          )}
+          {/* ส่วนลด */}
+          {isPer && discount > 0 && (
+            <tr>
+              <td colSpan={isPer ? 5 : 3} className="text-right px-3 py-1.5 border border-slate-300">
+                ส่วนลด{note.discountNote ? ` (${note.discountNote})` : ''}
+              </td>
+              <td className="text-right px-3 py-1.5 border border-slate-300">-{formatCurrency(discount)}</td>
+            </tr>
+          )}
+          {/* ยอดรวมทั้งหมด */}
+          {isPer && hasAdjustments && (
             <tr className="bg-slate-100 font-bold">
               <td colSpan={isPer ? 5 : 3} className="text-right px-3 py-2 border border-slate-300">ยอดรวมทั้งหมด</td>
               <td className="text-right px-3 py-2 border border-slate-300">{formatCurrency(totalAmount)}</td>
