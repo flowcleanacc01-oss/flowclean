@@ -10,7 +10,7 @@ import Modal from '@/components/Modal'
 import SortableHeader from '@/components/SortableHeader'
 
 type PageTab = 'customers' | 'categories'
-type SortKey = 'shortName' | 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'enabledItems' | 'qt' | 'contact' | 'isActive'
+type SortKey = 'shortName' | 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'tax' | 'qt' | 'contact' | 'isActive'
 
 const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   customerCode: '', customerType: 'hotel',
@@ -79,7 +79,7 @@ export default function CustomersPage() {
         case 'customerType': va = getCustomerCategoryLabel(a.customerType); vb = getCustomerCategoryLabel(b.customerType); break
         case 'billingModel': va = a.billingModel; vb = b.billingModel; break
         case 'creditDays': va = a.creditDays; vb = b.creditDays; break
-        case 'enabledItems': va = a.enabledItems.length; vb = b.enabledItems.length; break
+        case 'tax': va = (a.enableVat !== false ? 2 : 0) + (a.enableWithholding !== false ? 1 : 0); vb = (b.enableVat !== false ? 2 : 0) + (b.enableWithholding !== false ? 1 : 0); break
         case 'qt': va = linkedQTMap.has(a.name) ? 1 : 0; vb = linkedQTMap.has(b.name) ? 1 : 0; break
         case 'contact': va = a.contactName || ''; vb = b.contactName || ''; break
         case 'isActive': va = a.isActive ? 0 : 1; vb = b.isActive ? 0 : 1; break
@@ -205,7 +205,7 @@ export default function CustomersPage() {
                     <SortableHeader label="หมวด" sortKey="customerType" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                     <SortableHeader label="รูปแบบบิล" sortKey="billingModel" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                     <SortableHeader label="เครดิต" sortKey="creditDays" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
-                    <SortableHeader label="รายการผ้า" sortKey="enabledItems" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
+                    <SortableHeader label="ภาษี" sortKey="tax" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                     <SortableHeader label="QT" sortKey="qt" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                     <SortableHeader label="ผู้ติดต่อ" sortKey="contact" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                     <SortableHeader label="สถานะ" sortKey="isActive" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
@@ -246,7 +246,18 @@ export default function CustomersPage() {
                         </div>
                       </td>
                       <td className={cn("px-4 py-3 text-right text-slate-600", sortedBg('creditDays'))}>{c.creditDays} วัน</td>
-                      <td className={cn("px-4 py-3 text-right text-slate-600", sortedBg('enabledItems'))}>{c.enabledItems.length}</td>
+                      <td className={cn("px-4 py-3 text-center", sortedBg('tax'))}>
+                        <div className="flex flex-wrap justify-center gap-1">
+                          <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-medium',
+                            c.enableVat !== false ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400 line-through')}>
+                            VAT
+                          </span>
+                          <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-medium',
+                            c.enableWithholding !== false ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400 line-through')}>
+                            W/T
+                          </span>
+                        </div>
+                      </td>
                       <td className={cn("px-4 py-3 text-center", sortedBg('qt'))}>
                         {(() => {
                           const qt = linkedQTMap.get(c.name)
