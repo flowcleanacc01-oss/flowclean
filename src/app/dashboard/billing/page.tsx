@@ -97,7 +97,7 @@ export default function BillingPage() {
   const [quValidDays, setQuValidDays] = useState(30)
   const [quConditions, setQuConditions] = useState('1. ราคายังไม่รวมภาษีมูลค่าเพิ่ม 7%\n2. ระยะเวลาเครดิต 30 วัน\n3. บริการรับ-ส่งผ้าทุกวัน')
   const [quNotes, setQuNotes] = useState('')
-  const [quItems, setQuItems] = useState<QuotationItem[]>([])
+  const [quItems, setQuItems] = useState<{ code: string; name: string; pricePerUnit: number | null }[]>([])
   const [quSearch, setQuSearch] = useState('')
   const [quFilterCat, setQuFilterCat] = useState<string>('all')
   // Option B: QT billing conditions
@@ -132,7 +132,7 @@ export default function BillingPage() {
     setQuMonthlyFlatRate(cust.monthlyFlatRate ?? 0)
     setQuValidDays(30)
     setQuConditions('1. ราคายังไม่รวมภาษีมูลค่าเพิ่ม 7%\n2. ระยะเวลาเครดิต 30 วัน\n3. บริการรับ-ส่งผ้าทุกวัน')
-    setQuItems(linenCatalog.map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice })))
+    setQuItems(linenCatalog.map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice > 0 ? i.defaultPrice : null })))
     setShowCreateQU(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, customers, linenCatalog])
@@ -370,7 +370,7 @@ export default function BillingPage() {
       customerContact: quCustomerContact,
       date: quDate,
       validUntil: format(validDate, 'yyyy-MM-dd'),
-      items: quItems.filter(i => i.pricePerUnit > 0),
+      items: quItems.filter(i => i.pricePerUnit !== null).map(i => ({ code: i.code, name: i.name, pricePerUnit: i.pricePerUnit as number })),
       conditions: quConditions,
       status: 'draft' as const,
       notes: quNotes,
@@ -493,7 +493,7 @@ export default function BillingPage() {
   const handleQuotationCSV = () => {
     if (!detailQuotation) return
     const headers = ['รหัส', 'รายการ', 'ราคา/หน่วย']
-    const rows = detailQuotation.items.filter(i => i.pricePerUnit > 0).map(item => [
+    const rows = detailQuotation.items.map(item => [
       item.code, item.name, String(item.pricePerUnit),
     ])
     exportCSV(headers, rows, detailQuotation.quotationNumber)
@@ -720,7 +720,7 @@ export default function BillingPage() {
             setQuValidDays(30)
             setQuConditions('1. ราคายังไม่รวมภาษีมูลค่าเพิ่ม 7%\n2. ระยะเวลาเครดิต 30 วัน\n3. บริการรับ-ส่งผ้าทุกวัน')
             setQuNotes('')
-            setQuItems([...linenCatalog].sort((a, b) => a.sortOrder - b.sortOrder).map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice })))
+            setQuItems([...linenCatalog].sort((a, b) => a.sortOrder - b.sortOrder).map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice > 0 ? i.defaultPrice : null })))
             setQuSearch('')
             setQuFilterCat('all')
             setQuEnablePerPiece(true)
@@ -1825,7 +1825,7 @@ export default function BillingPage() {
                 const newItems = [...linenCatalog]
                   .filter(i => !existingCodes.has(i.code))
                   .sort((a, b) => a.sortOrder - b.sortOrder)
-                  .map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice }))
+                  .map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice > 0 ? i.defaultPrice : null }))
                 setQuItems([...quItems, ...newItems])
               }}
                 className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
@@ -1875,14 +1875,16 @@ export default function BillingPage() {
                         <td className="px-3 py-1 text-xs text-slate-400">{catItem?.unit || 'ชิ้น'}</td>
                         <td className="px-1 py-1 text-right">
                           <input type="number" min={0} step={0.5}
-                            value={item.pricePerUnit || ''}
+                            value={item.pricePerUnit === null ? '' : item.pricePerUnit}
                             onChange={e => {
                               const updated = [...quItems]
-                              updated[idx] = { ...item, pricePerUnit: sanitizeNumber(e.target.value) }
+                              updated[idx] = { ...item, pricePerUnit: e.target.value === '' ? null : sanitizeNumber(e.target.value) }
                               setQuItems(updated)
                             }}
                             className={cn("w-24 px-2 py-1 border rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none",
-                              !item.pricePerUnit ? "border-red-400 bg-red-50" : "border-slate-200")} />
+                              item.pricePerUnit === null ? "border-red-400 bg-red-50"
+                              : item.pricePerUnit === 0 ? "border-orange-300 bg-orange-50"
+                              : "border-slate-200")} />
                         </td>
                         <td className="px-1 py-1 text-center">
                           <div className="flex items-center justify-center gap-0.5">
@@ -1915,7 +1917,7 @@ export default function BillingPage() {
                           <tr key={catItem.code} className="border-t border-slate-100 opacity-40 hover:opacity-70">
                             <td className="px-1 py-1 text-center">
                               <input type="checkbox" checked={false}
-                                onChange={() => setQuItems([...quItems, { code: catItem.code, name: catItem.name, pricePerUnit: catItem.defaultPrice }])}
+                                onChange={() => setQuItems([...quItems, { code: catItem.code, name: catItem.name, pricePerUnit: catItem.defaultPrice > 0 ? catItem.defaultPrice : null }])}
                                 className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8] cursor-pointer" />
                             </td>
                             <td className="px-3 py-1 font-mono text-xs text-slate-600">{catItem.code}</td>
@@ -1996,8 +1998,11 @@ export default function BillingPage() {
           </div>{/* end relative wrapper */}
 
           <div className="space-y-2 pt-2">
-            {quCustomerId && quItems.length > 0 && quItems.some(i => !i.pricePerUnit) && (
+            {quCustomerId && quItems.length > 0 && quItems.some(i => i.pricePerUnit === null) && (
               <p className="text-xs text-red-500 text-right">กรุณาใส่ราคาให้ครบทุกรายการ — รายการที่ยังไม่มีราคาแสดงกรอบแดง</p>
+            )}
+            {quCustomerId && quItems.length > 0 && !quItems.some(i => i.pricePerUnit === null) && quItems.some(i => i.pricePerUnit === 0) && (
+              <p className="text-xs text-orange-500 text-right">มีรายการราคา 0 (ฟรี) — กรอบสีส้ม ระบบจะบันทึกเป็นบริการฟรี</p>
             )}
             {quCustomerId && quItems.length === 0 && (
               <p className="text-xs text-red-500 text-right">ไม่มีรายการผ้า — กรุณาเพิ่มอย่างน้อย 1 รายการ</p>
@@ -2005,7 +2010,7 @@ export default function BillingPage() {
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowCreateQU(false)}
                 className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-              <button onClick={handleCreateQuotation} disabled={!quCustomerId || quItems.length === 0 || quItems.some(i => !i.pricePerUnit)}
+              <button onClick={handleCreateQuotation} disabled={!quCustomerId || quItems.length === 0 || quItems.some(i => i.pricePerUnit === null)}
                 className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
                 บันทึก
               </button>
