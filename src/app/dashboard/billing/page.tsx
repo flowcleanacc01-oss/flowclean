@@ -3,11 +3,11 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber } from '@/lib/utils'
+import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber, buildPriceMapFromQT } from '@/lib/utils'
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
-import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2, RefreshCw } from 'lucide-react'
+import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
@@ -268,7 +268,7 @@ export default function BillingPage() {
       if (selectedNotes.length === 0) return null
       const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerId === selCustomer.id)
       baseItems = billingMode === 'by_date'
-        ? aggregateDeliveryItemsByDate(selectedNotes, selCustomer)
+        ? aggregateDeliveryItemsByDate(selectedNotes, selCustomer, linkedQT?.items)
         : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog, linkedQT?.items)
     }
     let lineItems = [...baseItems]
@@ -437,7 +437,7 @@ export default function BillingPage() {
       return
     }
     updateQuotationStatus(qtId, 'accepted')
-    // Auto sync: อัปเดต priceList + billing conditions ให้ลูกค้าอัตโนมัติ
+    // Auto sync: อัปเดต billing conditions ให้ลูกค้าอัตโนมัติ (ราคาอ่านจาก QT โดยตรงแล้ว)
     const cust = customers.find(c => c.id === qt.customerId)
     if (cust) {
       updateCustomer(cust.id, {
@@ -448,7 +448,6 @@ export default function BillingPage() {
         minPerTripThreshold: qt.minPerTripThreshold ?? 0,
         enableMinPerMonth: qt.enableMinPerMonth ?? false,
         monthlyFlatRate: qt.monthlyFlatRate ?? 0,
-        priceList: qt.items.map(i => ({ code: i.code, price: i.pricePerUnit })),
       })
     }
   }
@@ -1296,7 +1295,7 @@ export default function BillingPage() {
                 .sort((a, b) => a!.date.localeCompare(b!.date))
               if (linkedDNs.length === 0) return null
               const isPer = (detailCustomer.enablePerPiece ?? true)
-              const priceMap = isPer ? Object.fromEntries(detailCustomer.priceList.map(p => [p.code, p.price])) : {}
+              const priceMap = isPer ? buildPriceMapFromQT(detailCustomer.id, quotations) : {}
               return (
                 <div>
                   <h3 className="text-sm font-medium text-slate-700 mb-2">ใบส่งของที่รวมวางบิล ({linkedDNs.length} ใบ)</h3>
@@ -2102,28 +2101,6 @@ export default function BillingPage() {
                       className="text-sm px-3 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100">ปฏิเสธ</button>
                   </>
                 )}
-                {detailQuotation.status === 'accepted' && detailQuotation.customerId && (() => {
-                  const cust = getCustomer(detailQuotation.customerId!)
-                  return cust ? (
-                    <button onClick={() => {
-                      updateCustomer(cust.id, {
-                        enablePerPiece: detailQuotation.enablePerPiece ?? true,
-                        enableMinPerTrip: detailQuotation.enableMinPerTrip ?? false,
-                        minPerTrip: detailQuotation.minPerTrip ?? 0,
-                        enableWaive: detailQuotation.enableWaive ?? false,
-                        minPerTripThreshold: detailQuotation.minPerTripThreshold ?? 0,
-                        enableMinPerMonth: detailQuotation.enableMinPerMonth ?? false,
-                        monthlyFlatRate: detailQuotation.monthlyFlatRate ?? 0,
-                        priceList: detailQuotation.items.map(i => ({ code: i.code, price: i.pricePerUnit })),
-                      })
-                      alert(`Sync ราคาให้ ${cust.shortName || cust.name} แล้ว`)
-                    }}
-                      className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 flex items-center gap-1"
-                      title="Sync ราคาอีกครั้ง (ปกติ auto sync ตอนกดตกลงแล้ว)">
-                      <RefreshCw className="w-3 h-3" />Sync ราคาซ้ำ
-                    </button>
-                  ) : null
-                })()}
                 <button onClick={() => {
                   if (confirm(`ลบใบเสนอราคา ${detailQuotation.quotationNumber}?`)) {
                     deleteQuotation(detailQuotation.id)

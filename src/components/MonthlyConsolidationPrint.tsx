@@ -8,6 +8,7 @@ interface Props {
   deliveryNotes: DeliveryNote[]
   catalog: LinenItemDef[]
   company: CompanyInfo
+  priceMap?: Record<string, number>
 }
 
 const thS: React.CSSProperties = {
@@ -24,20 +25,21 @@ const tdL: React.CSSProperties = {
   textAlign: 'left', padding: '1px 2px', fontSize: '7pt', border: '0.5px solid #ccc',
 }
 
-export default function MonthlyConsolidationPrint({ customer, month, deliveryNotes, catalog }: Props) {
+export default function MonthlyConsolidationPrint({ customer, month, deliveryNotes, catalog, priceMap: priceMapProp }: Props) {
   // Filter + sort delivery notes for this customer + month
   const notes = deliveryNotes
     .filter(dn => dn.customerId === customer.id && dn.date.startsWith(month))
     .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
 
-  // Collect item codes used this month + items in customer priceList
+  // Collect item codes used this month + items in priceMap
   const usedCodes = new Set<string>()
   for (const dn of notes) {
     for (const item of dn.items) {
       if (!item.isClaim) usedCodes.add(item.code)
     }
   }
-  for (const p of customer.priceList) usedCodes.add(p.code)
+  const resolvedPriceMap = priceMapProp ?? Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+  for (const code of Object.keys(resolvedPriceMap)) usedCodes.add(code)
 
   // Items sorted by catalog sortOrder
   const items = catalog
@@ -49,9 +51,8 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
   const thaiYear = year + 543
 
   // Price lookup
-  const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
   const getPrice = (code: string): number =>
-    priceMap[code] ?? catalog.find(i => i.code === code)?.defaultPrice ?? 0
+    resolvedPriceMap[code] ?? catalog.find(i => i.code === code)?.defaultPrice ?? 0
 
   // Build matrix: code → dnId → qty (non-claim items only)
   const matrix: Record<string, Record<string, number>> = {}

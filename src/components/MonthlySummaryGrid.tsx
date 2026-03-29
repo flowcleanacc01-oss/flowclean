@@ -10,15 +10,16 @@ interface MonthlySummaryGridProps {
   linenForms: LinenForm[]
   deliveryNotes: DeliveryNote[]
   catalog: LinenItemDef[]
+  priceMap?: Record<string, number>
 }
 
-export default function MonthlySummaryGrid({ customer, month, linenForms, deliveryNotes, catalog }: MonthlySummaryGridProps) {
+export default function MonthlySummaryGrid({ customer, month, linenForms, deliveryNotes, catalog, priceMap: priceMapProp }: MonthlySummaryGridProps) {
   const itemNameMap = Object.fromEntries(catalog.map(i => [i.code, i.name]))
   const summary = useMemo(() => {
     const [year, m] = month.split('-').map(Number)
     const daysInMonth = new Date(year, m, 0).getDate()
     const enabledCodes = customer.enabledItems
-    const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+    const priceMap = priceMapProp ?? Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
 
     // Build grid: code → day → quantity (from col5 of linen forms)
     const grid: Record<string, Record<number, number>> = {}

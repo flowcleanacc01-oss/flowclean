@@ -241,29 +241,6 @@ export default function CustomerDetailPage() {
             )}
           </div>
 
-          {/* Price List */}
-          {customer.enabledItems.length > 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <h3 className="font-semibold text-slate-800 mb-3">รายการผ้า ({customer.enabledItems.length} ชนิด)</h3>
-              <div className="space-y-1">
-                {customer.enabledItems.map(code => {
-                  const price = customer.priceList.find(p => p.code === code)
-                  return (
-                    <div key={code} className="flex justify-between text-sm py-1 border-b border-slate-50 last:border-0">
-                      <span className="text-slate-600">
-                        <span className="font-mono text-xs text-slate-400 mr-2">{code}</span>
-                        {catalogMap[code] || code}
-                      </span>
-                      {(customer.enablePerPiece ?? true) && (
-                        <span className="text-slate-800 font-medium">{formatCurrency(price?.price ?? 0)}</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Carry-over */}
           {carryOver.length > 0 && (
             <div className="bg-white rounded-xl border border-amber-200 p-5">

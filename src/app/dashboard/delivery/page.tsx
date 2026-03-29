@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatDate, formatNumber, formatCurrency, cn, todayISO, sanitizeNumber } from '@/lib/utils'
+import { formatDate, formatNumber, formatCurrency, cn, todayISO, sanitizeNumber, buildPriceMapFromQT } from '@/lib/utils'
 import { type DeliveryNoteItem } from '@/types'
 import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
@@ -20,7 +20,7 @@ export default function DeliveryPage() {
   const {
     deliveryNotes, addDeliveryNote, updateDeliveryNote, deleteDeliveryNote,
     linenForms, customers, getCustomer, companyInfo, linenCatalog,
-    billingStatements,
+    billingStatements, quotations,
   } = useStore()
   const [showPrint, setShowPrint] = useState(false)
 
@@ -73,7 +73,7 @@ export default function DeliveryPage() {
   const getDNTotalAmount = (dn: typeof deliveryNotes[number]): number => {
     const customer = getCustomer(dn.customerId)
     if (!customer || !(customer.enablePerPiece ?? true)) return 0
-    const priceMap = Object.fromEntries((customer.priceList || []).map(p => [p.code, p.price]))
+    const priceMap = buildPriceMapFromQT(dn.customerId, quotations)
     const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
     return itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0)
   }
@@ -180,7 +180,7 @@ export default function DeliveryPage() {
     let tripFee = 0
     let monthFee = 0
     if (customer) {
-      const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+      const priceMap = buildPriceMapFromQT(selCustomerId, quotations)
       const itemSubtotal = deliveryItems.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
       tripFee = calculateTransportFeeTrip(itemSubtotal, customer)
 
@@ -193,7 +193,7 @@ export default function DeliveryPage() {
         updateDeliveryNote(prevLastDN.id, { transportFeeMonth: 0 })
       }
 
-      monthFee = calculateTransportFeeMonth(monthDNs, customer, itemSubtotal, tripFee)
+      monthFee = calculateTransportFeeMonth(monthDNs, customer, itemSubtotal, tripFee, priceMap)
     }
 
     const newDN = addDeliveryNote({
@@ -238,7 +238,7 @@ export default function DeliveryPage() {
   const handleExportCSV = () => {
     if (!detailNote || !detailCustomer) return
     const isPer = (detailCustomer.enablePerPiece ?? true)
-    const priceMap = Object.fromEntries(detailCustomer.priceList.map(p => [p.code, p.price]))
+    const priceMap = buildPriceMapFromQT(detailCustomer.id, quotations)
     const headers = isPer
       ? ['รหัส', 'รายการ', 'จำนวน', 'ราคา/หน่วย', 'มูลค่า']
       : ['รหัส', 'รายการ', 'จำนวน']
@@ -657,7 +657,7 @@ export default function DeliveryPage() {
 
             {(() => {
               const isPer = (detailCustomer.enablePerPiece ?? true)
-              const priceMap = Object.fromEntries(detailCustomer.priceList.map(p => [p.code, p.price]))
+              const priceMap = buildPriceMapFromQT(detailCustomer.id, quotations)
               const itemSubtotal = isPer ? detailNote.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0) : 0
               const tripFee = detailNote.transportFeeTrip || 0
               const monthFee = detailNote.transportFeeMonth || 0
@@ -992,7 +992,7 @@ export default function DeliveryPage() {
               </label>
             </div>
 
-            <DeliveryNotePrint note={detailNote} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} />
+            <DeliveryNotePrint note={detailNote} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} priceMap={buildPriceMapFromQT(detailCustomer.id, quotations)} />
             <div className="flex justify-end mt-4 no-print">
               <ExportButtons targetId="print-delivery" filename={detailNote.noteNumber} onExportCSV={handleExportCSV} onPrint={handlePrintExport} onExportFile={handleExportFile} />
             </div>
@@ -1010,7 +1010,7 @@ export default function DeliveryPage() {
             return (
               <div key={dnId}>
                 {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6" style={{ pageBreakBefore: 'always' }} />}
-                <DeliveryNotePrint note={dn} customer={cust} company={companyInfo} catalog={linenCatalog} />
+                <DeliveryNotePrint note={dn} customer={cust} company={companyInfo} catalog={linenCatalog} priceMap={buildPriceMapFromQT(cust.id, quotations)} />
               </div>
             )
           })}

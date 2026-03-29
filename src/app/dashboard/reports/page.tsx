@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatNumber, cn } from '@/lib/utils'
+import { formatCurrency, formatNumber, cn, buildPriceMapFromQT } from '@/lib/utils'
 import { FileDown, ExternalLink } from 'lucide-react'
 import ExportButtons from '@/components/ExportButtons'
 import Link from 'next/link'
@@ -15,7 +15,7 @@ import Modal from '@/components/Modal'
 type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'carryover' | 'delivery' | 'stock' | 'consolidation'
 
 export default function ReportsPage() {
-  const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo } = useStore()
+  const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations } = useStore()
   const [tab, setTab] = useState<TabKey>('monthly')
   const [showDeliveryPrint, setShowDeliveryPrint] = useState(false)
   const [showStockPrint, setShowStockPrint] = useState(false)
@@ -172,6 +172,7 @@ export default function ReportsPage() {
             linenForms={linenForms}
             deliveryNotes={deliveryNotes}
             catalog={linenCatalog}
+            priceMap={buildPriceMapFromQT(selCustomer.id, quotations)}
           />
         </div>
       )}
@@ -379,6 +380,7 @@ export default function ReportsPage() {
               deliveryNotes={deliveryNotes}
               catalog={linenCatalog}
               company={companyInfo}
+              priceMap={buildPriceMapFromQT(selCustomer.id, quotations)}
             />
           </div>
         </div>
@@ -484,6 +486,7 @@ export default function ReportsPage() {
               deliveryNotes={deliveryNotes}
               catalog={linenCatalog}
               company={companyInfo}
+              priceMap={buildPriceMapFromQT(selCustomer.id, quotations)}
             />
             <div className="flex justify-end mt-4 no-print">
               <ExportButtons targetId="print-consolidation" filename={`รวบเดือน-${selCustomer.shortName || selCustomer.name}-${selMonth}`} showPrint={true} orientation={printOrientation} />

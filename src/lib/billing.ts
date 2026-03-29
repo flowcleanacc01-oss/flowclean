@@ -24,7 +24,9 @@ export function aggregateDeliveryItems(
     }
   }
 
-  const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+  const priceMap = qtItems
+    ? Object.fromEntries(qtItems.map(i => [i.code, i.pricePerUnit]))
+    : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
 
   const result = Object.entries(qtyMap)
     .filter(([, qty]) => qty > 0)
@@ -87,8 +89,11 @@ export function aggregateDeliveryItems(
 export function aggregateDeliveryItemsByDate(
   notes: DeliveryNote[],
   customer: Customer,
+  qtItems?: QuotationItem[],
 ): BillingLineItem[] {
-  const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+  const priceMap = qtItems
+    ? Object.fromEntries(qtItems.map(i => [i.code, i.pricePerUnit]))
+    : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
   const result: BillingLineItem[] = []
   const sortedNotes = [...notes].sort((a, b) => a.date.localeCompare(b.date))
 

@@ -9,11 +9,12 @@ interface DeliveryNotePrintProps {
   customer: Customer
   company: CompanyInfo
   catalog: LinenItemDef[]
+  priceMap?: Record<string, number>
 }
 
-export default function DeliveryNotePrint({ note, customer, company, catalog }: DeliveryNotePrintProps) {
+export default function DeliveryNotePrint({ note, customer, company, catalog, priceMap: priceMapProp }: DeliveryNotePrintProps) {
   const itemNameMap = Object.fromEntries(catalog.map(i => [i.code, i.name]))
-  const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+  const priceMap = priceMapProp ?? Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
   const totalItems = note.items.reduce((s, i) => s + i.quantity, 0)
   const isPer = (customer.enablePerPiece ?? true)
   const itemSubtotal = isPer ? note.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0) : 0

@@ -3,11 +3,11 @@ import type { Customer, DeliveryNote } from '@/types'
 /**
  * Calculate DN item subtotal (before VAT, excluding transport fees)
  */
-export function calculateDNSubtotal(dn: DeliveryNote, customer: Customer): number {
-  const priceMap = Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+export function calculateDNSubtotal(dn: DeliveryNote, customer: Customer, priceMap?: Record<string, number>): number {
+  const pm = priceMap ?? Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
   return dn.items.reduce((sum, item) => {
     if (item.isClaim) return sum
-    return sum + item.quantity * (priceMap[item.code] || 0)
+    return sum + item.quantity * (pm[item.code] || 0)
   }, 0)
 }
 
@@ -41,12 +41,13 @@ export function calculateTransportFeeMonth(
   customer: Customer,
   currentDNSubtotal: number,
   currentDNTripFee: number,
+  priceMap?: Record<string, number>,
 ): number {
   if (!customer.enableMinPerMonth) return 0
 
   // Sum existing DNs (excluding any existing month fee — we're recalculating)
   const existingTotal = allDNsForMonth.reduce((sum, dn) => {
-    const itemSubtotal = calculateDNSubtotal(dn, customer)
+    const itemSubtotal = calculateDNSubtotal(dn, customer, priceMap)
     return sum + itemSubtotal + (dn.transportFeeTrip || 0)
   }, 0)
 

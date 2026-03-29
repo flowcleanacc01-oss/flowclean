@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx'
 import { format, parseISO, differenceInDays } from 'date-fns'
 import { th } from 'date-fns/locale'
+import type { Quotation } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs)
@@ -126,4 +127,11 @@ export function sanitizeNumber(value: string | number, max = 9_999_999): number 
   const n = typeof value === 'string' ? parseFloat(value) : value
   if (!Number.isFinite(n) || n < 0) return 0
   return Math.min(n, max)
+}
+
+/** Build price map from the customer's accepted QT. Returns {} if no accepted QT found. */
+export function buildPriceMapFromQT(customerId: string, quotations: Quotation[]): Record<string, number> {
+  const qt = quotations.find(q => q.customerId === customerId && q.status === 'accepted')
+  if (!qt) return {}
+  return Object.fromEntries(qt.items.map(i => [i.code, i.pricePerUnit]))
 }
