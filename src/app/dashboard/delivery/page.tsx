@@ -268,7 +268,9 @@ export default function DeliveryPage() {
   }
 
   const handleBulkDelete = () => {
-    const billedCount = selectedDnIds.filter(id => deliveryNotes.find(d => d.id === id)?.isBilled).length
+    const billedCount = selectedDnIds.filter(id =>
+      billingStatements.some(b => b.deliveryNoteIds.includes(id))
+    ).length
     if (billedCount > 0) {
       alert(`ไม่สามารถลบได้ — มี SD ที่วางบิลแล้ว ${billedCount} ใบ\nกรุณายกเลิกการเลือก SD ที่วางบิลแล้วก่อน`)
       return
@@ -721,7 +723,7 @@ export default function DeliveryPage() {
             ต้องการลบใบส่งของที่เลือกทั้งหมด <span className="font-semibold text-red-600">{selectedDnIds.length} ใบ</span> หรือไม่?
           </p>
           <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            ⚠️ SD ที่วางบิลแล้วจะไม่ถูกลบ — ระบบจะข้ามรายการนั้นอัตโนมัติ
+            ⚠️ SD ที่มีใบวางบิลอยู่จะไม่ถูกลบ — ระบบจะหยุดและแจ้งเตือนให้ยกเลิกการเลือกก่อน
           </p>
           <div className="flex justify-end gap-3">
             <button onClick={() => setConfirmBulkDeleteOpen(false)}
@@ -736,12 +738,22 @@ export default function DeliveryPage() {
 
       {/* Delete Confirmation Modal */}
       <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
+        {(() => {
+          const hasLinkedWB = billingStatements.some(b => b.deliveryNoteIds.includes(confirmDeleteId || ''))
+          return (
         <div className="space-y-4">
-          <p className="text-sm text-slate-600">ต้องการลบใบส่งของนี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
+          {hasLinkedWB ? (
+            <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-700">
+              <span className="font-medium">⚠ ไม่สามารถลบได้</span> — SD นี้มีใบวางบิลอยู่<br />
+              กรุณาย้อน WB ก่อน แล้วค่อยลบ SD
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">ต้องการลบใบส่งของนี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
+          )}
           <div className="flex justify-end gap-3">
             <button onClick={() => setConfirmDeleteId(null)}
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={() => {
+            {!hasLinkedWB && (<button onClick={() => {
               if (!confirmDeleteId) return
               const deletedDN = deliveryNotes.find(d => d.id === confirmDeleteId)
               deleteDeliveryNote(confirmDeleteId)
@@ -768,8 +780,11 @@ export default function DeliveryPage() {
               setShowDetail(null)
             }}
               className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
+            )}
           </div>
         </div>
+          )
+        })()}
       </Modal>
 
       {/* Print List Modal — พิมพ์รายการ SD */}
