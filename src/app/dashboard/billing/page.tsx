@@ -88,6 +88,7 @@ export default function BillingPage() {
   const [showCreateQU, setShowCreateQU] = useState(false)
   const [editQuId, setEditQuId] = useState<string | null>(null)
   const [showLoadFromQT, setShowLoadFromQT] = useState(false)
+  const [quLoadQTSearch, setQuLoadQTSearch] = useState('')
   const [showQuDetail, setShowQuDetail] = useState<string | null>(null)
   const [showQuPrint, setShowQuPrint] = useState(false)
   const [quCustomerName, setQuCustomerName] = useState('')
@@ -108,6 +109,7 @@ export default function BillingPage() {
   const [quMinPerTripThreshold, setQuMinPerTripThreshold] = useState(0)
   const [quEnableMinPerMonth, setQuEnableMinPerMonth] = useState(false)
   const [quMonthlyFlatRate, setQuMonthlyFlatRate] = useState(0)
+  const [quNeedCustomerWarn, setQuNeedCustomerWarn] = useState(false)
 
   // Option A: Customer → QT shortcut (newqt=customerId in URL)
   useEffect(() => {
@@ -718,6 +720,7 @@ export default function BillingPage() {
             setQuMinPerTripThreshold(0)
             setQuEnableMinPerMonth(false)
             setQuMonthlyFlatRate(0)
+            setQuNeedCustomerWarn(false)
             setShowCreateQU(true)
           }}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
@@ -1641,12 +1644,13 @@ export default function BillingPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">โรงแรม / ลูกค้า</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">ชื่อย่อลูกค้า</label>
               <select value={quCustomerId} onChange={e => {
                 const cust = customers.find(c => c.id === e.target.value)
                 setQuCustomerId(e.target.value)
                 setQuCustomerName(cust?.name || '')
                 setQuCustomerContact(cust?.contactName ? `${cust.contactName}${cust.contactPhone ? ` (${cust.contactPhone})` : ''}` : '')
+                setQuNeedCustomerWarn(false)
                 if (cust) {
                   setQuEnablePerPiece(cust.enablePerPiece ?? true)
                   setQuEnableMinPerTrip(cust.enableMinPerTrip ?? false)
@@ -1655,17 +1659,18 @@ export default function BillingPage() {
                   setQuMinPerTripThreshold(cust.minPerTripThreshold ?? 0)
                   setQuEnableMinPerMonth(cust.enableMinPerMonth ?? false)
                   setQuMonthlyFlatRate(cust.monthlyFlatRate ?? 0)
-                  // Auto-load from linked accepted QT if exists, else keep current items (full catalog default)
                   const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerId === cust.id)
                   if (linkedQT) setQuItems([...linkedQT.items])
                 }
               }}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+                className={cn("w-full px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none",
+                  !quCustomerId ? "border-[#3DD8D8] ring-2 ring-[#3DD8D8]/40 bg-[#3DD8D8]/5" : "border-slate-200")}>
                 <option value="">— เลือกจากลูกค้าในระบบ —</option>
                 {customers.filter(c => c.isActive).map(c => (
                   <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
                 ))}
               </select>
+              {!quCustomerId && <p className="text-xs text-[#1B3A5C] mt-1 font-medium animate-pulse">↑ เริ่มต้นเลือกลูกค้าที่นี่ก่อน</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">ผู้ติดต่อ</label>
@@ -1679,34 +1684,66 @@ export default function BillingPage() {
             </div>
           </div>
 
+          {quNeedCustomerWarn && !quCustomerId && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              กรุณาเลือก "ชื่อย่อลูกค้า" ก่อนดำเนินการ
+            </div>
+          )}
+          <div className="relative">
+            {!quCustomerId && (
+              <div className="absolute inset-0 z-10 cursor-not-allowed rounded-lg"
+                onClick={() => setQuNeedCustomerWarn(true)} />
+            )}
+            <div className={cn(!quCustomerId && 'opacity-40 select-none')}>
+
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm font-medium text-slate-600">รายการผ้า + ราคา ({quItems.length} รายการ)</label>
               <div className="relative">
-                <button type="button" onClick={() => setShowLoadFromQT(!showLoadFromQT)}
+                <button type="button" onClick={() => { setShowLoadFromQT(!showLoadFromQT); setQuLoadQTSearch('') }}
                   className="flex items-center gap-1 text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
                   <FileText className="w-3.5 h-3.5" />โหลดจากใบเสนอราคา
                 </button>
                 {showLoadFromQT && (
-                  <div className="absolute z-20 mt-1 right-0 w-80 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
-                    {quotations.length === 0 ? (
-                      <div className="px-3 py-2 text-xs text-slate-400">ไม่มีใบเสนอราคา</div>
-                    ) : quotations.map(q => (
-                      <button key={q.id} type="button" onClick={() => { setQuItems([...q.items]); setShowLoadFromQT(false) }}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0 flex items-center gap-2">
-                        <span className="font-mono font-medium text-slate-700">{q.quotationNumber}</span>
-                        <span className="text-slate-500">{q.customerName}</span>
-                        <span className={cn('ml-auto px-1.5 py-0.5 rounded text-[10px]', q.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500')}>
-                          {q.items.length} รายการ
-                        </span>
-                      </button>
-                    ))}
+                  <div className="absolute z-20 mt-1 right-0 w-80 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 flex flex-col">
+                    <div className="sticky top-0 p-2 border-b border-slate-100 bg-white">
+                      <input value={quLoadQTSearch} onChange={e => setQuLoadQTSearch(e.target.value)}
+                        placeholder="พิมพ์ค้นหา..."
+                        autoFocus
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded text-xs focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                    </div>
+                    <div className="overflow-y-auto flex-1">
+                      {(() => {
+                        const s = quLoadQTSearch.toLowerCase()
+                        const filtered = quotations.filter(q => {
+                          if (!s) return true
+                          const cust = customers.find(c => c.id === q.customerId)
+                          const shortName = cust?.shortName || ''
+                          return q.quotationNumber.toLowerCase().includes(s) || shortName.toLowerCase().includes(s) || q.customerName.toLowerCase().includes(s)
+                        })
+                        if (filtered.length === 0) return <div className="px-3 py-2 text-xs text-slate-400">{quotations.length === 0 ? 'ไม่มีใบเสนอราคา' : 'ไม่พบรายการ'}</div>
+                        return filtered.map(q => {
+                          const cust = customers.find(c => c.id === q.customerId)
+                          const displayName = cust?.shortName || q.customerName
+                          return (
+                            <button key={q.id} type="button" onClick={() => { setQuItems([...q.items]); setShowLoadFromQT(false) }}
+                              className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0 flex items-center gap-2">
+                              <span className="font-mono font-medium text-slate-700">{q.quotationNumber}</span>
+                              <span className="text-slate-500 truncate">{displayName}</span>
+                              <span className={cn('ml-auto shrink-0 px-1.5 py-0.5 rounded text-[10px]', q.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500')}>
+                                {q.items.length} รายการ
+                              </span>
+                            </button>
+                          )
+                        })
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
             <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 mb-2">
-              การแก้ไขชื่อ ราคา และลำดับที่นี่มีผลกับใบเสนอราคานี้เท่านั้น — หากต้องการแก้ฐานข้อมูลรายการผ้า ไปที่เมนู "รายการผ้า"
+              การแก้ไข ราคา และลำดับที่นี่มีผลกับใบเสนอราคานี้เท่านั้น — หากต้องการแก้ฐานข้อมูลรายการผ้า ไปที่เมนู "รายการผ้า"
             </div>
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <div className="relative flex-1 min-w-[150px]">
@@ -1722,11 +1759,27 @@ export default function BillingPage() {
                   <option key={c.key} value={c.key}>{c.label}</option>
                 ))}
               </select>
+              <button type="button" onClick={() => {
+                const existingCodes = new Set(quItems.map(i => i.code))
+                const newItems = [...linenCatalog]
+                  .filter(i => !existingCodes.has(i.code))
+                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                  .map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice }))
+                setQuItems([...quItems, ...newItems])
+              }}
+                className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
+                เลือกทั้งหมด
+              </button>
+              <button type="button" onClick={() => setQuItems([])}
+                className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
+                ไม่เลือกเลย
+              </button>
             </div>
             <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50">
+                    <th className="text-center px-1 py-2 w-8"><Check className="w-3.5 h-3.5 mx-auto text-slate-400" /></th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600 w-16">รหัส</th>
                     <th className="text-center px-1 py-2 font-medium text-slate-600 w-8">ลำดับ</th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600">ชื่อ (ไทย)</th>
@@ -1738,9 +1791,9 @@ export default function BillingPage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Checked items — in quItems order */}
                   {quItems.map((item, idx) => {
                     const catItem = linenCatalog.find(i => i.code === item.code)
-                    // Apply search + category filter
                     if (quSearch) {
                       const s = quSearch.toLowerCase()
                       if (!item.code.toLowerCase().includes(s) && !item.name.toLowerCase().includes(s) && !(catItem?.nameEn || '').toLowerCase().includes(s)) return null
@@ -1748,6 +1801,11 @@ export default function BillingPage() {
                     if (quFilterCat !== 'all' && catItem?.category !== quFilterCat) return null
                     return (
                       <tr key={item.code} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="px-1 py-1 text-center">
+                          <input type="checkbox" checked={true}
+                            onChange={() => setQuItems(quItems.filter(i => i.code !== item.code))}
+                            className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8] cursor-pointer" />
+                        </td>
                         <td className="px-3 py-1 font-mono text-xs text-slate-600">{item.code}</td>
                         <td className="px-1 py-1 text-center text-xs text-slate-400">{idx + 1}</td>
                         <td className="px-3 py-1 text-slate-700">{item.name}</td>
@@ -1762,7 +1820,8 @@ export default function BillingPage() {
                               updated[idx] = { ...item, pricePerUnit: sanitizeNumber(e.target.value) }
                               setQuItems(updated)
                             }}
-                            className="w-24 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                            className={cn("w-24 px-2 py-1 border rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none",
+                              !item.pricePerUnit ? "border-red-400 bg-red-50" : "border-slate-200")} />
                         </td>
                         <td className="px-1 py-1 text-center">
                           <div className="flex items-center justify-center gap-0.5">
@@ -1774,13 +1833,42 @@ export default function BillingPage() {
                               className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-default transition-colors">
                               <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
                             </button>
-                            <button type="button" onClick={() => setQuItems(quItems.filter((_, i) => i !== idx))}
-                              className="text-slate-400 hover:text-red-500 p-0.5"><X className="w-3 h-3" /></button>
                           </div>
                         </td>
                       </tr>
                     )
                   })}
+                  {/* Unchecked items — catalog items not in quItems */}
+                  {(() => {
+                    const checkedCodes = new Set(quItems.map(i => i.code))
+                    return [...linenCatalog]
+                      .filter(cat => !checkedCodes.has(cat.code))
+                      .sort((a, b) => a.sortOrder - b.sortOrder)
+                      .map(catItem => {
+                        if (quSearch) {
+                          const s = quSearch.toLowerCase()
+                          if (!catItem.code.toLowerCase().includes(s) && !catItem.name.toLowerCase().includes(s) && !(catItem.nameEn || '').toLowerCase().includes(s)) return null
+                        }
+                        if (quFilterCat !== 'all' && catItem.category !== quFilterCat) return null
+                        return (
+                          <tr key={catItem.code} className="border-t border-slate-100 opacity-40 hover:opacity-70">
+                            <td className="px-1 py-1 text-center">
+                              <input type="checkbox" checked={false}
+                                onChange={() => setQuItems([...quItems, { code: catItem.code, name: catItem.name, pricePerUnit: catItem.defaultPrice }])}
+                                className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8] cursor-pointer" />
+                            </td>
+                            <td className="px-3 py-1 font-mono text-xs text-slate-600">{catItem.code}</td>
+                            <td className="px-1 py-1 text-center text-xs text-slate-400">-</td>
+                            <td className="px-3 py-1 text-slate-700">{catItem.name}</td>
+                            <td className="px-3 py-1 text-slate-500 text-xs">{catItem.nameEn || ''}</td>
+                            <td className="px-3 py-1 text-xs text-slate-400">{getCategoryLabel(catItem.category)}</td>
+                            <td className="px-3 py-1 text-xs text-slate-400">{catItem.unit || 'ชิ้น'}</td>
+                            <td className="px-1 py-1 text-right text-xs text-slate-400">{catItem.defaultPrice ? formatCurrency(catItem.defaultPrice) : '-'}</td>
+                            <td className="px-1 py-1"></td>
+                          </tr>
+                        )
+                      })
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -1843,13 +1931,24 @@ export default function BillingPage() {
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button onClick={() => setShowCreateQU(false)}
-              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={handleCreateQuotation} disabled={!quCustomerId || quItems.filter(i => i.pricePerUnit > 0).length === 0}
-              className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
-              บันทึก
-            </button>
+            </div>{/* end opacity wrapper */}
+          </div>{/* end relative wrapper */}
+
+          <div className="space-y-2 pt-2">
+            {quCustomerId && quItems.length > 0 && quItems.some(i => !i.pricePerUnit) && (
+              <p className="text-xs text-red-500 text-right">กรุณาใส่ราคาให้ครบทุกรายการ — รายการที่ยังไม่มีราคาแสดงกรอบแดง</p>
+            )}
+            {quCustomerId && quItems.length === 0 && (
+              <p className="text-xs text-red-500 text-right">ไม่มีรายการผ้า — กรุณาเพิ่มอย่างน้อย 1 รายการ</p>
+            )}
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowCreateQU(false)}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+              <button onClick={handleCreateQuotation} disabled={!quCustomerId || quItems.length === 0 || quItems.some(i => !i.pricePerUnit)}
+                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
+                บันทึก
+              </button>
+            </div>
           </div>
         </div>
       </Modal>
