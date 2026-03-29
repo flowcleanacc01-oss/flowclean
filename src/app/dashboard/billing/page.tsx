@@ -154,6 +154,7 @@ export default function BillingPage() {
   const [dnSortKey, setDnSortKey] = useState('date')
   const [dnSortDir, setDnSortDir] = useState<'asc' | 'desc'>('asc')
   const [billingIssueDate, setBillingIssueDate] = useState(todayISO())
+  const [billingDiscount, setBillingDiscount] = useState(0)
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'billing', label: 'ใบวางบิล (WB)' },
@@ -254,19 +255,24 @@ export default function BillingPage() {
 
   const previewBilling = useMemo(() => {
     if (!selCustomer) return null
+    let baseItems: ReturnType<typeof aggregateDeliveryItems>
     if (!(selCustomer.enablePerPiece ?? true)) {
       if (flatRateBillExists) return null
-      return createFlatRateBilling(selCustomer, selMonth, custVatRate, custWhtRate)
+      const flatResult = createFlatRateBilling(selCustomer, selMonth, custVatRate, custWhtRate)
+      baseItems = flatResult.lineItems
+    } else {
+      const selectedNotes = deliveryNotes.filter(dn => selDnIds.includes(dn.id))
+      if (selectedNotes.length === 0) return null
+      const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerId === selCustomer.id)
+      baseItems = billingMode === 'by_date'
+        ? aggregateDeliveryItemsByDate(selectedNotes, selCustomer)
+        : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog, linkedQT?.items)
     }
-    // per-piece: use only selected DNs
-    const selectedNotes = deliveryNotes.filter(dn => selDnIds.includes(dn.id))
-    if (selectedNotes.length === 0) return null
-    const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerId === selCustomer.id)
-    const lineItems = billingMode === 'by_date'
-      ? aggregateDeliveryItemsByDate(selectedNotes, selCustomer)
-      : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog, linkedQT?.items)
+    const lineItems = billingDiscount > 0
+      ? [...baseItems, { code: 'DISCOUNT', name: 'ส่วนลด', quantity: 1, pricePerUnit: -billingDiscount, amount: -billingDiscount }]
+      : baseItems
     return { lineItems, ...calculateBillingTotals(lineItems, custVatRate, custWhtRate) }
-  }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists, billingMode, quotations, custVatRate, custWhtRate])
+  }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists, billingMode, quotations, custVatRate, custWhtRate, billingDiscount])
 
   const handleCreateBilling = () => {
     if (!selCustomer || !previewBilling) return
@@ -1044,7 +1050,7 @@ export default function BillingPage() {
       )}
 
       {/* Create Billing Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบวางบิล" size="lg">
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setBillingDiscount(0) }} title="สร้างใบวางบิล" size="lg">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -1164,6 +1170,28 @@ export default function BillingPage() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-slate-200 bg-slate-50">
+                      <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">ยอดรวมก่อนส่วนลด</td>
+                      <td className="px-3 py-1.5 text-right font-medium">
+                        {formatCurrency(billingDiscount > 0
+                          ? previewBilling.lineItems.filter(i => i.code !== 'DISCOUNT').reduce((s, i) => s + i.amount, 0)
+                          : previewBilling.subtotal)}
+                      </td>
+                    </tr>
+                    <tr className="bg-slate-50">
+                      <td colSpan={3} className="px-3 py-1.5 text-right text-orange-600">ส่วนลด</td>
+                      <td className="px-3 py-1.5 text-right">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={billingDiscount || ''}
+                          onChange={e => setBillingDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
+                          placeholder="0.00"
+                          className="w-28 text-right border border-slate-200 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-300"
+                        />
+                      </td>
+                    </tr>
+                    <tr className="border-t border-slate-200 bg-slate-50">
                       <td colSpan={3} className="px-3 py-1.5 text-right text-slate-600">รวม</td>
                       <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(previewBilling.subtotal)}</td>
                     </tr>
@@ -1208,7 +1236,7 @@ export default function BillingPage() {
           {selCustomerId && !previewBilling && (
             <div className="text-center py-8 text-slate-400 text-sm">
               {flatRateBillExists
-                ? 'ลูกค้านี้มีใบวางบิลเดือนนี้แล้ว (เหมาจ่าย)'
+                ? 'ลูกค้านี้มีใบวางบิลเดือนนี้แล้ว'
                 : availableDNs.length > 0 && selDnIds.length === 0
                   ? 'กรุณาเลือกใบส่งของอย่างน้อย 1 รายการ'
                   : 'ไม่พบใบส่งของที่ยังไม่วางบิลในเดือนนี้'}
@@ -1216,7 +1244,7 @@ export default function BillingPage() {
           )}
 
           <div className="flex justify-end gap-3 pt-2">
-            <button onClick={() => setShowCreate(false)}
+            <button onClick={() => { setShowCreate(false); setBillingDiscount(0) }}
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
             <button onClick={handleCreateBilling} disabled={!previewBilling}
               className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">

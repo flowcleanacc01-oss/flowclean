@@ -7,6 +7,7 @@ import { exportJPG, exportPDF } from '@/lib/export'
 interface ExportButtonsProps {
   targetId: string
   filename: string
+  orientation?: 'portrait' | 'landscape'
   onExportCSV?: () => void
   onExport?: () => void     // backward compat: fires on any action
   onPrint?: () => void      // fires only on print button
@@ -14,7 +15,7 @@ interface ExportButtonsProps {
   showPrint?: boolean
 }
 
-export default function ExportButtons({ targetId, filename, onExportCSV, onExport, onPrint, onExportFile, showPrint = true }: ExportButtonsProps) {
+export default function ExportButtons({ targetId, filename, orientation = 'portrait', onExportCSV, onExport, onPrint, onExportFile, showPrint = true }: ExportButtonsProps) {
   const [busy, setBusy] = useState(false)
 
   const handleJPG = async () => {
@@ -27,7 +28,7 @@ export default function ExportButtons({ targetId, filename, onExportCSV, onExpor
 
   const handlePDF = async () => {
     setBusy(true)
-    try { await exportPDF(targetId, filename) } catch { /* ignore */ }
+    try { await exportPDF(targetId, filename, orientation) } catch { /* ignore */ }
     setBusy(false)
     onExportFile?.()
     onExport?.()

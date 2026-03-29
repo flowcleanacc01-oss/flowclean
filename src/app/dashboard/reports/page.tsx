@@ -433,7 +433,7 @@ export default function ReportsPage() {
               company={companyInfo}
             />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-delivery-report" filename={`delivery-report-${selCustomer.shortName || selCustomer.name}-${selMonth}`} showPrint={true} />
+              <ExportButtons targetId="print-delivery-report" filename={`delivery-report-${selCustomer.shortName || selCustomer.name}-${selMonth}`} showPrint={true} orientation={printOrientation} />
             </div>
           </div>
         )}
@@ -486,7 +486,7 @@ export default function ReportsPage() {
               company={companyInfo}
             />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-consolidation" filename={`รวบเดือน-${selCustomer.shortName || selCustomer.name}-${selMonth}`} showPrint={true} />
+              <ExportButtons targetId="print-consolidation" filename={`รวบเดือน-${selCustomer.shortName || selCustomer.name}-${selMonth}`} showPrint={true} orientation={printOrientation} />
             </div>
           </div>
         )}
@@ -542,7 +542,7 @@ export default function ReportsPage() {
               getCarryOver={getCarryOver}
             />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-stock-report" filename={`stock-report-${selCustomer.shortName || selCustomer.name}-${selMonth}`} showPrint={true} />
+              <ExportButtons targetId="print-stock-report" filename={`stock-report-${selCustomer.shortName || selCustomer.name}-${selMonth}`} showPrint={true} orientation={printOrientation} />
             </div>
           </div>
         )}

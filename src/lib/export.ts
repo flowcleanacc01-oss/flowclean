@@ -11,12 +11,12 @@ export async function exportJPG(elementId: string, filename: string) {
   link.click()
 }
 
-export async function exportPDF(elementId: string, filename: string) {
+export async function exportPDF(elementId: string, filename: string, orientation: 'portrait' | 'landscape' = 'portrait') {
   const el = document.getElementById(elementId)
   if (!el) return
   const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
   const imgData = canvas.toDataURL('image/jpeg', 0.95)
-  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
   const margin = 10
