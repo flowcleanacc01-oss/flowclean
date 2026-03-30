@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { cn, formatCurrency, sanitizeNumber } from '@/lib/utils'
+import { cn, formatCurrency, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import type { Customer, CustomerCategoryDef } from '@/types'
 import { Plus, Search, Edit2, Trash2, Check, FileText, Eye, X, Link2 } from 'lucide-react'
 import Link from 'next/link'
@@ -135,6 +135,7 @@ export default function CustomersPage() {
     } else {
       const newCust = addCustomer(derived)
       setActiveCustomerId(newCust.id)
+      scrollToActiveRow(newCust.id)
     }
     setShowForm(false)
   }
@@ -217,6 +218,7 @@ export default function CustomersPage() {
                     <tr><td colSpan={10} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                   ) : filtered.map(c => (
                     <tr key={c.id}
+                      data-row-id={c.id}
                       className={cn('border-b border-slate-100 cursor-pointer',
                         activeCustomerId === c.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50',
                         !c.isActive && 'bg-red-50/30')}

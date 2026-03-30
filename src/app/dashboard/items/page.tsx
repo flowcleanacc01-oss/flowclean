@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react'
 import { useStore } from '@/lib/store'
-import { cn, sanitizeNumber } from '@/lib/utils'
+import { cn, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import type { LinenItemDef, LinenCategoryDef } from '@/types'
 import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
 
@@ -105,8 +105,10 @@ export default function ItemsPage() {
       return
     }
     const maxOrder = linenCatalog.reduce((max, i) => Math.max(max, i.sortOrder), 0)
+    const newCode = newItem.code
     addLinenItem({ ...newItem, sortOrder: maxOrder + 1 })
-    setActiveCode(newItem.code)
+    setActiveCode(newCode)
+    scrollToActiveRow(newCode)
     setNewItem(EMPTY_NEW_ITEM)
     setShowAddItem(false)
   }
@@ -336,6 +338,7 @@ export default function ItemsPage() {
                 <tbody>
                   {filteredItems.map((item, idx) => (
                     <tr key={item.code}
+                      data-row-id={item.code}
                       onClick={() => setActiveCode(item.code)}
                       className={cn(
                         'border-t border-slate-100 transition-colors cursor-pointer',

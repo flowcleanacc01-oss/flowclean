@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatDate, formatNumber, formatCurrency, cn, todayISO, sanitizeNumber, buildPriceMapFromQT } from '@/lib/utils'
+import { formatDate, formatNumber, formatCurrency, cn, todayISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow } from '@/lib/utils'
 import { type DeliveryNoteItem } from '@/types'
 import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
@@ -217,6 +217,7 @@ export default function DeliveryPage() {
       notes: dnNotes,
     })
     setActiveRowId(newDN.id)
+    scrollToActiveRow(newDN.id)
     setShowCreate(false)
   }
 
@@ -428,6 +429,7 @@ export default function DeliveryPage() {
                 const wbInfo = dnBillingMap.get(dn.id)
                 return (
                   <tr key={dn.id}
+                    data-row-id={dn.id}
                     className={cn(
                       'border-b border-slate-100 cursor-pointer transition-colors',
                       activeRowId === dn.id

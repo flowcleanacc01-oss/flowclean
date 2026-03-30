@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatDate, todayISO, sanitizeNumber, cn } from '@/lib/utils'
+import { formatCurrency, formatDate, todayISO, sanitizeNumber, cn, scrollToActiveRow } from '@/lib/utils'
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type Expense } from '@/types'
 import Modal from '@/components/Modal'
 import {
@@ -145,6 +145,7 @@ export default function ExpensesPage() {
                 const config = EXPENSE_CATEGORIES[exp.category]
                 return (
                   <tr key={exp.id}
+                    data-row-id={exp.id}
                     className={cn("border-b border-slate-50 cursor-pointer", activeExpenseId === exp.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50/50')}
                     onClick={() => setActiveExpenseId(exp.id)}>
                     <td className="px-5 py-3 text-slate-600">{formatDate(exp.date)}</td>
@@ -196,7 +197,9 @@ export default function ExpensesPage() {
             if (editingExpense) {
               updateExpense(editingExpense.id, data)
             } else {
-              addExpense(data)
+              const newExp = addExpense(data)
+              setActiveExpenseId(newExp.id)
+              scrollToActiveRow(newExp.id)
             }
             setShowForm(false)
             setEditingExpense(null)

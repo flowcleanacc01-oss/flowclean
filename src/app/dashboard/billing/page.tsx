@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber, buildPriceMapFromQT } from '@/lib/utils'
+import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow } from '@/lib/utils'
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
@@ -305,6 +305,7 @@ export default function BillingPage() {
       billingMode,
     })
     setActiveWbId(newWB.id)
+    scrollToActiveRow(newWB.id)
 
     // Mark selected delivery notes as billed
     for (const dnId of selDnIds) {
@@ -364,6 +365,7 @@ export default function BillingPage() {
       notes: '',
     })
     setActiveIvId(newIV.id)
+    scrollToActiveRow(newIV.id)
     setShowCreateIV(null)
     setShowDetail(null)
   }
@@ -396,6 +398,7 @@ export default function BillingPage() {
     } else {
       const newQT = addQuotation(qtData)
       setActiveQtId(newQT.id)
+      scrollToActiveRow(newQT.id)
     }
     setEditQuId(null)
     setShowCreateQU(false)
@@ -854,6 +857,7 @@ export default function BillingPage() {
                   const customer = getCustomer(b.customerId)
                   return (
                     <tr key={b.id}
+                      data-row-id={b.id}
                       className={cn("border-b border-slate-100 cursor-pointer", activeWbId === b.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                       onClick={() => { setActiveWbId(b.id); setShowDetail(b.id) }}>
                       <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
@@ -943,6 +947,7 @@ export default function BillingPage() {
                   const wbInfo = ivBillingMap.get(inv.id)
                   return (
                     <tr key={inv.id}
+                      data-row-id={inv.id}
                       className={cn("border-b border-slate-100 cursor-pointer", activeIvId === inv.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                       onClick={() => { setActiveIvId(inv.id); setShowInvoiceDetail(inv.id) }}>
                       <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
@@ -1011,6 +1016,7 @@ export default function BillingPage() {
                   const nextStatus: QuotationStatus | null = q.status === 'draft' ? 'sent' : q.status === 'sent' ? 'accepted' : null
                   return (
                     <tr key={q.id}
+                      data-row-id={q.id}
                       className={cn("border-b border-slate-100 cursor-pointer", activeQtId === q.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                       onClick={() => { setActiveQtId(q.id); setShowQuDetail(q.id) }}>
                       <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(q.date)}</td>

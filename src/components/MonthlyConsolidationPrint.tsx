@@ -66,9 +66,11 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
     }
   }
 
-  // Transport fee presence
+  // Fee/adjustment presence
   const hasTransportTrip = notes.some(dn => (dn.transportFeeTrip || 0) > 0)
   const hasTransportMonth = notes.some(dn => (dn.transportFeeMonth || 0) > 0)
+  const hasExtraCharge = notes.some(dn => (dn.extraCharge || 0) > 0)
+  const hasDiscount = notes.some(dn => (dn.discount || 0) > 0)
 
   // Row totals (across all SDs)
   const rowQty: Record<string, number> = {}
@@ -79,7 +81,7 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
     rowAmt[item.code] = qty * getPrice(item.code)
   }
 
-  // Total amount per SD (items × price + transport fees)
+  // Total amount per SD (items × price + transport fees + adjustments)
   const dnTotals: Record<string, number> = {}
   for (const dn of notes) {
     let total = 0
@@ -88,16 +90,20 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
     }
     total += dn.transportFeeTrip || 0
     total += dn.transportFeeMonth || 0
+    total += dn.extraCharge || 0
+    total -= dn.discount || 0
     dnTotals[dn.id] = total
   }
 
-  // Transport totals
+  // Totals by category
   const totalTransportTrip = notes.reduce((s, dn) => s + (dn.transportFeeTrip || 0), 0)
   const totalTransportMonth = notes.reduce((s, dn) => s + (dn.transportFeeMonth || 0), 0)
+  const totalExtraCharge = notes.reduce((s, dn) => s + (dn.extraCharge || 0), 0)
+  const totalDiscount = notes.reduce((s, dn) => s + (dn.discount || 0), 0)
 
   // Financial totals
   const itemSubtotal = Object.values(rowAmt).reduce((s, v) => s + v, 0)
-  const subtotal = itemSubtotal + totalTransportTrip + totalTransportMonth
+  const subtotal = itemSubtotal + totalTransportTrip + totalTransportMonth + totalExtraCharge - totalDiscount
   const vat = customer.enableVat ? Math.round(subtotal * 0.07 * 100) / 100 : 0
   const totalWithVat = subtotal + vat
   const wht = customer.enableWithholding ? Math.round(subtotal * 0.03 * 100) / 100 : 0
@@ -140,8 +146,9 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
             <th style={thS}>จำนวน</th>
             <th style={thS}>เป็นเงิน</th>
             {notes.map(dn => (
-              <th key={dn.id} style={{ ...thS, fontSize: '6pt' }}>
-                {parseInt(dn.date.split('-')[2])}
+              <th key={dn.id} style={{ ...thS, fontSize: '6pt', lineHeight: '1.3' }}>
+                <div>{parseInt(dn.date.split('-')[2])}</div>
+                <div style={{ fontSize: '5pt', color: '#888', fontWeight: 'normal' }}>{dn.noteNumber}</div>
               </th>
             ))}
           </tr>
@@ -195,17 +202,49 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
             </tr>
           )}
 
+          {/* ค่าใช้จ่ายเพิ่มเติม row */}
+          {hasExtraCharge && (
+            <tr>
+              <td style={tdC}></td>
+              <td style={tdL}>ค่าใช้จ่ายเพิ่มเติม</td>
+              <td style={tdC}></td>
+              <td style={tdR}></td>
+              <td style={tdR}>{totalExtraCharge ? fmtM(totalExtraCharge) : ''}</td>
+              {notes.map(dn => (
+                <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
+                  {(dn.extraCharge || 0) > 0 ? fmtM(dn.extraCharge!) : ''}
+                </td>
+              ))}
+            </tr>
+          )}
+
+          {/* ส่วนลด row */}
+          {hasDiscount && (
+            <tr>
+              <td style={tdC}></td>
+              <td style={tdL}>ส่วนลด</td>
+              <td style={tdC}></td>
+              <td style={tdR}></td>
+              <td style={tdR}>{totalDiscount ? `-${fmtM(totalDiscount)}` : ''}</td>
+              {notes.map(dn => (
+                <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
+                  {(dn.discount || 0) > 0 ? `-${fmtM(dn.discount!)}` : ''}
+                </td>
+              ))}
+            </tr>
+          )}
+
           {/* Footer: ยอดรวมทั้งหมด per SD (amount, not qty) */}
           <tr style={{ borderTop: '1.5px solid #666' }}>
             <td colSpan={2} style={{ ...tdL, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>
-              ยอด {customer.shortName || customer.name}
+              ยอดรวมทั้งหมด
             </td>
             <td style={{ ...tdC, backgroundColor: '#f0f0f0' }}></td>
-            <td style={{ ...tdR, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>รวม</td>
+            <td style={{ ...tdR, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}></td>
             <td style={{ ...tdR, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>{fmtM(subtotal)}</td>
             {notes.map(dn => (
               <td key={dn.id} style={{ ...tdR, fontWeight: 'bold', fontSize: '6pt', backgroundColor: '#f0f0f0' }}>
-                {dnTotals[dn.id] ? fmtM(dnTotals[dn.id]) : '-'}
+                {fmtM(dnTotals[dn.id] ?? 0)}
               </td>
             ))}
           </tr>

@@ -3,7 +3,7 @@
 import { useState, useMemo, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
+import { formatDate, cn, todayISO, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink } from 'lucide-react'
@@ -210,6 +210,7 @@ export default function LinenFormsPage() {
       bagsSentCount: newBagsSent,
     })
     setActiveRowId(newLF.id)
+    scrollToActiveRow(newLF.id)
     setShowCreate(false)
   }
 
@@ -391,7 +392,7 @@ export default function LinenFormsPage() {
                 const linkedDNInfo = linkedLFMap.get(form.id)
 
                 return (
-                  <tr key={form.id}
+                  <tr key={form.id} data-row-id={form.id}
                     className={cn("border-b border-slate-100 cursor-pointer", activeRowId === form.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                     onClick={() => { setActiveRowId(form.id); setShowDetail(form.id) }}>
                     <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>

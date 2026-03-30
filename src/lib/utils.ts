@@ -129,6 +129,13 @@ export function sanitizeNumber(value: string | number, max = 9_999_999): number 
   return Math.min(n, max)
 }
 
+/** Scroll to newly created/active row in a table */
+export function scrollToActiveRow(id: string, delay = 150) {
+  setTimeout(() => {
+    document.querySelector(`[data-row-id="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, delay)
+}
+
 /** Build price map from the customer's accepted QT. Returns {} if no accepted QT found. */
 export function buildPriceMapFromQT(customerId: string, quotations: Quotation[]): Record<string, number> {
   const qt = quotations.find(q => q.customerId === customerId && q.status === 'accepted')
