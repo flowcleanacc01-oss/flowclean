@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { LinenFormRow, Customer, LinenItemDef, LinenFormStatus, QuotationItem } from '@/types'
-import { cn, sanitizeNumber } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 
 interface LinenFormGridProps {
   customer: Customer
@@ -29,6 +29,11 @@ const COL_LABELS = [
   { key: 'col4', label: 'ลูกค้านับผ้ากลับ', short: 'นับกลับ', tip: 'จำนวนผ้าที่ลูกค้านับรับกลับ (⚠ ถ้าไม่ตรงกับแพคส่ง)' },
 ] as const
 
+// Column index for arrow navigation (position within editable inputs per row)
+const COL_NAV_INDEX: Record<string, number> = {
+  col2: 0, col3: 1, col5: 2, col6: 3, note: 4, col4: 5,
+}
+
 export default function LinenFormGrid({
   customer,
   rows,
@@ -48,12 +53,12 @@ export default function LinenFormGrid({
         const catItem = catalog.find(c => c.code === qi.code)
         return {
           code: qi.code,
-          name: qi.name, // ใช้ชื่อจาก QT (custom name)
+          name: qi.name,
           nameEn: catItem?.nameEn || '',
           category: catItem?.category || 'other',
           unit: catItem?.unit || 'ชิ้น',
           defaultPrice: qi.pricePerUnit,
-          sortOrder: 0, // ไม่ใช้ — ลำดับตาม array position ของ QT
+          sortOrder: 0,
         }
       })
     : catalog.filter(item =>
@@ -61,6 +66,7 @@ export default function LinenFormGrid({
       )
 
   const [localRows, setLocalRows] = useState<LinenFormRow[]>(rows)
+  const gridRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setLocalRows(rows)
@@ -86,14 +92,43 @@ export default function LinenFormGrid({
     onChange(updated)
   }
 
-  const effectiveLabels = COL_LABELS
+  // Arrow key + Enter navigation between cells (spreadsheet UX)
+  const navigate = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    rowIndex: number,
+    colIndex: number
+  ) => {
+    let dRow = 0, dCol = 0
+    if (e.key === 'ArrowUp') dRow = -1
+    else if (e.key === 'ArrowDown' || e.key === 'Enter') { dRow = 1; e.preventDefault() }
+    else if (e.key === 'ArrowLeft') dCol = -1
+    else if (e.key === 'ArrowRight') dCol = 1
+    else return
+    e.preventDefault()
+
+    const container = gridRef.current
+    if (!container) return
+
+    if (dRow !== 0) {
+      const target = container.querySelector<HTMLInputElement>(
+        `input[data-row="${rowIndex + dRow}"][data-col="${colIndex}"]`
+      )
+      if (target) { target.focus(); target.select(); return }
+    }
+    if (dCol !== 0) {
+      const rowInputs = Array.from(
+        container.querySelectorAll<HTMLInputElement>(`input[data-row="${rowIndex}"]`)
+      ).sort((a, b) => Number(a.dataset.col) - Number(b.dataset.col))
+      const cur = rowInputs.findIndex(i => Number(i.dataset.col) === colIndex)
+      const next = rowInputs[cur + dCol]
+      if (next) { next.focus(); next.select() }
+    }
+  }
 
   const isEditable = (colKey: string) => !readOnly && editableColumns.includes(colKey as typeof editableColumns[number])
 
-  // Check if there are any carry-over values (± both)
   const hasCarryOver = Object.keys(carryOver).some(k => carryOver[k] !== 0)
 
-  // Totals
   const totals = {
     col1: 0, col2: 0, col3: 0, col4: 0, col5: 0, col6: 0,
   }
@@ -109,7 +144,7 @@ export default function LinenFormGrid({
   }
 
   return (
-    <div>
+    <div ref={gridRef}>
       {/* Date display */}
       {formDate && (
         <div className="mb-2 text-sm text-slate-600">
@@ -142,7 +177,7 @@ export default function LinenFormGrid({
             <tr className="bg-slate-50 border-b border-slate-200">
               <th className="text-left px-3 py-2 font-medium text-slate-600 w-16">รหัส</th>
               <th className="text-left px-3 py-2 font-medium text-slate-600 w-32">รายการ</th>
-              {effectiveLabels.map(col => {
+              {COL_LABELS.map(col => {
                 const editable = isEditable(col.key)
                 return (
                   <th key={col.key} title={col.tip} className={cn(
@@ -160,13 +195,11 @@ export default function LinenFormGrid({
             </tr>
           </thead>
           <tbody>
-            {enabledItems.map((item) => {
+            {enabledItems.map((item, rowIndex) => {
               const row = getRow(item.code)
               const co = carryOver[item.code] || 0
-              // Discrepancy 1: นับเข้า (col5) ≠ นับส่ง + เคลม (col2 + col3)
               const expectedCountIn = row.col2_hotelCountIn + row.col3_hotelClaimCount
               const hasCountInDisc = row.col5_factoryClaimApproved > 0 && row.col5_factoryClaimApproved !== expectedCountIn
-              // Discrepancy 2: นับกลับ (col4) ≠ แพคส่ง (col6) — only at delivered/confirmed
               const packSend = row.col6_factoryPackSend || 0
               const hasCountBackDisc = (!formStatus || ['delivered', 'confirmed'].includes(formStatus)) &&
                 row.col4_factoryApproved > 0 && row.col4_factoryApproved !== packSend
@@ -175,7 +208,8 @@ export default function LinenFormGrid({
                 <tr key={item.code} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
                   <td className="px-3 py-1.5 text-slate-700">{item.name}</td>
-                  {/* Col 1 - ยกยอดมา (auto, ± ได้) */}
+
+                  {/* Col 1 - ยกยอดมา (auto) */}
                   <td className="px-1 py-1 text-center">
                     <span className={cn(
                       'text-slate-700',
@@ -185,36 +219,63 @@ export default function LinenFormGrid({
                       {co !== 0 ? (co > 0 ? `+${co}` : co) : '-'}
                     </span>
                   </td>
+
                   {/* Col 2 - ลูกค้านับส่ง */}
                   <td className="px-1 py-1 text-center">
                     {isEditable('col2') ? (
-                      <input type="number" min={0}
+                      <input
+                        type="text" inputMode="numeric" pattern="[0-9]*"
+                        data-row={rowIndex} data-col={COL_NAV_INDEX.col2}
                         value={row.col2_hotelCountIn || ''}
-                        onChange={e => updateRow(item.code, 'col2_hotelCountIn', sanitizeNumber(e.target.value, 99999))}
+                        onChange={e => {
+                          const v = e.target.value
+                          if (v === '' || /^\d+$/.test(v))
+                            updateRow(item.code, 'col2_hotelCountIn', v === '' ? 0 : parseInt(v, 10))
+                        }}
+                        onFocus={e => e.currentTarget.select()}
+                        onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col2)}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
                     ) : (
                       <span className="text-slate-700">{row.col2_hotelCountIn || '-'}</span>
                     )}
                   </td>
+
                   {/* Col 3 - เคลม */}
                   <td className="px-1 py-1 text-center">
                     {isEditable('col3') ? (
-                      <input type="number" min={0}
+                      <input
+                        type="text" inputMode="numeric" pattern="[0-9]*"
+                        data-row={rowIndex} data-col={COL_NAV_INDEX.col3}
                         value={row.col3_hotelClaimCount || ''}
-                        onChange={e => updateRow(item.code, 'col3_hotelClaimCount', sanitizeNumber(e.target.value, 99999))}
+                        onChange={e => {
+                          const v = e.target.value
+                          if (v === '' || /^\d+$/.test(v))
+                            updateRow(item.code, 'col3_hotelClaimCount', v === '' ? 0 : parseInt(v, 10))
+                        }}
+                        onFocus={e => e.currentTarget.select()}
+                        onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col3)}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
                     ) : (
                       <span className="text-slate-700">{row.col3_hotelClaimCount || '-'}</span>
                     )}
                   </td>
-                  {/* Col 5 - โรงซักนับเข้า (⚠ ถ้า ≠ นับส่ง+เคลม) → สีเหลือง */}
+
+                  {/* Col 5 - โรงซักนับเข้า */}
                   <td className={cn('px-1 py-1 text-center', hasCountInDisc && 'bg-amber-50')}>
                     {isEditable('col5') ? (
-                      <input type="number" min={0}
+                      <input
+                        type="text" inputMode="numeric" pattern="[0-9]*"
+                        data-row={rowIndex} data-col={COL_NAV_INDEX.col5}
                         value={row.col5_factoryClaimApproved || ''}
-                        onChange={e => updateRow(item.code, 'col5_factoryClaimApproved', sanitizeNumber(e.target.value, 99999))}
+                        onChange={e => {
+                          const v = e.target.value
+                          if (v === '' || /^\d+$/.test(v))
+                            updateRow(item.code, 'col5_factoryClaimApproved', v === '' ? 0 : parseInt(v, 10))
+                        }}
+                        onFocus={e => e.currentTarget.select()}
+                        onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col5)}
                         className={cn(
                           'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
                           hasCountInDisc ? 'border-amber-400 bg-amber-50' : 'border-slate-200'
@@ -227,38 +288,51 @@ export default function LinenFormGrid({
                       </span>
                     )}
                   </td>
+
                   {/* Col 6 - โรงซักแพคส่ง */}
                   <td className="px-1 py-1 text-center">
                     {isEditable('col6') ? (
-                      <input type="number" min={0}
+                      <input
+                        type="text" inputMode="numeric" pattern="[0-9]*"
+                        data-row={rowIndex} data-col={COL_NAV_INDEX.col6}
                         value={row.col6_factoryPackSend || ''}
-                        onChange={e => updateRow(item.code, 'col6_factoryPackSend', sanitizeNumber(e.target.value, 99999))}
+                        onChange={e => {
+                          const v = e.target.value
+                          if (v === '' || /^\d+$/.test(v))
+                            updateRow(item.code, 'col6_factoryPackSend', v === '' ? 0 : parseInt(v, 10))
+                        }}
+                        onFocus={e => e.currentTarget.select()}
+                        onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col6)}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
                     ) : (
                       <span className="text-slate-700">{row.col6_factoryPackSend || '-'}</span>
                     )}
                   </td>
-                  {/* Calculated - ค้าง(-)/คืน(+) = แพคส่ง - นับเข้า */}
+
+                  {/* Calculated - ค้าง(-)/คืน(+) */}
                   <td className="px-1 py-1 text-center">
                     {(() => {
                       const val = (row.col6_factoryPackSend || 0) - row.col5_factoryClaimApproved
                       if (val === 0) return <span className="text-slate-400">-</span>
                       return (
-                        <span className={cn(
-                          val < 0 ? 'text-red-600 font-medium' : 'text-emerald-600 font-medium'
-                        )}>
+                        <span className={cn(val < 0 ? 'text-red-600 font-medium' : 'text-emerald-600 font-medium')}>
                           {val > 0 ? `+${val}` : val}
                         </span>
                       )
                     })()}
                   </td>
+
                   {/* Note - หมายเหตุ */}
                   <td className="px-1 py-1">
                     {isEditable('note') ? (
-                      <input type="text"
+                      <input
+                        type="text"
+                        data-row={rowIndex} data-col={COL_NAV_INDEX.note}
                         value={row.note}
                         onChange={e => updateRow(item.code, 'note', e.target.value)}
+                        onFocus={e => e.currentTarget.select()}
+                        onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.note)}
                         className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                         placeholder="..."
                       />
@@ -266,12 +340,21 @@ export default function LinenFormGrid({
                       <span className="text-slate-500 text-xs">{row.note || '-'}</span>
                     )}
                   </td>
-                  {/* Col 4 - ลูกค้านับกลับ (⚠ ถ้า ≠ แพคส่ง) → สีแดง */}
+
+                  {/* Col 4 - ลูกค้านับกลับ */}
                   <td className={cn('px-1 py-1 text-center', hasCountBackDisc && 'bg-red-50')}>
                     {isEditable('col4') ? (
-                      <input type="number" min={0}
+                      <input
+                        type="text" inputMode="numeric" pattern="[0-9]*"
+                        data-row={rowIndex} data-col={COL_NAV_INDEX.col4}
                         value={row.col4_factoryApproved || ''}
-                        onChange={e => updateRow(item.code, 'col4_factoryApproved', sanitizeNumber(e.target.value, 99999))}
+                        onChange={e => {
+                          const v = e.target.value
+                          if (v === '' || /^\d+$/.test(v))
+                            updateRow(item.code, 'col4_factoryApproved', v === '' ? 0 : parseInt(v, 10))
+                        }}
+                        onFocus={e => e.currentTarget.select()}
+                        onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col4)}
                         className={cn(
                           'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
                           hasCountBackDisc ? 'border-red-400 bg-red-50' : 'border-slate-200'
@@ -308,9 +391,7 @@ export default function LinenFormGrid({
                   const val = totals.col6 - totals.col5
                   if (val === 0) return '-'
                   return (
-                    <span className={cn(
-                      val < 0 ? 'text-red-600' : 'text-emerald-600'
-                    )}>
+                    <span className={cn(val < 0 ? 'text-red-600' : 'text-emerald-600')}>
                       {val > 0 ? `+${val}` : val}
                     </span>
                   )

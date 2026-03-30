@@ -466,7 +466,7 @@ export default function LinenFormsPage() {
       </div>
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งรับผ้าใหม่ (Create New LF)" size="xl">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งรับผ้าใหม่ (Create New LF)" size="wide">
         <div className="space-y-4">
           <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2.5 text-sm text-teal-700">
             <span className="font-medium">สิ่งที่ทำ: {LINEN_FORM_STATUS_CONFIG.draft.todoLabel}</span>
@@ -545,7 +545,7 @@ export default function LinenFormsPage() {
       </Modal>
 
       {/* Detail Modal */}
-      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={detailForm?.formNumber || ''} size="xl">
+      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={detailForm?.formNumber || ''} size="wide">
         {detailForm && detailCustomer && (
           <div className="space-y-4">
             <div id="linen-form-detail" className="space-y-4 bg-white p-2">

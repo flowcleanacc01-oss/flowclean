@@ -9,7 +9,7 @@ interface ModalProps {
   onClose: () => void
   title: string
   children: ReactNode
-  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'wide' | 'full'
   className?: string
 }
 
@@ -18,6 +18,7 @@ const SIZE_MAP = {
   md: 'max-w-lg',
   lg: 'max-w-2xl',
   xl: 'max-w-4xl',
+  wide: 'w-[90vw] max-w-[1400px]',
   full: 'max-w-7xl',
 }
 
