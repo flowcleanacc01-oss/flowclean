@@ -46,8 +46,11 @@ export default function LinenFormsPage() {
 
   const [activeRowId, setActiveRowId] = useState<string | null>(null)
 
-  // Bulk select state
-  const [selectedLfIds, setSelectedLfIds] = useState<string[]>([])
+  // Bulk select state (pre-populated from URL param e.g. after SD delete)
+  const [selectedLfIds, setSelectedLfIds] = useState<string[]>(() => {
+    const p = searchParams.get('select')
+    return p ? p.split(',').filter(Boolean) : []
+  })
   const [showLfPrintList, setShowLfPrintList] = useState(false)
   const [showLfBulkPrint, setShowLfBulkPrint] = useState(false)
 

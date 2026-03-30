@@ -43,11 +43,35 @@ export default function BillingPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
 
-  // Sync tab when URL query param changes (e.g. clicking different billing menu items)
+  // Sync tab + auto-open detail from URL params (cross-page navigation)
   useEffect(() => {
     const t = searchParams.get('tab')
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (t === 'billing' || t === 'invoice' || t === 'quotation') setTab(t)
+
+    // Auto-open WB detail
+    const detailParam = searchParams.get('detail')
+    if (detailParam) {
+      setTab('billing')
+      setActiveWbId(detailParam)
+      setShowDetail(detailParam)
+      scrollToActiveRow(detailParam)
+    }
+    // Auto-open QT detail (from customers page link)
+    const openqt = searchParams.get('openqt')
+    if (openqt) {
+      setTab('quotation')
+      setActiveQtId(openqt)
+      setShowQuDetail(openqt)
+      scrollToActiveRow(openqt)
+    }
+    // Auto-open IV detail
+    const openiv = searchParams.get('openiv')
+    if (openiv) {
+      setTab('invoice')
+      setActiveIvId(openiv)
+      setShowInvoiceDetail(openiv)
+      scrollToActiveRow(openiv)
+    }
   }, [searchParams])
 
   const [showPrint, setShowPrint] = useState(false)
@@ -559,9 +583,17 @@ export default function BillingPage() {
     if (!inv) return
     const linkedWB = billingStatements.find(b => b.id === inv.billingStatementId)
     if (confirm(`ยืนยันการลบใบกำกับภาษี ${inv.invoiceNumber}?\n\nใบวางบิลที่เกี่ยวข้อง: ${linkedWB?.billingNumber || '-'}`)) {
+      const linkedWBId = inv.billingStatementId
       deleteTaxInvoice(invoiceId)
       setShowInvoiceDetail(null)
       setShowInvoicePrint(false)
+      // Navigate to linked WB after IV delete
+      if (linkedWBId) {
+        setTab('billing')
+        setActiveWbId(linkedWBId)
+        setShowDetail(linkedWBId)
+        scrollToActiveRow(linkedWBId)
+      }
     }
   }
 

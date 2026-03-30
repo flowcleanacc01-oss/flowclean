@@ -264,7 +264,7 @@ export default function CustomersPage() {
                         {(() => {
                           const qt = linkedQTMap.get(c.name)
                           return qt ? (
-                            <Link href="/dashboard/billing?tab=quotation"
+                            <Link href={`/dashboard/billing?tab=quotation&openqt=${qt.id}`}
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                               title={`Link กับ ${qt.quotationNumber}`}>
                               <Link2 className="w-3 h-3" />{qt.quotationNumber}

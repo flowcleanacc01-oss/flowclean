@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow } from '@/lib/utils'
 import { type DeliveryNoteItem } from '@/types'
@@ -28,6 +28,7 @@ export default function DeliveryPage() {
   const [customerFilter, setCustomerFilter] = useState<string>('all')
   const [showCreate, setShowCreate] = useState(false)
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [dnFilter, setDnFilter] = useState<DNFilter>(() => {
@@ -38,7 +39,7 @@ export default function DeliveryPage() {
     const p = searchParams.get('preselect')
     return p ? p.split(',').filter(Boolean) : []
   })
-  const [activeRowId, setActiveRowId] = useState<string | null>(null)
+  const [activeRowId, setActiveRowId] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false)
   const [showPrintList, setShowPrintList] = useState(false)
   const [showBulkPrint, setShowBulkPrint] = useState(false)
@@ -847,6 +848,10 @@ export default function DeliveryPage() {
               }
               setConfirmDeleteId(null)
               setShowDetail(null)
+              // Navigate to LF page with linked LF IDs pre-selected
+              if (deletedDN && deletedDN.linenFormIds.length > 0) {
+                router.push(`/dashboard/linen-forms?select=${deletedDN.linenFormIds.join(',')}`)
+              }
             }}
               className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
             )}
