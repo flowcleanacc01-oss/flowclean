@@ -42,6 +42,7 @@ next-env.d.ts
 
 # AI project files (ห้าม push ข้อมูล ecosystem)
 CLAUDE.md
+KIMI.md
 GEMINI.md
 AGENTS.md
 .ai-memory/
