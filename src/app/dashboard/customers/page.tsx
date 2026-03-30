@@ -61,6 +61,17 @@ export default function CustomersPage() {
   }
   const sortedBg = (key: string) => sortKey === key ? 'bg-[#1B3A5C]/[0.04]' : ''
 
+  // Map customer name → linked accepted QT (must be before filtered useMemo)
+  const linkedQTMap = useMemo(() => {
+    const map = new Map<string, { id: string; quotationNumber: string }>()
+    for (const q of quotations) {
+      if (q.status === 'accepted') {
+        map.set(q.customerName, { id: q.id, quotationNumber: q.quotationNumber })
+      }
+    }
+    return map
+  }, [quotations])
+
   const filtered = useMemo(() => {
     let list = [...customers]
     if (filterCat !== 'all') list = list.filter(c => c.customerType === filterCat)
@@ -88,7 +99,7 @@ export default function CustomersPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [customers, filterCat, search, sortKey, sortDir, getCustomerCategoryLabel])
+  }, [customers, filterCat, search, sortKey, sortDir, getCustomerCategoryLabel, linkedQTMap])
 
   const handleEdit = (c: Customer) => {
     setEditId(c.id)
@@ -127,17 +138,6 @@ export default function CustomersPage() {
     }
     setShowForm(false)
   }
-
-  // Map customer name → linked accepted QT (only one allowed per customerName)
-  const linkedQTMap = useMemo(() => {
-    const map = new Map<string, { id: string; quotationNumber: string }>()
-    for (const q of quotations) {
-      if (q.status === 'accepted') {
-        map.set(q.customerName, { id: q.id, quotationNumber: q.quotationNumber })
-      }
-    }
-    return map
-  }, [quotations])
 
   // Category CRUD
   const handleAddCategory = () => {
