@@ -467,7 +467,7 @@ export default function ChecklistPage() {
                 )}
                 <button onClick={() => setShowPrint(true)}
                   className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-                  <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
+                  <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสาร
                 </button>
               </div>
             </div>

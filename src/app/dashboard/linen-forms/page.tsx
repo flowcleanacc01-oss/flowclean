@@ -143,6 +143,11 @@ export default function LinenFormsPage() {
           va = aScore; vb = bScore; break
         }
         case 'isExported': va = a.isExported ? 1 : 0; vb = b.isExported ? 1 : 0; break
+        case 'dept': {
+          va = DEPARTMENT_CONFIG.filter(d => a[d.key]).length
+          vb = DEPARTMENT_CONFIG.filter(d => b[d.key]).length
+          break
+        }
         case 'isPrinted': va = a.isPrinted ? 1 : 0; vb = b.isPrinted ? 1 : 0; break
         case 'sd': {
           va = linkedLFMap.get(a.id)?.noteNumber || ''
@@ -281,12 +286,12 @@ export default function LinenFormsPage() {
           {selectedLfIds.length > 0 && (
             <button onClick={() => setShowLfBulkPrint(true)}
               className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
-              <FileDown className="w-4 h-4" />พิมพ์/ส่งออกที่เลือก ({selectedLfIds.length})
+              <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสารที่เลือก ({selectedLfIds.length})
             </button>
           )}
           <button onClick={() => setShowLfPrintList(true)} disabled={filtered.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
-            <Printer className="w-4 h-4" />พิมพ์/ส่งออกรายการ
+            <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
           </button>
           <button onClick={handleCreateOpen}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
@@ -373,10 +378,11 @@ export default function LinenFormsPage() {
                 <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="ชื่อย่อลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="เลขที่" sortKey="formNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                <SortableHeader label="จำนวน" sortKey="pieces" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
-                <SortableHeader label="สถานะ" sortKey="status" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                 <SortableHeader label="⚠" sortKey="alert" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center w-12" />
-                <SortableHeader label="ส่งออก" sortKey="isExported" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                <SortableHeader label="ส่งออกเอกสาร" sortKey="isExported" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                <SortableHeader label="สถานะแผนก" sortKey="dept" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                <SortableHeader label="สถานะ" sortKey="status" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                <SortableHeader label="จำนวน" sortKey="pieces" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                 <SortableHeader label="SD" sortKey="sd" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                 <th className="text-right px-4 py-3 font-medium text-slate-600 w-28"></th>
@@ -384,7 +390,7 @@ export default function LinenFormsPage() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={11} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={12} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
               ) : filtered.map(form => {
                 const customer = getCustomer(form.customerId)
                 const totalPieces = form.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
@@ -407,13 +413,6 @@ export default function LinenFormsPage() {
                     <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(form.date)}</td>
                     <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
                     <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('formNumber'))}>{form.formNumber}</td>
-                    <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('pieces'))}>{totalPieces}</td>
-                    <td className={cn("px-4 py-3 text-center", sortedBg('status'))}>
-                      <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>
-                        <span className={cn('w-1.5 h-1.5 rounded-full', cfg.dotColor)} />
-                        {cfg.label}
-                      </span>
-                    </td>
                     <td className={cn("px-4 py-3 text-center", sortedBg('alert'))}>
                       {disc1 && <span title="โรงซักนับเข้า ≠ นับส่ง+เคลม"><AlertTriangle className="w-4 h-4 text-amber-500 inline" /></span>}
                       {disc2 && <span title="ลูกค้านับกลับ ≠ แพคส่ง"><AlertTriangle className="w-4 h-4 text-red-500 inline" /></span>}
@@ -421,9 +420,25 @@ export default function LinenFormsPage() {
                     <td className={cn("px-3 py-3 text-center", sortedBg('isExported'))}>
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                         form.isExported ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-400')}>
-                        {form.isExported ? 'ส่งออกแล้ว' : 'ยังไม่ส่งออก'}
+                        {form.isExported ? 'ส่งออกเอกสารแล้ว' : '-'}
                       </span>
                     </td>
+                    <td className={cn("px-3 py-3 text-center", sortedBg('dept'))}>
+                      <div className="flex flex-wrap justify-center gap-0.5">
+                        {DEPARTMENT_CONFIG.filter(d => form[d.key]).map(d => (
+                          <span key={d.key} className={cn('px-1.5 py-0.5 rounded text-[10px] font-medium', d.bgColor, d.color)}>
+                            {d.label.replace('เสร็จ', '')}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className={cn("px-4 py-3 text-center", sortedBg('status'))}>
+                      <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>
+                        <span className={cn('w-1.5 h-1.5 rounded-full', cfg.dotColor)} />
+                        {cfg.label}
+                      </span>
+                    </td>
+                    <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('pieces'))}>{totalPieces}</td>
                     <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                         form.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
@@ -734,7 +749,7 @@ export default function LinenFormsPage() {
                   </button>
                   <button onClick={() => setShowPrint(true)}
                     className="text-xs text-slate-400 hover:text-[#1B3A5C] transition-colors flex items-center gap-1">
-                    <Printer className="w-3.5 h-3.5" />พิมพ์/ส่งออก
+                    <Printer className="w-3.5 h-3.5" />พิมพ์/ส่งออกเอกสาร
                   </button>
                 </div>
 
@@ -793,7 +808,7 @@ export default function LinenFormsPage() {
                 <input type="checkbox" checked={!!detailForm.isExported}
                   onChange={e => updateLinenForm(detailForm.id, { isExported: e.target.checked })}
                   className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-                <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว</span>
+                <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกเอกสารแล้ว</span>
               </label>
             </div>
             <LinenFormPrint form={detailForm} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} carryOver={detailCarryOver} qtItems={getLinkedQT(detailCustomer.name, detailForm.customerId)?.items} />
@@ -881,7 +896,7 @@ export default function LinenFormsPage() {
       </Modal>
 
       {/* LF Bulk Print Modal */}
-      <Modal open={showLfBulkPrint} onClose={() => setShowLfBulkPrint(false)} title={`พิมพ์/ส่งออกใบส่งรับผ้า (${selectedLfIds.length} ใบ)`} size="xl" className="print-target">
+      <Modal open={showLfBulkPrint} onClose={() => setShowLfBulkPrint(false)} title={`พิมพ์/ส่งออกเอกสารใบส่งรับผ้า (${selectedLfIds.length} ใบ)`} size="xl" className="print-target">
         {/* Select All row */}
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 no-print">
           <div className="flex items-center gap-6">
@@ -897,10 +912,10 @@ export default function LinenFormsPage() {
                 checked={selectedLfIds.every(id => linenForms.find(f => f.id === id)?.isExported)}
                 onChange={e => { for (const lfId of selectedLfIds) updateLinenForm(lfId, { isExported: e.target.checked }) }}
                 className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-              <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว (ทุกรายการ)</span>
+              <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกเอกสารแล้ว (ทุกรายการ)</span>
             </label>
           </div>
-          <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกแล้ว"</p>
+          <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกเอกสารแล้ว"</p>
         </div>
         <div id="print-bulk-lf">
           {selectedLfIds.map((lfId, idx) => {
@@ -924,7 +939,7 @@ export default function LinenFormsPage() {
                     <input type="checkbox" checked={!!form.isExported}
                       onChange={e => updateLinenForm(form.id, { isExported: e.target.checked })}
                       className="w-3.5 h-3.5 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-                    <span className="text-xs font-medium text-violet-700">ส่งออกแล้ว</span>
+                    <span className="text-xs font-medium text-violet-700">ส่งออกเอกสารแล้ว</span>
                   </label>
                 </div>
                 <LinenFormPrint form={form} customer={cust} company={companyInfo} catalog={linenCatalog} carryOver={carryOver} qtItems={getLinkedQT(cust.name, form.customerId)?.items} />

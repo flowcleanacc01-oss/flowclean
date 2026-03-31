@@ -321,7 +321,7 @@ export default function ReportsPage() {
             </h3>
             <button onClick={() => { setPrintOrientation('landscape'); setPrintMargin('narrow'); setShowDeliveryPrint(true) }}
               className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-              <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
+              <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสาร
             </button>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -345,7 +345,7 @@ export default function ReportsPage() {
             </h3>
             <button onClick={() => { setPrintOrientation('landscape'); setPrintMargin('narrow'); setShowStockPrint(true) }}
               className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-              <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
+              <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสาร
             </button>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -370,7 +370,7 @@ export default function ReportsPage() {
             </h3>
             <button onClick={() => { setPrintOrientation('landscape'); setPrintMargin('narrow'); setShowConsolidationPrint(true) }}
               className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-              <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
+              <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสาร
             </button>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">

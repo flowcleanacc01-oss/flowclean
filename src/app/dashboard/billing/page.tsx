@@ -724,12 +724,12 @@ export default function BillingPage() {
             {selectedWbIds.length > 0 && (
               <button onClick={() => setShowWbBulkPrint(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
-                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกที่เลือก ({selectedWbIds.length})
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสารที่เลือก ({selectedWbIds.length})
               </button>
             )}
             <button onClick={() => setShowWbPrintList(true)} disabled={filteredBilling.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
-              <Printer className="w-4 h-4" />พิมพ์/ส่งออกรายการ
+              <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
             </button>
             <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setBillingIssueDate(todayISO()) }}
               className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
@@ -742,12 +742,12 @@ export default function BillingPage() {
             {selectedIvIds.length > 0 && (
               <button onClick={() => setShowIvBulkPrint(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
-                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกที่เลือก ({selectedIvIds.length})
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสารที่เลือก ({selectedIvIds.length})
               </button>
             )}
             <button onClick={() => setShowIvPrintList(true)} disabled={filteredInvoices.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
-              <Printer className="w-4 h-4" />พิมพ์/ส่งออกรายการ
+              <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
             </button>
           </div>
         )}
@@ -1455,7 +1455,7 @@ export default function BillingPage() {
               </button>
               <button onClick={() => setShowPrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-                <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสาร
               </button>
             </div>
           </div>
@@ -1535,7 +1535,7 @@ export default function BillingPage() {
                 <input type="checkbox" checked={!!detailBilling.isExported}
                   onChange={e => updateBillingStatement(detailBilling.id, { isExported: e.target.checked })}
                   className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-                <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว</span>
+                <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกเอกสารแล้ว</span>
               </label>
             </div>
             <BillingPrint billing={detailBilling} customer={detailCustomer} company={companyInfo} />
@@ -1636,7 +1636,7 @@ export default function BillingPage() {
               </label>
               <button onClick={() => setShowInvoicePrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-                <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสาร
               </button>
             </div>
           </div>
@@ -1666,7 +1666,7 @@ export default function BillingPage() {
                 <input type="checkbox" checked={!!detailInvoice.isExported}
                   onChange={e => updateTaxInvoice(detailInvoice.id, { isExported: e.target.checked })}
                   className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-                <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว</span>
+                <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกเอกสารแล้ว</span>
               </label>
             </div>
             <TaxInvoicePrint
@@ -2151,7 +2151,7 @@ export default function BillingPage() {
               </div>
               <button onClick={() => setShowQuPrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-                <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสาร
               </button>
             </div>
           </div>
@@ -2285,7 +2285,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* WB Bulk Print Modal */}
-      <Modal open={showWbBulkPrint} onClose={() => setShowWbBulkPrint(false)} title={`พิมพ์/ส่งออกใบวางบิล (${selectedWbIds.length} ใบ)`} size="xl" className="print-target">
+      <Modal open={showWbBulkPrint} onClose={() => setShowWbBulkPrint(false)} title={`พิมพ์/ส่งออกเอกสารใบวางบิล (${selectedWbIds.length} ใบ)`} size="xl" className="print-target">
         {/* Select All row */}
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 no-print">
           <div className="flex items-center gap-6">
@@ -2301,10 +2301,10 @@ export default function BillingPage() {
                 checked={selectedWbIds.every(id => billingStatements.find(b => b.id === id)?.isExported)}
                 onChange={e => { for (const bId of selectedWbIds) updateBillingStatement(bId, { isExported: e.target.checked }) }}
                 className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-              <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว (ทุกรายการ)</span>
+              <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกเอกสารแล้ว (ทุกรายการ)</span>
             </label>
           </div>
-          <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกแล้ว"</p>
+          <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกเอกสารแล้ว"</p>
         </div>
         <div id="print-bulk-wb">
           {selectedWbIds.map((bId, idx) => {
@@ -2327,7 +2327,7 @@ export default function BillingPage() {
                     <input type="checkbox" checked={!!b.isExported}
                       onChange={e => updateBillingStatement(b.id, { isExported: e.target.checked })}
                       className="w-3.5 h-3.5 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-                    <span className="text-xs font-medium text-violet-700">ส่งออกแล้ว</span>
+                    <span className="text-xs font-medium text-violet-700">ส่งออกเอกสารแล้ว</span>
                   </label>
                 </div>
                 <BillingPrint billing={b} customer={cust} company={companyInfo} />
@@ -2347,7 +2347,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* IV Bulk Print Modal */}
-      <Modal open={showIvBulkPrint} onClose={() => setShowIvBulkPrint(false)} title={`พิมพ์/ส่งออกใบกำกับภาษี (${selectedIvIds.length} ใบ)`} size="xl" className="print-target">
+      <Modal open={showIvBulkPrint} onClose={() => setShowIvBulkPrint(false)} title={`พิมพ์/ส่งออกเอกสารใบกำกับภาษี (${selectedIvIds.length} ใบ)`} size="xl" className="print-target">
         {/* Select All row */}
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 no-print">
           <div className="flex items-center gap-6">
@@ -2363,10 +2363,10 @@ export default function BillingPage() {
                 checked={selectedIvIds.every(id => taxInvoices.find(i => i.id === id)?.isExported)}
                 onChange={e => { for (const ivId of selectedIvIds) updateTaxInvoice(ivId, { isExported: e.target.checked }) }}
                 className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-              <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกแล้ว (ทุกรายการ)</span>
+              <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกเอกสารแล้ว (ทุกรายการ)</span>
             </label>
           </div>
-          <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกแล้ว"</p>
+          <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกเอกสารแล้ว"</p>
         </div>
         <div id="print-bulk-iv">
           {selectedIvIds.map((ivId, idx) => {
@@ -2390,7 +2390,7 @@ export default function BillingPage() {
                     <input type="checkbox" checked={!!inv.isExported}
                       onChange={e => updateTaxInvoice(inv.id, { isExported: e.target.checked })}
                       className="w-3.5 h-3.5 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
-                    <span className="text-xs font-medium text-violet-700">ส่งออกแล้ว</span>
+                    <span className="text-xs font-medium text-violet-700">ส่งออกเอกสารแล้ว</span>
                   </label>
                 </div>
                 <TaxInvoicePrint invoice={inv} customer={cust} company={companyInfo} withholdingTax={wb?.withholdingTax} netPayable={wb?.netPayable} />

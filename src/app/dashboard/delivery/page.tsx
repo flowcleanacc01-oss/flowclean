@@ -315,7 +315,7 @@ export default function DeliveryPage() {
               <button onClick={() => setShowBulkPrint(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
                 <FileDown className="w-4 h-4" />
-                พิมพ์/ส่งออกที่เลือก ({selectedDnIds.length})
+                พิมพ์/ส่งออกเอกสารที่เลือก ({selectedDnIds.length})
               </button>
               <button onClick={() => setConfirmBulkDeleteOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium">
@@ -328,7 +328,7 @@ export default function DeliveryPage() {
             disabled={filtered.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
             <Printer className="w-4 h-4" />
-            พิมพ์/ส่งออกรายการ
+            พิมพ์/ส่งออกเอกสารรายการ
           </button>
           <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()); setDnDiscount(0); setDnDiscountNote(''); setDnExtraCharge(0); setDnExtraChargeNote('') }}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
@@ -779,7 +779,7 @@ export default function DeliveryPage() {
               </button>
               <button onClick={() => setShowPrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1">
-                <FileDown className="w-4 h-4" />พิมพ์/ส่งออก
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสาร
               </button>
             </div>
           </div>
@@ -994,7 +994,7 @@ export default function DeliveryPage() {
                   className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500"
                 />
                 <span className="text-sm font-medium text-violet-700 flex items-center gap-1">
-                  <Check className="w-4 h-4" />ส่งออกแล้ว
+                  <Check className="w-4 h-4" />ส่งออกเอกสารแล้ว
                 </span>
               </label>
             </div>
@@ -1035,7 +1035,7 @@ export default function DeliveryPage() {
               />
               <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว (ทุกรายการ)</span>
             </label>
-            <p className="text-xs text-slate-400">พิมพ์ → สถานะ "พิมพ์แล้ว" | ส่งออก JPG/PDF/CSV → สถานะ "ส่งออกแล้ว"</p>
+            <p className="text-xs text-slate-400">พิมพ์ → สถานะ "พิมพ์แล้ว" | ส่งออกเอกสาร JPG/PDF/CSV → สถานะ "ส่งออกเอกสารแล้ว"</p>
           </div>
           <ExportButtons
             targetId="print-bulk-dn"
