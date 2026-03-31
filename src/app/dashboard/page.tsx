@@ -26,24 +26,27 @@ export default function DashboardPage() {
 
   // Stats
   const stats = useMemo(() => {
-    const todayForms = linenForms.filter(f => f.date === today)
-    const todayReceived = todayForms.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0), 0)
+    // 2.1 ผ้านับเข้าแล้วรอซัก — LF status=sorting → sum col5 (โรงซักนับเข้า)
+    const sortingForms = linenForms.filter(f => f.status === 'sorting')
+    const countedInWaiting = sortingForms.reduce((s, f) =>
+      s + f.rows.reduce((rs, r) => rs + r.col5_factoryClaimApproved, 0), 0)
 
-    const inProcess = linenForms.filter(f => PROCESS_STATUSES.includes(f.status) || f.status === 'received')
-    const processingCount = inProcess.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0), 0)
+    // 2.2 ผ้าซักอบแล้วรอส่ง — LF status=washing → sum col5 (โรงซักนับเข้า)
+    const washingForms = linenForms.filter(f => f.status === 'washing')
+    const washedWaiting = washingForms.reduce((s, f) =>
+      s + f.rows.reduce((rs, r) => rs + r.col5_factoryClaimApproved, 0), 0)
 
-    const packed = linenForms.filter(f => f.status === 'packed')
-    const packedCount = packed.reduce((s, f) => s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0), 0), 0)
+    // 2.3 ผ้าเช็คส่งออกวันนี้ — LF status=confirmed → sum col6 (โรงซักแพคส่ง)
+    const confirmedForms = linenForms.filter(f => f.status === 'confirmed')
+    const checkedOut = confirmedForms.reduce((s, f) =>
+      s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0), 0), 0)
 
-    // Total carry-over across all customers
-    let totalCarryOver = 0
-    for (const c of customers) {
-      const co = getCarryOver(c.id, '9999-12-31')
-      totalCarryOver += Object.values(co).reduce((s, v) => s + v, 0)
-    }
+    // 2.4 ผ้าค้าง/คืนรวมวันนี้ — LF status=confirmed → sum (col6 - col5)
+    const carryOverToday = confirmedForms.reduce((s, f) =>
+      s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved, 0), 0)
 
-    return { todayReceived, processingCount, packedCount, totalCarryOver }
-  }, [linenForms, customers, today, getCarryOver])
+    return { countedInWaiting, washedWaiting, checkedOut, carryOverToday }
+  }, [linenForms])
 
   // Pipeline counts by status
   const pipeline = useMemo(() => {
@@ -80,11 +83,14 @@ export default function DashboardPage() {
     return [...linenForms].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6)
   }, [linenForms])
 
+  const coVal = stats.carryOverToday
+  const coDisplay = coVal === 0 ? '0' : coVal > 0 ? `+${formatNumber(coVal)}` : formatNumber(coVal)
+
   const statCards = [
-    { label: 'ผ้ารับเข้าวันนี้', value: formatNumber(stats.todayReceived), unit: 'ชิ้น', icon: Package, color: 'bg-blue-50 text-blue-600' },
-    { label: 'กำลังซัก', value: formatNumber(stats.processingCount), unit: 'ชิ้น', icon: ClipboardList, color: 'bg-amber-50 text-amber-600' },
-    { label: 'พร้อมส่ง', value: formatNumber(stats.packedCount), unit: 'ชิ้น', icon: Truck, color: 'bg-teal-50 text-teal-600' },
-    { label: 'ผ้าค้างรวม', value: formatNumber(stats.totalCarryOver), unit: 'ชิ้น', icon: AlertTriangle, color: stats.totalCarryOver < 0 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600' },
+    { label: 'ผ้านับเข้าแล้วรอซัก', value: formatNumber(stats.countedInWaiting), unit: 'ผืน', icon: Package, color: 'bg-blue-50 text-blue-600' },
+    { label: 'ผ้าซักอบแล้วรอส่ง', value: formatNumber(stats.washedWaiting), unit: 'ผืน', icon: ClipboardList, color: 'bg-amber-50 text-amber-600' },
+    { label: 'ผ้าเช็คส่งออกวันนี้', value: formatNumber(stats.checkedOut), unit: 'ผืน', icon: Truck, color: 'bg-teal-50 text-teal-600' },
+    { label: 'ผ้าค้าง/คืนรวมวันนี้', value: coDisplay, unit: 'ผืน', icon: AlertTriangle, color: coVal < 0 ? 'bg-orange-50 text-orange-600' : coVal > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500' },
   ]
 
   return (
