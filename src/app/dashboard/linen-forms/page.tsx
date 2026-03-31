@@ -274,6 +274,21 @@ export default function LinenFormsPage() {
     if (prev) updateLinenFormStatus(formId, prev)
   }
 
+  // Scroll modal to top + auto-focus first editable cell (spreadsheet UX)
+  const scrollAndFocusGrid = () => {
+    setTimeout(() => {
+      const detailEl = document.getElementById('linen-form-detail')
+      if (detailEl) {
+        const scrollContainer = detailEl.closest('[class*="overflow-y"]')
+        if (scrollContainer) scrollContainer.scrollTop = 0
+      }
+      setTimeout(() => {
+        const firstInput = document.querySelector('#linen-form-detail input[data-row="0"]') as HTMLInputElement
+        if (firstInput) { firstInput.focus(); firstInput.select() }
+      }, 150)
+    }, 100)
+  }
+
   return (
     <div>
       {/* Header */}
@@ -760,7 +775,7 @@ export default function LinenFormsPage() {
                 ) : (
                   <div className="flex items-center gap-2">
                     {PREV_LINEN_STATUS[detailForm.status] ? (
-                      <button onClick={() => handleRevertStatus(detailForm.id)}
+                      <button onClick={() => { handleRevertStatus(detailForm.id); scrollAndFocusGrid() }}
                         className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
                         <ChevronLeft className="w-4 h-4" />
                         <span className="hidden sm:inline">{LINEN_FORM_STATUS_CONFIG[detailForm.status].prevLabel}</span>
@@ -774,16 +789,17 @@ export default function LinenFormsPage() {
                     )}
 
                     {NEXT_LINEN_STATUS[detailForm.status] ? (
-                      <button onClick={() => handleAdvanceStatus(detailForm.id)}
+                      <button onClick={() => { handleAdvanceStatus(detailForm.id); scrollAndFocusGrid() }}
                         className="px-4 py-2.5 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
                         {LINEN_FORM_STATUS_CONFIG[NEXT_LINEN_STATUS[detailForm.status]!].label}
                         <ChevronRight className="w-4 h-4" />
                       </button>
                     ) : (
-                      <span className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1.5">
+                      <button onClick={() => setShowDetail(null)}
+                        className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors flex items-center gap-1.5">
                         <Check className="w-4 h-4" />
                         เสร็จสมบูรณ์
-                      </span>
+                      </button>
                     )}
                   </div>
                 )}
