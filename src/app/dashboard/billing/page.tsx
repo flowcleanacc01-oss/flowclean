@@ -454,14 +454,14 @@ export default function BillingPage() {
     setShowCreateQU(true)
   }
 
-  // Validate only one accepted QT per customerName (6.2.4)
+  // Accept QT — auto-reject old accepted QT (no gap where prices = 0)
   const handleAcceptQT = (qtId: string) => {
     const qt = quotations.find(q => q.id === qtId)
     if (!qt) return
-    const conflicting = quotations.find(q => q.id !== qtId && q.status === 'accepted' && q.customerId === qt.customerId)
-    if (conflicting) {
-      alert(`ลูกค้า "${qt.customerName}" มีใบเสนอราคาที่ตกลงแล้ว (${conflicting.quotationNumber}) อยู่แล้ว\nสามารถมีสถานะ "ตกลง" ได้เพียง 1 ใบต่อลูกค้าเท่านั้น`)
-      return
+    // Auto-reject old accepted QT for same customer (ลบช่องว่าง)
+    const oldAccepted = quotations.find(q => q.id !== qtId && q.status === 'accepted' && q.customerId === qt.customerId)
+    if (oldAccepted) {
+      updateQuotationStatus(oldAccepted.id, 'rejected')
     }
     // Record priceHistory before accepting new QT
     const cust = customers.find(c => c.id === qt.customerId)
@@ -1047,7 +1047,25 @@ export default function BillingPage() {
       )}
 
       {/* Quotation Tab */}
-      {tab === 'quotation' && (
+      {tab === 'quotation' && (() => {
+        // Warn: customers with SDs but no accepted QT (prices would be 0)
+        const customersWithoutQT = customers.filter(c => {
+          const hasAcceptedQT = quotations.some(q => q.customerId === c.id && q.status === 'accepted')
+          const hasSD = deliveryNotes.some(d => d.customerId === c.id)
+          return !hasAcceptedQT && hasSD && c.isActive
+        })
+        return <>
+        {customersWithoutQT.length > 0 && (
+          <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+            <p className="text-sm font-medium text-red-800 mb-1">⚠ ลูกค้าที่มี SD แต่ไม่มี QT ตกลง — ราคาจะเป็น 0!</p>
+            <div className="flex flex-wrap gap-2">
+              {customersWithoutQT.map(c => (
+                <span key={c.id} className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">{c.shortName || c.name}</span>
+              ))}
+            </div>
+            <p className="text-xs text-red-600 mt-1">กรุณาสร้างและกดตกลง QT ให้ลูกค้าเหล่านี้ก่อนออก SD/WB ใหม่</p>
+          </div>
+        )}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1113,7 +1131,7 @@ export default function BillingPage() {
             </table>
           </div>
         </div>
-      )}
+      </>})()}
 
       {/* Create Billing Modal */}
       <Modal open={showCreate} onClose={() => { setShowCreate(false); setBillingDiscount(0); setBillingDiscountNote(''); setBillingExtraCharge(0); setBillingExtraChargeNote('') }} title="สร้างใบวางบิล" size="lg">
@@ -2144,6 +2162,13 @@ export default function BillingPage() {
               <div className="text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">
                 <strong>เงื่อนไข:</strong>
                 <p className="whitespace-pre-wrap mt-1">{detailQuotation.conditions}</p>
+              </div>
+            )}
+
+            {/* Info: price change scope */}
+            {detailQuotation.status === 'sent' && deliveryNotes.some(d => d.customerId === detailQuotation.customerId) && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-700">
+                <strong>หมายเหตุ:</strong> ราคาใหม่จะมีผลเฉพาะ SD ที่สร้างหลังกดตกลงเท่านั้น — SD/WB/IV ที่ออกไปแล้วจะใช้ราคาเดิม (ล็อคไว้ตอนสร้าง)
               </div>
             )}
 

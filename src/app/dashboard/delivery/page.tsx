@@ -177,6 +177,12 @@ export default function DeliveryPage() {
     const customer = getCustomer(selCustomerId)
     const month = dnDate.slice(0, 7)
 
+    // Warn if no accepted QT → prices will be 0
+    const hasAcceptedQT = quotations.some(q => q.customerId === selCustomerId && q.status === 'accepted')
+    if (!hasAcceptedQT) {
+      if (!confirm('⚠ ลูกค้านี้ไม่มีใบเสนอราคาที่ตกลงแล้ว — ราคาทุกรายการจะเป็น 0\n\nกรุณาสร้างและกดตกลง QT ก่อน\n\nยืนยันสร้าง SD ต่อหรือไม่?')) return
+    }
+
     // Calculate item subtotal for trip fee
     let tripFee = 0
     let monthFee = 0
