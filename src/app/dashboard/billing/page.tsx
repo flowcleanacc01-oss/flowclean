@@ -463,9 +463,31 @@ export default function BillingPage() {
       alert(`ลูกค้า "${qt.customerName}" มีใบเสนอราคาที่ตกลงแล้ว (${conflicting.quotationNumber}) อยู่แล้ว\nสามารถมีสถานะ "ตกลง" ได้เพียง 1 ใบต่อลูกค้าเท่านั้น`)
       return
     }
-    updateQuotationStatus(qtId, 'accepted')
-    // Auto sync: อัปเดต billing conditions ให้ลูกค้าอัตโนมัติ (ราคาอ่านจาก QT โดยตรงแล้ว)
+    // Record priceHistory before accepting new QT
     const cust = customers.find(c => c.id === qt.customerId)
+    if (cust) {
+      const oldPriceMap = buildPriceMapFromQT(qt.customerId, quotations) // current accepted QT prices
+      const newPriceMap = Object.fromEntries(qt.items.map(i => [i.code, i.pricePerUnit]))
+      const priceChanges: { code: string; oldPrice: number; newPrice: number; effectiveDate: string; changedBy: string }[] = []
+      for (const item of qt.items) {
+        const oldP = oldPriceMap[item.code] ?? 0
+        if (oldP !== item.pricePerUnit) {
+          priceChanges.push({ code: item.code, oldPrice: oldP, newPrice: item.pricePerUnit, effectiveDate: todayISO(), changedBy: `QT ${qt.quotationNumber}` })
+        }
+      }
+      // Also check items removed from new QT
+      for (const code of Object.keys(oldPriceMap)) {
+        if (!newPriceMap[code]) {
+          priceChanges.push({ code, oldPrice: oldPriceMap[code], newPrice: 0, effectiveDate: todayISO(), changedBy: `QT ${qt.quotationNumber}` })
+        }
+      }
+      if (priceChanges.length > 0) {
+        updateCustomer(cust.id, { priceHistory: [...cust.priceHistory, ...priceChanges] })
+      }
+    }
+
+    updateQuotationStatus(qtId, 'accepted')
+    // Auto sync: อัปเดต billing conditions ให้ลูกค้าอัตโนมัติ
     if (cust) {
       updateCustomer(cust.id, {
         enablePerPiece: qt.enablePerPiece ?? true,

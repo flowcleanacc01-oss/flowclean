@@ -2,8 +2,24 @@ import type { Customer, DeliveryNote, BillingLineItem, LinenItemDef, QuotationIt
 import { formatDate } from './utils'
 
 /**
- * Aggregate delivery note items into billing line items with pricing
- * ถ้ามี qtItems → ใช้ชื่อ + ลำดับจาก QT, fallback ไป catalog
+ * Get the effective priceMap for a DN:
+ * 1. DN.priceSnapshot (ล็อคราคา ณ วันสร้าง)
+ * 2. fallback → qtItems (from current accepted QT)
+ * 3. fallback → customer.priceList (legacy)
+ */
+function getDNPriceMap(
+  note: DeliveryNote,
+  fallbackPriceMap: Record<string, number>
+): Record<string, number> {
+  if (note.priceSnapshot && Object.keys(note.priceSnapshot).length > 0) {
+    return note.priceSnapshot
+  }
+  return fallbackPriceMap
+}
+
+/**
+ * Aggregate delivery note items into billing line items with pricing (by_item mode)
+ * ราคาใช้จาก DN.priceSnapshot → ถ้าราคาเปลี่ยนกลางเดือน จะแยก line item ตาม tier
  */
 export function aggregateDeliveryItems(
   notes: DeliveryNote[],
@@ -15,37 +31,53 @@ export function aggregateDeliveryItems(
   const itemNameMap = qtItems
     ? Object.fromEntries(qtItems.map(i => [i.code, i.name]))
     : Object.fromEntries(catalog.map(i => [i.code, i.name]))
-  const qtyMap: Record<string, number> = {}
 
-  for (const note of notes) {
-    for (const item of note.items) {
-      if (item.isClaim) continue // Claim items are free — skip for billing
-      qtyMap[item.code] = (qtyMap[item.code] || 0) + item.quantity
-    }
-  }
-
-  const priceMap = qtItems
+  // Fallback priceMap (for old DNs without priceSnapshot)
+  const fallbackPriceMap = qtItems
     ? Object.fromEntries(qtItems.map(i => [i.code, i.pricePerUnit]))
     : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
 
-  const result = Object.entries(qtyMap)
-    .filter(([, qty]) => qty > 0)
-    .map(([code, quantity]) => {
-      const pricePerUnit = priceMap[code] ?? 0
+  // Aggregate by (code, price) — handles price changes mid-month
+  const tierMap: Record<string, { code: string; qty: number; price: number }> = {}
+  for (const note of notes) {
+    const pm = getDNPriceMap(note, fallbackPriceMap)
+    for (const item of note.items) {
+      if (item.isClaim) continue
+      const price = pm[item.code] ?? 0
+      const key = `${item.code}@${price}`
+      if (!tierMap[key]) tierMap[key] = { code: item.code, qty: 0, price }
+      tierMap[key].qty += item.quantity
+    }
+  }
+
+  // Check which codes have multiple price tiers
+  const codePriceCount: Record<string, number> = {}
+  for (const t of Object.values(tierMap)) {
+    codePriceCount[t.code] = (codePriceCount[t.code] || 0) + 1
+  }
+
+  const result: BillingLineItem[] = Object.values(tierMap)
+    .filter(t => t.qty > 0)
+    .map(t => {
+      const hasTiers = codePriceCount[t.code] > 1
+      const name = 'ค่าบริการซัก ' + (itemNameMap[t.code] || t.code)
+        + (hasTiers ? ` (@${t.price.toLocaleString()})` : '')
       return {
-        code,
-        name: 'ค่าบริการซัก ' + (itemNameMap[code] || code),
-        quantity,
-        pricePerUnit,
-        amount: quantity * pricePerUnit,
+        code: hasTiers ? `${t.code}@${t.price}` : t.code,
+        name,
+        quantity: t.qty,
+        pricePerUnit: t.price,
+        amount: t.qty * t.price,
       }
     })
     .sort((a, b) => {
-      // เรียงตาม QT order ถ้ามี, fallback ไป catalog order
       const orderSource = qtItems || catalog
-      const aIdx = orderSource.findIndex(i => i.code === a.code)
-      const bIdx = orderSource.findIndex(i => i.code === b.code)
-      return aIdx - bIdx
+      const aCode = a.code.split('@')[0]
+      const bCode = b.code.split('@')[0]
+      const aIdx = orderSource.findIndex(i => i.code === aCode)
+      const bIdx = orderSource.findIndex(i => i.code === bCode)
+      if (aIdx !== bIdx) return aIdx - bIdx
+      return a.pricePerUnit - b.pricePerUnit // same item → sort by price asc
     })
 
   // Aggregate transport fees + adjustments from delivery notes
@@ -83,27 +115,26 @@ export function aggregateDeliveryItems(
 
 /**
  * Aggregate delivery notes into billing line items grouped by DN (by_date mode)
- * Each DN = one line: "ค่าบริการซักวันที่ {date}" with total = item costs + transport fees
- * Transport fees (trip + month) are embedded in each DN's total — no separate rows.
+ * Each DN uses its own priceSnapshot for correct historical pricing
  */
 export function aggregateDeliveryItemsByDate(
   notes: DeliveryNote[],
   customer: Customer,
   qtItems?: QuotationItem[],
 ): BillingLineItem[] {
-  const priceMap = qtItems
+  const fallbackPriceMap = qtItems
     ? Object.fromEntries(qtItems.map(i => [i.code, i.pricePerUnit]))
     : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
   const result: BillingLineItem[] = []
   const sortedNotes = [...notes].sort((a, b) => a.date.localeCompare(b.date))
 
   for (const note of sortedNotes) {
+    const pm = getDNPriceMap(note, fallbackPriceMap)
     let total = 0
     for (const item of note.items) {
       if (item.isClaim) continue
-      total += item.quantity * (priceMap[item.code] ?? 0)
+      total += item.quantity * (pm[item.code] ?? 0)
     }
-    // Include transport fees + adjustments in each DN's total
     total += note.transportFeeTrip || 0
     total += note.transportFeeMonth || 0
     total += note.extraCharge || 0
@@ -113,7 +144,7 @@ export function aggregateDeliveryItemsByDate(
     if ((note.discount || 0) > 0 && note.discountNote) adjNotes.push(`-${note.discountNote}`)
     const nameSuffix = adjNotes.length > 0 ? ` [${adjNotes.join(', ')}]` : ''
     result.push({
-      code: `DATE_${note.id}`,  // use id for uniqueness (avoids duplicate-key bug on same-date DNs)
+      code: `DATE_${note.id}`,
       name: `ค่าบริการซักวันที่ ${formatDate(note.date)}${nameSuffix}`,
       quantity: 1,
       pricePerUnit: total,

@@ -283,6 +283,7 @@ export interface DeliveryNote {
   discountNote?: string      // หมายเหตุส่วนลด
   extraCharge?: number       // ค่าใช้จ่ายเพิ่มเติม (default 0)
   extraChargeNote?: string   // หมายเหตุค่าใช้จ่ายเพิ่มเติม
+  priceSnapshot?: Record<string, number> // ราคา ณ วันที่สร้าง (จาก QT) — ล็อคไม่เปลี่ยนตาม QT ใหม่
   notes: string
   createdBy: string
   updatedAt: string

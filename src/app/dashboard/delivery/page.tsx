@@ -74,7 +74,7 @@ export default function DeliveryPage() {
   const getDNTotalAmount = (dn: typeof deliveryNotes[number]): number => {
     const customer = getCustomer(dn.customerId)
     if (!customer || !(customer.enablePerPiece ?? true)) return 0
-    const priceMap = buildPriceMapFromQT(dn.customerId, quotations)
+    const priceMap = getDNPrices(dn)
     const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
     return itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0)
   }
@@ -215,6 +215,7 @@ export default function DeliveryPage() {
       discountNote: dnDiscountNote,
       extraCharge: dnExtraCharge,
       extraChargeNote: dnExtraChargeNote,
+      priceSnapshot: buildPriceMapFromQT(selCustomerId, quotations),
       notes: dnNotes,
     })
     setActiveRowId(newDN.id)
@@ -225,6 +226,12 @@ export default function DeliveryPage() {
   const detailNote = showDetail ? deliveryNotes.find(d => d.id === showDetail) : null
   const detailCustomer = detailNote ? getCustomer(detailNote.customerId) : null
   const itemNameMap = Object.fromEntries(linenCatalog.map(i => [i.code, i.name]))
+
+  // Resolve price for a DN: snapshot (locked) → current QT → legacy
+  const getDNPrices = (dn: typeof deliveryNotes[number]): Record<string, number> => {
+    if (dn.priceSnapshot && Object.keys(dn.priceSnapshot).length > 0) return dn.priceSnapshot
+    return buildPriceMapFromQT(dn.customerId, quotations)
+  }
 
   // Map DN id → billing statement (for WB badge)
   const dnBillingMap = useMemo(() => {
@@ -240,7 +247,7 @@ export default function DeliveryPage() {
   const handleExportCSV = () => {
     if (!detailNote || !detailCustomer) return
     const isPer = (detailCustomer.enablePerPiece ?? true)
-    const priceMap = buildPriceMapFromQT(detailCustomer.id, quotations)
+    const priceMap = getDNPrices(detailNote)
     const headers = isPer
       ? ['รหัส', 'รายการ', 'จำนวน', 'ราคา/หน่วย', 'มูลค่า']
       : ['รหัส', 'รายการ', 'จำนวน']
@@ -660,7 +667,7 @@ export default function DeliveryPage() {
 
             {(() => {
               const isPer = (detailCustomer.enablePerPiece ?? true)
-              const priceMap = buildPriceMapFromQT(detailCustomer.id, quotations)
+              const priceMap = getDNPrices(detailNote)
               const itemSubtotal = isPer ? detailNote.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0) : 0
               const tripFee = detailNote.transportFeeTrip || 0
               const monthFee = detailNote.transportFeeMonth || 0

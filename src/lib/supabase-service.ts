@@ -79,6 +79,7 @@ const FIELD_MAP: Record<string, string> = {
   discountNote: 'discount_note',
   extraCharge: 'extra_charge',
   extraChargeNote: 'extra_charge_note',
+  priceSnapshot: 'price_snapshot',
   billingNumber: 'billing_number',
   deliveryNoteIds: 'delivery_note_ids',
   billingMonth: 'billing_month',
