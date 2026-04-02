@@ -286,6 +286,9 @@ export default function LinenFormsPage() {
         }
       }
       setTimeout(() => {
+        // packed status → focus bagsPackCount input instead of grid
+        const bagsInput = document.getElementById('bags-pack-input') as HTMLInputElement
+        if (bagsInput) { bagsInput.focus(); bagsInput.select(); return }
         const firstInput = document.querySelector('#linen-form-detail input[data-row="0"]') as HTMLInputElement
         if (firstInput) { firstInput.focus(); firstInput.select() }
       }, 150)
@@ -616,16 +619,36 @@ export default function LinenFormsPage() {
                 </div>
               )}
               {['packed', 'delivered', 'confirmed'].includes(detailForm.status) && (
-                <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-3">
-                  <label className="block text-xs font-medium text-teal-800 mb-1">จำนวนถุงแพคส่ง</label>
-                  {['packed', 'delivered'].includes(detailForm.status) ? (
-                    <input type="number" min={0}
-                      value={detailForm.bagsPackCount || ''}
-                      onChange={e => updateLinenForm(detailForm.id, { bagsPackCount: sanitizeNumber(e.target.value, 9999) })}
-                      className="w-28 px-3 py-1.5 border border-teal-300 rounded text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                  ) : (
-                    <span className="text-sm font-medium text-teal-900">{detailForm.bagsPackCount || '-'}</span>
-                  )}
+                <div className={cn('rounded-lg px-4 py-3 border',
+                  detailForm.status === 'packed' ? 'bg-emerald-50 border-emerald-200' : 'bg-teal-50 border-teal-200'
+                )}>
+                  <label className={cn('block text-xs font-medium mb-1',
+                    detailForm.status === 'packed' ? 'text-emerald-800' : 'text-teal-800'
+                  )}>จำนวนถุงแพคส่ง</label>
+                  <div className="flex items-center gap-3">
+                    {['packed', 'delivered'].includes(detailForm.status) ? (
+                      <input type="text" inputMode="numeric" pattern="[0-9]*"
+                        id="bags-pack-input"
+                        value={detailForm.bagsPackCount || ''}
+                        onChange={e => {
+                          const v = e.target.value
+                          if (v === '' || /^\d+$/.test(v))
+                            updateLinenForm(detailForm.id, { bagsPackCount: v === '' ? 0 : parseInt(v, 10) })
+                        }}
+                        onFocus={e => e.currentTarget.select()}
+                        className={cn('w-28 px-3 py-1.5 border rounded text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
+                          detailForm.status === 'packed' ? 'border-emerald-300' : 'border-teal-300'
+                        )} />
+                    ) : (
+                      <span className="text-sm font-medium text-teal-900">{detailForm.bagsPackCount || '-'}</span>
+                    )}
+                    {detailForm.status === 'packed' && (
+                      <button onClick={() => { handleAdvanceStatus(detailForm.id); scrollAndFocusGrid() }}
+                        className="px-4 py-2.5 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                        นับจำนวนถุงแพคแล้ว <ChevronRight className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -659,17 +682,9 @@ export default function LinenFormsPage() {
                   'rounded-lg px-4 py-3 border',
                   isDeptActive ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
                 )}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className={cn('text-xs font-medium', isDeptActive ? 'text-emerald-700' : 'text-slate-400')}>
-                      สถานะแผนก {isDeptActive ? '(ติ๊กได้อิสระ)' : '(ยังไม่ถึงขั้นตอน)'}
-                    </p>
-                    {detailForm.status === 'sorting' && (
-                      <button onClick={() => { handleAdvanceStatus(detailForm.id); scrollAndFocusGrid() }}
-                        className="px-3 py-1.5 text-xs bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 font-medium transition-colors flex items-center gap-1">
-                        ซักอบเสร็จ <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+                  <p className={cn('text-xs font-medium mb-2', isDeptActive ? 'text-emerald-700' : 'text-slate-400')}>
+                    สถานะแผนก {isDeptActive ? '(ติ๊กได้อิสระ)' : '(ยังไม่ถึงขั้นตอน)'}
+                  </p>
                   <div className="flex flex-wrap gap-3">
                     {DEPARTMENT_CONFIG.map(dept => {
                       const checked = detailForm[dept.key] ?? false
@@ -693,6 +708,14 @@ export default function LinenFormsPage() {
                       )
                     })}
                   </div>
+                  {detailForm.status === 'sorting' && (
+                    <div className="mt-3 flex justify-end">
+                      <button onClick={() => { handleAdvanceStatus(detailForm.id); scrollAndFocusGrid() }}
+                        className="px-4 py-2.5 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                        ซักอบเสร็จ <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })()}
