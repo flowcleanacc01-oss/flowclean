@@ -235,14 +235,8 @@ export default function LinenFormsPage() {
     const next = NEXT_LINEN_STATUS[form.status]
     if (!next) return
 
-    // Per-step validation (draft ไม่บังคับ — ลูกค้ายังไม่นับก็ข้ามได้)
-    if (form.status === 'received') {
-      const hasCountIn = form.rows.some(r => r.col5_factoryClaimApproved > 0)
-      if (!hasCountIn) {
-        alert('กรุณากรอกจำนวนโรงซักนับเข้าอย่างน้อย 1 รายการ')
-        return
-      }
-    } else if (form.status === 'washing') {
+    // Per-step validation (draft + received ไม่บังคับ — ข้ามได้เลย)
+    if (form.status === 'washing') {
       const hasPack = form.rows.some(r => (r.col6_factoryPackSend || 0) > 0)
       if (!hasPack) {
         alert('กรุณากรอกจำนวนแพคส่งอย่างน้อย 1 รายการ')
