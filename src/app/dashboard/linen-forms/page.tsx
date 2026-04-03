@@ -634,8 +634,8 @@ export default function LinenFormsPage() {
                       <Fragment key={s}>
                         <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: isCurrent ? '72px' : '54px' }}>
                           <div className={cn(
-                            'rounded-full flex items-center justify-center font-bold text-white',
-                            isCurrent ? 'w-8 h-8 text-sm ring-2 ring-offset-1 ring-[#3DD8D8]' : 'w-7 h-7 text-xs',
+                            'rounded-full flex items-center justify-center font-bold text-white transition-all',
+                            isCurrent ? 'w-9 h-9 text-sm ring-2 ring-offset-2 ring-[#3DD8D8] shadow-md' : 'w-7 h-7 text-xs',
                             isCurrent || isDone ? cfg.dotColor : 'bg-slate-200 !text-slate-400',
                           )}>
                             {isDone ? <Check className="w-3.5 h-3.5" /> : i + 1}
@@ -836,8 +836,8 @@ export default function LinenFormsPage() {
                         <Fragment key={s}>
                           <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: isCurrent ? '72px' : '54px' }}>
                             <div className={cn(
-                              'rounded-full flex items-center justify-center font-bold text-white',
-                              isCurrent ? 'w-8 h-8 text-sm ring-2 ring-offset-1 ring-[#3DD8D8]' : 'w-7 h-7 text-xs',
+                              'rounded-full flex items-center justify-center font-bold text-white transition-all',
+                              isCurrent ? 'w-9 h-9 text-sm ring-2 ring-offset-2 ring-[#3DD8D8] shadow-md' : 'w-7 h-7 text-xs',
                               isCurrent || isDone ? cfg.dotColor : 'bg-slate-200 !text-slate-400',
                             )}>
                               {isDone ? <Check className="w-3.5 h-3.5" /> : i + 1}

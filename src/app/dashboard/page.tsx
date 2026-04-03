@@ -132,7 +132,7 @@ export default function DashboardPage() {
             return (
               <div key={status} className="flex items-center gap-1">
                 <Link href={`/dashboard/linen-forms?status=${status}`}
-                  className={cn('flex flex-col items-center px-2 py-2 rounded-lg min-w-[70px] transition-all hover:ring-2 hover:ring-[#3DD8D8] hover:shadow-sm cursor-pointer', cfg.bgColor)}>
+                  className={cn('flex flex-col items-center px-3 py-2.5 rounded-lg min-w-[74px] transition-all hover:ring-2 hover:ring-[#3DD8D8] hover:ring-offset-2 hover:shadow-md cursor-pointer', cfg.bgColor)}>
                   <span className={cn('text-lg font-bold', cfg.color)}>{pipeline[status]}</span>
                   <span className={cn('text-[9px] leading-tight text-center whitespace-nowrap', cfg.color)}>{cfg.label}</span>
                 </Link>
