@@ -285,13 +285,18 @@ export default function LinenFormsPage() {
           if (scrollContainer) scrollContainer.scrollTop = 0
         }
       }
-      setTimeout(() => {
-        // packed status → focus bagsPackCount input instead of grid
+      // Wait for React re-render then focus the right input
+      const tryFocus = (attempt = 0) => {
+        // packed → focus bagsPackCount
         const bagsInput = document.getElementById('bags-pack-input') as HTMLInputElement
         if (bagsInput) { bagsInput.focus(); bagsInput.select(); return }
+        // grid → focus first editable cell
         const firstInput = document.querySelector('#linen-form-detail input[data-row="0"]') as HTMLInputElement
-        if (firstInput) { firstInput.focus(); firstInput.select() }
-      }, 150)
+        if (firstInput) { firstInput.focus(); firstInput.select(); return }
+        // retry up to 3 times (waiting for re-render)
+        if (attempt < 3) setTimeout(() => tryFocus(attempt + 1), 150)
+      }
+      setTimeout(() => tryFocus(), 200)
     }, 100)
   }
 
