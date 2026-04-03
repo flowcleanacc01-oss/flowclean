@@ -632,25 +632,30 @@ export default function LinenFormsPage() {
                     const shortLabel = cfg.label.replace(/^\d\/7\s*/, '')
                     return (
                       <Fragment key={s}>
-                        <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: '52px' }}>
+                        <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: isCurrent ? '72px' : '54px' }}>
                           <div className={cn(
-                            'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
-                            isCurrent ? 'bg-[#1B3A5C] text-white ring-2 ring-[#3DD8D8] ring-offset-1'
-                              : isDone ? 'bg-[#3DD8D8] text-white'
-                              : 'bg-slate-100 text-slate-400',
+                            'rounded-full flex items-center justify-center font-bold text-white',
+                            isCurrent ? 'w-8 h-8 text-sm ring-2 ring-offset-1 ring-[#3DD8D8]' : 'w-7 h-7 text-xs',
+                            isCurrent || isDone ? cfg.dotColor : 'bg-slate-200 !text-slate-400',
                           )}>
-                            {isDone ? <Check className="w-3 h-3" /> : i + 1}
+                            {isDone ? <Check className="w-3.5 h-3.5" /> : i + 1}
                           </div>
-                          <span className={cn(
-                            'text-[8px] sm:text-[9px] mt-1 text-center leading-tight max-w-[52px]',
-                            isCurrent ? `${cfg.color} font-bold` : isDone ? 'text-teal-500 font-medium' : 'text-slate-400'
-                          )}>
-                            {shortLabel}
-                          </span>
+                          {isCurrent ? (
+                            <span className={cn('mt-1.5 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold text-center whitespace-nowrap', cfg.bgColor, cfg.color)}>
+                              {shortLabel}
+                            </span>
+                          ) : (
+                            <span className={cn(
+                              'text-[9px] sm:text-[10px] mt-1 text-center leading-tight max-w-[56px]',
+                              isDone ? 'text-slate-500 font-medium' : 'text-slate-400'
+                            )}>
+                              {shortLabel}
+                            </span>
+                          )}
                         </div>
                         {i < 6 && (
-                          <div className={cn('flex-1 h-0.5 rounded-full mt-3.5 min-w-2',
-                            i < currentIdx ? 'bg-[#3DD8D8]' : 'bg-slate-100'
+                          <div className={cn('flex-1 h-0.5 rounded-full mt-[14px] min-w-2',
+                            i < currentIdx ? 'bg-[#3DD8D8]' : 'bg-slate-200'
                           )} />
                         )}
                       </Fragment>
@@ -819,25 +824,30 @@ export default function LinenFormsPage() {
                       const shortLabel = cfg.label.replace(/^\d\/7\s*/, '')
                       return (
                         <Fragment key={s}>
-                          <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: '52px' }}>
+                          <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: isCurrent ? '72px' : '54px' }}>
                             <div className={cn(
-                              'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
-                              isCurrent ? 'bg-[#1B3A5C] text-white ring-2 ring-[#3DD8D8] ring-offset-1'
-                                : isDone ? 'bg-[#3DD8D8] text-white'
-                                : 'bg-slate-100 text-slate-400',
+                              'rounded-full flex items-center justify-center font-bold text-white',
+                              isCurrent ? 'w-8 h-8 text-sm ring-2 ring-offset-1 ring-[#3DD8D8]' : 'w-7 h-7 text-xs',
+                              isCurrent || isDone ? cfg.dotColor : 'bg-slate-200 !text-slate-400',
                             )}>
-                              {isDone ? <Check className="w-3 h-3" /> : i + 1}
+                              {isDone ? <Check className="w-3.5 h-3.5" /> : i + 1}
                             </div>
-                            <span className={cn(
-                              'text-[8px] sm:text-[9px] mt-1 text-center leading-tight max-w-[52px]',
-                              isCurrent ? `${cfg.color} font-bold` : isDone ? 'text-teal-500 font-medium' : 'text-slate-400'
-                            )}>
-                              {shortLabel}
-                            </span>
+                            {isCurrent ? (
+                              <span className={cn('mt-1.5 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold text-center whitespace-nowrap', cfg.bgColor, cfg.color)}>
+                                {shortLabel}
+                              </span>
+                            ) : (
+                              <span className={cn(
+                                'text-[9px] sm:text-[10px] mt-1 text-center leading-tight max-w-[56px]',
+                                isDone ? 'text-slate-500 font-medium' : 'text-slate-400'
+                              )}>
+                                {shortLabel}
+                              </span>
+                            )}
                           </div>
                           {i < 6 && (
-                            <div className={cn('flex-1 h-0.5 rounded-full mt-3.5 min-w-2',
-                              i < currentIdx ? 'bg-[#3DD8D8]' : 'bg-slate-100'
+                            <div className={cn('flex-1 h-0.5 rounded-full mt-[14px] min-w-2',
+                              i < currentIdx ? 'bg-[#3DD8D8]' : 'bg-slate-200'
                             )} />
                           )}
                         </Fragment>
