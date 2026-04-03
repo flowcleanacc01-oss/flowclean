@@ -93,6 +93,18 @@ export default function LinenFormGrid({
   }
 
   // Arrow key + Enter navigation — เลื่อน cell ใน grid เท่านั้น (ข้ามกล่อง/ปุ่มใช้ Tab/Shift+Tab)
+  // scroll ให้ cell ไม่ถูก sticky header บัง
+  const scrollCellVisible = (el: HTMLElement) => {
+    const wrapper = el.closest('[class*="overflow-auto"]') as HTMLElement | null
+    if (!wrapper) return
+    const thead = wrapper.querySelector('thead')
+    const headerH = thead ? thead.offsetHeight : 0
+    const elTop = el.offsetTop
+    if (wrapper.scrollTop > elTop - headerH) {
+      wrapper.scrollTop = elTop - headerH
+    }
+  }
+
   const navigate = (
     e: React.KeyboardEvent<HTMLInputElement>,
     rowIndex: number,
@@ -112,8 +124,13 @@ export default function LinenFormGrid({
       const target = container.querySelector<HTMLInputElement>(
         `input[data-row="${rowIndex + dRow}"][data-col="${colIndex}"]`
       )
-      if (target) { e.preventDefault(); target.focus(); target.select() }
-      // ถ้าไม่มี target (ขอบ grid) → ไม่ preventDefault → ให้ browser scroll ตามปกติ
+      if (target) {
+        e.preventDefault()
+        target.focus()
+        target.select()
+        const tr = target.closest('tr')
+        if (tr) scrollCellVisible(tr)
+      }
       return
     }
     if (dCol !== 0) {
