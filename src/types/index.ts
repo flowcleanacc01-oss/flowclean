@@ -169,13 +169,13 @@ export interface LinenFormRow {
 export type LinenFormStatus = 'draft' | 'received' | 'sorting' | 'washing' | 'packed' | 'delivered' | 'confirmed'
 
 export const LINEN_FORM_STATUS_CONFIG: Record<LinenFormStatus, { label: string; todoLabel: string; prevLabel: string; color: string; bgColor: string; dotColor: string }> = {
-  draft: { label: 'ลูกค้านับผ้าส่งซักแล้ว', todoLabel: 'ลูกค้านับผ้าส่งซัก', prevLabel: 'ลูกค้านับผ้าส่งซัก', color: 'text-gray-700', bgColor: 'bg-gray-100', dotColor: 'bg-gray-400' },
-  received: { label: 'ขนส่งนับแล้ว', todoLabel: 'ขนส่งนับ', prevLabel: 'ขนส่งนับ', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
-  sorting: { label: 'โรงซักนับผ้าเข้าแล้ว', todoLabel: 'โรงซักนับผ้าเข้า', prevLabel: 'โรงซักนับผ้าเข้า', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
-  washing: { label: 'ซักอบเสร็จ', todoLabel: 'กำลังซักอบ', prevLabel: 'กำลังซักอบ', color: 'text-blue-700', bgColor: 'bg-blue-50', dotColor: 'bg-blue-500' },
-  packed: { label: 'นับผ้าแพคส่งแล้ว', todoLabel: 'นับผ้าแพคส่ง', prevLabel: 'นับผ้าแพคส่ง', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
-  delivered: { label: 'นับจำนวนถุงแพคแล้ว', todoLabel: 'นับจำนวนถุงแพค', prevLabel: 'นับจำนวนถุงแพค', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
-  confirmed: { label: 'ลูกค้านับผ้ากลับแล้ว', todoLabel: 'ลูกค้านับผ้ากลับ', prevLabel: 'ลูกค้านับกลับ', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
+  draft: { label: '1/7 ลูกค้านับส่งแล้ว', todoLabel: 'ลูกค้านับผ้าส่งซัก', prevLabel: 'ลูกค้านับผ้าส่งซัก', color: 'text-gray-700', bgColor: 'bg-gray-100', dotColor: 'bg-gray-400' },
+  received: { label: '2/7 ขนส่งนับแล้ว', todoLabel: 'ขนส่งนับ', prevLabel: 'ขนส่งนับ', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
+  sorting: { label: '3/7 โรงซักนับเข้าแล้ว', todoLabel: 'โรงซักนับผ้าเข้า', prevLabel: 'โรงซักนับผ้าเข้า', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
+  washing: { label: '4/7 ซักอบเสร็จ', todoLabel: 'กำลังซักอบ', prevLabel: 'กำลังซักอบ', color: 'text-blue-700', bgColor: 'bg-blue-50', dotColor: 'bg-blue-500' },
+  packed: { label: '5/7 นับผ้าแพคส่งแล้ว', todoLabel: 'นับผ้าแพคส่ง', prevLabel: 'นับผ้าแพคส่ง', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
+  delivered: { label: '6/7 นับจำนวนถุงแพคแล้ว', todoLabel: 'นับจำนวนถุงแพค', prevLabel: 'นับจำนวนถุงแพค', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
+  confirmed: { label: '7/7 ลูกค้านับผ้ากลับแล้ว', todoLabel: 'ลูกค้านับผ้ากลับ', prevLabel: 'ลูกค้านับกลับ', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
 }
 
 // 4 แผนก — checkbox อิสระ (ไม่บังคับเรียง, ข้ามได้)
@@ -184,7 +184,7 @@ export type DepartmentKey = 'deptDrying' | 'deptIroning' | 'deptFolding' | 'dept
 export const DEPARTMENT_CONFIG: { key: DepartmentKey; label: string; color: string; bgColor: string; dotColor: string }[] = [
   { key: 'deptDrying', label: 'ผ้าเรียบเสร็จ', color: 'text-sky-700', bgColor: 'bg-sky-50', dotColor: 'bg-sky-500' },
   { key: 'deptIroning', label: 'ปลอกหมอนเสร็จ', color: 'text-violet-700', bgColor: 'bg-violet-50', dotColor: 'bg-violet-500' },
-  { key: 'deptFolding', label: 'ผ้าขนเสร็จ', color: 'text-purple-700', bgColor: 'bg-purple-50', dotColor: 'bg-purple-500' },
+  { key: 'deptFolding', label: 'ผ้าขนเสร็จ', color: 'text-orange-700', bgColor: 'bg-orange-50', dotColor: 'bg-orange-500' },
   { key: 'deptQc', label: 'สปาเสร็จ', color: 'text-pink-700', bgColor: 'bg-pink-50', dotColor: 'bg-pink-500' },
 ]
 

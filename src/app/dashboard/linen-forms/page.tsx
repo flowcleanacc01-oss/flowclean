@@ -406,7 +406,7 @@ export default function LinenFormsPage() {
                 <SortableHeader label="เลขที่" sortKey="formNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="⚠" sortKey="alert" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center w-12" />
                 <SortableHeader label="ส่งออกเอกสาร" sortKey="isExported" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
-                <SortableHeader label="สถานะแผนก" sortKey="dept" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                <SortableHeader label="สถานะแผนกย่อย" sortKey="dept" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                 <SortableHeader label="สถานะ" sortKey="status" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                 <SortableHeader label="จำนวน" sortKey="pieces" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
@@ -516,7 +516,7 @@ export default function LinenFormsPage() {
           <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2.5 text-sm text-teal-700">
             <span className="font-medium">สิ่งที่ทำ: {LINEN_FORM_STATUS_CONFIG.draft.todoLabel}</span>
             <span className="mx-2">|</span>
-            กรอก: ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ
+            กรอก: จำนวนถุงกระสอบส่งซัก, ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ
             <span className="ml-2 text-xs text-teal-500">(บันทึกแล้วจะเข้าสถานะ &quot;{LINEN_FORM_STATUS_CONFIG.draft.label}&quot;)</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -545,12 +545,13 @@ export default function LinenFormsPage() {
 
           {newCustomerId && getCustomer(newCustomerId) && getLinkedQT(getCustomer(newCustomerId)!.name, newCustomerId) && (
             <>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                <label className="block text-sm font-medium text-amber-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
-                <input type="number" min={0}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+                <label className="block text-sm font-medium text-emerald-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
+                <input type="text" inputMode="numeric" pattern="[0-9]*"
                   value={newBagsSent || ''}
-                  onChange={e => setNewBagsSent(sanitizeNumber(e.target.value, 9999))}
-                  className="w-32 px-3 py-2 border border-amber-300 rounded-lg text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                  onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setNewBagsSent(v === '' ? 0 : parseInt(v, 10)) }}
+                  onFocus={e => e.currentTarget.select()}
+                  className="w-32 px-3 py-2 border border-emerald-300 rounded-lg text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                   placeholder="0" />
               </div>
               <LinenFormGrid
@@ -597,6 +598,42 @@ export default function LinenFormsPage() {
             <div className="flex flex-wrap gap-4 text-sm">
               <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
               <div><span className="text-slate-500">วันที่:</span> {formatDate(detailForm.date)}</div>
+            </div>
+            {/* Top stepper — แสดงขั้นตอนด้านบนเพื่อเห็นภาพรวม */}
+            {(() => {
+              const currentIdx = ALL_LINEN_STATUSES.indexOf(detailForm.status)
+              return (
+                <div className="flex items-center gap-0.5 px-1">
+                  {ALL_LINEN_STATUSES.map((s, i) => {
+                    const isDone = i < currentIdx
+                    const isCurrent = i === currentIdx
+                    return (
+                      <Fragment key={s}>
+                        <div title={LINEN_FORM_STATUS_CONFIG[s].label} className="flex-shrink-0">
+                          <div className={cn(
+                            'w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold',
+                            isCurrent
+                              ? 'bg-[#1B3A5C] text-white ring-2 ring-[#3DD8D8] ring-offset-1'
+                              : isDone
+                                ? 'bg-[#3DD8D8] text-white'
+                                : 'bg-slate-100 text-slate-400',
+                          )}>
+                            {isDone ? <Check className="w-3 h-3" /> : i + 1}
+                          </div>
+                        </div>
+                        {i < 6 && (
+                          <div className={cn(
+                            'flex-1 h-0.5 rounded-full',
+                            i < currentIdx ? 'bg-[#3DD8D8]' : 'bg-slate-100'
+                          )} />
+                        )}
+                      </Fragment>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+            <div className="flex items-center justify-center">
               <div>
                 <span className={cn(
                   'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
@@ -668,10 +705,10 @@ export default function LinenFormsPage() {
               <span className="font-medium">สิ่งที่ทำ: {nextDetailStatus ? LINEN_FORM_STATUS_CONFIG[nextDetailStatus].todoLabel : LINEN_FORM_STATUS_CONFIG[detailForm.status].label}</span>
               <span className="mx-2">|</span>
               {{
-                draft: 'กรอก: ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ',
+                draft: 'ยืนยัน หรือ แก้ไข: ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ (กรณีนับผ้าด้วยกันอีกครั้ง)',
                 received: 'กรอก: โรงซักนับเข้า, หมายเหตุ',
                 sorting: 'แก้ได้เฉพาะหมายเหตุ',
-                washing: 'กรอก: โรงซักแพคส่ง, หมายเหตุ, ติ๊กสถานะแผนกได้ด้วย',
+                washing: 'กรอก: โรงซักแพคส่ง, หมายเหตุ, ติ๊กสถานะแผนกย่อยย่อยได้ด้วย',
                 packed: 'ดูข้อมูลเท่านั้น',
                 delivered: 'กรอก: ลูกค้านับผ้ากลับ',
                 confirmed: 'ดูข้อมูลเท่านั้น',
@@ -680,15 +717,15 @@ export default function LinenFormsPage() {
 
             {/* Department checkboxes — แสดงตั้งแต่ sorting ขึ้นไป (sorting=grey disabled, washing+=green active) */}
             {['sorting', 'washing', 'packed', 'delivered', 'confirmed'].includes(detailForm.status) && (() => {
-              const isDeptActive = ['washing', 'packed', 'delivered'].includes(detailForm.status)
-              const isDeptReadOnly = detailForm.status === 'sorting' || detailForm.status === 'confirmed'
+              const isDeptActive = detailForm.status === 'washing'
+              const isDeptReadOnly = detailForm.status !== 'washing'
               return (
                 <div className={cn(
                   'rounded-lg px-4 py-3 border',
                   isDeptActive ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
                 )}>
                   <p className={cn('text-xs font-medium mb-2', isDeptActive ? 'text-emerald-700' : 'text-slate-400')}>
-                    สถานะแผนก {isDeptActive ? '(ติ๊กได้อิสระ)' : '(ยังไม่ถึงขั้นตอน)'}
+                    สถานะแผนกย่อย {isDeptActive ? '(ติ๊กได้อิสระ)' : '(ยังไม่ถึงขั้นตอน)'}
                   </p>
                   <div className="flex flex-wrap gap-3">
                     {DEPARTMENT_CONFIG.map(dept => {
