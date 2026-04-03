@@ -93,6 +93,7 @@ export default function LinenFormGrid({
   }
 
   // Arrow key + Enter navigation between cells (spreadsheet UX)
+  // At grid edges → navigate to external focusable elements (bags input, dept checkboxes, action buttons)
   const navigate = (
     e: React.KeyboardEvent<HTMLInputElement>,
     rowIndex: number,
@@ -114,6 +115,21 @@ export default function LinenFormGrid({
         `input[data-row="${rowIndex + dRow}"][data-col="${colIndex}"]`
       )
       if (target) { target.focus(); target.select(); return }
+
+      // Edge: navigate outside grid
+      const detail = document.getElementById('linen-form-detail')
+      if (detail) {
+        if (dRow < 0) {
+          // ArrowUp from row 0 → focus bags input or dept checkbox
+          const ext = detail.querySelector<HTMLInputElement>('#bags-pack-input, #bags-sent-input, input[type="checkbox"]')
+          if (ext) { ext.focus(); return }
+        } else {
+          // ArrowDown from last row → focus action buttons at bottom
+          const btns = detail.closest('[class*="space-y"]')?.querySelectorAll<HTMLButtonElement>('button')
+          const lastBtn = btns ? btns[btns.length - 1] : null
+          if (lastBtn) { lastBtn.focus(); return }
+        }
+      }
     }
     if (dCol !== 0) {
       const rowInputs = Array.from(
@@ -173,7 +189,7 @@ export default function LinenFormGrid({
       {/* Grid */}
       <div className="overflow-x-auto border border-slate-200 rounded-lg">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10 shadow-sm">
             <tr className="bg-slate-50 border-b border-slate-200">
               <th className="text-left px-3 py-2 font-medium text-slate-600 w-16">รหัส</th>
               <th className="text-left px-3 py-2 font-medium text-slate-600 w-32">รายการ</th>
