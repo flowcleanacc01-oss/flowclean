@@ -186,13 +186,13 @@ export default function LinenFormGrid({
         </div>
       )}
 
-      {/* Grid */}
-      <div className="overflow-x-auto border border-slate-200 rounded-lg">
+      {/* Grid — overflow wrapper is the scroll context for sticky thead */}
+      <div className="border border-slate-200 rounded-lg overflow-auto max-h-[50vh]">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 shadow-sm">
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="text-left px-3 py-2 font-medium text-slate-600 w-16">รหัส</th>
-              <th className="text-left px-3 py-2 font-medium text-slate-600 w-32">รายการ</th>
+          <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+            <tr className="border-b border-slate-200">
+              <th className="text-left px-3 py-2 font-medium text-slate-600 w-16 bg-slate-50">รหัส</th>
+              <th className="text-left px-3 py-2 font-medium text-slate-600 w-32 bg-slate-50">รายการ</th>
               {COL_LABELS.map(col => {
                 const editable = isEditable(col.key)
                 return (
@@ -200,8 +200,8 @@ export default function LinenFormGrid({
                     'px-3 py-2 font-medium text-center cursor-help',
                     col.key === 'note' ? 'w-32 text-left' : 'w-20',
                     editable
-                      ? 'text-[#1B3A5C] bg-teal-50/70 border-b-2 border-[#3DD8D8]'
-                      : 'text-slate-600'
+                      ? 'text-[#1B3A5C] bg-teal-50 border-b-2 border-[#3DD8D8]'
+                      : 'text-slate-600 bg-slate-50'
                   )}>
                     <span className="hidden sm:inline">{col.label}</span>
                     <span className="sm:hidden">{col.short}</span>

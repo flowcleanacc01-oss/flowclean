@@ -624,7 +624,7 @@ export default function LinenFormsPage() {
             {(() => {
               const currentIdx = ALL_LINEN_STATUSES.indexOf(detailForm.status)
               return (
-                <div className="flex items-start overflow-x-auto pb-1">
+                <div className="flex items-start overflow-x-auto pb-2 pt-1 px-1">
                   {ALL_LINEN_STATUSES.map((s, i) => {
                     const isDone = i < currentIdx
                     const isCurrent = i === currentIdx
@@ -826,7 +826,7 @@ export default function LinenFormsPage() {
               {(() => {
                 const currentIdx = ALL_LINEN_STATUSES.indexOf(detailForm.status)
                 return (
-                  <div className="flex items-start overflow-x-auto pb-1">
+                  <div className="flex items-start overflow-x-auto pb-2 pt-1 px-1">
                     {ALL_LINEN_STATUSES.map((s, i) => {
                       const isDone = i < currentIdx
                       const isCurrent = i === currentIdx
