@@ -632,21 +632,21 @@ export default function LinenFormsPage() {
                     const shortLabel = cfg.label.replace(/^\d\/7\s*/, '')
                     return (
                       <Fragment key={s}>
-                        <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: isCurrent ? '72px' : '54px' }}>
+                        <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: isCurrent ? '82px' : '60px' }}>
                           <div className={cn(
                             'rounded-full flex items-center justify-center font-bold text-white transition-all',
-                            isCurrent ? 'w-9 h-9 text-sm ring-2 ring-offset-2 ring-[#3DD8D8] shadow-md' : 'w-7 h-7 text-xs',
+                            isCurrent ? 'w-10 h-10 text-base ring-2 ring-offset-2 ring-[#3DD8D8] shadow-md' : 'w-8 h-8 text-sm',
                             isCurrent || isDone ? cfg.dotColor : 'bg-slate-200 !text-slate-400',
                           )}>
-                            {isDone ? <Check className="w-3.5 h-3.5" /> : i + 1}
+                            {isDone ? <Check className="w-4 h-4" /> : i + 1}
                           </div>
                           {isCurrent ? (
-                            <span className={cn('mt-1.5 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold text-center whitespace-nowrap', cfg.bgColor, cfg.color)}>
+                            <span className={cn('mt-1.5 px-2.5 py-0.5 rounded-full text-[12px] sm:text-[13px] font-bold text-center whitespace-nowrap', cfg.bgColor, cfg.color)}>
                               {shortLabel}
                             </span>
                           ) : (
                             <span className={cn(
-                              'text-[9px] sm:text-[10px] mt-1 text-center leading-tight max-w-[56px]',
+                              'text-[11px] sm:text-[12px] mt-1 text-center leading-tight max-w-[64px]',
                               isDone ? 'text-slate-500 font-medium' : 'text-slate-400'
                             )}>
                               {shortLabel}
@@ -654,11 +654,11 @@ export default function LinenFormsPage() {
                           )}
                         </div>
                         {i < 6 && (
-                          <div className="flex-1 flex flex-col items-center min-w-2 mt-[6px]">
+                          <div className="flex-1 flex flex-col items-center min-w-2 mt-[8px]">
                             {i === currentIdx && (() => {
                               const nextCfg = LINEN_FORM_STATUS_CONFIG[ALL_LINEN_STATUSES[i + 1]]
                               return (
-                                <span className={cn('text-[7px] sm:text-[8px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
+                                <span className={cn('text-[9px] sm:text-[10px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
                                   {nextCfg.todoLabel}
                                 </span>
                               )
@@ -834,21 +834,21 @@ export default function LinenFormsPage() {
                       const shortLabel = cfg.label.replace(/^\d\/7\s*/, '')
                       return (
                         <Fragment key={s}>
-                          <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: isCurrent ? '72px' : '54px' }}>
+                          <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: isCurrent ? '82px' : '60px' }}>
                             <div className={cn(
                               'rounded-full flex items-center justify-center font-bold text-white transition-all',
-                              isCurrent ? 'w-9 h-9 text-sm ring-2 ring-offset-2 ring-[#3DD8D8] shadow-md' : 'w-7 h-7 text-xs',
+                              isCurrent ? 'w-10 h-10 text-base ring-2 ring-offset-2 ring-[#3DD8D8] shadow-md' : 'w-8 h-8 text-sm',
                               isCurrent || isDone ? cfg.dotColor : 'bg-slate-200 !text-slate-400',
                             )}>
-                              {isDone ? <Check className="w-3.5 h-3.5" /> : i + 1}
+                              {isDone ? <Check className="w-4 h-4" /> : i + 1}
                             </div>
                             {isCurrent ? (
-                              <span className={cn('mt-1.5 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold text-center whitespace-nowrap', cfg.bgColor, cfg.color)}>
+                              <span className={cn('mt-1.5 px-2.5 py-0.5 rounded-full text-[12px] sm:text-[13px] font-bold text-center whitespace-nowrap', cfg.bgColor, cfg.color)}>
                                 {shortLabel}
                               </span>
                             ) : (
                               <span className={cn(
-                                'text-[9px] sm:text-[10px] mt-1 text-center leading-tight max-w-[56px]',
+                                'text-[11px] sm:text-[12px] mt-1 text-center leading-tight max-w-[64px]',
                                 isDone ? 'text-slate-500 font-medium' : 'text-slate-400'
                               )}>
                                 {shortLabel}
@@ -856,11 +856,11 @@ export default function LinenFormsPage() {
                             )}
                           </div>
                           {i < 6 && (
-                            <div className="flex-1 flex flex-col items-center min-w-2 mt-[6px]">
+                            <div className="flex-1 flex flex-col items-center min-w-2 mt-[8px]">
                               {i === currentIdx && (() => {
                                 const nextCfg = LINEN_FORM_STATUS_CONFIG[ALL_LINEN_STATUSES[i + 1]]
                                 return (
-                                  <span className={cn('text-[7px] sm:text-[8px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
+                                  <span className={cn('text-[9px] sm:text-[10px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
                                     {nextCfg.todoLabel}
                                   </span>
                                 )
