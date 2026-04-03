@@ -620,31 +620,36 @@ export default function LinenFormsPage() {
               <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
               <div><span className="text-slate-500">วันที่:</span> {formatDate(detailForm.date)}</div>
             </div>
-            {/* Top stepper — แสดงขั้นตอนด้านบนเพื่อเห็นภาพรวม */}
+            {/* Top stepper — แผนที่สถานี (train station map) */}
             {(() => {
               const currentIdx = ALL_LINEN_STATUSES.indexOf(detailForm.status)
               return (
-                <div className="flex items-center gap-0.5 px-1">
+                <div className="flex items-start overflow-x-auto pb-1">
                   {ALL_LINEN_STATUSES.map((s, i) => {
                     const isDone = i < currentIdx
                     const isCurrent = i === currentIdx
+                    const cfg = LINEN_FORM_STATUS_CONFIG[s]
+                    const shortLabel = cfg.label.replace(/^\d\/7\s*/, '')
                     return (
                       <Fragment key={s}>
-                        <div title={LINEN_FORM_STATUS_CONFIG[s].label} className="flex-shrink-0">
+                        <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: '52px' }}>
                           <div className={cn(
-                            'w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold',
-                            isCurrent
-                              ? 'bg-[#1B3A5C] text-white ring-2 ring-[#3DD8D8] ring-offset-1'
-                              : isDone
-                                ? 'bg-[#3DD8D8] text-white'
-                                : 'bg-slate-100 text-slate-400',
+                            'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
+                            isCurrent ? 'bg-[#1B3A5C] text-white ring-2 ring-[#3DD8D8] ring-offset-1'
+                              : isDone ? 'bg-[#3DD8D8] text-white'
+                              : 'bg-slate-100 text-slate-400',
                           )}>
                             {isDone ? <Check className="w-3 h-3" /> : i + 1}
                           </div>
+                          <span className={cn(
+                            'text-[8px] sm:text-[9px] mt-1 text-center leading-tight max-w-[52px]',
+                            isCurrent ? `${cfg.color} font-bold` : isDone ? 'text-teal-500 font-medium' : 'text-slate-400'
+                          )}>
+                            {shortLabel}
+                          </span>
                         </div>
                         {i < 6 && (
-                          <div className={cn(
-                            'flex-1 h-0.5 rounded-full',
+                          <div className={cn('flex-1 h-0.5 rounded-full mt-3.5 min-w-2',
                             i < currentIdx ? 'bg-[#3DD8D8]' : 'bg-slate-100'
                           )} />
                         )}
@@ -654,17 +659,6 @@ export default function LinenFormsPage() {
                 </div>
               )
             })()}
-            <div className="flex items-center justify-center">
-              <div>
-                <span className={cn(
-                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-                  LINEN_FORM_STATUS_CONFIG[detailForm.status].bgColor,
-                  LINEN_FORM_STATUS_CONFIG[detailForm.status].color
-                )}>
-                  {LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
-                </span>
-              </div>
-            </div>
 
             {/* จำนวนถุง — แสดงตามสถานะ */}
             <div className="flex flex-wrap gap-4">
@@ -813,30 +807,36 @@ export default function LinenFormsPage() {
             {/* Progress stepper + Action buttons */}
             <div className="border-t border-slate-200 pt-4 mt-2 space-y-3">
               {/* Step progress bar */}
+              {/* Bottom stepper — แผนที่สถานี (train station map) */}
               {(() => {
                 const currentIdx = ALL_LINEN_STATUSES.indexOf(detailForm.status)
                 return (
-                  <div className="flex items-center gap-0.5 px-1">
+                  <div className="flex items-start overflow-x-auto pb-1">
                     {ALL_LINEN_STATUSES.map((s, i) => {
                       const isDone = i < currentIdx
                       const isCurrent = i === currentIdx
+                      const cfg = LINEN_FORM_STATUS_CONFIG[s]
+                      const shortLabel = cfg.label.replace(/^\d\/7\s*/, '')
                       return (
                         <Fragment key={s}>
-                          <div title={LINEN_FORM_STATUS_CONFIG[s].label} className="flex-shrink-0">
+                          <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: '52px' }}>
                             <div className={cn(
-                              'w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold',
-                              isCurrent
-                                ? 'bg-[#1B3A5C] text-white ring-2 ring-[#3DD8D8] ring-offset-1'
-                                : isDone
-                                  ? 'bg-[#3DD8D8] text-white'
-                                  : 'bg-slate-100 text-slate-400',
+                              'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
+                              isCurrent ? 'bg-[#1B3A5C] text-white ring-2 ring-[#3DD8D8] ring-offset-1'
+                                : isDone ? 'bg-[#3DD8D8] text-white'
+                                : 'bg-slate-100 text-slate-400',
                             )}>
                               {isDone ? <Check className="w-3 h-3" /> : i + 1}
                             </div>
+                            <span className={cn(
+                              'text-[8px] sm:text-[9px] mt-1 text-center leading-tight max-w-[52px]',
+                              isCurrent ? `${cfg.color} font-bold` : isDone ? 'text-teal-500 font-medium' : 'text-slate-400'
+                            )}>
+                              {shortLabel}
+                            </span>
                           </div>
                           {i < 6 && (
-                            <div className={cn(
-                              'flex-1 h-0.5 rounded-full',
+                            <div className={cn('flex-1 h-0.5 rounded-full mt-3.5 min-w-2',
                               i < currentIdx ? 'bg-[#3DD8D8]' : 'bg-slate-100'
                             )} />
                           )}
@@ -846,19 +846,6 @@ export default function LinenFormsPage() {
                   </div>
                 )
               })()}
-
-              {/* Current status label + step count */}
-              <div className="flex items-center justify-center gap-2">
-                <span className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium',
-                  LINEN_FORM_STATUS_CONFIG[detailForm.status].bgColor,
-                  LINEN_FORM_STATUS_CONFIG[detailForm.status].color
-                )}>
-                  <span className={cn('w-1.5 h-1.5 rounded-full', LINEN_FORM_STATUS_CONFIG[detailForm.status].dotColor)} />
-                  {LINEN_FORM_STATUS_CONFIG[detailForm.status].label}
-                </span>
-                <span className="text-xs text-slate-400">ขั้นตอน {ALL_LINEN_STATUSES.indexOf(detailForm.status) + 1}/7</span>
-              </div>
 
               {/* Action buttons */}
               <div className="flex items-center justify-between">
