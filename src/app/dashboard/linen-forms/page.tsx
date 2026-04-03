@@ -658,7 +658,7 @@ export default function LinenFormsPage() {
                             {i === currentIdx && (() => {
                               const nextCfg = LINEN_FORM_STATUS_CONFIG[ALL_LINEN_STATUSES[i + 1]]
                               return (
-                                <span className={cn('text-[9px] sm:text-[10px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
+                                <span className={cn('text-[11px] sm:text-[12px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
                                   {nextCfg.todoLabel}
                                 </span>
                               )
@@ -860,7 +860,7 @@ export default function LinenFormsPage() {
                               {i === currentIdx && (() => {
                                 const nextCfg = LINEN_FORM_STATUS_CONFIG[ALL_LINEN_STATUSES[i + 1]]
                                 return (
-                                  <span className={cn('text-[9px] sm:text-[10px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
+                                  <span className={cn('text-[11px] sm:text-[12px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
                                     {nextCfg.todoLabel}
                                   </span>
                                 )
