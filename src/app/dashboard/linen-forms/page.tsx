@@ -422,7 +422,7 @@ export default function LinenFormsPage() {
                 <SortableHeader label="จำนวน" sortKey="pieces" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                 <SortableHeader label="SD" sortKey="sd" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
-                <th className="text-right px-4 py-3 font-medium text-slate-600 w-28"></th>
+                <th className="text-right px-2 py-3 font-medium text-slate-600 w-[120px]"></th>
               </tr>
             </thead>
             <tbody>
@@ -495,20 +495,20 @@ export default function LinenFormsPage() {
                         <span className="text-xs text-slate-400">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                      <div className="inline-flex items-center gap-1">
+                    <td className="px-2 py-3 text-right w-[120px]" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
                         {PREV_LINEN_STATUS[form.status] && (
                           <button onClick={() => handleRevertStatus(form.id)}
-                            className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded font-medium hover:bg-slate-200 transition-colors inline-flex items-center gap-1"
+                            className="text-[10px] w-6 h-6 bg-slate-100 text-slate-500 rounded hover:bg-slate-200 transition-colors flex items-center justify-center flex-shrink-0"
                             title={`ย้อนกลับ → ${LINEN_FORM_STATUS_CONFIG[PREV_LINEN_STATUS[form.status]!].label}`}>
                             <ChevronLeft className="w-3 h-3" />
                           </button>
                         )}
                         {nextStatus && (
                           <button onClick={() => handleAdvanceStatus(form.id)}
-                            className="text-xs px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] rounded font-medium hover:bg-[#2bb8b8] transition-colors inline-flex items-center gap-1">
-                            {LINEN_FORM_STATUS_CONFIG[nextStatus].label}
-                            <ChevronRight className="w-3 h-3" />
+                            className="text-[10px] leading-tight px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] rounded font-medium hover:bg-[#2bb8b8] transition-colors flex items-center gap-0.5 max-w-[90px] text-center">
+                            <span className="truncate">{LINEN_FORM_STATUS_CONFIG[nextStatus].label.replace(/^\d\/7\s*/, '')}</span>
+                            <ChevronRight className="w-3 h-3 flex-shrink-0" />
                           </button>
                         )}
                       </div>
