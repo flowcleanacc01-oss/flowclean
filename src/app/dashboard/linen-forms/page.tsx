@@ -654,9 +654,19 @@ export default function LinenFormsPage() {
                           )}
                         </div>
                         {i < 6 && (
-                          <div className={cn('flex-1 h-0.5 rounded-full mt-[14px] min-w-2',
-                            i < currentIdx ? 'bg-[#3DD8D8]' : 'bg-slate-200'
-                          )} />
+                          <div className="flex-1 flex flex-col items-center min-w-2 mt-[6px]">
+                            {i === currentIdx && (() => {
+                              const nextCfg = LINEN_FORM_STATUS_CONFIG[ALL_LINEN_STATUSES[i + 1]]
+                              return (
+                                <span className={cn('text-[7px] sm:text-[8px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
+                                  {nextCfg.todoLabel}
+                                </span>
+                              )
+                            })()}
+                            <div className={cn('w-full h-0.5 rounded-full',
+                              i < currentIdx ? 'bg-[#3DD8D8]' : i === currentIdx ? 'bg-slate-300' : 'bg-slate-200'
+                            )} />
+                          </div>
                         )}
                       </Fragment>
                     )
@@ -846,9 +856,19 @@ export default function LinenFormsPage() {
                             )}
                           </div>
                           {i < 6 && (
-                            <div className={cn('flex-1 h-0.5 rounded-full mt-[14px] min-w-2',
-                              i < currentIdx ? 'bg-[#3DD8D8]' : 'bg-slate-200'
-                            )} />
+                            <div className="flex-1 flex flex-col items-center min-w-2 mt-[6px]">
+                              {i === currentIdx && (() => {
+                                const nextCfg = LINEN_FORM_STATUS_CONFIG[ALL_LINEN_STATUSES[i + 1]]
+                                return (
+                                  <span className={cn('text-[7px] sm:text-[8px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
+                                    {nextCfg.todoLabel}
+                                  </span>
+                                )
+                              })()}
+                              <div className={cn('w-full h-0.5 rounded-full',
+                                i < currentIdx ? 'bg-[#3DD8D8]' : i === currentIdx ? 'bg-slate-300' : 'bg-slate-200'
+                              )} />
+                            </div>
                           )}
                         </Fragment>
                       )
