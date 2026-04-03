@@ -154,13 +154,13 @@ export default function DashboardPage() {
               <span className={cn('text-[9px] leading-tight text-center whitespace-nowrap', LINEN_FORM_STATUS_CONFIG.washing.color)}>{LINEN_FORM_STATUS_CONFIG.washing.label}</span>
             </Link>
             <div className="w-8 border-t-2 border-dashed border-slate-300" />
-            <h2 className="text-sm font-semibold text-slate-700">สถานะแผนกย่อย (ซักอบเสร็จ {deptCounts[0]?.total || 0} ใบ)</h2>
+            <h2 className="text-sm font-semibold text-slate-700">สถานะแผนกย่อย (จำนวนลูกค้าซักอบเสร็จ {deptCounts[0]?.total || 0} ใบ)</h2>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {deptCounts.map(d => (
               <Link key={d.key} href="/dashboard/linen-forms?status=washing"
                 className={cn('flex flex-col px-3 py-2.5 rounded-lg transition-all hover:ring-2 hover:ring-[#3DD8D8] hover:shadow-sm', d.bgColor)}>
-                <span className={cn('text-sm font-bold', d.color)}>{d.label}</span>
+                <span className={cn('text-sm font-bold', d.color)}>✓ {d.label}</span>
                 <span className={cn('text-xs', d.color)}>({d.done} จาก {d.total})</span>
               </Link>
             ))}

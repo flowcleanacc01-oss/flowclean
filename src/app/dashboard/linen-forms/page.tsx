@@ -464,7 +464,7 @@ export default function LinenFormsPage() {
                       <div className="flex flex-wrap justify-center gap-0.5">
                         {DEPARTMENT_CONFIG.filter(d => form[d.key]).map(d => (
                           <span key={d.key} className={cn('px-1.5 py-0.5 rounded text-[10px] font-medium', d.bgColor, d.color)}>
-                            {d.label.replace('เสร็จ', '')}
+                            ✓ {d.label.replace('เสร็จ', '')}
                           </span>
                         ))}
                       </div>
