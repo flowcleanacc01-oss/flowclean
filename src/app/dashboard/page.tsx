@@ -126,7 +126,7 @@ export default function DashboardPage() {
       {/* Pipeline — 7 สถานะหลัก */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
         <h2 className="text-sm font-semibold text-slate-700 mb-4">สถานะใบส่งรับผ้า (จำนวนลูกค้าที่อยู่ในขั้นตอนหน้างาน)</h2>
-        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+        <div className="flex items-center gap-1 overflow-x-auto py-2 px-1">
           {ALL_LINEN_STATUSES.map((status, i) => {
             const cfg = LINEN_FORM_STATUS_CONFIG[status]
             return (
