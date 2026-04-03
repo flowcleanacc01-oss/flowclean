@@ -92,8 +92,7 @@ export default function LinenFormGrid({
     onChange(updated)
   }
 
-  // Arrow key + Enter navigation between cells (spreadsheet UX)
-  // At grid edges → navigate to external focusable elements (bags input, dept checkboxes, action buttons)
+  // Arrow key + Enter navigation — เลื่อน cell ใน grid เท่านั้น (ข้ามกล่อง/ปุ่มใช้ Tab/Shift+Tab)
   const navigate = (
     e: React.KeyboardEvent<HTMLInputElement>,
     rowIndex: number,
@@ -101,11 +100,10 @@ export default function LinenFormGrid({
   ) => {
     let dRow = 0, dCol = 0
     if (e.key === 'ArrowUp') dRow = -1
-    else if (e.key === 'ArrowDown' || e.key === 'Enter') { dRow = 1; e.preventDefault() }
+    else if (e.key === 'ArrowDown' || e.key === 'Enter') dRow = 1
     else if (e.key === 'ArrowLeft') dCol = -1
     else if (e.key === 'ArrowRight') dCol = 1
     else return
-    e.preventDefault()
 
     const container = gridRef.current
     if (!container) return
@@ -114,22 +112,9 @@ export default function LinenFormGrid({
       const target = container.querySelector<HTMLInputElement>(
         `input[data-row="${rowIndex + dRow}"][data-col="${colIndex}"]`
       )
-      if (target) { target.focus(); target.select(); return }
-
-      // Edge: navigate outside grid
-      const detail = document.getElementById('linen-form-detail')
-      if (detail) {
-        if (dRow < 0) {
-          // ArrowUp from row 0 → focus bags input or dept checkbox
-          const ext = detail.querySelector<HTMLInputElement>('#bags-pack-input, #bags-sent-input, input[type="checkbox"]')
-          if (ext) { ext.focus(); return }
-        } else {
-          // ArrowDown from last row → focus action buttons at bottom
-          const btns = detail.closest('[class*="space-y"]')?.querySelectorAll<HTMLButtonElement>('button')
-          const lastBtn = btns ? btns[btns.length - 1] : null
-          if (lastBtn) { lastBtn.focus(); return }
-        }
-      }
+      if (target) { e.preventDefault(); target.focus(); target.select() }
+      // ถ้าไม่มี target (ขอบ grid) → ไม่ preventDefault → ให้ browser scroll ตามปกติ
+      return
     }
     if (dCol !== 0) {
       const rowInputs = Array.from(
@@ -137,7 +122,7 @@ export default function LinenFormGrid({
       ).sort((a, b) => Number(a.dataset.col) - Number(b.dataset.col))
       const cur = rowInputs.findIndex(i => Number(i.dataset.col) === colIndex)
       const next = rowInputs[cur + dCol]
-      if (next) { next.focus(); next.select() }
+      if (next) { e.preventDefault(); next.focus(); next.select() }
     }
   }
 
