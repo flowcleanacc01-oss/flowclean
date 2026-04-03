@@ -171,7 +171,7 @@ export default function ChecklistPage() {
             <FileDown className="w-4 h-4" />พิมพ์ใบเช็คของ
           </button>
           <button onClick={handleCreateOpen}
-            className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
+            className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />สร้างใบเช็ค
           </button>
         </div>
@@ -189,7 +189,7 @@ export default function ChecklistPage() {
           {(['all', 'qc', 'loading'] as const).map(t => (
             <button key={t} onClick={() => setTypeFilter(t)}
               className={cn('px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
-                typeFilter === t ? 'bg-[#1B3A5C] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
+                typeFilter === t ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
               {t === 'all' ? 'ทั้งหมด' : CHECKLIST_TYPE_CONFIG[t].label}
             </button>
           ))}
@@ -365,7 +365,7 @@ export default function ChecklistPage() {
             <button onClick={() => setShowCreate(false)}
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
             <button onClick={handleCreate} disabled={!newLinkedId || newItems.length === 0}
-              className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
+              className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors font-medium">
               บันทึก
             </button>
           </div>

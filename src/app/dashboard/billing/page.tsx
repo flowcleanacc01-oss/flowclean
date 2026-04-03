@@ -754,7 +754,7 @@ export default function BillingPage() {
               <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
             </button>
             <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setBillingIssueDate(todayISO()) }}
-              className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
+              className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
               <Plus className="w-4 h-4" />สร้างใบวางบิล
             </button>
           </div>
@@ -796,7 +796,7 @@ export default function BillingPage() {
             setQuNeedCustomerWarn(false)
             setShowCreateQU(true)
           }}
-            className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
+            className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />สร้างใบเสนอราคา
           </button>
         )}
@@ -853,7 +853,7 @@ export default function BillingPage() {
           ]).map(f => (
             <button key={f.key} onClick={() => setWbFilter(f.key)}
               className={cn('px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                wbFilter === f.key ? 'bg-[#1B3A5C] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
+                wbFilter === f.key ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
               {f.label}
             </button>
           ))}
@@ -872,7 +872,7 @@ export default function BillingPage() {
           ]).map(f => (
             <button key={f.key} onClick={() => setIvFilter(f.key)}
               className={cn('px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                ivFilter === f.key ? 'bg-[#1B3A5C] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
+                ivFilter === f.key ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
               {f.label}
             </button>
           ))}
@@ -1347,7 +1347,7 @@ export default function BillingPage() {
             <button onClick={() => { setShowCreate(false); setBillingDiscount(0); setBillingDiscountNote(''); setBillingExtraCharge(0); setBillingExtraChargeNote('') }}
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
             <button onClick={handleCreateBilling} disabled={!previewBilling}
-              className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
+              className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors font-medium">
               สร้างใบวางบิล
             </button>
           </div>
@@ -2111,7 +2111,7 @@ export default function BillingPage() {
               <button onClick={() => setShowCreateQU(false)}
                 className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
               <button onClick={handleCreateQuotation} disabled={!quCustomerId || quItems.length === 0 || quItems.some(i => i.pricePerUnit === null)}
-                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
+                className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors font-medium">
                 บันทึก
               </button>
             </div>

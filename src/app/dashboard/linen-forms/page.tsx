@@ -331,7 +331,7 @@ export default function LinenFormsPage() {
             <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
           </button>
           <button onClick={handleCreateOpen}
-            className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
+            className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />สร้างใบส่งรับผ้าใหม่
           </button>
         </div>
@@ -370,7 +370,7 @@ export default function LinenFormsPage() {
             className={cn(
               'px-3 py-1 rounded-full text-xs font-medium transition-colors',
               statusFilter === s
-                ? 'bg-[#1B3A5C] text-white'
+                ? 'bg-[#3DD8D8] text-[#1B3A5C]'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             )}>
             {s === 'all' ? 'ทั้งหมด' : LINEN_FORM_STATUS_CONFIG[s].label}
@@ -392,7 +392,7 @@ export default function LinenFormsPage() {
             className={cn(
               'px-3 py-1 rounded-full text-xs font-medium transition-colors',
               alertFilter === f.key
-                ? f.key === 'alert' ? 'bg-amber-500 text-white' : f.key === 'no-sd' ? 'bg-blue-500 text-white' : 'bg-[#1B3A5C] text-white'
+                ? f.key === 'alert' ? 'bg-amber-500 text-white' : f.key === 'no-sd' ? 'bg-blue-500 text-white' : 'bg-[#3DD8D8] text-[#1B3A5C]'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             )}>
             {f.label}

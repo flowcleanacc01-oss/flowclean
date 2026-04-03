@@ -400,12 +400,12 @@ export default function ReportsPage() {
                 <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
                   <button onClick={() => setPrintOrientation('portrait')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printOrientation === 'portrait' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printOrientation === 'portrait' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     แนวตั้ง
                   </button>
                   <button onClick={() => setPrintOrientation('landscape')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printOrientation === 'landscape' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printOrientation === 'landscape' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     แนวนอน
                   </button>
                 </div>
@@ -415,12 +415,12 @@ export default function ReportsPage() {
                 <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
                   <button onClick={() => setPrintMargin('normal')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printMargin === 'normal' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printMargin === 'normal' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     ปกติ (10mm)
                   </button>
                   <button onClick={() => setPrintMargin('narrow')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printMargin === 'narrow' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printMargin === 'narrow' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     แคบ (5mm)
                   </button>
                 </div>
@@ -453,12 +453,12 @@ export default function ReportsPage() {
                 <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
                   <button onClick={() => setPrintOrientation('portrait')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printOrientation === 'portrait' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printOrientation === 'portrait' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     แนวตั้ง
                   </button>
                   <button onClick={() => setPrintOrientation('landscape')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printOrientation === 'landscape' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printOrientation === 'landscape' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     แนวนอน
                   </button>
                 </div>
@@ -468,12 +468,12 @@ export default function ReportsPage() {
                 <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
                   <button onClick={() => setPrintMargin('normal')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printMargin === 'normal' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printMargin === 'normal' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     ปกติ (10mm)
                   </button>
                   <button onClick={() => setPrintMargin('narrow')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printMargin === 'narrow' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printMargin === 'narrow' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     แคบ (5mm)
                   </button>
                 </div>
@@ -509,12 +509,12 @@ export default function ReportsPage() {
                 <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
                   <button onClick={() => setPrintOrientation('portrait')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printOrientation === 'portrait' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printOrientation === 'portrait' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     แนวตั้ง
                   </button>
                   <button onClick={() => setPrintOrientation('landscape')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printOrientation === 'landscape' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printOrientation === 'landscape' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     แนวนอน
                   </button>
                 </div>
@@ -524,12 +524,12 @@ export default function ReportsPage() {
                 <div className="inline-flex rounded-lg overflow-hidden border border-slate-200">
                   <button onClick={() => setPrintMargin('normal')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printMargin === 'normal' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printMargin === 'normal' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     ปกติ (10mm)
                   </button>
                   <button onClick={() => setPrintMargin('narrow')}
                     className={cn('px-3 py-1.5 text-xs font-medium transition-colors',
-                      printMargin === 'narrow' ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-600 hover:bg-slate-100')}>
+                      printMargin === 'narrow' ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-600 hover:bg-slate-100')}>
                     แคบ (5mm)
                   </button>
                 </div>

@@ -344,7 +344,7 @@ export default function DeliveryPage() {
             พิมพ์/ส่งออกเอกสารรายการ
           </button>
           <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()); setDnDiscount(0); setDnDiscountNote(''); setDnExtraCharge(0); setDnExtraChargeNote('') }}
-            className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium">
+            className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />
             สร้างใบส่งของชั่วคราว
           </button>
@@ -374,7 +374,7 @@ export default function DeliveryPage() {
           <button key={f.key} onClick={() => setDnFilter(f.key)}
             className={cn(
               'px-3 py-1 rounded-full text-xs font-medium transition-colors',
-              dnFilter === f.key ? 'bg-[#1B3A5C] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              dnFilter === f.key ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             )}>
             {f.label}
           </button>
@@ -634,7 +634,7 @@ export default function DeliveryPage() {
             <button onClick={() => setShowCreate(false)}
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
             <button onClick={handleCreate} disabled={!selCustomerId || deliveryItems.length === 0}
-              className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium">
+              className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors font-medium">
               บันทึก
             </button>
           </div>

@@ -162,7 +162,7 @@ export default function CustomersPage() {
           {(['customers', 'categories'] as const).map(t => (
             <button key={t} onClick={() => setPageTab(t)}
               className={cn('px-4 py-2 text-sm font-medium rounded-lg transition-colors',
-                pageTab === t ? 'bg-[#1B3A5C] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
+                pageTab === t ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
               {t === 'customers' ? 'ลูกค้า' : 'หมวด'}
             </button>
           ))}
@@ -324,7 +324,7 @@ export default function CustomersPage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-medium text-slate-700">หมวดลูกค้า</h3>
             <button onClick={() => setShowAddCat(true)}
-              className="px-3 py-1.5 text-xs bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] flex items-center gap-1">
+              className="px-3 py-1.5 text-xs bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] flex items-center gap-1">
               <Plus className="w-3 h-3" />เพิ่มหมวด
             </button>
           </div>
@@ -336,7 +336,7 @@ export default function CustomersPage() {
               <input value={newCatLabel} onChange={e => setNewCatLabel(e.target.value)} placeholder="ชื่อ (เช่น โรงแรม)"
                 className="px-3 py-1.5 border border-slate-200 rounded text-sm flex-1 focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               <button onClick={handleAddCategory} disabled={!newCatKey || !newCatLabel}
-                className="px-3 py-1.5 bg-[#1B3A5C] text-white text-xs rounded hover:bg-[#122740] disabled:opacity-50">
+                className="px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-xs rounded hover:bg-[#2bb8b8] disabled:opacity-50">
                 <Check className="w-3.5 h-3.5" />
               </button>
               <button onClick={() => { setShowAddCat(false); setNewCatKey(''); setNewCatLabel('') }}
@@ -582,7 +582,7 @@ export default function CustomersPage() {
               className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
             <button onClick={handleSave}
               disabled={!form.shortName || !form.name || customers.some(c => c.shortName.toUpperCase() === form.shortName.toUpperCase() && c.id !== editId)}
-              className="px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors font-medium flex items-center gap-1">
+              className="px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors font-medium flex items-center gap-1">
               <Check className="w-4 h-4" />บันทึก
             </button>
           </div>

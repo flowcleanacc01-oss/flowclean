@@ -257,7 +257,7 @@ export default function ItemsPage() {
                 </button>
               )}
               <button onClick={() => { setShowAddItem(true); setNewItem(EMPTY_NEW_ITEM) }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-[#1B3A5C] text-white text-xs rounded-lg hover:bg-[#122740] transition-colors">
+                className="flex items-center gap-1 px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-xs rounded-lg hover:bg-[#2bb8b8] transition-colors">
                 <Plus className="w-3.5 h-3.5" />เพิ่มรายการ
               </button>
             </div>
@@ -292,7 +292,7 @@ export default function ItemsPage() {
                 </div>
                 <div className="flex gap-2 mt-2">
                   <button onClick={handleAddItem} disabled={!newItem.code || !newItem.name}
-                    className="px-3 py-1.5 bg-[#1B3A5C] text-white text-xs rounded hover:bg-[#122740] disabled:opacity-50 transition-colors flex items-center gap-1">
+                    className="px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-xs rounded hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors flex items-center gap-1">
                     <Check className="w-3.5 h-3.5" />บันทึก
                   </button>
                   <button onClick={() => setShowAddItem(false)}
@@ -453,7 +453,7 @@ export default function ItemsPage() {
                 <p className="text-xs text-slate-400 mt-0.5">เพิ่ม/แก้ไข/ลบหมวดหมู่ผ้า</p>
               </div>
               <button onClick={() => { setShowAddCat(true); setNewCatKey(''); setNewCatLabel('') }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-[#1B3A5C] text-white text-xs rounded-lg hover:bg-[#122740] transition-colors">
+                className="flex items-center gap-1 px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-xs rounded-lg hover:bg-[#2bb8b8] transition-colors">
                 <Plus className="w-3.5 h-3.5" />เพิ่มหมวด
               </button>
             </div>
@@ -470,7 +470,7 @@ export default function ItemsPage() {
                     placeholder="ชื่อหมวด (ไทย)"
                     className="px-2 py-1.5 border border-slate-200 rounded text-sm w-48 focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                   <button onClick={handleAddCategory} disabled={!newCatKey || !newCatLabel}
-                    className="px-3 py-1.5 bg-[#1B3A5C] text-white text-xs rounded hover:bg-[#122740] disabled:opacity-50 transition-colors flex items-center gap-1">
+                    className="px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-xs rounded hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors flex items-center gap-1">
                     <Check className="w-3.5 h-3.5" />บันทึก
                   </button>
                   <button onClick={() => setShowAddCat(false)}

@@ -288,7 +288,7 @@ export default function SettingsPage() {
                 <option value="admin">Admin</option>
               </select>
               <button onClick={handleAddUser} disabled={!newName || !newEmail || !newPassword}
-                className="px-4 py-2 bg-[#1B3A5C] text-white text-sm rounded-lg hover:bg-[#122740] disabled:opacity-50 transition-colors flex items-center gap-1">
+                className="px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] text-sm rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors flex items-center gap-1">
                 <Plus className="w-4 h-4" />เพิ่ม
               </button>
             </div>
@@ -305,7 +305,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2">
               {savedMsg && <span className="text-sm text-emerald-600 font-medium">บันทึกแล้ว ✓</span>}
               <button onClick={handleCompanySaveNow}
-                className="px-4 py-1.5 bg-[#1B3A5C] text-white text-sm rounded-lg hover:bg-[#122740] transition-colors flex items-center gap-1">
+                className="px-4 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-sm rounded-lg hover:bg-[#2bb8b8] transition-colors flex items-center gap-1">
                 <Check className="w-3.5 h-3.5" />บันทึก
               </button>
             </div>
@@ -377,7 +377,7 @@ export default function SettingsPage() {
                 const updated = [...(companyDraft.bankAccounts || []), { id: genId(), bankName: '', accountName: '', accountNumber: '', isDefault: (companyDraft.bankAccounts || []).length === 0 }]
                 setCompanyDraft(prev => ({ ...prev, bankAccounts: updated }))
                 companyDirty.current = true
-              }} className="px-3 py-1 text-xs bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] flex items-center gap-1">
+              }} className="px-3 py-1 text-xs bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] flex items-center gap-1">
                 <Plus className="w-3 h-3" />เพิ่มบัญชี
               </button>
             </div>
