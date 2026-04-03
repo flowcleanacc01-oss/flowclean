@@ -235,14 +235,8 @@ export default function LinenFormsPage() {
     const next = NEXT_LINEN_STATUS[form.status]
     if (!next) return
 
-    // Per-step validation
-    if (form.status === 'draft') {
-      const hasData = form.rows.some(r => r.col2_hotelCountIn > 0 || r.col3_hotelClaimCount > 0)
-      if (!hasData) {
-        alert('กรุณากรอกจำนวนผ้าส่งซักหรือผ้าส่งเคลมอย่างน้อย 1 รายการ')
-        return
-      }
-    } else if (form.status === 'received') {
+    // Per-step validation (draft ไม่บังคับ — ลูกค้ายังไม่นับก็ข้ามได้)
+    if (form.status === 'received') {
       const hasCountIn = form.rows.some(r => r.col5_factoryClaimApproved > 0)
       if (!hasCountIn) {
         alert('กรุณากรอกจำนวนโรงซักนับเข้าอย่างน้อย 1 รายการ')
@@ -578,14 +572,24 @@ export default function LinenFormsPage() {
               className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
               <ChevronLeft className="w-4 h-4" />ยกเลิก
             </button>
-            <span className={cn('px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap', LINEN_FORM_STATUS_CONFIG.draft.bgColor, LINEN_FORM_STATUS_CONFIG.draft.color)}>
-              {LINEN_FORM_STATUS_CONFIG.draft.todoLabel}
-            </span>
-            <button onClick={handleCreate} disabled={!newCustomerId || newRows.length === 0 || !getLinkedQT(getCustomer(newCustomerId)?.name || '', newCustomerId)}
-              className="px-3 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 font-medium transition-colors flex items-center gap-1">
-              {LINEN_FORM_STATUS_CONFIG.draft.label}
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => { handleCreate() }} disabled={!newCustomerId || newRows.length === 0 || !getLinkedQT(getCustomer(newCustomerId)?.name || '', newCustomerId)}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition-colors">
+                บันทึก
+              </button>
+              <button onClick={() => {
+                if (!newCustomerId || newRows.length === 0 || !getLinkedQT(getCustomer(newCustomerId)?.name || '', newCustomerId)) return
+                const newLF = addLinenForm({ customerId: newCustomerId, date: newDate, status: 'draft', rows: newRows, notes: newNotes, bagsSentCount: newBagsSent })
+                setActiveRowId(newLF.id)
+                setShowCreate(false)
+                setShowDetail(newLF.id)
+                scrollAndFocusGrid()
+              }} disabled={!newCustomerId || newRows.length === 0 || !getLinkedQT(getCustomer(newCustomerId)?.name || '', newCustomerId)}
+                className="px-3 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 font-medium transition-colors flex items-center gap-1">
+                {LINEN_FORM_STATUS_CONFIG.draft.label}
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </Modal>
@@ -706,7 +710,7 @@ export default function LinenFormsPage() {
               <span className="mx-2">|</span>
               {{
                 draft: 'ยืนยัน หรือ แก้ไข: ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ (กรณีนับผ้าด้วยกันอีกครั้ง)',
-                received: 'กรอก: โรงซักนับเข้า, หมายเหตุ',
+                received: 'กรอก: ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, โรงซักนับเข้า, หมายเหตุ',
                 sorting: 'แก้ได้เฉพาะหมายเหตุ',
                 washing: 'กรอก: โรงซักแพคส่ง, หมายเหตุ, ติ๊กสถานะแผนกย่อยย่อยได้ด้วย',
                 packed: 'ดูข้อมูลเท่านั้น',
@@ -773,7 +777,7 @@ export default function LinenFormsPage() {
               formStatus={detailForm.status}
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
-                detailForm.status === 'received' ? ['col5', 'note'] :
+                detailForm.status === 'received' ? ['col2', 'col3', 'col5', 'note'] :
                 PROCESS_STATUSES.includes(detailForm.status) ? ['note'] :
                 detailForm.status === 'washing' ? ['col6', 'note'] :
                 detailForm.status === 'delivered' ? ['col4'] :
