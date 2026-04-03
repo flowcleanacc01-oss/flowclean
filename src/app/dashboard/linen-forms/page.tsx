@@ -105,6 +105,26 @@ export default function LinenFormsPage() {
   const [newNotes, setNewNotes] = useState('')
   const [newBagsSent, setNewBagsSent] = useState(0)
 
+  // จำนวนผ้าตามสถานะ — แสดงค่าที่ relevant ที่สุด ณ สถานะนั้น
+  const getPiecesForStatus = (f: typeof linenForms[number]): number => {
+    switch (f.status) {
+      case 'draft':     // 1/7: ลูกค้านับส่ง + เคลม
+      case 'received':  // 2/7: ยังใช้ค่าลูกค้า (รอโรงซักนับ)
+        return f.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
+      case 'sorting':   // 3/7: โรงซักนับเข้า
+        return f.rows.reduce((s, r) => s + r.col5_factoryClaimApproved, 0)
+      case 'washing':   // 4/7: ซักอบเสร็จ → ใช้ col5 (col6 ยังไม่กรอก)
+        return f.rows.reduce((s, r) => s + r.col5_factoryClaimApproved, 0)
+      case 'packed':    // 5/7: แพคส่ง
+      case 'delivered': // 6/7: แพคส่ง
+        return f.rows.reduce((s, r) => s + (r.col6_factoryPackSend || 0), 0)
+      case 'confirmed': // 7/7: ลูกค้านับกลับ
+        return f.rows.reduce((s, r) => s + r.col4_factoryApproved, 0)
+      default:
+        return f.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
+    }
+  }
+
   const filtered = useMemo(() => {
     return linenForms.filter(f => {
       if (statusFilter !== 'all' && f.status !== statusFilter) return false
@@ -135,7 +155,7 @@ export default function LinenFormsPage() {
         case 'formNumber': va = a.formNumber; vb = b.formNumber; break
         case 'customer': { const ca = getCustomer(a.customerId); va = ca?.shortName || ca?.name || ''; const cb = getCustomer(b.customerId); vb = cb?.shortName || cb?.name || ''; break }
         case 'date': va = a.date; vb = b.date; break
-        case 'pieces': va = a.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0); vb = b.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0); break
+        case 'pieces': va = getPiecesForStatus(a); vb = getPiecesForStatus(b); break
         case 'status': va = ALL_LINEN_STATUSES.indexOf(a.status); vb = ALL_LINEN_STATUSES.indexOf(b.status); break
         case 'alert': {
           const aScore = (hasType1Discrepancy(a) ? 1 : 0) + (hasType2Discrepancy(a) ? 2 : 0)
@@ -410,7 +430,7 @@ export default function LinenFormsPage() {
                 <tr><td colSpan={12} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
               ) : filtered.map(form => {
                 const customer = getCustomer(form.customerId)
-                const totalPieces = form.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
+                const totalPieces = getPiecesForStatus(form)
                 const disc1 = hasType1Discrepancy(form)
                 const disc2 = hasType2Discrepancy(form)
                 const cfg = LINEN_FORM_STATUS_CONFIG[form.status] || LINEN_FORM_STATUS_CONFIG.draft
