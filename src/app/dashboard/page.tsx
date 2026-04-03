@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatNumber, formatCurrency, formatDateShort, cn, todayISO } from '@/lib/utils'
-import { LINEN_FORM_STATUS_CONFIG, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus } from '@/types'
+import { LINEN_FORM_STATUS_CONFIG, ALL_LINEN_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus } from '@/types'
 import { hasDiscrepancies } from '@/lib/discrepancy'
 import Link from 'next/link'
 import {
@@ -26,17 +26,17 @@ export default function DashboardPage() {
 
   // Stats
   const stats = useMemo(() => {
-    // 2.1 ผ้านับเข้าแล้วรอซัก — LF status=sorting → sum col5 (โรงซักนับเข้า)
+    // 2.1 จำนวนผ้านับเข้าแล้วรอซัก (3/7) — LF status=sorting → sum col5
     const sortingForms = linenForms.filter(f => f.status === 'sorting')
     const countedInWaiting = sortingForms.reduce((s, f) =>
       s + f.rows.reduce((rs, r) => rs + r.col5_factoryClaimApproved, 0), 0)
 
-    // 2.2 ผ้าซักอบแล้วรอส่ง — LF status=washing → sum col5 (โรงซักนับเข้า)
+    // 2.2 จำนวนผ้าซักอบแล้วรอส่ง (4/7) — LF status=washing → sum col5
     const washingForms = linenForms.filter(f => f.status === 'washing')
     const washedWaiting = washingForms.reduce((s, f) =>
       s + f.rows.reduce((rs, r) => rs + r.col5_factoryClaimApproved, 0), 0)
 
-    // 2.3 ผ้าเช็คส่งออกวันนี้ — LF status=confirmed → sum col6 (โรงซักแพคส่ง)
+    // 2.3 จำนวนผ้าเช็คส่งออกวันนี้ (7/7) — LF status=confirmed → sum col6
     const confirmedForms = linenForms.filter(f => f.status === 'confirmed')
     const checkedOut = confirmedForms.reduce((s, f) =>
       s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0), 0), 0)
@@ -55,7 +55,7 @@ export default function DashboardPage() {
     return counts
   }, [linenForms])
 
-  // Department checkbox counts (forms ที่ซักอบเสร็จแล้วแต่ยังไม่แพค)
+  // Department checkbox counts (forms ที่ซักอบเสร็จ)
   const deptCounts = useMemo(() => {
     const active = linenForms.filter(f => f.status === 'washing')
     return DEPARTMENT_CONFIG.map(d => ({
@@ -86,10 +86,13 @@ export default function DashboardPage() {
   const coVal = stats.carryOverToday
   const coDisplay = coVal === 0 ? '0' : coVal > 0 ? `+${formatNumber(coVal)}` : formatNumber(coVal)
 
+  // Total LF in process (non-confirmed)
+  const totalInProcess = ALL_LINEN_STATUSES.reduce((s, st) => st !== 'confirmed' ? s + pipeline[st] : s, 0)
+
   const statCards = [
-    { label: 'ผ้านับเข้าแล้วรอซัก', value: formatNumber(stats.countedInWaiting), unit: 'ผืน', icon: Package, color: 'bg-blue-50 text-blue-600' },
-    { label: 'ผ้าซักอบแล้วรอส่ง', value: formatNumber(stats.washedWaiting), unit: 'ผืน', icon: ClipboardList, color: 'bg-amber-50 text-amber-600' },
-    { label: 'ผ้าเช็คส่งออกวันนี้', value: formatNumber(stats.checkedOut), unit: 'ผืน', icon: Truck, color: 'bg-teal-50 text-teal-600' },
+    { label: 'จำนวนผ้านับเข้าแล้วรอซัก (3/7)', value: formatNumber(stats.countedInWaiting), unit: 'ผืน', icon: Package, color: 'bg-red-50 text-red-600' },
+    { label: 'จำนวนผ้าซักอบแล้วรอส่ง (4/7)', value: formatNumber(stats.washedWaiting), unit: 'ผืน', icon: ClipboardList, color: 'bg-blue-50 text-blue-600' },
+    { label: 'จำนวนผ้าเช็คส่งออกวันนี้ (7/7)', value: formatNumber(stats.checkedOut), unit: 'ผืน', icon: Truck, color: 'bg-teal-50 text-teal-600' },
     { label: 'ผ้าค้าง/คืนรวมวันนี้', value: coDisplay, unit: 'ผืน', icon: AlertTriangle, color: coVal < 0 ? 'bg-orange-50 text-orange-600' : coVal > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500' },
   ]
 
@@ -122,16 +125,16 @@ export default function DashboardPage() {
 
       {/* Pipeline — 7 สถานะหลัก */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
-        <h2 className="text-sm font-semibold text-slate-700 mb-4">สถานะใบส่งรับผ้า</h2>
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+        <h2 className="text-sm font-semibold text-slate-700 mb-4">สถานะใบส่งรับผ้า (จำนวนลูกค้าที่อยู่ในขั้นตอนหน้างาน)</h2>
+        <div className="flex items-center gap-1 overflow-x-auto pb-1">
           {ALL_LINEN_STATUSES.map((status, i) => {
             const cfg = LINEN_FORM_STATUS_CONFIG[status]
             return (
-              <div key={status} className="flex items-center gap-1.5">
+              <div key={status} className="flex items-center gap-1">
                 <Link href={`/dashboard/linen-forms?status=${status}`}
-                  className={cn('flex flex-col items-center px-3 py-2.5 rounded-lg min-w-16 transition-all hover:ring-2 hover:ring-[#3DD8D8] hover:shadow-sm cursor-pointer', cfg.bgColor)}>
+                  className={cn('flex flex-col items-center px-2 py-2 rounded-lg min-w-[70px] transition-all hover:ring-2 hover:ring-[#3DD8D8] hover:shadow-sm cursor-pointer', cfg.bgColor)}>
                   <span className={cn('text-lg font-bold', cfg.color)}>{pipeline[status]}</span>
-                  <span className="text-[10px] text-slate-600 whitespace-nowrap">{cfg.label}</span>
+                  <span className={cn('text-[9px] leading-tight text-center whitespace-nowrap', cfg.color)}>{cfg.label}</span>
                 </Link>
                 {i < ALL_LINEN_STATUSES.length - 1 && <ArrowRight className="w-3 h-3 text-slate-300 flex-shrink-0" />}
               </div>
@@ -140,16 +143,21 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Department checkboxes summary — 4 แผนก */}
+      {/* Department checkboxes summary — สถานะแผนกย่อย */}
       {deptCounts.some(d => d.total > 0) && (
         <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
-          <h2 className="text-sm font-semibold text-slate-700 mb-3">สถานะแผนก (ซักอบเสร็จ {deptCounts[0]?.total || 0} ใบ)</h2>
+          <Link href="/dashboard/linen-forms?status=washing"
+            className="text-sm font-semibold text-slate-700 mb-3 block hover:text-[#1B3A5C] transition-colors">
+            สถานะแผนกย่อย (จำนวนลูกค้าที่อยู่ในขั้นตอนแผนกย่อย {deptCounts[0]?.total || 0})
+          </Link>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {deptCounts.map(d => (
-              <div key={d.key} className={cn('flex items-center gap-2 px-3 py-2.5 rounded-lg', d.bgColor)}>
-                <span className={cn('text-lg font-bold', d.color)}>{d.done}/{d.total}</span>
-                <span className="text-xs text-slate-600">{d.label}</span>
-              </div>
+              <Link key={d.key} href="/dashboard/linen-forms?status=washing"
+                className={cn('flex flex-col px-3 py-2.5 rounded-lg transition-all hover:ring-2 hover:ring-[#3DD8D8] hover:shadow-sm', d.bgColor)}>
+                <span className={cn('text-sm font-medium', d.color)}>
+                  จำนวนลูกค้าที่{d.label} {d.done} จากที่มีอยู่ในแผนกย่อยทั้งหมด {d.total}
+                </span>
+              </Link>
             ))}
           </div>
         </div>
