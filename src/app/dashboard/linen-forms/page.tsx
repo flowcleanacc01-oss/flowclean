@@ -533,7 +533,7 @@ export default function LinenFormsPage() {
             <span className="font-medium">สิ่งที่ทำ: {LINEN_FORM_STATUS_CONFIG.draft.todoLabel}</span>
             <span className="mx-2">|</span>
             กรอก: จำนวนถุงกระสอบส่งซัก, ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ
-            <span className="ml-2 text-xs text-teal-500">(บันทึกแล้วจะเข้าสถานะ &quot;{LINEN_FORM_STATUS_CONFIG.draft.label}&quot;)</span>
+            <span className="ml-2 text-xs text-teal-500">(บันทึกแล้วจะเข้าสถานะ &quot;{LINEN_FORM_STATUS_CONFIG.draft.label}&quot;+ปิดหน้าต่างอัตโนมัติ) , (คลิกปุ่ม {LINEN_FORM_STATUS_CONFIG.draft.label} เพื่อกรอกข้อมูลสถานะถัดไป)</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -755,7 +755,7 @@ export default function LinenFormsPage() {
               {{
                 draft: 'ยืนยัน หรือ แก้ไข: จำนวนถุงกระสอบส่งซัก, ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ (กรณีนับผ้าด้วยกันอีกครั้ง)',
                 received: 'กรอก: จำนวนถุงกระสอบส่งซัก, ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, โรงซักนับเข้า, หมายเหตุ',
-                sorting: 'แก้ได้เฉพาะหมายเหตุ',
+                sorting: 'เมื่อซักอบเสร็จแล้ว ให้คลิกที่ปุ่ม "ซักอบเสร็จ"',
                 washing: 'กรอก: โรงซักแพคส่ง, หมายเหตุ, ติ๊กสถานะแผนกย่อยย่อยได้ด้วย',
                 packed: 'ดูข้อมูลเท่านั้น',
                 delivered: 'กรอก: ลูกค้านับผ้ากลับ',
@@ -822,7 +822,7 @@ export default function LinenFormsPage() {
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
                 detailForm.status === 'received' ? ['col2', 'col3', 'col5', 'note'] :
-                PROCESS_STATUSES.includes(detailForm.status) ? ['note'] :
+                PROCESS_STATUSES.includes(detailForm.status) ? [] :
                 detailForm.status === 'washing' ? ['col6', 'note'] :
                 detailForm.status === 'delivered' ? ['col4'] :
                 []
@@ -937,7 +937,7 @@ export default function LinenFormsPage() {
                       <button onClick={() => {
                         const nextSt = NEXT_LINEN_STATUS[detailForm.status]
                         handleAdvanceStatus(detailForm.id)
-                        scrollAndFocusGrid(nextSt === 'confirmed', nextSt || undefined)
+                        scrollAndFocusGrid(nextSt === 'confirmed' || nextSt === 'sorting', nextSt || undefined)
                       }}
                         className="px-4 py-2.5 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
                         {LINEN_FORM_STATUS_CONFIG[NEXT_LINEN_STATUS[detailForm.status]!].label}
@@ -988,15 +988,31 @@ export default function LinenFormsPage() {
 
       {/* Delete Confirmation Modal — ต้องอยู่หลัง Detail Modal เพื่อให้แสดงด้านหน้า */}
       <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">ต้องการลบใบรับส่งผ้านี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
-          <div className="flex justify-end gap-3">
-            <button onClick={() => setConfirmDeleteId(null)}
-              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={() => { if (confirmDeleteId) { deleteLinenForm(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
-              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
-          </div>
-        </div>
+        {(() => {
+          const hasLinkedSD = confirmDeleteId ? linkedLFMap.has(confirmDeleteId) : false
+          const linkedSD = confirmDeleteId ? linkedLFMap.get(confirmDeleteId) : null
+          return (
+            <div className="space-y-4">
+              {hasLinkedSD ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                  <p className="text-sm font-medium text-red-800">ไม่สามารถลบได้</p>
+                  <p className="text-sm text-red-700 mt-1">LF นี้มีใบส่งของ (SD) ที่เกี่ยวข้อง: <strong>{linkedSD?.noteNumber}</strong></p>
+                  <p className="text-xs text-red-600 mt-1">กรุณาลบ SD ก่อน แล้วจึงลบ LF ได้</p>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600">ต้องการลบใบรับส่งผ้านี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
+              )}
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setConfirmDeleteId(null)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+                {!hasLinkedSD && (
+                  <button onClick={() => { if (confirmDeleteId) { deleteLinenForm(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
+                    className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
+                )}
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
 
       {/* LF Print List Modal */}
