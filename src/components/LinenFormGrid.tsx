@@ -200,8 +200,8 @@ export default function LinenFormGrid({
         </div>
       )}
 
-      {/* Grid — no own scroll; sticky thead works relative to parent scroll (modal body) */}
-      <div className="border border-slate-200 rounded-lg overflow-x-auto">
+      {/* Grid — no overflow wrapper; sticky thead works relative to parent scroll (modal body) */}
+      <div className="border border-slate-200 rounded-lg">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
             {headerLabel && (
