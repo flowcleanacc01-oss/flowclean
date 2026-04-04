@@ -817,6 +817,7 @@ export default function LinenFormsPage() {
               catalog={linenCatalog}
               qtItems={getLinkedQT(detailCustomer.name, detailForm.customerId)?.items}
               carryOver={detailCarryOver}
+              headerLabel={`ลูกค้า: ${detailCustomer.shortName || detailCustomer.name}  |  วันที่: ${formatDate(detailForm.date)}`}
               formStatus={detailForm.status}
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :

@@ -13,6 +13,7 @@ interface LinenFormGridProps {
   qtItems?: QuotationItem[]  // QT items — ใช้ลำดับ + ชื่อจาก QT แทน catalog
   carryOver?: Record<string, number>
   formDate?: string
+  headerLabel?: string  // แสดงเหนือ header (เช่น "ลูกค้า: X | วันที่: Y")
   readOnly?: boolean
   editableColumns?: ('col1' | 'col2' | 'col3' | 'col4' | 'col5' | 'col6' | 'note')[]
   formStatus?: LinenFormStatus
@@ -43,6 +44,7 @@ export default function LinenFormGrid({
   qtItems,
   carryOver = {},
   formDate,
+  headerLabel,
   readOnly = false,
   editableColumns = ['col2', 'col3', 'col4', 'col5', 'col6', 'note'],
   formStatus,
@@ -186,8 +188,15 @@ export default function LinenFormGrid({
       {/* Grid — no own scroll; sticky thead works relative to parent scroll (modal body) */}
       <div className="border border-slate-200 rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-            <tr className="border-b border-slate-200">
+          <thead className="sticky top-0 z-10 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+            {headerLabel && (
+              <tr className="bg-[#1B3A5C]">
+                <th colSpan={99} className="text-left px-3 py-1.5 text-xs font-medium text-white tracking-wide">
+                  {headerLabel}
+                </th>
+              </tr>
+            )}
+            <tr className="bg-slate-50 border-b border-slate-200">
               <th className="text-left px-3 py-2 font-medium text-slate-600 w-16 bg-slate-50">รหัส</th>
               <th className="text-left px-3 py-2 font-medium text-slate-600 w-32 bg-slate-50">รายการ</th>
               {COL_LABELS.map(col => {
