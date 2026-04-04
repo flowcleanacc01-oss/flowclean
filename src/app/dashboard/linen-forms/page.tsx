@@ -365,20 +365,22 @@ export default function LinenFormsPage() {
 
       {/* Status filter tabs */}
       <div className="flex flex-wrap gap-1.5 mb-4">
-        {statuses.map(s => (
+        {statuses.map(s => {
+          const cfg = s !== 'all' ? LINEN_FORM_STATUS_CONFIG[s] : null
+          return (
           <button key={s} onClick={() => setStatusFilter(s)}
             className={cn(
               'px-3 py-1 rounded-full text-xs font-medium transition-colors',
               statusFilter === s
-                ? 'bg-[#3DD8D8] text-[#1B3A5C]'
+                ? cfg ? `${cfg.bgColor} ${cfg.color} ring-1 ring-current` : 'bg-[#3DD8D8] text-[#1B3A5C]'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             )}>
-            {s === 'all' ? 'ทั้งหมด' : LINEN_FORM_STATUS_CONFIG[s].label}
+            {s === 'all' ? 'ทั้งหมด' : cfg!.label}
             <span className="ml-1 opacity-70">
               ({s === 'all' ? linenForms.length : linenForms.filter(f => f.status === s).length})
             </span>
           </button>
-        ))}
+        )})}
       </div>
 
       {/* Alert / SD filter */}
@@ -680,19 +682,27 @@ export default function LinenFormsPage() {
 
             {/* จำนวนถุง — แสดงตามสถานะ */}
             <div className="flex flex-wrap gap-4">
-              {['draft', 'received', 'sorting', 'washing'].includes(detailForm.status) && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                  <label className="block text-xs font-medium text-amber-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
-                  {['draft', 'received', 'sorting'].includes(detailForm.status) ? (
-                    <input type="number" min={0}
-                      value={detailForm.bagsSentCount || ''}
-                      onChange={e => updateLinenForm(detailForm.id, { bagsSentCount: sanitizeNumber(e.target.value, 9999) })}
-                      className="w-28 px-3 py-1.5 border border-amber-300 rounded text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                  ) : (
-                    <span className="text-sm font-medium text-amber-900">{detailForm.bagsSentCount || '-'}</span>
-                  )}
-                </div>
-              )}
+              {['draft', 'received', 'sorting', 'washing'].includes(detailForm.status) && (() => {
+                const canEdit = ['draft', 'received'].includes(detailForm.status)
+                return (
+                  <div className={cn('rounded-lg px-4 py-3 border',
+                    canEdit ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                  )}>
+                    <label className={cn('block text-xs font-medium mb-1',
+                      canEdit ? 'text-emerald-800' : 'text-slate-400'
+                    )}>จำนวนถุงกระสอบส่งซัก</label>
+                    {canEdit ? (
+                      <input type="text" inputMode="numeric" pattern="[0-9]*"
+                        value={detailForm.bagsSentCount || ''}
+                        onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateLinenForm(detailForm.id, { bagsSentCount: v === '' ? 0 : parseInt(v, 10) }) }}
+                        onFocus={e => e.currentTarget.select()}
+                        className="w-28 px-3 py-1.5 border border-emerald-300 rounded text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                    ) : (
+                      <span className="text-sm font-medium text-slate-500">{detailForm.bagsSentCount || '-'}</span>
+                    )}
+                  </div>
+                )
+              })()}
               {['packed', 'delivered', 'confirmed'].includes(detailForm.status) && (
                 <div className={cn('rounded-lg px-4 py-3 border',
                   detailForm.status === 'packed' ? 'bg-emerald-50 border-emerald-200' : 'bg-teal-50 border-teal-200'
@@ -738,8 +748,8 @@ export default function LinenFormsPage() {
               <span className="font-medium">สิ่งที่ทำ: {nextDetailStatus ? LINEN_FORM_STATUS_CONFIG[nextDetailStatus].todoLabel : LINEN_FORM_STATUS_CONFIG[detailForm.status].label}</span>
               <span className="mx-2">|</span>
               {{
-                draft: 'ยืนยัน หรือ แก้ไข: ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ (กรณีนับผ้าด้วยกันอีกครั้ง)',
-                received: 'กรอก: ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, โรงซักนับเข้า, หมายเหตุ',
+                draft: 'ยืนยัน หรือ แก้ไข: จำนวนถุงกระสอบส่งซัก, ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ (กรณีนับผ้าด้วยกันอีกครั้ง)',
+                received: 'กรอก: จำนวนถุงกระสอบส่งซัก, ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, โรงซักนับเข้า, หมายเหตุ',
                 sorting: 'แก้ได้เฉพาะหมายเหตุ',
                 washing: 'กรอก: โรงซักแพคส่ง, หมายเหตุ, ติ๊กสถานะแผนกย่อยย่อยได้ด้วย',
                 packed: 'ดูข้อมูลเท่านั้น',
