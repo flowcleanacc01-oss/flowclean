@@ -658,21 +658,26 @@ export default function LinenFormsPage() {
                             </span>
                           )}
                         </div>
-                        {i < 6 && (
-                          <div className="flex-1 flex flex-col items-center min-w-2 mt-[8px]">
-                            {i === currentIdx && (() => {
-                              const nextCfg = LINEN_FORM_STATUS_CONFIG[ALL_LINEN_STATUSES[i + 1]]
-                              return (
-                                <span className={cn('text-[11px] sm:text-[12px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
-                                  {nextCfg.todoLabel}
-                                </span>
-                              )
-                            })()}
-                            <div className={cn('w-full h-0.5 rounded-full',
-                              i < currentIdx ? 'bg-[#3DD8D8]' : i === currentIdx ? 'bg-slate-300' : 'bg-slate-200'
-                            )} />
-                          </div>
-                        )}
+                        {i < 6 && (() => {
+                          const nextCfg = LINEN_FORM_STATUS_CONFIG[ALL_LINEN_STATUSES[i + 1]]
+                          const isActive = i === currentIdx
+                          const isPast = i < currentIdx
+                          return (
+                            <div className="flex-1 flex flex-col items-center min-w-[40px] mt-[8px]">
+                              <span className={cn(
+                                'text-[9px] sm:text-[10px] whitespace-nowrap mb-0.5',
+                                isActive ? `${nextCfg.color} font-bold animate-blink text-[11px] sm:text-[12px]`
+                                  : isPast ? 'text-slate-400 font-medium'
+                                  : 'text-slate-300'
+                              )}>
+                                {nextCfg.todoLabel}
+                              </span>
+                              <div className={cn('w-full h-0.5 rounded-full',
+                                isPast ? 'bg-[#3DD8D8]' : isActive ? 'bg-slate-300' : 'bg-slate-200'
+                              )} />
+                            </div>
+                          )
+                        })()}
                       </Fragment>
                     )
                   })}
@@ -867,21 +872,26 @@ export default function LinenFormsPage() {
                               </span>
                             )}
                           </div>
-                          {i < 6 && (
-                            <div className="flex-1 flex flex-col items-center min-w-2 mt-[8px]">
-                              {i === currentIdx && (() => {
-                                const nextCfg = LINEN_FORM_STATUS_CONFIG[ALL_LINEN_STATUSES[i + 1]]
-                                return (
-                                  <span className={cn('text-[11px] sm:text-[12px] font-bold animate-blink whitespace-nowrap mb-0.5', nextCfg.color)}>
-                                    {nextCfg.todoLabel}
-                                  </span>
-                                )
-                              })()}
-                              <div className={cn('w-full h-0.5 rounded-full',
-                                i < currentIdx ? 'bg-[#3DD8D8]' : i === currentIdx ? 'bg-slate-300' : 'bg-slate-200'
-                              )} />
-                            </div>
-                          )}
+                          {i < 6 && (() => {
+                            const nextCfg = LINEN_FORM_STATUS_CONFIG[ALL_LINEN_STATUSES[i + 1]]
+                            const isActive = i === currentIdx
+                            const isPast = i < currentIdx
+                            return (
+                              <div className="flex-1 flex flex-col items-center min-w-[40px] mt-[8px]">
+                                <span className={cn(
+                                  'text-[9px] sm:text-[10px] whitespace-nowrap mb-0.5',
+                                  isActive ? `${nextCfg.color} font-bold animate-blink text-[11px] sm:text-[12px]`
+                                    : isPast ? 'text-slate-400 font-medium'
+                                    : 'text-slate-300'
+                                )}>
+                                  {nextCfg.todoLabel}
+                                </span>
+                                <div className={cn('w-full h-0.5 rounded-full',
+                                  isPast ? 'bg-[#3DD8D8]' : isActive ? 'bg-slate-300' : 'bg-slate-200'
+                                )} />
+                              </div>
+                            )
+                          })()}
                         </Fragment>
                       )
                     })}
