@@ -622,7 +622,7 @@ export default function LinenFormsPage() {
           <div className="space-y-4">
             <div id="linen-form-detail" className="space-y-4 bg-white p-2">
             <div className="flex flex-wrap gap-4 text-sm">
-              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
+              <div><span className="text-slate-500">ลูกค้า:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
               <div><span className="text-slate-500">วันที่:</span> {formatDate(detailForm.date)}</div>
             </div>
             {/* Top stepper — แผนที่สถานี (train station map) */}
@@ -812,7 +812,6 @@ export default function LinenFormsPage() {
               catalog={linenCatalog}
               qtItems={getLinkedQT(detailCustomer.name, detailForm.customerId)?.items}
               carryOver={detailCarryOver}
-              formDate={detailForm.date}
               formStatus={detailForm.status}
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
