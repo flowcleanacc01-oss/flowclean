@@ -105,6 +105,12 @@ export function startOfMonthISO(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
 }
 
+export function endOfMonthISO(): string {
+  const now = new Date()
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+}
+
 export function getAgingBucket(daysPast: number): string {
   if (daysPast <= 0) return 'ยังไม่ถึงกำหนด'
   if (daysPast <= 30) return '1-30 วัน'

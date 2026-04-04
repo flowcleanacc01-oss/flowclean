@@ -21,6 +21,7 @@ function getPresets() {
   const today = todayISO()
   const [y, m] = today.split('-').map(Number)
   const startOfMonth = `${y}-${String(m).padStart(2, '0')}-01`
+  const endOfMonth = `${y}-${String(m).padStart(2, '0')}-${new Date(y, m, 0).getDate()}`
   const startOfYear = `${y}-01-01`
   // Previous month
   const pm = m === 1 ? 12 : m - 1
@@ -35,7 +36,7 @@ function getPresets() {
 
   return [
     { label: 'วันนี้', from: today, to: today },
-    { label: 'เดือนนี้', from: startOfMonth, to: today },
+    { label: 'เดือนนี้', from: startOfMonth, to: endOfMonth },
     { label: 'ต้นปีนี้', from: startOfYear, to: today },
     { label: 'เดือนที่แล้ว', from: prevMonthStart, to: prevMonthEnd },
     { divider: true },
