@@ -287,7 +287,7 @@ export default function LinenFormsPage() {
     setTimeout(() => {
       // Scroll modal body to top
       if (!skipScroll) {
-        const modalBody = document.querySelector('.max-h-\\[85vh\\]') as HTMLElement | null
+        const modalBody = document.querySelector('.max-h-\\[94vh\\] > .overflow-auto') as HTMLElement | null
         if (modalBody) modalBody.scrollTop = 0
       }
       // Wait for React re-render then focus the right input

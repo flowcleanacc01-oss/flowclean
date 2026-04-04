@@ -100,7 +100,7 @@ export default function LinenFormGrid({
   const scrollCellVisible = (el: HTMLElement) => {
     // รอ browser focus scroll เสร็จ → adjust ให้ cell ไม่ถูก sticky header บัง
     setTimeout(() => {
-      const scrollParent = document.querySelector('.max-h-\\[85vh\\]') as HTMLElement | null
+      const scrollParent = document.querySelector('.max-h-\\[94vh\\] > .overflow-auto') as HTMLElement | null
       if (!scrollParent) return
       const thead = gridRef.current?.querySelector('thead')
       const headerH = thead ? thead.getBoundingClientRect().height : 0

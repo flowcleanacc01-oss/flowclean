@@ -45,11 +45,11 @@ export default function Modal({ open, onClose, title, children, size = 'md', cla
   if (!open) return null
 
   return (
-    <div className={cn("fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4 animate-fadeIn", className)}>
+    <div className={cn("fixed inset-0 z-50 flex items-start justify-center pt-[3vh] px-4 animate-fadeIn", className)}>
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div ref={ref} className={cn('relative bg-white rounded-2xl shadow-xl w-full animate-slideIn', SIZE_MAP[size])}>
+      <div ref={ref} className={cn('relative bg-white rounded-2xl shadow-xl w-full animate-slideIn max-h-[94vh] flex flex-col', SIZE_MAP[size])}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100 flex-shrink-0">
           <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
           <button
             onClick={onClose}
@@ -59,7 +59,7 @@ export default function Modal({ open, onClose, title, children, size = 'md', cla
           </button>
         </div>
         {/* Body */}
-        <div className="px-6 py-4 max-h-[85vh] overflow-auto">
+        <div className="px-6 py-4 overflow-auto flex-1">
           {children}
         </div>
       </div>
