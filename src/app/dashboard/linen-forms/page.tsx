@@ -283,28 +283,21 @@ export default function LinenFormsPage() {
   }
 
   // Scroll modal to top + auto-focus first editable cell (spreadsheet UX)
-  // skipScroll: ไม่ scroll ขึ้นบน (เช่น confirmed → อยู่ด้านล่างกดเสร็จสมบูรณ์ได้เลย)
-  // targetStatus: สถานะที่จะไปถึง (ใช้ตัดสินใจว่า focus ช่องไหน)
   const scrollAndFocusGrid = (skipScroll = false, targetStatus?: string) => {
     setTimeout(() => {
+      // Scroll modal body to top
       if (!skipScroll) {
-        const detailEl = document.getElementById('linen-form-detail')
-        if (detailEl) {
-          const scrollContainer = detailEl.closest('[class*="overflow-y"]')
-          if (scrollContainer) scrollContainer.scrollTop = 0
-        }
+        const modalBody = document.querySelector('.max-h-\\[70vh\\]') as HTMLElement | null
+        if (modalBody) modalBody.scrollTop = 0
       }
       // Wait for React re-render then focus the right input
       const tryFocus = (attempt = 0) => {
-        // packed → focus bagsPackCount (เฉพาะ packed เท่านั้น ไม่ใช่ delivered)
         if (targetStatus === 'packed') {
           const bagsInput = document.getElementById('bags-pack-input') as HTMLInputElement
           if (bagsInput) { bagsInput.focus(); bagsInput.select(); return }
         }
-        // grid → focus first editable cell
         const firstInput = document.querySelector('#linen-form-detail input[data-row="0"]') as HTMLInputElement
         if (firstInput) { firstInput.focus(); firstInput.select(); return }
-        // retry up to 3 times (waiting for re-render)
         if (attempt < 3) setTimeout(() => tryFocus(attempt + 1), 150)
       }
       setTimeout(() => tryFocus(), 200)
