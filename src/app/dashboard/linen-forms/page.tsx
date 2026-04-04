@@ -634,7 +634,7 @@ export default function LinenFormsPage() {
                     const isDone = i < currentIdx
                     const isCurrent = i === currentIdx
                     const cfg = LINEN_FORM_STATUS_CONFIG[s]
-                    const shortLabel = cfg.label.replace(/^\d\/7\s*/, '')
+                    const shortLabel = cfg.label
                     return (
                       <Fragment key={s}>
                         <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: isCurrent ? '82px' : '60px' }}>
@@ -848,7 +848,7 @@ export default function LinenFormsPage() {
                       const isDone = i < currentIdx
                       const isCurrent = i === currentIdx
                       const cfg = LINEN_FORM_STATUS_CONFIG[s]
-                      const shortLabel = cfg.label.replace(/^\d\/7\s*/, '')
+                      const shortLabel = cfg.label
                       return (
                         <Fragment key={s}>
                           <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: isCurrent ? '82px' : '60px' }}>
