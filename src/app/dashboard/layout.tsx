@@ -21,7 +21,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <main className="lg:pl-60 min-h-screen transition-all duration-300">
-        <div className="p-4 pt-20 lg:pt-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="p-4 pt-16 lg:pt-6 lg:p-8 max-w-7xl mx-auto">
           {children}
         </div>
       </main>

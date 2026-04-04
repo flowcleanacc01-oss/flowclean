@@ -8,7 +8,7 @@ import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { calculateTransportFeeTrip } from '@/lib/transport-fee'
-import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2, FileCheck, Receipt } from 'lucide-react'
+import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
@@ -917,8 +917,8 @@ export default function BillingPage() {
       {/* Billing Tab */}
       {tab === 'billing' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
-            <table className="w-full text-sm" style={{ minWidth: '1100px' }}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="px-2 py-3 w-10">
@@ -941,13 +941,7 @@ export default function BillingPage() {
               </thead>
               <tbody>
                 {filteredBilling.length === 0 ? (
-                  <tr><td colSpan={11} className="text-center py-16">
-                    <div className="flex flex-col items-center text-slate-400">
-                      <FileCheck className="w-12 h-12 mb-3 text-slate-300" />
-                      <p className="text-base">ไม่พบข้อมูล</p>
-                      <p className="text-sm mt-1">ลองปรับตัวกรองหรือสร้างใบวางบิลใหม่</p>
-                    </div>
-                  </td></tr>
+                  <tr><td colSpan={11} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                 ) : filteredBilling.map(b => {
                   const customer = getCustomer(b.customerId)
                   return (
@@ -1015,8 +1009,8 @@ export default function BillingPage() {
       {/* Invoice Tab */}
       {tab === 'invoice' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
-            <table className="w-full text-sm" style={{ minWidth: '900px' }}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="px-2 py-3 w-10">
@@ -1036,13 +1030,7 @@ export default function BillingPage() {
               </thead>
               <tbody>
                 {filteredInvoices.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center py-16">
-                    <div className="flex flex-col items-center text-slate-400">
-                      <Receipt className="w-12 h-12 mb-3 text-slate-300" />
-                      <p className="text-base">ยังไม่มีใบกำกับภาษี</p>
-                      <p className="text-sm mt-1">สร้างได้จากหน้าใบวางบิล</p>
-                    </div>
-                  </td></tr>
+                  <tr><td colSpan={8} className="text-center py-12 text-slate-400">ยังไม่มีใบกำกับภาษี — สร้างจากใบวางบิล</td></tr>
                 ) : filteredInvoices.map(inv => {
                   const customer = getCustomer(inv.customerId)
                   const wbInfo = ivBillingMap.get(inv.id)
@@ -1114,8 +1102,8 @@ export default function BillingPage() {
           </div>
         )}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
-            <table className="w-full text-sm" style={{ minWidth: '900px' }}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
@@ -1129,13 +1117,7 @@ export default function BillingPage() {
               </thead>
               <tbody>
                 {filteredQuotations.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-16">
-                    <div className="flex flex-col items-center text-slate-400">
-                      <FileText className="w-12 h-12 mb-3 text-slate-300" />
-                      <p className="text-base">ไม่พบข้อมูล</p>
-                      <p className="text-sm mt-1">ลองปรับตัวกรองหรือสร้างใบเสนอราคาใหม่</p>
-                    </div>
-                  </td></tr>
+                  <tr><td colSpan={7} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                 ) : filteredQuotations.map(q => {
                   const cfg = QUOTATION_STATUS_CONFIG[q.status]
                   const nextStatus: QuotationStatus | null = q.status === 'draft' ? 'sent' : q.status === 'sent' ? 'accepted' : null
@@ -1556,7 +1538,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ" layer="overlay">
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
         {(() => {
           const hasLinkedIV = taxInvoices.some(ti => ti.billingStatementId === confirmDeleteId)
           const wbToDelete = billingStatements.find(b => b.id === confirmDeleteId)

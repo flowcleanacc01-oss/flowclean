@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow } from '@/lib/utils'
 import { type DeliveryNoteItem } from '@/types'
 import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal } from '@/lib/transport-fee'
-import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2, Truck } from 'lucide-react'
+import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import ExportButtons from '@/components/ExportButtons'
@@ -410,8 +410,8 @@ export default function DeliveryPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
-          <table className="w-full text-sm" style={{ minWidth: '900px' }}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="px-2 py-3 w-10">
@@ -435,13 +435,7 @@ export default function DeliveryPage() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-16">
-                  <div className="flex flex-col items-center text-slate-400">
-                    <Truck className="w-12 h-12 mb-3 text-slate-300" />
-                    <p className="text-base">ไม่พบข้อมูล</p>
-                    <p className="text-sm mt-1">ลองปรับตัวกรองหรือสร้างใบส่งของใหม่</p>
-                  </div>
-                </td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
               ) : filtered.map(dn => {
                 const customer = getCustomer(dn.customerId)
                 const totalItems = dn.items.reduce((s, i) => s + i.quantity, 0)
@@ -806,7 +800,7 @@ export default function DeliveryPage() {
       </Modal>
 
       {/* Bulk Delete Confirmation Modal */}
-      <Modal open={confirmBulkDeleteOpen} onClose={() => setConfirmBulkDeleteOpen(false)} title="ยืนยันการลบ" layer="overlay">
+      <Modal open={confirmBulkDeleteOpen} onClose={() => setConfirmBulkDeleteOpen(false)} title="ยืนยันการลบ">
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
             ต้องการลบใบส่งของที่เลือกทั้งหมด <span className="font-semibold text-red-600">{selectedDnIds.length} ใบ</span> หรือไม่?
@@ -826,7 +820,7 @@ export default function DeliveryPage() {
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ" layer="overlay">
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
         {(() => {
           const hasLinkedWB = billingStatements.some(b => b.deliveryNoteIds.includes(confirmDeleteId || ''))
           return (

@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatNumber, cn, buildPriceMapFromQT } from '@/lib/utils'
-import { FileDown, ExternalLink, BarChart3 } from 'lucide-react'
+import { FileDown, ExternalLink } from 'lucide-react'
 import ExportButtons from '@/components/ExportButtons'
 import Link from 'next/link'
 import MonthlySummaryGrid from '@/components/MonthlySummaryGrid'
@@ -200,8 +200,7 @@ export default function ReportsPage() {
       {/* Customer Tab */}
       {tab === 'customer' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
-            <table className="w-full text-sm" style={{ minWidth: '600px' }}>
+          <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-4 py-3 font-medium text-slate-600">โรงแรม</th>
@@ -225,15 +224,13 @@ export default function ReportsPage() {
               })}
             </tbody>
           </table>
-          </div>
         </div>
       )}
 
       {/* Item Tab */}
       {tab === 'item' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
-            <table className="w-full text-sm" style={{ minWidth: '600px' }}>
+          <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-4 py-3 font-medium text-slate-600">รหัส</th>
@@ -243,13 +240,7 @@ export default function ReportsPage() {
             </thead>
             <tbody>
               {itemUsage.length === 0 ? (
-                <tr><td colSpan={3} className="text-center py-16">
-                  <div className="flex flex-col items-center text-slate-400">
-                    <BarChart3 className="w-12 h-12 mb-3 text-slate-300" />
-                    <p className="text-base">ไม่มีข้อมูล</p>
-                    <p className="text-sm mt-1">ไม่มีการใช้งานสินค้าในเดือนนี้</p>
-                  </div>
-                </td></tr>
+                <tr><td colSpan={3} className="text-center py-8 text-slate-400">ไม่มีข้อมูล</td></tr>
               ) : itemUsage.map(item => (
                 <tr key={item.code} className="border-b border-slate-100">
                   <td className="px-4 py-2 font-mono text-xs text-slate-500">{item.code}</td>
@@ -259,7 +250,6 @@ export default function ReportsPage() {
               ))}
             </tbody>
           </table>
-          </div>
         </div>
       )}
 
@@ -289,8 +279,7 @@ export default function ReportsPage() {
       {/* Carry-over Tab */}
       {tab === 'carryover' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
-            <table className="w-full text-sm" style={{ minWidth: '600px' }}>
+          <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-4 py-3 font-medium text-slate-600">โรงแรม</th>
@@ -320,7 +309,6 @@ export default function ReportsPage() {
               ))}
             </tbody>
           </table>
-          </div>
         </div>
       )}
 

@@ -198,8 +198,8 @@ export default function ChecklistPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
-          <table className="w-full text-sm" style={{ minWidth: '900px' }}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-4 py-3 font-medium text-slate-600">เลขที่</th>
@@ -214,12 +214,9 @@ export default function ChecklistPage() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-16">
-                  <div className="flex flex-col items-center text-slate-400">
-                    <ClipboardCheck className="w-12 h-12 mb-3 text-slate-300" />
-                    <p className="text-base">ไม่พบข้อมูล</p>
-                    <p className="text-sm mt-1">ลองปรับตัวกรองหรือสร้างใบเช็คสินค้าใหม่</p>
-                  </div>
+                <tr><td colSpan={8} className="text-center py-12 text-slate-400">
+                  <ClipboardCheck className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                  ไม่พบข้อมูล
                 </td></tr>
               ) : filtered.map(cl => {
                 const customer = getCustomer(cl.customerId)
@@ -479,7 +476,7 @@ export default function ChecklistPage() {
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ" layer="overlay">
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
         <div className="space-y-4">
           <p className="text-sm text-slate-600">ต้องการลบใบเช็คสินค้านี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
           <div className="flex justify-end gap-3">

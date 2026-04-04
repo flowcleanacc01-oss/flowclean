@@ -11,8 +11,6 @@ interface ModalProps {
   children: ReactNode
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'wide' | 'full'
   className?: string
-  /** ใช้สำหรับ modal ที่ซ้อนกัน (confirm delete บน detail) */
-  layer?: 'base' | 'overlay'
 }
 
 const SIZE_MAP = {
@@ -24,7 +22,7 @@ const SIZE_MAP = {
   full: 'max-w-7xl',
 }
 
-export default function Modal({ open, onClose, title, children, size = 'md', className, layer = 'base' }: ModalProps) {
+export default function Modal({ open, onClose, title, children, size = 'md', className }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -46,27 +44,22 @@ export default function Modal({ open, onClose, title, children, size = 'md', cla
 
   if (!open) return null
 
-  // z-index สำหรับ modal ซ้อนกัน: overlay สูงกว่า base
-  const zIndexClass = layer === 'overlay' ? 'z-[60]' : 'z-50'
-  const backdropZIndex = layer === 'overlay' ? 'z-[59]' : 'z-40'
-
   return (
-    <div className={cn("fixed inset-0 flex items-start justify-center pt-[10vh] px-4 animate-fadeIn", zIndexClass, className)}>
-      <div className={cn("fixed inset-0 bg-black/40", backdropZIndex)} onClick={onClose} />
-      <div ref={ref} className={cn('relative bg-white rounded-2xl shadow-2xl w-full animate-slideIn border border-slate-200', SIZE_MAP[size])}>
+    <div className={cn("fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4 animate-fadeIn", className)}>
+      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div ref={ref} className={cn('relative bg-white rounded-2xl shadow-xl w-full animate-slideIn', SIZE_MAP[size])}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white rounded-t-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
           <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-            aria-label="ปิด"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
         {/* Body */}
-        <div className="px-6 py-5 max-h-[85vh] overflow-auto">
+        <div className="px-6 py-4 max-h-[85vh] overflow-auto">
           {children}
         </div>
       </div>
