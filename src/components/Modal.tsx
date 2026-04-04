@@ -59,7 +59,7 @@ export default function Modal({ open, onClose, title, children, size = 'md', cla
           </button>
         </div>
         {/* Body */}
-        <div className="px-6 py-4 max-h-[70vh] overflow-auto">
+        <div className="px-6 py-4 max-h-[85vh] overflow-auto">
           {children}
         </div>
       </div>

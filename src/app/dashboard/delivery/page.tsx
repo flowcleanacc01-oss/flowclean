@@ -461,7 +461,7 @@ export default function DeliveryPage() {
                         className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                     </td>
                     <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(dn.date)}</td>
-                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
+                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}><span className="truncate block max-w-[120px]">{customer?.shortName || customer?.name || '-'}</span></td>
                     <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('noteNumber'))}>{dn.noteNumber}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('items'))}>{formatNumber(totalItems)}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('amount'))}>{dnAmount > 0 ? formatCurrency(dnAmount) : '-'}</td>

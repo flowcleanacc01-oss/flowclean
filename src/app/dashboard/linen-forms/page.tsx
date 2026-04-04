@@ -287,7 +287,7 @@ export default function LinenFormsPage() {
     setTimeout(() => {
       // Scroll modal body to top
       if (!skipScroll) {
-        const modalBody = document.querySelector('.max-h-\\[70vh\\]') as HTMLElement | null
+        const modalBody = document.querySelector('.max-h-\\[85vh\\]') as HTMLElement | null
         if (modalBody) modalBody.scrollTop = 0
       }
       // Wait for React re-render then focus the right input
@@ -443,7 +443,7 @@ export default function LinenFormsPage() {
                         className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                     </td>
                     <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(form.date)}</td>
-                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
+                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}><span className="truncate block max-w-[120px]">{customer?.shortName || customer?.name || '-'}</span></td>
                     <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('formNumber'))}>{form.formNumber}</td>
                     <td className={cn("px-4 py-3 text-center", sortedBg('alert'))}>
                       {disc1 && <span title="โรงซักนับเข้า ≠ นับส่ง+เคลม"><AlertTriangle className="w-4 h-4 text-amber-500 inline" /></span>}
