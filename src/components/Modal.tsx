@@ -52,7 +52,7 @@ export default function Modal({ open, onClose, title, children, size = 'md', cla
 
   return (
     <div className={cn("fixed inset-0 flex items-start justify-center pt-[10vh] px-4 animate-fadeIn", zIndexClass, className)}>
-      <div className={cn("fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity", backdropZIndex)} onClick={onClose} />
+      <div className={cn("fixed inset-0 bg-black/40", backdropZIndex)} onClick={onClose} />
       <div ref={ref} className={cn('relative bg-white rounded-2xl shadow-2xl w-full animate-slideIn border border-slate-200', SIZE_MAP[size])}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white rounded-t-2xl">
