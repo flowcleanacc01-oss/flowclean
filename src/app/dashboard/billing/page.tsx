@@ -115,6 +115,11 @@ export default function BillingPage() {
   const [quLoadQTSearch, setQuLoadQTSearch] = useState('')
   const [showQuDetail, setShowQuDetail] = useState<string | null>(null)
   const [showQuPrint, setShowQuPrint] = useState(false)
+
+  // QT Accept confirmation modal
+  const [pendingAcceptQTId, setPendingAcceptQTId] = useState<string | null>(null)
+  const [sdUpdateMode, setSdUpdateMode] = useState<'none' | 'from_date' | 'this_month'>('none')
+  const [sdUpdateFromDate, setSdUpdateFromDate] = useState(todayISO())
   const [quCustomerName, setQuCustomerName] = useState('')
   const [quCustomerContact, setQuCustomerContact] = useState('')
   const [quDate, setQuDate] = useState(todayISO())
@@ -454,19 +459,30 @@ export default function BillingPage() {
     setShowCreateQU(true)
   }
 
-  // Accept QT — auto-reject old accepted QT (no gap where prices = 0)
+  // Accept QT — show confirmation modal with price diff + SD update options
   const handleAcceptQT = (qtId: string) => {
+    setSdUpdateMode('none')
+    setSdUpdateFromDate(startOfMonthISO())
+    setPendingAcceptQTId(qtId)
+  }
+
+  // Actually execute QT accept after user confirms
+  const confirmAcceptQT = () => {
+    const qtId = pendingAcceptQTId
+    if (!qtId) return
     const qt = quotations.find(q => q.id === qtId)
     if (!qt) return
+
     // Auto-reject old accepted QT for same customer (ลบช่องว่าง)
     const oldAccepted = quotations.find(q => q.id !== qtId && q.status === 'accepted' && q.customerId === qt.customerId)
     if (oldAccepted) {
       updateQuotationStatus(oldAccepted.id, 'rejected')
     }
-    // Record priceHistory before accepting new QT
+
+    // Record priceHistory
     const cust = customers.find(c => c.id === qt.customerId)
     if (cust) {
-      const oldPriceMap = buildPriceMapFromQT(qt.customerId, quotations) // current accepted QT prices
+      const oldPriceMap = buildPriceMapFromQT(qt.customerId, quotations)
       const newPriceMap = Object.fromEntries(qt.items.map(i => [i.code, i.pricePerUnit]))
       const priceChanges: { code: string; oldPrice: number; newPrice: number; effectiveDate: string; changedBy: string }[] = []
       for (const item of qt.items) {
@@ -475,7 +491,6 @@ export default function BillingPage() {
           priceChanges.push({ code: item.code, oldPrice: oldP, newPrice: item.pricePerUnit, effectiveDate: todayISO(), changedBy: `QT ${qt.quotationNumber}` })
         }
       }
-      // Also check items removed from new QT
       for (const code of Object.keys(oldPriceMap)) {
         if (!newPriceMap[code]) {
           priceChanges.push({ code, oldPrice: oldPriceMap[code], newPrice: 0, effectiveDate: todayISO(), changedBy: `QT ${qt.quotationNumber}` })
@@ -487,7 +502,8 @@ export default function BillingPage() {
     }
 
     updateQuotationStatus(qtId, 'accepted')
-    // Auto sync: อัปเดต billing conditions ให้ลูกค้าอัตโนมัติ
+
+    // Auto sync billing conditions
     if (cust) {
       updateCustomer(cust.id, {
         enablePerPiece: qt.enablePerPiece ?? true,
@@ -499,6 +515,20 @@ export default function BillingPage() {
         monthlyFlatRate: qt.monthlyFlatRate ?? 0,
       })
     }
+
+    // Update SD priceSnapshots if requested
+    if (sdUpdateMode !== 'none') {
+      const newSnapshot = Object.fromEntries(qt.items.map(i => [i.code, i.pricePerUnit]))
+      const fromDate = sdUpdateMode === 'this_month' ? startOfMonthISO() : sdUpdateFromDate
+      const targetDNs = deliveryNotes.filter(dn =>
+        dn.customerId === qt.customerId && dn.date >= fromDate && !dn.isBilled
+      )
+      for (const dn of targetDNs) {
+        updateDeliveryNote(dn.id, { priceSnapshot: newSnapshot })
+      }
+    }
+
+    setPendingAcceptQTId(null)
   }
 
   const moveQuItem = (code: string, dir: 'up' | 'down') => {
@@ -2454,6 +2484,98 @@ export default function BillingPage() {
             onExportFile={() => { for (const ivId of selectedIvIds) updateTaxInvoice(ivId, { isExported: true }) }}
           />
         </div>
+      </Modal>
+
+      {/* QT Accept Confirmation Modal — price diff + SD update options */}
+      <Modal open={!!pendingAcceptQTId} onClose={() => setPendingAcceptQTId(null)} title="ยืนยันตกลงใบเสนอราคา" size="lg">
+        {(() => {
+          const qt = pendingAcceptQTId ? quotations.find(q => q.id === pendingAcceptQTId) : null
+          if (!qt) return null
+          const oldPriceMap = buildPriceMapFromQT(qt.customerId, quotations)
+          const hasOldPrices = Object.keys(oldPriceMap).length > 0
+          const diffs = qt.items.map(i => ({ code: i.code, name: i.name, oldPrice: oldPriceMap[i.code] ?? 0, newPrice: i.pricePerUnit }))
+          const changed = diffs.filter(d => d.oldPrice !== d.newPrice)
+          const unchanged = diffs.filter(d => d.oldPrice === d.newPrice)
+          const custDNs = deliveryNotes.filter(dn => dn.customerId === qt.customerId && !dn.isBilled)
+          const cust = getCustomer(qt.customerId)
+
+          return (
+            <div className="space-y-4">
+              <div className="text-sm text-slate-600">
+                ลูกค้า: <strong>{cust?.shortName || qt.customerName}</strong> | QT: <strong>{qt.quotationNumber}</strong>
+              </div>
+
+              {/* Price diff table */}
+              {hasOldPrices && changed.length > 0 && (
+                <div className="border border-amber-200 rounded-lg overflow-hidden">
+                  <div className="bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">ราคาที่เปลี่ยน ({changed.length} รายการ)</div>
+                  <table className="w-full text-sm">
+                    <thead><tr className="bg-slate-50 text-xs"><th className="text-left px-3 py-1.5">รายการ</th><th className="text-right px-3 py-1.5">ราคาเดิม</th><th className="text-center px-3 py-1.5">→</th><th className="text-right px-3 py-1.5">ราคาใหม่</th></tr></thead>
+                    <tbody>
+                      {changed.map(d => (
+                        <tr key={d.code} className="border-t border-slate-100">
+                          <td className="px-3 py-1.5"><span className="font-mono text-xs text-slate-400 mr-1">{d.code}</span>{d.name}</td>
+                          <td className="px-3 py-1.5 text-right text-red-600 line-through">{formatCurrency(d.oldPrice)}</td>
+                          <td className="px-3 py-1.5 text-center text-slate-400">→</td>
+                          <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(d.newPrice)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {unchanged.length > 0 && (
+                <p className="text-xs text-slate-400">ราคาไม่เปลี่ยน: {unchanged.length} รายการ</p>
+              )}
+              {!hasOldPrices && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-sm text-emerald-700">
+                  QT แรกของลูกค้านี้ — ตั้งราคาใหม่ทั้งหมด
+                </div>
+              )}
+
+              {/* SD update options */}
+              {custDNs.length > 0 && changed.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 space-y-3">
+                  <p className="text-sm font-medium text-blue-800">อัปเดตราคาใน SD เก่าด้วยไหม? ({custDNs.length} ใบที่ยังไม่วางบิล)</p>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="radio" name="sdUpdate" checked={sdUpdateMode === 'none'} onChange={() => setSdUpdateMode('none')} className="accent-[#1B3A5C]" />
+                      <span className="text-slate-700">ไม่อัปเดต <span className="text-slate-400">(SD เก่าใช้ราคาเดิม)</span></span>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="radio" name="sdUpdate" checked={sdUpdateMode === 'this_month'} onChange={() => setSdUpdateMode('this_month')} className="accent-[#1B3A5C]" />
+                      <span className="text-slate-700">อัปเดต SD ทั้งหมดของเดือนนี้ <span className="text-slate-400">({custDNs.filter(d => d.date >= startOfMonthISO()).length} ใบ)</span></span>
+                    </label>
+                    <label className="flex items-start gap-2 text-sm cursor-pointer">
+                      <input type="radio" name="sdUpdate" checked={sdUpdateMode === 'from_date'} onChange={() => setSdUpdateMode('from_date')} className="accent-[#1B3A5C] mt-1" />
+                      <span className="text-slate-700">
+                        อัปเดต SD ตั้งแต่วันที่
+                        <input type="date" value={sdUpdateFromDate} onChange={e => { setSdUpdateFromDate(e.target.value); setSdUpdateMode('from_date') }}
+                          className="ml-2 px-2 py-1 border border-blue-300 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                        <span className="text-slate-400 ml-1">({custDNs.filter(d => d.date >= sdUpdateFromDate).length} ใบ)</span>
+                      </span>
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-blue-600">⚠ SD ที่วางบิลแล้วจะไม่ถูกอัปเดต (ราคาล็อคแล้ว)</p>
+                </div>
+              )}
+
+              {/* Warning */}
+              <div className="bg-slate-50 rounded-lg px-3 py-2 text-xs text-slate-500">
+                <strong>หมายเหตุ:</strong> SD ที่สร้างหลังจากนี้จะใช้ราคาใหม่โดยอัตโนมัติ (priceSnapshot)
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button onClick={() => setPendingAcceptQTId(null)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+                <button onClick={confirmAcceptQT}
+                  className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors">
+                  ยืนยันตกลง
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
     </div>
   )
