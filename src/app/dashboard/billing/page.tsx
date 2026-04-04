@@ -7,6 +7,7 @@ import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
+import { calculateTransportFeeTrip } from '@/lib/transport-fee'
 import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
@@ -516,15 +517,19 @@ export default function BillingPage() {
       })
     }
 
-    // Update SD priceSnapshots if requested
-    if (sdUpdateMode !== 'none') {
+    // Update SD priceSnapshots + recalculate transport fees if requested
+    if (sdUpdateMode !== 'none' && cust) {
       const newSnapshot = Object.fromEntries(qt.items.map(i => [i.code, i.pricePerUnit]))
       const fromDate = sdUpdateMode === 'this_month' ? startOfMonthISO() : sdUpdateFromDate
       const targetDNs = deliveryNotes.filter(dn =>
         dn.customerId === qt.customerId && dn.date >= fromDate && !dn.isBilled
       )
+      // Update each DN: new priceSnapshot + recalc transportFeeTrip
+      const updatedCust = { ...cust, enableMinPerTrip: qt.enableMinPerTrip ?? false, minPerTrip: qt.minPerTrip ?? 0, enableWaive: qt.enableWaive ?? false, minPerTripThreshold: qt.minPerTripThreshold ?? 0 }
       for (const dn of targetDNs) {
-        updateDeliveryNote(dn.id, { priceSnapshot: newSnapshot })
+        const newSubtotal = dn.items.reduce((s, item) => item.isClaim ? s : s + item.quantity * (newSnapshot[item.code] || 0), 0)
+        const newTripFee = calculateTransportFeeTrip(newSubtotal, updatedCust)
+        updateDeliveryNote(dn.id, { priceSnapshot: newSnapshot, transportFeeTrip: newTripFee })
       }
     }
 
