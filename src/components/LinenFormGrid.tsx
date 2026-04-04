@@ -98,25 +98,22 @@ export default function LinenFormGrid({
   // Arrow key + Enter navigation — เลื่อน cell ใน grid เท่านั้น (ข้ามกล่อง/ปุ่มใช้ Tab/Shift+Tab)
   // scroll ให้ cell ไม่ถูก sticky header บัง (ทั้ง navy bar + column header)
   const scrollCellVisible = (el: HTMLElement) => {
-    // ใช้ rAF 2 ชั้น → รอ browser focus scroll เสร็จก่อน แล้วค่อย adjust
-    requestAnimationFrame(() => { requestAnimationFrame(() => {
-      // Find modal body scroll container
+    // รอ browser focus scroll เสร็จ → adjust ให้ cell ไม่ถูก sticky header บัง
+    setTimeout(() => {
       const scrollParent = document.querySelector('.max-h-\\[70vh\\]') as HTMLElement | null
       if (!scrollParent) return
-      // Get sticky header height (thead = navy bar + column header)
       const thead = gridRef.current?.querySelector('thead')
       const headerH = thead ? thead.getBoundingClientRect().height : 0
       const elRect = el.getBoundingClientRect()
       const parentRect = scrollParent.getBoundingClientRect()
-      // ถ้า cell ถูก header บัง (ด้านบน) → scroll ขึ้น
-      if (elRect.top < parentRect.top + headerH) {
-        scrollParent.scrollTop -= (parentRect.top + headerH - elRect.top + 8)
+      const gap = 16 // padding ให้เห็นสวย
+      if (elRect.top < parentRect.top + headerH + gap) {
+        scrollParent.scrollTop -= (parentRect.top + headerH + gap - elRect.top)
       }
-      // ถ้า cell หลุดขอบล่าง → scroll ลง
-      if (elRect.bottom > parentRect.bottom) {
-        scrollParent.scrollTop += (elRect.bottom - parentRect.bottom + 8)
+      if (elRect.bottom > parentRect.bottom - gap) {
+        scrollParent.scrollTop += (elRect.bottom - parentRect.bottom + gap)
       }
-    })})
+    }, 50)
   }
 
   const navigate = (
