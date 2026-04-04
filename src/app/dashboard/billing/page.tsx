@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatDate, formatNumber, cn, todayISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow } from '@/lib/utils'
+import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow } from '@/lib/utils'
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
@@ -35,9 +35,9 @@ export default function BillingPage() {
     return 'billing'
   })
   const [search, setSearch] = useState('')
-  const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('single')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')
+  const [dateFrom, setDateFrom] = useState(() => startOfMonthISO())
+  const [dateTo, setDateTo] = useState(() => todayISO())
   const [sortKey, setSortKey] = useState('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [showCreate, setShowCreate] = useState(false)

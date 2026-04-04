@@ -3,7 +3,7 @@
 import { useState, useMemo, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatDate, cn, todayISO, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
+import { formatDate, cn, todayISO, startOfMonthISO, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink } from 'lucide-react'
@@ -35,9 +35,9 @@ export default function LinenFormsPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   // Date filter & sort state
-  const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('single')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')
+  const [dateFrom, setDateFrom] = useState(() => startOfMonthISO())
+  const [dateTo, setDateTo] = useState(() => todayISO())
   const [sortKey, setSortKey] = useState('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 

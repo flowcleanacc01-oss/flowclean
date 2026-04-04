@@ -100,6 +100,11 @@ export function todayISO(): string {
   return format(new Date(), 'yyyy-MM-dd')
 }
 
+export function startOfMonthISO(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+}
+
 export function getAgingBucket(daysPast: number): string {
   if (daysPast <= 0) return 'ยังไม่ถึงกำหนด'
   if (daysPast <= 30) return '1-30 วัน'

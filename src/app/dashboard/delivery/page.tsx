@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatDate, formatNumber, formatCurrency, cn, todayISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow } from '@/lib/utils'
+import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow } from '@/lib/utils'
 import { type DeliveryNoteItem } from '@/types'
 import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
@@ -44,9 +44,9 @@ export default function DeliveryPage() {
   const [showPrintList, setShowPrintList] = useState(false)
   const [showBulkPrint, setShowBulkPrint] = useState(false)
 
-  const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('single')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')
+  const [dateFrom, setDateFrom] = useState(() => startOfMonthISO())
+  const [dateTo, setDateTo] = useState(() => todayISO())
   const [sortKey, setSortKey] = useState('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
