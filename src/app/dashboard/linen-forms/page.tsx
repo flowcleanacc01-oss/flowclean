@@ -930,7 +930,7 @@ export default function LinenFormsPage() {
                       <button onClick={() => {
                         const nextSt = NEXT_LINEN_STATUS[detailForm.status]
                         handleAdvanceStatus(detailForm.id)
-                        scrollAndFocusGrid(nextSt === 'confirmed' || nextSt === 'sorting', nextSt || undefined)
+                        scrollAndFocusGrid(nextSt === 'confirmed', nextSt || undefined)
                       }}
                         className="px-4 py-2.5 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
                         {LINEN_FORM_STATUS_CONFIG[NEXT_LINEN_STATUS[detailForm.status]!].label}
