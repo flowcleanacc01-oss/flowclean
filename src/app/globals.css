@@ -65,9 +65,11 @@ body {
     z-index: 9999 !important;
   }
   /* Remove modal backdrop */
-  .print-target > .fixed.inset-0.bg-black\/40 { display: none !important; }
+  .print-target > .fixed.inset-0.bg-black\/40,
+  .print-target > .fixed.inset-0.bg-black\/50 { display: none !important; }
   /* Modal card: remove shadow, border, max-height, make full-width */
-  .print-target > .relative {
+  .print-target > .relative,
+  .print-target > .z-\[60\] > .relative {
     position: static !important;
     max-width: 100% !important;
     width: 100% !important;
@@ -76,11 +78,15 @@ body {
     border: none !important;
   }
   /* Modal header: hide */
-  .print-target > .relative > .flex.items-center.justify-between {
+  .print-target > .relative > .flex.items-center.justify-between,
+  .print-target > .z-\[60\] > .relative > .flex.items-center.justify-between {
     display: none !important;
   }
-  /* Modal body: remove max-height/overflow */
-  .print-target > .relative > .max-h-\[70vh\] {
+  /* Modal body: remove max-height/overflow - support both 70vh and 85vh */
+  .print-target > .relative > .max-h-\[70vh\],
+  .print-target > .relative > .max-h-\[85vh\],
+  .print-target > .z-\[60\] > .relative > .max-h-\[70vh\],
+  .print-target > .z-\[60\] > .relative > .max-h-\[85vh\] {
     max-height: none !important;
     overflow: visible !important;
     padding: 0 !important;
@@ -88,6 +94,48 @@ body {
 
   /* Dashboard layout: remove padding/margin for print */
   main { padding: 0 !important; margin: 0 !important; }
+
+  /* Prevent table rows from breaking across pages */
+  table { page-break-inside: auto; }
+  tr { page-break-inside: avoid; page-break-after: auto; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+
+  /* Ensure images don't break */
+  img { page-break-inside: avoid; max-width: 100% !important; }
+
+  /* Print-friendly shadows (convert to borders) */
+  .shadow-lg, .shadow-xl, .shadow-2xl, .shadow-md, .shadow-sm {
+    box-shadow: none !important;
+  }
+}
+
+/* Focus styles for accessibility */
+*:focus-visible {
+  outline: 2px solid #3DD8D8;
+  outline-offset: 2px;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) {
+  .hover\:bg-slate-50:active { background-color: #f8fafc; }
+  .hover\:bg-slate-100:active { background-color: #f1f5f9; }
+}
+
+/* Responsive table improvements */
+@media (max-width: 768px) {
+  table {
+    font-size: 13px;
+  }
+  th, td {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
 }
 
 /* Custom animations */
@@ -105,3 +153,10 @@ body {
 
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 .animate-blink { animation: blink 1.2s ease-in-out infinite; }
+
+/* Loading pulse animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.animate-pulse-slow { animation: pulse 2s ease-in-out infinite; }

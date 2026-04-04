@@ -128,8 +128,8 @@ export default function ExpensesPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
+          <table className="w-full text-sm" style={{ minWidth: '700px' }}>
             <thead>
               <tr className="text-slate-500 text-xs bg-slate-50/50 border-b border-slate-200">
                 <th className="text-left px-5 py-3 font-medium">วันที่</th>
@@ -209,7 +209,7 @@ export default function ExpensesPage() {
       )}
 
       {/* Delete Confirmation Modal */}
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ" layer="overlay">
         <div className="space-y-4">
           <p className="text-sm text-slate-600">ต้องการลบรายจ่ายนี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
           <div className="flex justify-end gap-3">

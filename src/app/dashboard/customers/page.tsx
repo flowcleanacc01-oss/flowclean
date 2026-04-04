@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { cn, formatCurrency, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import type { Customer, CustomerCategoryDef } from '@/types'
-import { Plus, Search, Edit2, Trash2, Check, FileText, Eye, X, Link2 } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Check, FileText, Eye, X, Link2, Building2 } from 'lucide-react'
 import Link from 'next/link'
 import Modal from '@/components/Modal'
 import SortableHeader from '@/components/SortableHeader'
@@ -197,8 +197,8 @@ export default function CustomersPage() {
 
           {/* Table */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
+              <table className="w-full text-sm" style={{ minWidth: '1100px' }}>
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <SortableHeader label="ชื่อย่อลูกค้า" sortKey="shortName" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
@@ -215,7 +215,13 @@ export default function CustomersPage() {
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={10} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                    <tr><td colSpan={10} className="text-center py-16">
+                      <div className="flex flex-col items-center text-slate-400">
+                        <Building2 className="w-12 h-12 mb-3 text-slate-300" />
+                        <p className="text-base">ไม่พบข้อมูล</p>
+                        <p className="text-sm mt-1">ลองค้นหาด้วยคำอื่นหรือเพิ่มลูกค้าใหม่</p>
+                      </div>
+                    </td></tr>
                   ) : filtered.map(c => (
                     <tr key={c.id}
                       data-row-id={c.id}

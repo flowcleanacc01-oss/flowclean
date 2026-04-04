@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink, ClipboardList } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
@@ -397,8 +397,8 @@ export default function LinenFormsPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
+          <table className="w-full text-sm" style={{ minWidth: '1100px' }}>
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="px-2 py-3 w-10">
@@ -422,7 +422,13 @@ export default function LinenFormsPage() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={12} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={12} className="text-center py-16">
+                  <div className="flex flex-col items-center text-slate-400">
+                    <ClipboardList className="w-12 h-12 mb-3 text-slate-300" />
+                    <p className="text-base">ไม่พบข้อมูล</p>
+                    <p className="text-sm mt-1">ลองปรับตัวกรองหรือสร้างใบส่งรับผ้าใหม่</p>
+                  </div>
+                </td></tr>
               ) : filtered.map(form => {
                 const customer = getCustomer(form.customerId)
                 const totalPieces = getPiecesForStatus(form)
@@ -494,7 +500,7 @@ export default function LinenFormsPage() {
                       <div className="flex items-center justify-end gap-1.5">
                         {PREV_LINEN_STATUS[form.status] && (
                           <button onClick={() => handleRevertStatus(form.id)}
-                            className="h-7 px-2 text-[11px] bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors flex items-center gap-0.5 font-medium flex-shrink-0"
+                            className="h-8 px-2.5 text-xs bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors flex items-center gap-1 font-medium flex-shrink-0"
                             title={`ย้อนกลับ → ${LINEN_FORM_STATUS_CONFIG[PREV_LINEN_STATUS[form.status]!].label}`}>
                             <ChevronLeft className="w-3 h-3" />ย้อน
                           </button>
@@ -503,7 +509,7 @@ export default function LinenFormsPage() {
                           const nextIdx = ALL_LINEN_STATUSES.indexOf(nextStatus)
                           return (
                             <button onClick={() => handleAdvanceStatus(form.id)}
-                              className="h-7 px-2.5 text-[11px] bg-[#3DD8D8] text-[#1B3A5C] rounded-md font-bold hover:bg-[#2bb8b8] transition-colors flex items-center gap-0.5 flex-shrink-0">
+                              className="h-8 px-3 text-xs bg-[#3DD8D8] text-[#1B3A5C] rounded-md font-bold hover:bg-[#2bb8b8] transition-colors flex items-center gap-1 flex-shrink-0">
                               {nextIdx + 1}/7
                               <ChevronRight className="w-3 h-3" />
                             </button>
@@ -980,7 +986,7 @@ export default function LinenFormsPage() {
       </Modal>
 
       {/* Delete Confirmation Modal — ต้องอยู่หลัง Detail Modal เพื่อให้แสดงด้านหน้า */}
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ" layer="overlay">
         {(() => {
           const hasLinkedSD = confirmDeleteId ? linkedLFMap.has(confirmDeleteId) : false
           const linkedSD = confirmDeleteId ? linkedLFMap.get(confirmDeleteId) : null

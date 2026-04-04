@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { useStore } from '@/lib/store'
 import { cn, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import type { LinenItemDef, LinenCategoryDef } from '@/types'
-import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
+import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown, Package } from 'lucide-react'
 
 type TabKey = 'items' | 'categories'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
@@ -303,8 +303,8 @@ export default function ItemsPage() {
               </div>
             )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto" style={{ minWidth: '100%' }}>
+              <table className="w-full text-sm" style={{ minWidth: '800px' }}>
                 <thead>
                   <tr className="bg-slate-50">
                     <th className="w-8 px-2 py-2">
@@ -434,7 +434,13 @@ export default function ItemsPage() {
                     </tr>
                   ))}
                   {filteredItems.length === 0 && (
-                    <tr><td colSpan={8} className="text-center py-8 text-slate-400">ไม่พบรายการ</td></tr>
+                    <tr><td colSpan={8} className="text-center py-16">
+                      <div className="flex flex-col items-center text-slate-400">
+                        <Package className="w-12 h-12 mb-3 text-slate-300" />
+                        <p className="text-base">ไม่พบรายการ</p>
+                        <p className="text-sm mt-1">ลองค้นหาด้วยคำอื่นหรือเพิ่มรายการใหม่</p>
+                      </div>
+                    </td></tr>
                   )}
                 </tbody>
               </table>
