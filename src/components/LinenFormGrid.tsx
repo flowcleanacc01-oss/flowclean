@@ -66,6 +66,7 @@ export default function LinenFormGrid({
       )
 
   const [localRows, setLocalRows] = useState<LinenFormRow[]>(rows)
+  const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -93,15 +94,21 @@ export default function LinenFormGrid({
   }
 
   // Arrow key + Enter navigation — เลื่อน cell ใน grid เท่านั้น (ข้ามกล่อง/ปุ่มใช้ Tab/Shift+Tab)
-  // scroll ให้ cell ไม่ถูก sticky header บัง
+  // scroll ให้ cell ไม่ถูก sticky header บัง (ทั้งขึ้นและลง)
   const scrollCellVisible = (el: HTMLElement) => {
     const wrapper = el.closest('[class*="overflow-auto"]') as HTMLElement | null
     if (!wrapper) return
     const thead = wrapper.querySelector('thead')
     const headerH = thead ? thead.offsetHeight : 0
     const elTop = el.offsetTop
+    const elBottom = elTop + el.offsetHeight
+    // ถ้า cell อยู่ใต้ header (ถูกบัง) → scroll ขึ้น
     if (wrapper.scrollTop > elTop - headerH) {
-      wrapper.scrollTop = elTop - headerH
+      wrapper.scrollTop = Math.max(0, elTop - headerH)
+    }
+    // ถ้า cell อยู่ใต้ขอบล่าง → scroll ลง
+    if (elBottom > wrapper.scrollTop + wrapper.clientHeight) {
+      wrapper.scrollTop = elBottom - wrapper.clientHeight
     }
   }
 
@@ -128,6 +135,7 @@ export default function LinenFormGrid({
         e.preventDefault()
         target.focus()
         target.select()
+        setActiveRowIdx(rowIndex + dRow)
         const tr = target.closest('tr')
         if (tr) scrollCellVisible(tr)
       }
@@ -223,9 +231,12 @@ export default function LinenFormGrid({
                 row.col4_factoryApproved > 0 && row.col4_factoryApproved !== packSend
 
               return (
-                <tr key={item.code} className="border-b border-slate-100 hover:bg-slate-50">
+                <tr key={item.code} className={cn(
+                  'border-b border-slate-100 transition-colors',
+                  activeRowIdx === rowIndex ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50'
+                )}>
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
-                  <td className="px-3 py-1.5 text-slate-700">{item.name}</td>
+                  <td className={cn('px-3 py-1.5', activeRowIdx === rowIndex ? 'text-[#1B3A5C] font-semibold' : 'text-slate-700')}>{item.name}</td>
 
                   {/* Col 1 - ยกยอดมา (auto) */}
                   <td className="px-1 py-1 text-center">
@@ -250,7 +261,7 @@ export default function LinenFormGrid({
                           if (v === '' || /^\d+$/.test(v))
                             updateRow(item.code, 'col2_hotelCountIn', v === '' ? 0 : parseInt(v, 10))
                         }}
-                        onFocus={e => e.currentTarget.select()}
+                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex) }}
                         onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col2)}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
@@ -271,7 +282,7 @@ export default function LinenFormGrid({
                           if (v === '' || /^\d+$/.test(v))
                             updateRow(item.code, 'col3_hotelClaimCount', v === '' ? 0 : parseInt(v, 10))
                         }}
-                        onFocus={e => e.currentTarget.select()}
+                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex) }}
                         onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col3)}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
@@ -292,7 +303,7 @@ export default function LinenFormGrid({
                           if (v === '' || /^\d+$/.test(v))
                             updateRow(item.code, 'col5_factoryClaimApproved', v === '' ? 0 : parseInt(v, 10))
                         }}
-                        onFocus={e => e.currentTarget.select()}
+                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex) }}
                         onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col5)}
                         className={cn(
                           'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
@@ -319,7 +330,7 @@ export default function LinenFormGrid({
                           if (v === '' || /^\d+$/.test(v))
                             updateRow(item.code, 'col6_factoryPackSend', v === '' ? 0 : parseInt(v, 10))
                         }}
-                        onFocus={e => e.currentTarget.select()}
+                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex) }}
                         onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col6)}
                         className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                       />
@@ -349,7 +360,7 @@ export default function LinenFormGrid({
                         data-row={rowIndex} data-col={COL_NAV_INDEX.note}
                         value={row.note}
                         onChange={e => updateRow(item.code, 'note', e.target.value)}
-                        onFocus={e => e.currentTarget.select()}
+                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex) }}
                         onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.note)}
                         className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                         placeholder="..."
@@ -371,7 +382,7 @@ export default function LinenFormGrid({
                           if (v === '' || /^\d+$/.test(v))
                             updateRow(item.code, 'col4_factoryApproved', v === '' ? 0 : parseInt(v, 10))
                         }}
-                        onFocus={e => e.currentTarget.select()}
+                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex) }}
                         onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col4)}
                         className={cn(
                           'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
