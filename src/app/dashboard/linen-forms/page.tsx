@@ -561,13 +561,13 @@ export default function LinenFormsPage() {
 
           {newCustomerId && getCustomer(newCustomerId) && getLinkedQT(getCustomer(newCustomerId)!.name, newCustomerId) && (
             <>
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-                <label className="block text-sm font-medium text-emerald-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
+              <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-3">
+                <label className="block text-sm font-medium text-teal-800 mb-1">จำนวนถุงกระสอบส่งซัก</label>
                 <input type="text" inputMode="numeric" pattern="[0-9]*"
                   value={newBagsSent || ''}
                   onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setNewBagsSent(v === '' ? 0 : parseInt(v, 10)) }}
                   onFocus={e => e.currentTarget.select()}
-                  className="w-32 px-3 py-2 border border-emerald-300 rounded-lg text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                  className="w-32 px-3 py-2 border border-teal-300 rounded-lg text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                   placeholder="0" />
               </div>
               <LinenFormGrid
@@ -691,17 +691,17 @@ export default function LinenFormsPage() {
                 const canEdit = ['draft', 'received'].includes(detailForm.status)
                 return (
                   <div className={cn('rounded-lg px-4 py-3 border',
-                    canEdit ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                    canEdit ? 'bg-teal-50 border-teal-200' : 'bg-slate-50 border-slate-200'
                   )}>
                     <label className={cn('block text-xs font-medium mb-1',
-                      canEdit ? 'text-emerald-800' : 'text-slate-400'
+                      canEdit ? 'text-teal-800' : 'text-slate-400'
                     )}>จำนวนถุงกระสอบส่งซัก</label>
                     {canEdit ? (
                       <input type="text" inputMode="numeric" pattern="[0-9]*"
                         value={detailForm.bagsSentCount || ''}
                         onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateLinenForm(detailForm.id, { bagsSentCount: v === '' ? 0 : parseInt(v, 10) }) }}
                         onFocus={e => e.currentTarget.select()}
-                        className="w-28 px-3 py-1.5 border border-emerald-300 rounded text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                        className="w-28 px-3 py-1.5 border border-teal-300 rounded text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                     ) : (
                       <span className="text-sm font-medium text-slate-500">{detailForm.bagsSentCount || '-'}</span>
                     )}
@@ -710,10 +710,10 @@ export default function LinenFormsPage() {
               })()}
               {['packed', 'delivered', 'confirmed'].includes(detailForm.status) && (
                 <div className={cn('rounded-lg px-4 py-3 border',
-                  detailForm.status === 'packed' ? 'bg-emerald-50 border-emerald-200' : 'bg-teal-50 border-teal-200'
+                  detailForm.status === 'packed' ? 'bg-teal-50 border-teal-200' : 'bg-teal-50 border-teal-200'
                 )}>
                   <label className={cn('block text-xs font-medium mb-1',
-                    detailForm.status === 'packed' ? 'text-emerald-800' : 'text-teal-800'
+                    'text-teal-800'
                   )}>จำนวนถุงแพคส่ง</label>
                   <div className="flex items-center gap-3">
                     {['packed', 'delivered'].includes(detailForm.status) ? (
@@ -727,14 +727,14 @@ export default function LinenFormsPage() {
                         }}
                         onFocus={e => e.currentTarget.select()}
                         className={cn('w-28 px-3 py-1.5 border rounded text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
-                          detailForm.status === 'packed' ? 'border-emerald-300' : 'border-teal-300'
+                          'border-teal-300'
                         )} />
                     ) : (
                       <span className="text-sm font-medium text-teal-900">{detailForm.bagsPackCount || '-'}</span>
                     )}
                     {detailForm.status === 'packed' && (
                       <button onClick={() => { handleAdvanceStatus(detailForm.id); scrollAndFocusGrid(false, 'delivered') }}
-                        className="px-4 py-2.5 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                        className="px-4 py-2.5 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
                         นับจำนวนถุงแพคแล้ว <ChevronRight className="w-4 h-4" />
                       </button>
                     )}
@@ -770,9 +770,9 @@ export default function LinenFormsPage() {
               return (
                 <div className={cn(
                   'rounded-lg px-4 py-3 border',
-                  isDeptActive ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                  isDeptActive ? 'bg-teal-50 border-teal-200' : 'bg-slate-50 border-slate-200'
                 )}>
-                  <p className={cn('text-xs font-medium mb-2', isDeptActive ? 'text-emerald-700' : 'text-slate-400')}>
+                  <p className={cn('text-xs font-medium mb-2', isDeptActive ? 'text-teal-700' : 'text-slate-400')}>
                     สถานะแผนกย่อย {isDeptActive ? '(ติ๊กได้อิสระ)' : '(ยังไม่ถึงขั้นตอน)'}
                   </p>
                   <div className="flex flex-wrap gap-3">
@@ -801,7 +801,7 @@ export default function LinenFormsPage() {
                   {detailForm.status === 'sorting' && (
                     <div className="mt-3 flex justify-end">
                       <button onClick={() => { handleAdvanceStatus(detailForm.id); scrollAndFocusGrid(false, 'washing') }}
-                        className="px-4 py-2.5 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                        className="px-4 py-2.5 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
                         ซักอบเสร็จ <ChevronRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -938,7 +938,7 @@ export default function LinenFormsPage() {
                         handleAdvanceStatus(detailForm.id)
                         scrollAndFocusGrid(nextSt === 'confirmed', nextSt || undefined)
                       }}
-                        className="px-4 py-2.5 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                        className="px-4 py-2.5 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
                         {LINEN_FORM_STATUS_CONFIG[NEXT_LINEN_STATUS[detailForm.status]!].label}
                         <ChevronRight className="w-4 h-4" />
                       </button>
