@@ -743,12 +743,12 @@ export default function LinenFormsPage() {
               )}
             </div>
 
-            {/* Status guide — สิ่งที่ทำ + ช่องที่กรอกได้ */}
+            {/* Status guide — สิ่งที่ทำ + ช่องที่กรอกได้ (สีเดียวกับสถานะถัดไป) */}
             <div className={cn(
               'rounded-lg px-4 py-2.5 text-sm border',
-              ['packed', 'confirmed'].includes(detailForm.status)
-                ? 'bg-slate-50 border-slate-200 text-slate-500'
-                : 'bg-teal-50 border-teal-200 text-teal-700'
+              nextDetailStatus
+                ? `${LINEN_FORM_STATUS_CONFIG[nextDetailStatus].bgColor} ${LINEN_FORM_STATUS_CONFIG[nextDetailStatus].color} border-current/20`
+                : 'bg-slate-50 border-slate-200 text-slate-500'
             )}>
               <span className="font-medium">สิ่งที่ทำ: {nextDetailStatus ? LINEN_FORM_STATUS_CONFIG[nextDetailStatus].todoLabel : LINEN_FORM_STATUS_CONFIG[detailForm.status].label}</span>
               <span className="mx-2">|</span>
