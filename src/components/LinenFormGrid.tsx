@@ -94,22 +94,9 @@ export default function LinenFormGrid({
   }
 
   // Arrow key + Enter navigation — เลื่อน cell ใน grid เท่านั้น (ข้ามกล่อง/ปุ่มใช้ Tab/Shift+Tab)
-  // scroll ให้ cell ไม่ถูก sticky header บัง (ทั้งขึ้นและลง)
+  // scroll ให้ cell ไม่ถูก sticky header บัง — ใช้ scrollIntoView
   const scrollCellVisible = (el: HTMLElement) => {
-    const wrapper = el.closest('[class*="overflow-auto"]') as HTMLElement | null
-    if (!wrapper) return
-    const thead = wrapper.querySelector('thead')
-    const headerH = thead ? thead.offsetHeight : 0
-    const elTop = el.offsetTop
-    const elBottom = elTop + el.offsetHeight
-    // ถ้า cell อยู่ใต้ header (ถูกบัง) → scroll ขึ้น
-    if (wrapper.scrollTop > elTop - headerH) {
-      wrapper.scrollTop = Math.max(0, elTop - headerH)
-    }
-    // ถ้า cell อยู่ใต้ขอบล่าง → scroll ลง
-    if (elBottom > wrapper.scrollTop + wrapper.clientHeight) {
-      wrapper.scrollTop = elBottom - wrapper.clientHeight
-    }
+    el.scrollIntoView({ block: 'nearest', behavior: 'auto' })
   }
 
   const navigate = (
@@ -196,8 +183,8 @@ export default function LinenFormGrid({
         </div>
       )}
 
-      {/* Grid — overflow wrapper is the scroll context for sticky thead */}
-      <div className="border border-slate-200 rounded-lg overflow-auto max-h-[50vh]">
+      {/* Grid — no own scroll; sticky thead works relative to parent scroll (modal body) */}
+      <div className="border border-slate-200 rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
             <tr className="border-b border-slate-200">
