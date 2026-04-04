@@ -206,7 +206,7 @@ export default function LinenFormGrid({
           <thead className="sticky top-0 z-10 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
             {headerLabel && (
               <tr className="bg-[#1B3A5C]">
-                <th colSpan={99} className="text-left px-3 py-1.5 text-xs font-medium text-white tracking-wide">
+                <th colSpan={99} className="text-left px-3 py-2 text-sm font-semibold text-white tracking-wide">
                   {headerLabel}
                 </th>
               </tr>
