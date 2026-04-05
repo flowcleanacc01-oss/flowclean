@@ -41,8 +41,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#e8eef5] via-white to-[#d5f7f7] px-4">
-      {/* Top bar */}
-      <div className="fixed top-0 left-0 w-full h-1 bg-gradient-to-r from-[#1B3A5C] via-[#3DD8D8] to-[#E67E22]" />
 
       <div className="w-full max-w-md animate-fadeIn">
         {/* Logo */}
