@@ -3,7 +3,7 @@
 import { useState, useMemo, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatDate, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
+import { formatDate, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink } from 'lucide-react'
@@ -85,7 +85,7 @@ export default function LinenFormsPage() {
         String(diff), r.note, String(r.col4_factoryApproved),
       ]
     })
-    exportCSV(headers, rows, `${detailForm.formNumber}_${detailCustomer.name}`)
+    exportCSV(headers, rows, formatExportFilename(detailForm.formNumber, detailCustomer.shortName || detailCustomer.name, detailForm.date))
   }
 
   const handleLfListCSV = (items: typeof filtered) => {
@@ -971,7 +971,7 @@ export default function LinenFormsPage() {
             </div>
             <LinenFormPrint form={detailForm} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} carryOver={detailCarryOver} qtItems={getLinkedQT(detailCustomer.name, detailForm.customerId)?.items} />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-lf" filename={detailForm.formNumber} onExportCSV={handleExportCSV}
+              <ExportButtons targetId="print-lf" filename={formatExportFilename(detailForm.formNumber, detailCustomer.shortName || detailCustomer.name, detailForm.date)} onExportCSV={handleExportCSV}
                 onPrint={() => { if (!detailForm.isPrinted) updateLinenForm(detailForm.id, { isPrinted: true }) }}
                 onExportFile={() => { if (!detailForm.isExported) updateLinenForm(detailForm.id, { isExported: true }) }} />
             </div>

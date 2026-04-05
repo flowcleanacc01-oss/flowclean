@@ -140,6 +140,14 @@ export function sanitizeNumber(value: string | number, max = 9_999_999): number 
   return Math.min(n, max)
 }
 
+/** Format export filename: "TP (4-4-69) LF-20260404-003" */
+export function formatExportFilename(docNumber: string, customerShortName?: string, docDate?: string): string {
+  if (!customerShortName || !docDate) return docNumber
+  const [y, m, d] = docDate.split('-').map(Number)
+  const thaiYear = (y + 543) % 100 // 2569 → 69
+  return `${customerShortName} (${d}-${m}-${thaiYear}) ${docNumber}`
+}
+
 /** Scroll to newly created/active row in a table */
 export function scrollToActiveRow(id: string, delay = 150) {
   setTimeout(() => {

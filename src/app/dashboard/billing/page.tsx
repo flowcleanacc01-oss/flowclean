@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow } from '@/lib/utils'
+import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
@@ -565,7 +565,7 @@ export default function BillingPage() {
     rows.push(['', '', '', 'รวมทั้งสิ้น', String(detailBilling.grandTotal)])
     if (detailBilling.withholdingTax > 0) rows.push(['', '', '', `หัก ณ ที่จ่าย ${detailBilling.subtotal > 0 ? Math.round(detailBilling.withholdingTax / detailBilling.subtotal * 100) : 0}%`, String(detailBilling.withholdingTax)])
     rows.push(['', '', '', 'ยอดจ่ายสุทธิ', String(detailBilling.netPayable)])
-    exportCSV(headers, rows, detailBilling.billingNumber)
+    exportCSV(headers, rows, formatExportFilename(detailBilling.billingNumber, detailCustomer?.shortName || detailCustomer?.name, detailBilling.issueDate))
   }
 
   const handleInvoiceCSV = () => {
@@ -577,7 +577,7 @@ export default function BillingPage() {
     rows.push(['', '', detailInvoice.vat > 0 ? 'รวมก่อน VAT' : 'รวม', String(detailInvoice.subtotal)])
     if (detailInvoice.vat > 0) rows.push(['', '', `VAT ${detailInvoice.subtotal > 0 ? Math.round(detailInvoice.vat / detailInvoice.subtotal * 100) : 0}%`, String(detailInvoice.vat)])
     rows.push(['', '', 'รวมทั้งสิ้น', String(detailInvoice.grandTotal)])
-    exportCSV(headers, rows, detailInvoice.invoiceNumber)
+    exportCSV(headers, rows, formatExportFilename(detailInvoice.invoiceNumber, getCustomer(detailInvoice.customerId)?.shortName || getCustomer(detailInvoice.customerId)?.name, detailInvoice.issueDate))
   }
 
   const handleQuotationCSV = () => {
@@ -586,7 +586,7 @@ export default function BillingPage() {
     const rows = detailQuotation.items.map(item => [
       item.code, item.name, String(item.pricePerUnit),
     ])
-    exportCSV(headers, rows, detailQuotation.quotationNumber)
+    exportCSV(headers, rows, formatExportFilename(detailQuotation.quotationNumber, detailQuotation.customerName, detailQuotation.date))
   }
 
   // List CSV handlers for bulk export
@@ -1615,7 +1615,7 @@ export default function BillingPage() {
             </div>
             <BillingPrint billing={detailBilling} customer={detailCustomer} company={companyInfo} />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-billing" filename={detailBilling.billingNumber} onExportCSV={handleBillingCSV}
+              <ExportButtons targetId="print-billing" filename={formatExportFilename(detailBilling.billingNumber, detailCustomer?.shortName || detailCustomer?.name, detailBilling.issueDate)} onExportCSV={handleBillingCSV}
                 onPrint={() => { if (!detailBilling.isPrinted) updateBillingStatement(detailBilling.id, { isPrinted: true }) }}
                 onExportFile={() => { if (!detailBilling.isExported) updateBillingStatement(detailBilling.id, { isExported: true }) }} />
             </div>
@@ -1752,7 +1752,7 @@ export default function BillingPage() {
               netPayable={billingStatements.find(b => b.id === detailInvoice.billingStatementId)?.netPayable}
             />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-tax-invoice" filename={detailInvoice.invoiceNumber} onExportCSV={handleInvoiceCSV}
+              <ExportButtons targetId="print-tax-invoice" filename={formatExportFilename(detailInvoice.invoiceNumber, getCustomer(detailInvoice.customerId)?.shortName || getCustomer(detailInvoice.customerId)?.name, detailInvoice.issueDate)} onExportCSV={handleInvoiceCSV}
                 onPrint={() => { if (!detailInvoice.isPrinted) updateTaxInvoice(detailInvoice.id, { isPrinted: true }) }}
                 onExportFile={() => { if (!detailInvoice.isExported) updateTaxInvoice(detailInvoice.id, { isExported: true }) }} />
             </div>
@@ -2246,7 +2246,7 @@ export default function BillingPage() {
           <div>
             <QuotationPrint quotation={detailQuotation} company={companyInfo} />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-quotation" filename={detailQuotation.quotationNumber} onExportCSV={handleQuotationCSV} />
+              <ExportButtons targetId="print-quotation" filename={formatExportFilename(detailQuotation.quotationNumber, detailQuotation.customerName, detailQuotation.date)} onExportCSV={handleQuotationCSV} />
             </div>
           </div>
         )}

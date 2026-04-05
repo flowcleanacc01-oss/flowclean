@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow } from '@/lib/utils'
+import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { type DeliveryNoteItem } from '@/types'
 import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
@@ -263,7 +263,7 @@ export default function DeliveryPage() {
         ? [item.code, itemNameMap[item.code] || item.code, String(item.quantity), String(price), String(item.quantity * price)]
         : [item.code, itemNameMap[item.code] || item.code, String(item.quantity)]
     })
-    exportCSV(headers, rows, detailNote.noteNumber)
+    exportCSV(headers, rows, formatExportFilename(detailNote.noteNumber, detailCustomer.shortName || detailCustomer.name, detailNote.date))
   }
 
   // Mark isPrinted when print button is clicked
@@ -1014,7 +1014,7 @@ export default function DeliveryPage() {
 
             <DeliveryNotePrint note={detailNote} customer={detailCustomer} company={companyInfo} catalog={linenCatalog} priceMap={buildPriceMapFromQT(detailCustomer.id, quotations)} />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-delivery" filename={detailNote.noteNumber} onExportCSV={handleExportCSV} onPrint={handlePrintExport} onExportFile={handleExportFile} />
+              <ExportButtons targetId="print-delivery" filename={formatExportFilename(detailNote.noteNumber, detailCustomer.shortName || detailCustomer.name, detailNote.date)} onExportCSV={handleExportCSV} onPrint={handlePrintExport} onExportFile={handleExportFile} />
             </div>
           </div>
         )}
