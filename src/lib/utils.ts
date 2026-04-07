@@ -1,6 +1,5 @@
 import { clsx, type ClassValue } from 'clsx'
 import { format, parseISO, differenceInDays } from 'date-fns'
-import { th } from 'date-fns/locale'
 import type { Quotation } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
@@ -61,17 +60,19 @@ export function genChecklistNumber(existingNumbers: string[]): string {
 // ============================================================
 // Date & Format Helpers
 // ============================================================
+/** Format date as DD-MM-YYYY (e.g., "04-04-2026") */
 export function formatDate(dateStr: string): string {
   try {
-    return format(parseISO(dateStr), 'd MMM yyyy', { locale: th })
+    return format(parseISO(dateStr), 'dd-MM-yyyy')
   } catch {
     return dateStr
   }
 }
 
+/** Format date as DD-MM-YY (e.g., "04-04-26") */
 export function formatDateShort(dateStr: string): string {
   try {
-    return format(parseISO(dateStr), 'd MMM yy', { locale: th })
+    return format(parseISO(dateStr), 'dd-MM-yy')
   } catch {
     return dateStr
   }

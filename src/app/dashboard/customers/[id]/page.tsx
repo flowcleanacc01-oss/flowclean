@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatNumber, cn } from '@/lib/utils'
+import { formatCurrency, formatNumber, cn, formatDate } from '@/lib/utils'
 import {
   ArrowLeft, Building2, Phone, Mail, MapPin, FileText, CreditCard,
   Truck, Receipt, ClipboardCheck, TrendingUp, Package, AlertTriangle, Link2, ExternalLink,
@@ -210,7 +210,7 @@ export default function CustomerDetailPage() {
                 <div className="flex items-center gap-2 text-sm">
                   <span className="font-mono font-semibold text-emerald-700">{linkedQT.quotationNumber}</span>
                   <span className="text-slate-500">•</span>
-                  <span className="text-slate-600">{linkedQT.date}</span>
+                  <span className="text-slate-600">{formatDate(linkedQT.date)}</span>
                   <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">ตกลง</span>
                 </div>
                 <div className="border border-emerald-100 rounded-lg overflow-hidden">
@@ -289,7 +289,7 @@ export default function CustomerDetailPage() {
                     return (
                       <tr key={f.id} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="px-4 py-2 font-mono text-xs">{f.formNumber}</td>
-                        <td className="px-4 py-2 text-slate-600">{f.date}</td>
+                        <td className="px-4 py-2 text-slate-600">{formatDate(f.date)}</td>
                         <td className="px-4 py-2 text-center">
                           <span className={cn('text-xs px-2 py-0.5 rounded-full', sc.bgColor, sc.color)}>{sc.label}</span>
                         </td>
@@ -328,7 +328,7 @@ export default function CustomerDetailPage() {
                     return (
                       <tr key={d.id} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="px-4 py-2 font-mono text-xs">{d.noteNumber}</td>
-                        <td className="px-4 py-2 text-slate-600">{d.date}</td>
+                        <td className="px-4 py-2 text-slate-600">{formatDate(d.date)}</td>
                         <td className="px-4 py-2 text-center">
                           <div className="flex items-center justify-center gap-1">
                             {d.isPrinted && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">พิมพ์แล้ว</span>}
@@ -402,7 +402,7 @@ export default function CustomerDetailPage() {
                   {custTaxInv.slice(0, 10).map(t => (
                     <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="px-4 py-2 font-mono text-xs">{t.invoiceNumber}</td>
-                      <td className="px-4 py-2 text-slate-600">{t.issueDate}</td>
+                      <td className="px-4 py-2 text-slate-600">{formatDate(t.issueDate)}</td>
                       <td className="px-4 py-2 text-right font-medium">{formatCurrency(t.grandTotal)}</td>
                     </tr>
                   ))}
@@ -428,7 +428,7 @@ export default function CustomerDetailPage() {
                   {custChecklists.slice(0, 5).map(c => (
                     <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="px-4 py-2 font-mono text-xs">{c.checklistNumber}</td>
-                      <td className="px-4 py-2 text-slate-600">{c.date}</td>
+                      <td className="px-4 py-2 text-slate-600">{formatDate(c.date)}</td>
                       <td className="px-4 py-2">{c.type === 'qc' ? 'QC' : 'Loading'}</td>
                       <td className="px-4 py-2 text-xs">{c.status}</td>
                     </tr>
