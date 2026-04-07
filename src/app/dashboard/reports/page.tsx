@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatNumber, cn, buildPriceMapFromQT } from '@/lib/utils'
-import { FileDown, ExternalLink } from 'lucide-react'
+import { formatCurrency, formatNumber, cn, buildPriceMapFromQT, formatDate, todayISO, startOfMonthISO, endOfMonthISO } from '@/lib/utils'
+import { FileDown, ExternalLink, Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react'
 import ExportButtons from '@/components/ExportButtons'
 import Link from 'next/link'
 import MonthlySummaryGrid from '@/components/MonthlySummaryGrid'
@@ -11,11 +11,14 @@ import MonthlyDeliveryReportPrint from '@/components/MonthlyDeliveryReportPrint'
 import MonthlyStockReportPrint from '@/components/MonthlyStockReportPrint'
 import MonthlyConsolidationPrint from '@/components/MonthlyConsolidationPrint'
 import Modal from '@/components/Modal'
+import CarryOverAdjustModal from '@/components/CarryOverAdjustModal'
+import { CARRY_OVER_MODE_CONFIG, CARRY_OVER_REASON_CONFIG } from '@/types'
+import type { CarryOverMode, CarryOverAdjustment } from '@/types'
 
-type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'carryover' | 'delivery' | 'stock' | 'consolidation'
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation'
 
 export default function ReportsPage() {
-  const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations } = useStore()
+  const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations, carryOverAdjustments, deleteCarryOverAdjustment } = useStore()
   const [tab, setTab] = useState<TabKey>('monthly')
   const [showDeliveryPrint, setShowDeliveryPrint] = useState(false)
   const [showStockPrint, setShowStockPrint] = useState(false)
@@ -28,13 +31,22 @@ export default function ReportsPage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
 
+  // ---- Carry-over (51-53) state ----
+  const [coMode, setCoMode] = useState<CarryOverMode | 'compare'>(1)
+  const [coView, setCoView] = useState<'monthly' | 'yearly'>('monthly')
+  const [coStartDate, setCoStartDate] = useState(() => startOfMonthISO())
+  const [coEndDate, setCoEndDate] = useState(() => endOfMonthISO())
+  const [coShowAdjustments, setCoShowAdjustments] = useState(true)
+  const [coAdjustModalOpen, setCoAdjustModalOpen] = useState(false)
+  const [coEditingAdjustment, setCoEditingAdjustment] = useState<CarryOverAdjustment | undefined>(undefined)
+
   const activeCustomers = customers.filter(c => c.isActive)
   // Derive effective customer ID — validate against active list
   const selCustomerId = selCustomerIdRaw && activeCustomers.some(c => c.id === selCustomerIdRaw)
     ? selCustomerIdRaw
     : ''
   // For per-customer tabs, auto-select first customer
-  const perCustomerTabs: TabKey[] = ['monthly', 'delivery', 'stock', 'consolidation']
+  const perCustomerTabs: TabKey[] = ['monthly', 'delivery', 'stock', 'consolidation', 'carryover']
   const needsCustomer = perCustomerTabs.includes(tab) && !selCustomerId
 
   const tabs: { key: TabKey; label: string }[] = [
@@ -44,6 +56,7 @@ export default function ReportsPage() {
     { key: 'item', label: 'ตามสินค้า' },
     { key: 'pnl', label: 'กำไร-ขาดทุน' },
     { key: 'carryover', label: 'ผ้าค้าง' },
+    { key: 'discrepancy', label: 'ความแตกต่างการนับ' },
     { key: 'delivery', label: 'รายงานส่งของ' },
     { key: 'stock', label: 'สต็อกรายเดือน' },
     { key: 'consolidation', label: 'รวบเดือน' },
@@ -90,16 +103,209 @@ export default function ReportsPage() {
     return { revenue, totalExpense, profit: revenue - totalExpense }
   }, [billingStatements, expenses, selMonth])
 
-  // Carry-over per customer
-  const carryOverReport = useMemo(() => {
-    let list = customers.filter(c => c.isActive)
-    if (selCustomerId) list = list.filter(c => c.id === selCustomerId)
-    return list.map(c => {
-      const co = getCarryOver(c.id, '9999-12-31')
-      const total = Object.values(co).reduce((s, v) => s + v, 0)
-      return { customer: c, carryOver: co, total }
-    }).filter(r => r.total !== 0)
-  }, [customers, selCustomerId, getCarryOver])
+  // ============================================================
+  // Carry-over Report (51.1 + 51.2 + 52)
+  // ============================================================
+
+  /** Helper: get next-day ISO string (used for inclusive end-of-range carry-over) */
+  const nextDay = (iso: string): string => {
+    const d = new Date(iso)
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().slice(0, 10)
+  }
+
+  /** Get codes that have any LF activity for this customer in date range */
+  const coActiveCodes = useMemo(() => {
+    if (!selCustomerId) return [] as string[]
+    const codes = new Set<string>()
+    for (const f of linenForms) {
+      if (f.customerId !== selCustomerId) continue
+      if (f.date < coStartDate || f.date > coEndDate) continue
+      for (const r of f.rows) codes.add(r.code)
+    }
+    // Also include codes that have adjustments in range
+    for (const a of carryOverAdjustments) {
+      if (a.isDeleted || a.customerId !== selCustomerId) continue
+      if (a.date < coStartDate || a.date > coEndDate) continue
+      for (const it of a.items) codes.add(it.code)
+    }
+    // Sort by catalog order
+    const orderMap = new Map(linenCatalog.map((it, i) => [it.code, i]))
+    return [...codes].sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999))
+  }, [selCustomerId, linenForms, carryOverAdjustments, linenCatalog, coStartDate, coEndDate])
+
+  const itemNameMap = useMemo(
+    () => Object.fromEntries(linenCatalog.map(it => [it.code, it.name])),
+    [linenCatalog],
+  )
+
+  /** Compute per-day diff for one item code in current mode */
+  const computeDailyDiff = (customerId: string, code: string, day: string, mode: CarryOverMode): number => {
+    let diff = 0
+    for (const f of linenForms) {
+      if (f.customerId !== customerId || f.date !== day) continue
+      for (const r of f.rows) {
+        if (r.code !== code) continue
+        switch (mode) {
+          case 1: diff += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
+          case 2: diff += (r.col6_factoryPackSend || 0) - r.col2_hotelCountIn; break
+          case 3: diff += r.col4_factoryApproved - r.col5_factoryClaimApproved; break
+          case 4: diff += r.col4_factoryApproved - r.col2_hotelCountIn; break
+        }
+      }
+    }
+    // Add adjustments on this day (only adjust type, reset is handled by getCarryOver)
+    for (const a of carryOverAdjustments) {
+      if (a.isDeleted || a.customerId !== customerId || a.date !== day || a.type !== 'adjust') continue
+      if (!coShowAdjustments && !a.showInCustomerReport) continue
+      for (const it of a.items) {
+        if (it.code === code) diff += it.delta || 0
+      }
+    }
+    return diff
+  }
+
+  /** Generate days array between start and end (inclusive) */
+  const coDaysInRange = useMemo(() => {
+    if (coView !== 'monthly') return [] as string[]
+    const days: string[] = []
+    const start = new Date(coStartDate)
+    const end = new Date(coEndDate)
+    while (start <= end) {
+      days.push(start.toISOString().slice(0, 10))
+      start.setDate(start.getDate() + 1)
+    }
+    return days
+  }, [coStartDate, coEndDate, coView])
+
+  /** Generate months array (YYYY-MM) between start and end */
+  const coMonthsInRange = useMemo(() => {
+    if (coView !== 'yearly') return [] as string[]
+    const months: string[] = []
+    const start = new Date(coStartDate)
+    const end = new Date(coEndDate)
+    let y = start.getFullYear()
+    let m = start.getMonth()
+    while (y < end.getFullYear() || (y === end.getFullYear() && m <= end.getMonth())) {
+      months.push(`${y}-${String(m + 1).padStart(2, '0')}`)
+      m++
+      if (m > 11) { m = 0; y++ }
+    }
+    return months
+  }, [coStartDate, coEndDate, coView])
+
+  /** Carry-over balance "ยกมา" (before start date) for each item */
+  const coBroughtForward = useMemo(() => {
+    if (!selCustomerId) return {} as Record<string, number>
+    if (coMode === 'compare') return {} as Record<string, number>
+    return getCarryOver(selCustomerId, coStartDate, coMode, coShowAdjustments)
+  }, [selCustomerId, coStartDate, coMode, getCarryOver, coShowAdjustments])
+
+  /** Carry-over balance "สะสม" (after end date) — used for ยอดสุดท้าย */
+  const coCarriedAfter = useMemo(() => {
+    if (!selCustomerId) return {} as Record<string, number>
+    if (coMode === 'compare') return {} as Record<string, number>
+    return getCarryOver(selCustomerId, nextDay(coEndDate), coMode, coShowAdjustments)
+  }, [selCustomerId, coEndDate, coMode, getCarryOver, coShowAdjustments])
+
+  /** For "compare" mode: balance for all 4 modes at end of range */
+  const coCompareValues = useMemo(() => {
+    if (!selCustomerId || coMode !== 'compare') return null
+    const end = nextDay(coEndDate)
+    return {
+      1: getCarryOver(selCustomerId, end, 1, coShowAdjustments),
+      2: getCarryOver(selCustomerId, end, 2, coShowAdjustments),
+      3: getCarryOver(selCustomerId, end, 3, coShowAdjustments),
+      4: getCarryOver(selCustomerId, end, 4, coShowAdjustments),
+    } as Record<CarryOverMode, Record<string, number>>
+  }, [selCustomerId, coMode, coEndDate, getCarryOver, coShowAdjustments])
+
+  // ============================================================
+  // Discrepancy Analytics (53.1) — ความแตกต่างการนับ
+  // ============================================================
+
+  /**
+   * วิเคราะห์ "นับไม่ตรง" จาก LF ในเดือนที่เลือก:
+   * - Type 1: col5 (โรงซักนับเข้า) ≠ col2+col3 (ลูกค้านับส่ง+เคลม)
+   * - Type 2: col4 (ลูกค้านับกลับ) ≠ col6 (โรงซักแพคส่ง)
+   */
+  const discrepancyAnalytics = useMemo(() => {
+    const monthForms = linenForms.filter(f => f.date.startsWith(selMonth))
+
+    // Per-customer counts
+    const custCount: Record<string, { name: string; type1: number; type2: number; total: number }> = {}
+    // Per-item counts
+    const itemCount: Record<string, { type1: number; type2: number; total: number }> = {}
+    // col6 != col4 (ลูกค้านับกลับไม่ตรงแพคส่ง) — case where we may need to fix col6
+    let col6col4Mismatch = 0
+    const col6col4Customers: Record<string, number> = {}
+
+    for (const f of monthForms) {
+      const cust = getCustomer(f.customerId)
+      if (!cust) continue
+      if (!custCount[f.customerId]) {
+        custCount[f.customerId] = { name: cust.shortName || cust.name, type1: 0, type2: 0, total: 0 }
+      }
+      for (const r of f.rows) {
+        const expected12 = r.col2_hotelCountIn + r.col3_hotelClaimCount
+        const countIn = r.col5_factoryClaimApproved
+        const packSend = r.col6_factoryPackSend || 0
+        const countBack = r.col4_factoryApproved
+
+        // Type 1: col5 ≠ col2+col3
+        if (countIn > 0 && countIn !== expected12) {
+          custCount[f.customerId].type1++
+          custCount[f.customerId].total++
+          if (!itemCount[r.code]) itemCount[r.code] = { type1: 0, type2: 0, total: 0 }
+          itemCount[r.code].type1++
+          itemCount[r.code].total++
+        }
+        // Type 2: col4 ≠ col6
+        if (countBack > 0 && packSend > 0 && countBack !== packSend) {
+          custCount[f.customerId].type2++
+          custCount[f.customerId].total++
+          if (!itemCount[r.code]) itemCount[r.code] = { type1: 0, type2: 0, total: 0 }
+          itemCount[r.code].type2++
+          itemCount[r.code].total++
+          col6col4Mismatch++
+          col6col4Customers[f.customerId] = (col6col4Customers[f.customerId] || 0) + 1
+        }
+      }
+    }
+
+    const topCustomers = Object.entries(custCount)
+      .map(([id, data]) => ({ id, ...data }))
+      .filter(c => c.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10)
+
+    const topItems = Object.entries(itemCount)
+      .map(([code, data]) => ({ code, name: itemNameMap[code] || code, ...data }))
+      .filter(i => i.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10)
+
+    const topCol6Customers = Object.entries(col6col4Customers)
+      .map(([id, count]) => ({ id, name: getCustomer(id)?.shortName || getCustomer(id)?.name || id, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
+
+    return { topCustomers, topItems, col6col4Mismatch, topCol6Customers }
+  }, [linenForms, selMonth, getCustomer, itemNameMap])
+
+  /** Adjustment records for this customer in date range (for history display) */
+  const coAdjustmentsInRange = useMemo(() => {
+    if (!selCustomerId) return [] as CarryOverAdjustment[]
+    return carryOverAdjustments
+      .filter(a =>
+        !a.isDeleted &&
+        a.customerId === selCustomerId &&
+        a.date >= coStartDate &&
+        a.date <= coEndDate &&
+        (coShowAdjustments || a.showInCustomerReport)
+      )
+      .sort((a, b) => b.date.localeCompare(a.date))
+  }, [carryOverAdjustments, selCustomerId, coStartDate, coEndDate, coShowAdjustments])
 
   if (currentUser?.role !== 'admin') {
     return (
@@ -129,7 +335,7 @@ export default function ReportsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
-        {(tab === 'monthly' || tab === 'delivery' || tab === 'stock' || tab === 'consolidation' || tab === 'revenue' || tab === 'carryover') && (
+        {(tab === 'monthly' || tab === 'delivery' || tab === 'stock' || tab === 'consolidation' || tab === 'revenue' || tab === 'carryover' || tab === 'discrepancy') && (
           <div className="flex items-center gap-2">
             <select value={selCustomerId} onChange={e => setSelCustomerId(e.target.value)}
               className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
@@ -277,38 +483,410 @@ export default function ReportsPage() {
       )}
 
       {/* Carry-over Tab */}
-      {tab === 'carryover' && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-4 py-3 font-medium text-slate-600">โรงแรม</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">รายการผ้าค้าง</th>
-                <th className="text-right px-4 py-3 font-medium text-slate-600">รวม (ชิ้น)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {carryOverReport.length === 0 ? (
-                <tr><td colSpan={3} className="text-center py-8 text-slate-400">ไม่มีผ้าค้าง</td></tr>
-              ) : carryOverReport.map(r => (
-                <tr key={r.customer.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <Link href={`/dashboard/customers/${r.customer.id}`} className="font-medium text-slate-800 hover:text-[#1B3A5C] hover:underline">{r.customer.shortName || r.customer.name}</Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {Object.entries(r.carryOver).map(([code, qty]) => (
-                        <span key={code} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
-                          {code} x{qty}
+      {tab === 'carryover' && selCustomer && (
+        <div className="space-y-4">
+          {/* Filter Bar */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              {/* Mode selector */}
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-slate-600">อ้างอิง:</span>
+                <select value={coMode} onChange={e => setCoMode(e.target.value === 'compare' ? 'compare' : Number(e.target.value) as CarryOverMode)}
+                  className="px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]">
+                  {([1, 2, 3, 4] as CarryOverMode[]).map(m => (
+                    <option key={m} value={m}>เคส {m}: {CARRY_OVER_MODE_CONFIG[m].formula}</option>
+                  ))}
+                  <option value="compare">เปรียบเทียบทุกเคส (1-4)</option>
+                </select>
+              </div>
+
+              {/* View toggle */}
+              {coMode !== 'compare' && (
+                <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5">
+                  <button onClick={() => setCoView('monthly')}
+                    className={cn('px-3 py-1 rounded transition-colors', coView === 'monthly' ? 'bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'text-slate-600')}>
+                    รายเดือน (รายวัน)
+                  </button>
+                  <button onClick={() => setCoView('yearly')}
+                    className={cn('px-3 py-1 rounded transition-colors', coView === 'yearly' ? 'bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'text-slate-600')}>
+                    รายปี (รายเดือน)
+                  </button>
+                </div>
+              )}
+
+              {/* Date range */}
+              <div className="flex items-center gap-2">
+                <input type="date" value={coStartDate} onChange={e => setCoStartDate(e.target.value)}
+                  className="px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+                <span className="text-slate-400">ถึง</span>
+                <input type="date" value={coEndDate} onChange={e => setCoEndDate(e.target.value)}
+                  className="px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+              </div>
+
+              {/* Show adjustments toggle */}
+              <button onClick={() => setCoShowAdjustments(v => !v)}
+                className={cn('flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors',
+                  coShowAdjustments ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500')}>
+                {coShowAdjustments ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                {coShowAdjustments ? 'แสดง' : 'ซ่อน'}รายการปรับยอด
+              </button>
+
+              {/* Adjust button */}
+              <button onClick={() => { setCoEditingAdjustment(undefined); setCoAdjustModalOpen(true) }}
+                className="ml-auto px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] flex items-center gap-1 font-semibold">
+                <Plus className="w-3.5 h-3.5" />ปรับยอด
+              </button>
+            </div>
+
+            {coMode !== 'compare' && (
+              <div className="text-[11px] text-slate-500">
+                {CARRY_OVER_MODE_CONFIG[coMode as CarryOverMode].description}
+              </div>
+            )}
+          </div>
+
+          {/* Compare Mode — แสดง 4 เคสคู่กัน */}
+          {coMode === 'compare' && coCompareValues && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-medium text-slate-600">รายการ</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-24">เคส 1</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-24">เคส 2</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-24">เคส 3</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-24">เคส 4</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coActiveCodes.length === 0 ? (
+                    <tr><td colSpan={5} className="text-center py-8 text-slate-400">ไม่มีรายการในช่วงเวลานี้</td></tr>
+                  ) : coActiveCodes.map(code => {
+                    const v1 = coCompareValues[1][code] || 0
+                    const v2 = coCompareValues[2][code] || 0
+                    const v3 = coCompareValues[3][code] || 0
+                    const v4 = coCompareValues[4][code] || 0
+                    return (
+                      <tr key={code} className="border-t border-slate-100">
+                        <td className="px-4 py-2">
+                          <span className="font-mono text-slate-400 mr-1.5">{code}</span>
+                          <span className="text-slate-700">{itemNameMap[code]}</span>
+                        </td>
+                        <td className={cn('text-right px-4 py-2 font-mono', v1 < 0 ? 'text-red-600' : v1 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v1 > 0 ? '+' : ''}{v1}</td>
+                        <td className={cn('text-right px-4 py-2 font-mono', v2 < 0 ? 'text-red-600' : v2 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v2 > 0 ? '+' : ''}{v2}</td>
+                        <td className={cn('text-right px-4 py-2 font-mono', v3 < 0 ? 'text-red-600' : v3 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v3 > 0 ? '+' : ''}{v3}</td>
+                        <td className={cn('text-right px-4 py-2 font-mono', v4 < 0 ? 'text-red-600' : v4 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v4 > 0 ? '+' : ''}{v4}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Monthly View (51.1) — รายการ=row, day=col */}
+          {coMode !== 'compare' && coView === 'monthly' && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+              <table className="text-xs">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600 sticky left-0 bg-slate-50 z-10">รายการ</th>
+                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-14">ยกมา</th>
+                    {coDaysInRange.map(day => (
+                      <th key={day} className="text-right px-2 py-2 font-medium text-slate-600 w-12">{parseInt(day.split('-')[2])}</th>
+                    ))}
+                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-14 bg-slate-100">รวม</th>
+                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-14 bg-slate-100">สะสม</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coActiveCodes.length === 0 ? (
+                    <tr><td colSpan={coDaysInRange.length + 4} className="text-center py-8 text-slate-400">ไม่มีรายการในช่วงเวลานี้</td></tr>
+                  ) : coActiveCodes.map(code => {
+                    const brought = coBroughtForward[code] || 0
+                    const carried = coCarriedAfter[code] || 0
+                    const monthTotal = carried - brought
+                    return (
+                      <tr key={code} className="border-t border-slate-100">
+                        <td className="px-3 py-1.5 sticky left-0 bg-white z-10">
+                          <span className="font-mono text-slate-400 mr-1">{code}</span>
+                          <span className="text-slate-700">{itemNameMap[code]}</span>
+                        </td>
+                        <td className={cn('text-right px-2 py-1.5 font-mono', brought < 0 ? 'text-red-600' : brought > 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                          {brought > 0 ? '+' : ''}{brought}
+                        </td>
+                        {coDaysInRange.map(day => {
+                          const d = computeDailyDiff(selCustomerId, code, day, coMode as CarryOverMode)
+                          return (
+                            <td key={day} className={cn('text-right px-2 py-1.5 font-mono', d < 0 ? 'text-red-600' : d > 0 ? 'text-emerald-600' : 'text-slate-300')}>
+                              {d === 0 ? '·' : (d > 0 ? '+' : '') + d}
+                            </td>
+                          )
+                        })}
+                        <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50', monthTotal < 0 ? 'text-red-600' : monthTotal > 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                          {monthTotal > 0 ? '+' : ''}{monthTotal}
+                        </td>
+                        <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50 font-semibold', carried < 0 ? 'text-red-600' : carried > 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                          {carried > 0 ? '+' : ''}{carried}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Yearly View (51.2) — รายการ=row, month=col */}
+          {coMode !== 'compare' && coView === 'yearly' && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+              <table className="text-xs">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600 sticky left-0 bg-slate-50 z-10">รายการ</th>
+                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-16">ยกมา</th>
+                    {coMonthsInRange.map(month => (
+                      <th key={month} className="text-right px-2 py-2 font-medium text-slate-600 w-16">{month.slice(5)}/{month.slice(2, 4)}</th>
+                    ))}
+                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-16 bg-slate-100">รวม</th>
+                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-16 bg-slate-100">สะสม</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coActiveCodes.length === 0 ? (
+                    <tr><td colSpan={coMonthsInRange.length + 4} className="text-center py-8 text-slate-400">ไม่มีรายการในช่วงเวลานี้</td></tr>
+                  ) : coActiveCodes.map(code => {
+                    const brought = coBroughtForward[code] || 0
+                    const carried = coCarriedAfter[code] || 0
+                    const yearTotal = carried - brought
+                    return (
+                      <tr key={code} className="border-t border-slate-100">
+                        <td className="px-3 py-1.5 sticky left-0 bg-white z-10">
+                          <span className="font-mono text-slate-400 mr-1">{code}</span>
+                          <span className="text-slate-700">{itemNameMap[code]}</span>
+                        </td>
+                        <td className={cn('text-right px-2 py-1.5 font-mono', brought < 0 ? 'text-red-600' : brought > 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                          {brought > 0 ? '+' : ''}{brought}
+                        </td>
+                        {coMonthsInRange.map(month => {
+                          // Sum daily diffs for this month
+                          let monthSum = 0
+                          for (const f of linenForms) {
+                            if (f.customerId !== selCustomerId || !f.date.startsWith(month)) continue
+                            for (const r of f.rows) {
+                              if (r.code !== code) continue
+                              const m = coMode as CarryOverMode
+                              switch (m) {
+                                case 1: monthSum += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
+                                case 2: monthSum += (r.col6_factoryPackSend || 0) - r.col2_hotelCountIn; break
+                                case 3: monthSum += r.col4_factoryApproved - r.col5_factoryClaimApproved; break
+                                case 4: monthSum += r.col4_factoryApproved - r.col2_hotelCountIn; break
+                              }
+                            }
+                          }
+                          // Add adjustments in this month
+                          for (const a of carryOverAdjustments) {
+                            if (a.isDeleted || a.customerId !== selCustomerId || !a.date.startsWith(month) || a.type !== 'adjust') continue
+                            if (!coShowAdjustments && !a.showInCustomerReport) continue
+                            for (const it of a.items) {
+                              if (it.code === code) monthSum += it.delta || 0
+                            }
+                          }
+                          return (
+                            <td key={month} className={cn('text-right px-2 py-1.5 font-mono', monthSum < 0 ? 'text-red-600' : monthSum > 0 ? 'text-emerald-600' : 'text-slate-300')}>
+                              {monthSum === 0 ? '·' : (monthSum > 0 ? '+' : '') + monthSum}
+                            </td>
+                          )
+                        })}
+                        <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50', yearTotal < 0 ? 'text-red-600' : yearTotal > 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                          {yearTotal > 0 ? '+' : ''}{yearTotal}
+                        </td>
+                        <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50 font-semibold', carried < 0 ? 'text-red-600' : carried > 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                          {carried > 0 ? '+' : ''}{carried}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Adjustments History */}
+          {coShowAdjustments && coAdjustmentsInRange.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+                <h3 className="text-sm font-semibold text-slate-700">รายการปรับยอดในช่วงเวลานี้ ({coAdjustmentsInRange.length})</h3>
+              </div>
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">วันที่</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">ประเภท</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">รายการ</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">หมวด</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">เหตุผล</th>
+                    <th className="text-center px-3 py-2 font-medium text-slate-600">แสดงลูกค้า</th>
+                    <th className="text-right px-3 py-2 font-medium text-slate-600 w-16"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coAdjustmentsInRange.map(a => (
+                    <tr key={a.id} className="border-t border-slate-100 hover:bg-slate-50">
+                      <td className="px-3 py-2 font-mono text-slate-600">{formatDate(a.date)}</td>
+                      <td className="px-3 py-2">
+                        <span className={cn('inline-block px-2 py-0.5 rounded font-medium',
+                          a.type === 'reset' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700')}>
+                          {a.type === 'reset' ? 'Reset' : 'Adjust'}
                         </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium text-amber-700">{r.total}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          {a.items.map(it => (
+                            <span key={it.code} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">
+                              {it.code}{a.type === 'adjust' && it.delta !== 0 ? ` ${it.delta > 0 ? '+' : ''}${it.delta}` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">{CARRY_OVER_REASON_CONFIG[a.reasonCategory].icon} {CARRY_OVER_REASON_CONFIG[a.reasonCategory].label}</td>
+                      <td className="px-3 py-2 text-slate-600 max-w-xs truncate" title={a.reason}>{a.reason}</td>
+                      <td className="px-3 py-2 text-center">
+                        {a.showInCustomerReport ? <Eye className="w-3.5 h-3.5 inline text-emerald-600" /> : <EyeOff className="w-3.5 h-3.5 inline text-slate-300" />}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="flex justify-end gap-1">
+                          <button onClick={() => { setCoEditingAdjustment(a); setCoAdjustModalOpen(true) }}
+                            className="p-1 text-slate-400 hover:text-[#1B3A5C]" title="แก้ไข">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => { if (confirm(`ลบรายการปรับยอดวันที่ ${formatDate(a.date)} ?`)) deleteCarryOverAdjustment(a.id) }}
+                            className="p-1 text-slate-400 hover:text-red-600" title="ลบ">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Discrepancy Analytics Tab (53.1) */}
+      {tab === 'discrepancy' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-sm text-slate-600">
+              วิเคราะห์ความถี่ของการนับไม่ตรงในเดือน <strong>{selMonth}</strong> — แสดง 2 type:
+            </p>
+            <ul className="text-xs text-slate-500 mt-2 space-y-1 ml-4 list-disc">
+              <li><strong>Type 1:</strong> โรงซักนับเข้า (col5) ≠ ลูกค้านับส่ง+เคลม (col2+col3) — ตรวจตอนรับผ้า</li>
+              <li><strong>Type 2:</strong> ลูกค้านับกลับ (col4) ≠ โรงซักแพคส่ง (col6) — ตรวจตอนคืนผ้า</li>
+            </ul>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Top Customers */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+                <h3 className="text-sm font-semibold text-slate-700">Top 10 ลูกค้านับไม่ตรง</h3>
+              </div>
+              {discrepancyAnalytics.topCustomers.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-sm">ไม่พบความแตกต่างการนับ</div>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600 w-8">#</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
+                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-16">Type 1</th>
+                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-16">Type 2</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600 w-16">รวม</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {discrepancyAnalytics.topCustomers.map((c, i) => (
+                      <tr key={c.id} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="px-3 py-2 text-slate-400 font-mono">{i + 1}</td>
+                        <td className="px-3 py-2">
+                          <Link href={`/dashboard/customers/${c.id}`} className="text-slate-700 hover:text-[#1B3A5C] hover:underline">{c.name}</Link>
+                        </td>
+                        <td className="text-right px-2 py-2 font-mono text-amber-600">{c.type1}</td>
+                        <td className="text-right px-2 py-2 font-mono text-orange-600">{c.type2}</td>
+                        <td className="text-right px-3 py-2 font-mono font-semibold text-slate-800">{c.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Top Items */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+                <h3 className="text-sm font-semibold text-slate-700">Top 10 รายการผ้านับไม่ตรง</h3>
+              </div>
+              {discrepancyAnalytics.topItems.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-sm">ไม่พบความแตกต่างการนับ</div>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600 w-8">#</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">รายการ</th>
+                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-16">Type 1</th>
+                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-16">Type 2</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600 w-16">รวม</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {discrepancyAnalytics.topItems.map((it, i) => (
+                      <tr key={it.code} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="px-3 py-2 text-slate-400 font-mono">{i + 1}</td>
+                        <td className="px-3 py-2">
+                          <span className="font-mono text-slate-400 mr-1">{it.code}</span>
+                          <span className="text-slate-700">{it.name}</span>
+                        </td>
+                        <td className="text-right px-2 py-2 font-mono text-amber-600">{it.type1}</td>
+                        <td className="text-right px-2 py-2 font-mono text-orange-600">{it.type2}</td>
+                        <td className="text-right px-3 py-2 font-mono font-semibold text-slate-800">{it.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {/* col4 ≠ col6 Summary */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-2">สรุป Type 2: ลูกค้านับกลับ ≠ โรงซักแพคส่ง</h3>
+            <p className="text-xs text-slate-500 mb-3">
+              เคสที่ "ลูกค้านับผ้ากลับ" ไม่ตรงกับ "โรงซักแพคส่ง" — ทางโรงซักอาจต้องตรวจสอบและแก้ col6 ตามความเป็นจริง
+            </p>
+            <div className="flex items-center gap-6">
+              <div>
+                <p className="text-2xl font-bold text-orange-600">{discrepancyAnalytics.col6col4Mismatch}</p>
+                <p className="text-xs text-slate-500">ครั้งทั้งหมด เดือนนี้</p>
+              </div>
+              {discrepancyAnalytics.topCol6Customers.length > 0 && (
+                <div className="flex-1 border-l border-slate-200 pl-6">
+                  <p className="text-xs font-medium text-slate-600 mb-1">ลูกค้าที่นับไม่ตรงบ่อย:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {discrepancyAnalytics.topCol6Customers.map(c => (
+                      <Link key={c.id} href={`/dashboard/customers/${c.id}`}
+                        className="text-xs bg-orange-50 text-orange-700 px-2 py-1 rounded hover:bg-orange-100">
+                        {c.name} <span className="font-mono">({c.count})</span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -550,6 +1128,17 @@ export default function ReportsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Carry-over Adjust Modal */}
+      {selCustomer && (
+        <CarryOverAdjustModal
+          open={coAdjustModalOpen}
+          onClose={() => { setCoAdjustModalOpen(false); setCoEditingAdjustment(undefined) }}
+          customerId={selCustomer.id}
+          customerName={selCustomer.shortName || selCustomer.name}
+          editing={coEditingAdjustment}
+        />
+      )}
     </div>
   )
 }

@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 import type {
   Customer, LinenForm, DeliveryNote, BillingStatement, TaxInvoice,
   Quotation, Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
-  CustomerCategoryDef, ProductChecklist, AuditLog,
+  CustomerCategoryDef, ProductChecklist, AuditLog, CarryOverAdjustment,
 } from '@/types'
 
 // ============================================================
@@ -125,6 +125,10 @@ const FIELD_MAP: Record<string, string> = {
   entityType: 'entity_type',
   entityId: 'entity_id',
   entityLabel: 'entity_label',
+  // Carry-over adjustments
+  reasonCategory: 'reason_category',
+  showInCustomerReport: 'show_in_customer_report',
+  isDeleted: 'is_deleted',
 }
 
 // Reverse map: snake_case → camelCase
@@ -538,6 +542,32 @@ export async function deleteChecklistDB(id: string): Promise<void> {
 }
 
 // ============================================================
+// Carry-over Adjustments (51-53)
+// ============================================================
+
+export async function fetchCarryOverAdjustments(): Promise<CarryOverAdjustment[]> {
+  const { data, error } = await supabase
+    .from('carry_over_adjustments')
+    .select('*')
+    .order('date', { ascending: false })
+  if (error) throw error
+  return toCamelCaseArray<CarryOverAdjustment>(data || [])
+}
+
+export async function insertCarryOverAdjustment(adj: CarryOverAdjustment): Promise<void> {
+  await dbWrite({ table: 'carry_over_adjustments', operation: 'insert', data: toSnakeCase(adj as unknown as Record<string, unknown>) })
+}
+
+export async function updateCarryOverAdjustmentDB(id: string, updates: Partial<CarryOverAdjustment>): Promise<void> {
+  await dbWrite({ table: 'carry_over_adjustments', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
+}
+
+export async function deleteCarryOverAdjustmentDB(id: string): Promise<void> {
+  // Soft delete: set is_deleted = true (not actual delete)
+  await dbWrite({ table: 'carry_over_adjustments', operation: 'update', data: { is_deleted: true }, match: { column: 'id', value: id } })
+}
+
+// ============================================================
 // Default Prices — stored as linen_items.default_price
 // ============================================================
 
@@ -582,6 +612,7 @@ export async function fetchAllData() {
     fetchChecklists(),
     fetchLinenCategories(),
     fetchCustomerCategories().catch(() => [] as CustomerCategoryDef[]),
+    fetchCarryOverAdjustments().catch(() => [] as CarryOverAdjustment[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -591,6 +622,7 @@ export async function fetchAllData() {
     customers, linenForms, deliveryNotes, billingStatements,
     taxInvoices, quotations, expenses, users, companyInfo,
     linenItems, checklists, linenCategories, customerCategories,
+    carryOverAdjustments,
   ] = [
     val(results[0], [] as Customer[]),
     val(results[1], [] as LinenForm[]),
@@ -605,6 +637,7 @@ export async function fetchAllData() {
     val(results[10], [] as ProductChecklist[]),
     val(results[11], [] as LinenCategoryDef[]),
     val(results[12], [] as CustomerCategoryDef[]),
+    val(results[13], [] as CarryOverAdjustment[]),
   ]
 
   return {
@@ -621,5 +654,6 @@ export async function fetchAllData() {
     checklists,
     linenCategories,
     customerCategories,
+    carryOverAdjustments,
   }
 }

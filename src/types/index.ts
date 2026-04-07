@@ -520,3 +520,71 @@ export interface ProductChecklist {
   createdBy: string
   updatedAt: string
 }
+
+// ============================================================
+// Carry-over Adjustment (51-53)
+// ============================================================
+
+/**
+ * Mode สำหรับคำนวณ carry-over (4 เคส)
+ * 1: col6_แพคส่ง − col5_โรงซักนับเข้า    (default, ใช้เปิดบิล)
+ * 2: col6_แพคส่ง − col2_ลูกค้านับส่ง
+ * 3: col4_ลูกค้านับกลับ − col5_โรงซักนับเข้า  (cross check, fair ที่สุด)
+ * 4: col4_ลูกค้านับกลับ − col2_ลูกค้านับส่ง
+ */
+export type CarryOverMode = 1 | 2 | 3 | 4
+
+export const CARRY_OVER_MODE_CONFIG: Record<CarryOverMode, { label: string; short: string; formula: string; description: string }> = {
+  1: { label: 'แพคส่ง − โรงซักนับเข้า', short: 'เคส 1', formula: 'col6 − col5', description: 'เชื่อใจฝั่งโรงซักล้วน (ใช้เปิดบิล)' },
+  2: { label: 'แพคส่ง − ลูกค้านับส่ง', short: 'เคส 2', formula: 'col6 − col2', description: 'เชื่อ 2 ฝั่ง (คนนับส่ง)' },
+  3: { label: 'ลูกค้านับกลับ − โรงซักนับเข้า', short: 'เคส 3', formula: 'col4 − col5', description: 'cross check / นับทวน — fair ที่สุด' },
+  4: { label: 'ลูกค้านับกลับ − ลูกค้านับส่ง', short: 'เคส 4', formula: 'col4 − col2', description: 'เชื่อใจฝั่งลูกค้าล้วน' },
+}
+
+export type CarryOverAdjustmentType = 'adjust' | 'reset'
+
+export type CarryOverReasonCategory = 'compensation' | 'human_error' | 'system_correction' | 'other'
+
+export const CARRY_OVER_REASON_CONFIG: Record<CarryOverReasonCategory, { label: string; icon: string }> = {
+  compensation: { label: 'ชดเชย/คืนผ้า', icon: '💰' },
+  human_error: { label: 'แก้ไข human error', icon: '✏️' },
+  system_correction: { label: 'แก้ไขระบบ/เริ่มใหม่', icon: '🔄' },
+  other: { label: 'อื่นๆ', icon: '📝' },
+}
+
+export interface CarryOverAdjustmentItem {
+  code: string  // รหัสรายการผ้า
+  delta: number // delta สำหรับ adjust (+/-) — สำหรับ reset = 0 (unused)
+}
+
+export interface CarryOverAdjustmentHistory {
+  editedAt: string
+  editedBy: string
+  changes: string  // human-readable summary ของการเปลี่ยนแปลง
+}
+
+/**
+ * CarryOverAdjustment — ปรับยอดผ้าค้าง/คืน
+ *
+ * type='adjust': delta apply กับทุกเคสเท่ากัน — ยังเห็น human error ของเคสอื่น
+ * type='reset':  overwrite ทุกเคสเป็น 0 (checkpoint) — ล้าง human error สะสมหมด
+ *
+ * ตอนคำนวณ getCarryOver():
+ * - หา reset ล่าสุดของ item code → ถ้ามี ignore LF + adjustments ก่อนวัน reset
+ * - คำนวณตาม mode (1-4) จาก LF หลัง reset + บวก adjustments หลัง reset
+ */
+export interface CarryOverAdjustment {
+  id: string
+  customerId: string
+  date: string                          // วันที่ apply (YYYY-MM-DD)
+  type: CarryOverAdjustmentType
+  items: CarryOverAdjustmentItem[]      // adjust: delta = +/-, reset: delta = 0 (unused)
+  reasonCategory: CarryOverReasonCategory
+  reason: string                        // เหตุผลละเอียด
+  showInCustomerReport: boolean         // แสดงในรายงานลูกค้าไหม (toggle ในรายงาน)
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  history: CarryOverAdjustmentHistory[] // Option B: edit history
+  isDeleted: boolean                    // soft delete
+}

@@ -6,6 +6,7 @@ const ALLOWED_TABLES = new Set([
   'linen_forms', 'delivery_notes', 'billing_statements',
   'tax_invoices', 'quotations', 'product_checklists',
   'expenses', 'audit_logs', 'customer_categories',
+  'carry_over_adjustments',
 ])
 
 interface DbRequest {

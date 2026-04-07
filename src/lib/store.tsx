@@ -7,6 +7,7 @@ import type {
   Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
   CustomerCategoryDef, ProductChecklist, ChecklistStatus,
   AuditAction, AuditEntityType, AuditLog,
+  CarryOverAdjustment, CarryOverMode, CarryOverAdjustmentHistory,
 } from '@/types'
 import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES, DEFAULT_CUSTOMER_CATEGORIES } from '@/types'
 import {
@@ -118,8 +119,14 @@ interface StoreContextType {
   updateChecklistStatus: (id: string, status: ChecklistStatus) => void
   deleteChecklist: (id: string) => void
 
+  // Carry-over Adjustments (51-53)
+  carryOverAdjustments: CarryOverAdjustment[]
+  addCarryOverAdjustment: (adj: Omit<CarryOverAdjustment, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'history' | 'isDeleted'>) => CarryOverAdjustment
+  updateCarryOverAdjustment: (id: string, updates: Partial<Omit<CarryOverAdjustment, 'id' | 'createdAt' | 'createdBy'>>, changeNote?: string) => void
+  deleteCarryOverAdjustment: (id: string) => void
+
   // Computed helpers
-  getCarryOver: (customerId: string, beforeDate: string) => Record<string, number>
+  getCarryOver: (customerId: string, beforeDate: string, mode?: CarryOverMode, includeHidden?: boolean) => Record<string, number>
   getDiscrepancies: (formId: string) => Record<string, number>
 }
 
@@ -167,6 +174,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [linenCategories, setLinenCategories] = useState<LinenCategoryDef[]>(DEFAULT_LINEN_CATEGORIES)
   const [customerCategories, setCustomerCategories] = useState<CustomerCategoryDef[]>(DEFAULT_CUSTOMER_CATEGORIES)
   const [checklists, setChecklists] = useState<ProductChecklist[]>([])
+  const [carryOverAdjustments, setCarryOverAdjustments] = useState<CarryOverAdjustment[]>([])
   const [loaded, setLoaded] = useState(false)
   const seeded = useRef(false)
   const currentUserRef = useRef<AppUser | null>(null)
@@ -285,6 +293,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setCustomerCategories(data.customerCategories.length > 0 ? data.customerCategories : DEFAULT_CUSTOMER_CATEGORIES)
       }
       setChecklists(data.checklists)
+      setCarryOverAdjustments(data.carryOverAdjustments || [])
 
       // Build defaultPrices from linenItems
       if (data.linenItems.length > 0) {
@@ -802,27 +811,134 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dbSave(db.deleteChecklistDB(id))
   }, [logAudit])
 
+  // ---- Carry-over Adjustments (51-53) ----
+  const addCarryOverAdjustment = useCallback((adj: Omit<CarryOverAdjustment, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'history' | 'isDeleted'>): CarryOverAdjustment => {
+    const now = new Date().toISOString()
+    const newAdj: CarryOverAdjustment = {
+      ...adj,
+      id: genId(),
+      createdBy: currentUserRef.current?.id || 'unknown',
+      createdAt: now,
+      updatedAt: now,
+      history: [],
+      isDeleted: false,
+    }
+    setCarryOverAdjustments(prev => [newAdj, ...prev])
+    dbSave(db.insertCarryOverAdjustment(newAdj), () => {
+      setCarryOverAdjustments(prev => prev.filter(x => x.id !== newAdj.id))
+    })
+    logAudit('create', 'customer', newAdj.id, `${adj.type === 'reset' ? 'Reset' : 'Adjust'} ${adj.items.length} รายการ`, adj.reason)
+    return newAdj
+  }, [logAudit])
+
+  const updateCarryOverAdjustment = useCallback((id: string, updates: Partial<Omit<CarryOverAdjustment, 'id' | 'createdAt' | 'createdBy'>>, changeNote?: string) => {
+    const now = new Date().toISOString()
+    const user = currentUserRef.current
+    setCarryOverAdjustments(prev => prev.map(x => {
+      if (x.id !== id) return x
+      // Build history entry (Option B: edit log)
+      const historyEntry: CarryOverAdjustmentHistory = {
+        editedAt: now,
+        editedBy: user?.name || 'unknown',
+        changes: changeNote || 'แก้ไขข้อมูล',
+      }
+      const updated = { ...x, ...updates, updatedAt: now, history: [...x.history, historyEntry] }
+      // Persist (fire-and-forget)
+      dbSave(db.updateCarryOverAdjustmentDB(id, { ...updates, updatedAt: now, history: updated.history }))
+      return updated
+    }))
+    logAudit('update', 'customer', id, `แก้ไขรายการปรับยอด`, changeNote || '')
+  }, [logAudit])
+
+  const deleteCarryOverAdjustment = useCallback((id: string) => {
+    // Soft delete: mark isDeleted = true
+    setCarryOverAdjustments(prev => prev.map(x => x.id === id ? { ...x, isDeleted: true } : x))
+    dbSave(db.deleteCarryOverAdjustmentDB(id))
+    logAudit('delete', 'customer', id, 'ลบรายการปรับยอด')
+  }, [logAudit])
+
   // ---- Computed Helpers ----
-  const getCarryOver = useCallback((customerId: string, beforeDate: string): Record<string, number> => {
+
+  /**
+   * คำนวณ carry-over (ค้าง/คืน) สะสมของลูกค้า ก่อนวันที่ที่กำหนด
+   *
+   * Mode (4 เคส):
+   *   1: col6_แพคส่ง − col5_โรงซักนับเข้า    (default, ใช้เปิดบิล)
+   *   2: col6_แพคส่ง − col2_ลูกค้านับส่ง
+   *   3: col4_ลูกค้านับกลับ − col5_โรงซักนับเข้า  (cross check)
+   *   4: col4_ลูกค้านับกลับ − col2_ลูกค้านับส่ง
+   *
+   * Apply order:
+   *   1. หา Reset checkpoint ล่าสุดต่อ item code → ignore LF/adjustments ก่อนวัน reset
+   *   2. Sum diff จาก LF (เฉพาะหลัง reset)
+   *   3. Apply Adjustments (เฉพาะหลัง reset)
+   */
+  const getCarryOver = useCallback((
+    customerId: string,
+    beforeDate: string,
+    mode: CarryOverMode = 1,
+    includeHidden: boolean = true,
+  ): Record<string, number> => {
     const result: Record<string, number> = {}
+
+    // Step 1: หา Reset checkpoint ล่าสุดต่อ item code
+    const resetDateMap: Record<string, string> = {}
+    const resets = carryOverAdjustments
+      .filter(a =>
+        !a.isDeleted &&
+        a.customerId === customerId &&
+        a.type === 'reset' &&
+        a.date < beforeDate &&
+        (includeHidden || a.showInCustomerReport)
+      )
+      .sort((a, b) => b.date.localeCompare(a.date)) // latest first
+    for (const r of resets) {
+      for (const it of r.items) {
+        if (!resetDateMap[it.code]) {
+          resetDateMap[it.code] = r.date
+          result[it.code] = 0 // ทุกเคสเป็น 0 ตั้งแต่วัน reset
+        }
+      }
+    }
+
+    // Step 2: Sum from LF rows (skip if before reset date for that item code)
     const forms = linenForms
       .filter(f => f.customerId === customerId && f.date < beforeDate)
       .sort((a, b) => a.date.localeCompare(b.date))
-
-    // ยกยอดมา = สะสม ค้าง/คืน = sum(col6_แพคส่ง - col5_นับเข้า)
-    // negative = ค้างส่ง, positive = ส่งเกิน
     for (const form of forms) {
       for (const row of form.rows) {
-        const packSend = row.col6_factoryPackSend || 0
-        const countIn = row.col5_factoryClaimApproved || 0
-        const diff = packSend - countIn
+        if (resetDateMap[row.code] && form.date < resetDateMap[row.code]) continue
+        let diff = 0
+        switch (mode) {
+          case 1: diff = (row.col6_factoryPackSend || 0) - row.col5_factoryClaimApproved; break
+          case 2: diff = (row.col6_factoryPackSend || 0) - row.col2_hotelCountIn; break
+          case 3: diff = row.col4_factoryApproved - row.col5_factoryClaimApproved; break
+          case 4: diff = row.col4_factoryApproved - row.col2_hotelCountIn; break
+        }
         if (diff !== 0) {
           result[row.code] = (result[row.code] || 0) + diff
         }
       }
     }
+
+    // Step 3: Apply Adjustments (delta — apply to all modes equally)
+    const adjustments = carryOverAdjustments
+      .filter(a =>
+        !a.isDeleted &&
+        a.customerId === customerId &&
+        a.type === 'adjust' &&
+        a.date < beforeDate &&
+        (includeHidden || a.showInCustomerReport)
+      )
+    for (const adj of adjustments) {
+      for (const it of adj.items) {
+        if (resetDateMap[it.code] && adj.date < resetDateMap[it.code]) continue
+        result[it.code] = (result[it.code] || 0) + (it.delta || 0)
+      }
+    }
+
     return result
-  }, [linenForms])
+  }, [linenForms, carryOverAdjustments])
 
   const getDiscrepancies = useCallback((formId: string): Record<string, number> => {
     const form = linenForms.find(f => f.id === formId)
@@ -874,6 +990,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       linenCategories, addCategory, updateCategory, deleteCategory, getCategoryLabel,
       customerCategories, addCustomerCategory, updateCustomerCategory, deleteCustomerCategory, getCustomerCategoryLabel,
       checklists, addChecklist, updateChecklist, updateChecklistStatus, deleteChecklist,
+      carryOverAdjustments, addCarryOverAdjustment, updateCarryOverAdjustment, deleteCarryOverAdjustment,
       getCarryOver, getDiscrepancies,
     }}>
       {children}
