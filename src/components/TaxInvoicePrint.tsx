@@ -18,37 +18,32 @@ export default function TaxInvoicePrint({ invoice, customer, company, withholdin
   return (
     <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-tax-invoice">
       {/* Header */}
-      <div className="text-center mb-6 border-b-2 border-[#1B3A5C] pb-4">
-        <div className="flex justify-center mb-2">
-          <Image src="/flowclean-logo.png" alt="FlowClean" width={48} height={48} className="print:w-[48px] print:h-[48px]" />
+      <div className="flex justify-between items-start mb-4 border-b border-slate-300 pb-3 print:mb-3 print:pb-2">
+        <div className="flex items-start gap-3">
+          <Image src="/flowclean-logo.png" alt="FlowClean" width={48} height={48} className="mt-0.5 print:w-[48px] print:h-[48px]" />
+          <div>
+            <h1 className="text-xl font-bold text-[#1B3A5C]">{company.name}</h1>
+            <p className="text-xs text-slate-500">{company.nameEn}</p>
+            <p className="text-xs text-slate-500 mt-1">{company.address}</p>
+            <p className="text-xs text-slate-500">เลขผู้เสียภาษี: {company.taxId}{company.branch ? ` | ${formatBranch(company.branch)}` : ''}</p>
+            <p className="text-xs text-slate-500">โทร: {company.phone}</p>
+          </div>
         </div>
-        <h1 className="text-xl font-bold text-[#1B3A5C]">{company.name}</h1>
-        <p className="text-xs text-slate-500">{company.nameEn}</p>
-        <p className="text-xs text-slate-500 mt-1">{company.address}</p>
-        <p className="text-xs text-slate-500">เลขผู้เสียภาษี: {company.taxId}{company.branch ? ` | ${formatBranch(company.branch)}` : ''}</p>
-        <p className="text-xs text-slate-500">โทร: {company.phone}</p>
-        <div className="mt-3">
+        <div className="text-right">
           <h2 className="text-lg font-bold text-[#1B3A5C]">ใบกำกับภาษี/ใบเสร็จรับเงิน</h2>
           <p className="text-xs text-slate-500">Tax Invoice / Receipt</p>
+          <p className="font-mono text-sm font-medium mt-2">{invoice.invoiceNumber}</p>
+          <p className="text-xs text-slate-500">วันที่: {formatDate(invoice.issueDate)}</p>
         </div>
       </div>
 
-      {/* Document Info */}
-      <div className="grid grid-cols-2 gap-4 mb-6 text-xs">
-        <div>
-          <p className="text-slate-500">ลูกค้า / Customer:</p>
-          <p className="font-medium text-slate-800">{customer.name}</p>
-          {customer.nameEn && <p className="text-slate-500">{customer.nameEn}</p>}
-          <p className="text-slate-500 mt-1">{customer.address}</p>
-          <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxId}</p>
-          <p className="text-slate-500">{formatBranch(customer.branch)}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-slate-500">เลขที่ / No:</p>
-          <p className="font-mono text-sm font-bold text-[#1B3A5C]">{invoice.invoiceNumber}</p>
-          <p className="text-slate-500 mt-2">วันที่ / Date:</p>
-          <p className="font-medium">{formatDate(invoice.issueDate)}</p>
-        </div>
+      {/* Customer Info */}
+      <div className="mb-4 text-xs">
+        <p className="text-slate-500">ลูกค้า / Customer:</p>
+        <p className="font-medium text-slate-800">{customer.name}</p>
+        {customer.nameEn && <p className="text-slate-500">{customer.nameEn}</p>}
+        <p className="text-slate-500 mt-1">{customer.address}</p>
+        <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxId} | {formatBranch(customer.branch)}</p>
       </div>
 
       {/* Items Table */}

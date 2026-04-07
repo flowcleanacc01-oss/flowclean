@@ -14,6 +14,9 @@ import {
   ClipboardList,
   ArrowRight,
   BookOpen,
+  Banknote,
+  Receipt,
+  Trophy,
 } from 'lucide-react'
 
 export default function DashboardPage() {
@@ -36,17 +39,44 @@ export default function DashboardPage() {
     const washedWaiting = washingForms.reduce((s, f) =>
       s + f.rows.reduce((rs, r) => rs + r.col5_factoryClaimApproved, 0), 0)
 
-    // 2.3 จำนวนผ้าเช็คส่งออกวันนี้ (7/7) — LF status=confirmed → sum col6
+    // 2.3 จำนวนผ้าเช็คส่งออกวันนี้ (7/7) — LF status=confirmed วันนี้ → sum col6
     const confirmedForms = linenForms.filter(f => f.status === 'confirmed')
-    const checkedOut = confirmedForms.reduce((s, f) =>
+    const confirmedFormsToday = confirmedForms.filter(f => f.date === today)
+    const checkedOut = confirmedFormsToday.reduce((s, f) =>
       s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0), 0), 0)
 
-    // 2.4 ผ้าค้าง/คืนรวมวันนี้ — LF status=confirmed → sum (col6 - col5)
-    const carryOverToday = confirmedForms.reduce((s, f) =>
+    // 2.4 ผ้าค้าง/คืนสะสม — LF status=confirmed ทุกใบ → sum (col6 - col5)
+    const carryOverAll = confirmedForms.reduce((s, f) =>
       s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved, 0), 0)
 
-    return { countedInWaiting, washedWaiting, checkedOut, carryOverToday }
-  }, [linenForms])
+    return { countedInWaiting, washedWaiting, checkedOut, carryOverAll }
+  }, [linenForms, today])
+
+  // Financial stats
+  const financialStats = useMemo(() => {
+    const currentMonth = today.slice(0, 7) // YYYY-MM
+
+    // รายได้เดือนนี้ (subtotal ก่อน VAT)
+    const monthBills = billingStatements.filter(b => b.billingMonth === currentMonth)
+    const revenueThisMonth = monthBills.reduce((s, b) => s + b.subtotal, 0)
+
+    // บิลค้างชำระ (sent + เกินกำหนด)
+    const overdueBills = billingStatements.filter(b => b.status === 'sent' && b.dueDate < today)
+    const overdueTotal = overdueBills.reduce((s, b) => s + b.netPayable, 0)
+    const overdueCount = overdueBills.length
+
+    // ลูกค้า Top 5 เดือนนี้ (ตามยอด subtotal)
+    const custRevMap = new Map<string, number>()
+    monthBills.forEach(b => {
+      custRevMap.set(b.customerId, (custRevMap.get(b.customerId) || 0) + b.subtotal)
+    })
+    const top5Customers = [...custRevMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([customerId, revenue]) => ({ customerId, revenue }))
+
+    return { revenueThisMonth, overdueTotal, overdueCount, top5Customers }
+  }, [billingStatements, today])
 
   // Pipeline counts by status
   const pipeline = useMemo(() => {
@@ -83,7 +113,7 @@ export default function DashboardPage() {
     return [...linenForms].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6)
   }, [linenForms])
 
-  const coVal = stats.carryOverToday
+  const coVal = stats.carryOverAll
   const coDisplay = coVal === 0 ? '0' : coVal > 0 ? `+${formatNumber(coVal)}` : formatNumber(coVal)
 
   // Total LF in process (non-confirmed)
@@ -93,7 +123,7 @@ export default function DashboardPage() {
     { label: 'จำนวนผ้านับเข้าแล้วรอซัก (3/7)', value: formatNumber(stats.countedInWaiting), unit: 'ผืน', icon: Package, color: 'bg-red-50 text-red-600' },
     { label: 'จำนวนผ้าซักอบแล้วรอส่ง (4/7)', value: formatNumber(stats.washedWaiting), unit: 'ผืน', icon: ClipboardList, color: 'bg-blue-50 text-blue-600' },
     { label: 'จำนวนผ้าเช็คส่งออกวันนี้ (7/7)', value: formatNumber(stats.checkedOut), unit: 'ผืน', icon: Truck, color: 'bg-teal-50 text-teal-600' },
-    { label: 'ผ้าค้าง/คืนรวมวันนี้', value: coDisplay, unit: 'ผืน', icon: AlertTriangle, color: coVal < 0 ? 'bg-orange-50 text-orange-600' : coVal > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500' },
+    { label: 'ผ้าค้าง/คืนสะสม', value: coDisplay, unit: 'ผืน', icon: AlertTriangle, color: coVal < 0 ? 'bg-orange-50 text-orange-600' : coVal > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500' },
   ]
 
   return (
@@ -121,6 +151,32 @@ export default function DashboardPage() {
             </div>
           )
         })}
+      </div>
+
+      {/* Financial Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-emerald-50 text-emerald-600">
+              <Banknote className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-slate-800">{formatCurrency(financialStats.revenueThisMonth)}</p>
+              <p className="text-xs text-slate-500">รายได้เดือนนี้ (ก่อน VAT)</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center gap-3">
+            <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', financialStats.overdueCount > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400')}>
+              <Receipt className="w-5 h-5" />
+            </div>
+            <div>
+              <p className={cn('text-2xl font-bold', financialStats.overdueCount > 0 ? 'text-red-600' : 'text-slate-800')}>{formatCurrency(financialStats.overdueTotal)}</p>
+              <p className="text-xs text-slate-500">บิลค้างชำระ ({financialStats.overdueCount} ใบ)</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Pipeline — 7 สถานะหลัก */}
@@ -215,6 +271,30 @@ export default function DashboardPage() {
 
         {/* Side Panel */}
         <div className="space-y-4">
+          {/* Top 5 Customers */}
+          {financialStats.top5Customers.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2 mb-3">
+                <Trophy className="w-4 h-4 text-amber-500" />
+                ลูกค้า Top 5 เดือนนี้
+              </h3>
+              <div className="space-y-2">
+                {financialStats.top5Customers.map((c, i) => {
+                  const customer = getCustomer(c.customerId)
+                  return (
+                    <div key={c.customerId} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600">
+                        <span className="font-semibold text-slate-800 mr-1.5">{i + 1}.</span>
+                        {customer?.shortName || customer?.name || '-'}
+                      </span>
+                      <span className="font-mono text-slate-700">{formatCurrency(c.revenue)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Discrepancy Alerts */}
           {discrepancyForms.length > 0 && (
             <div className="bg-white rounded-xl border border-orange-200 p-4">
