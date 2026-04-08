@@ -1151,7 +1151,13 @@ export default function BillingPage() {
                       </td>
                       <td className={cn("px-4 py-3 text-center", sortedBg('wb'))} onClick={e => e.stopPropagation()}>
                         {wbInfo ? (
-                          <button onClick={() => setShowDetail(wbInfo.billingId)}
+                          <button onClick={() => {
+                            // 68: switch ไป WB tab + auto open WB detail
+                            setTab('billing')
+                            setActiveWbId(wbInfo.billingId)
+                            setShowDetail(wbInfo.billingId)
+                            scrollToActiveRow(wbInfo.billingId)
+                          }}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 hover:bg-orange-200">
                             <span className="font-mono">{wbInfo.billingNumber}</span>
                             <ExternalLink className="w-3 h-3" />
