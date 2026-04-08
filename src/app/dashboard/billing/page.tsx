@@ -556,12 +556,65 @@ export default function BillingPage() {
       const targetDNs = deliveryNotes.filter(dn =>
         dn.customerId === qt.customerId && dn.date >= fromDate && !dn.isBilled
       )
-      // Update each DN: new priceSnapshot + recalc transportFeeTrip
-      const updatedCust = { ...cust, enableMinPerTrip: qt.enableMinPerTrip ?? false, minPerTrip: qt.minPerTrip ?? 0, enableWaive: qt.enableWaive ?? false, minPerTripThreshold: qt.minPerTripThreshold ?? 0 }
+      // Build customer with ALL billing conditions from new QT (63: complete coverage)
+      const updatedCust: typeof cust = {
+        ...cust,
+        enablePerPiece: qt.enablePerPiece ?? true,
+        enableMinPerTrip: qt.enableMinPerTrip ?? false,
+        minPerTrip: qt.minPerTrip ?? 0,
+        enableWaive: qt.enableWaive ?? false,
+        minPerTripThreshold: qt.minPerTripThreshold ?? 0,
+        enableMinPerMonth: qt.enableMinPerMonth ?? false,
+        monthlyFlatRate: qt.monthlyFlatRate ?? 0,
+      }
+      // Step 1: Update each target DN — new priceSnapshot + recalc transportFeeTrip
+      // (transportFeeTrip uses enableWaive + minPerTripThreshold inside calculateTransportFeeTrip)
+      const targetIds = new Set(targetDNs.map(d => d.id))
       for (const dn of targetDNs) {
         const newSubtotal = dn.items.reduce((s, item) => item.isClaim ? s : s + item.quantity * (newSnapshot[item.code] || 0), 0)
         const newTripFee = calculateTransportFeeTrip(newSubtotal, updatedCust)
         updateDeliveryNote(dn.id, { priceSnapshot: newSnapshot, transportFeeTrip: newTripFee })
+      }
+
+      // Step 2 (63): Recalc transportFeeMonth for affected months
+      // Month fee goes on the LAST DN of each month (if not billed)
+      if (updatedCust.enableMinPerMonth && updatedCust.monthlyFlatRate > 0) {
+        const affectedMonths = new Set(targetDNs.map(d => d.date.slice(0, 7)))
+        const fallbackPriceMap = Object.fromEntries(cust.priceList.map(p => [p.code, p.price]))
+
+        for (const month of affectedMonths) {
+          // All DNs in this month for this customer (sorted newest first)
+          const monthDNs = deliveryNotes
+            .filter(d => d.customerId === qt.customerId && d.date.startsWith(month))
+            .sort((a, b) => b.date.localeCompare(a.date))
+
+          const lastDN = monthDNs[0]
+          if (!lastDN || lastDN.isBilled) continue // ห้ามแก้ DN ที่ billed แล้ว
+
+          // Calc subtotal + tripFee for each DN — use new values for target DNs, original for others
+          const calcDN = (d: typeof lastDN) => {
+            const isTarget = targetIds.has(d.id)
+            const pm = isTarget ? newSnapshot : (d.priceSnapshot || fallbackPriceMap)
+            const subtotal = d.items.reduce((s, item) => item.isClaim ? s : s + item.quantity * (pm[item.code] || 0), 0)
+            const tripFee = isTarget ? calculateTransportFeeTrip(subtotal, updatedCust) : (d.transportFeeTrip || 0)
+            return { subtotal, tripFee }
+          }
+
+          // Sum month total = all DNs except last + last DN
+          const otherDNs = monthDNs.filter(d => d.id !== lastDN.id)
+          const otherTotal = otherDNs.reduce((sum, d) => {
+            const { subtotal, tripFee } = calcDN(d)
+            return sum + subtotal + tripFee
+          }, 0)
+          const last = calcDN(lastDN)
+          const monthTotal = otherTotal + last.subtotal + last.tripFee
+
+          const newMonthFee = monthTotal < updatedCust.monthlyFlatRate
+            ? updatedCust.monthlyFlatRate - monthTotal
+            : 0
+
+          updateDeliveryNote(lastDN.id, { transportFeeMonth: newMonthFee })
+        }
       }
     }
 
