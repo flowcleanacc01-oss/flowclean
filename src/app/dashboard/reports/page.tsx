@@ -10,6 +10,7 @@ import MonthlySummaryGrid from '@/components/MonthlySummaryGrid'
 import MonthlyDeliveryReportPrint from '@/components/MonthlyDeliveryReportPrint'
 import MonthlyStockReportPrint from '@/components/MonthlyStockReportPrint'
 import MonthlyConsolidationPrint from '@/components/MonthlyConsolidationPrint'
+import CarryOverReportPrint from '@/components/CarryOverReportPrint'
 import Modal from '@/components/Modal'
 import CarryOverAdjustModal from '@/components/CarryOverAdjustModal'
 import { CARRY_OVER_MODE_CONFIG, CARRY_OVER_REASON_CONFIG } from '@/types'
@@ -39,6 +40,7 @@ export default function ReportsPage() {
   const [coShowAdjustments, setCoShowAdjustments] = useState(true)
   const [coAdjustModalOpen, setCoAdjustModalOpen] = useState(false)
   const [coEditingAdjustment, setCoEditingAdjustment] = useState<CarryOverAdjustment | undefined>(undefined)
+  const [showCarryOverPrint, setShowCarryOverPrint] = useState(false)
 
   const activeCustomers = customers.filter(c => c.isActive)
   // Derive effective customer ID — validate against active list
@@ -531,11 +533,20 @@ export default function ReportsPage() {
                 {coShowAdjustments ? 'แสดง' : 'ซ่อน'}รายการปรับยอด
               </button>
 
-              {/* Adjust button */}
-              <button onClick={() => { setCoEditingAdjustment(undefined); setCoAdjustModalOpen(true) }}
-                className="ml-auto px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] flex items-center gap-1 font-semibold">
-                <Plus className="w-3.5 h-3.5" />ปรับยอด
-              </button>
+              {/* Spacer */}
+              <div className="ml-auto flex items-center gap-2">
+                {/* Print/Export button */}
+                <button onClick={() => { setPrintOrientation('landscape'); setPrintMargin('narrow'); setShowCarryOverPrint(true) }}
+                  className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1 font-medium">
+                  <FileDown className="w-3.5 h-3.5" />พิมพ์/ส่งออกเอกสาร
+                </button>
+
+                {/* Adjust button */}
+                <button onClick={() => { setCoEditingAdjustment(undefined); setCoAdjustModalOpen(true) }}
+                  className="px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] flex items-center gap-1 font-semibold">
+                  <Plus className="w-3.5 h-3.5" />ปรับยอด
+                </button>
+              </div>
             </div>
 
             {coMode !== 'compare' && (
@@ -1139,6 +1150,45 @@ export default function ReportsPage() {
           editing={coEditingAdjustment}
         />
       )}
+
+      {/* Carry-over Report Print Modal */}
+      <Modal open={showCarryOverPrint} onClose={() => setShowCarryOverPrint(false)} title="พิมพ์รายงานผ้าค้าง/คืน" size="full" className="print-target">
+        {selCustomer && (
+          <div className={cn('print-content', `print-${printOrientation}`, `print-margin-${printMargin}`)}>
+            <div className="flex justify-between items-center mb-4 no-print">
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-slate-600">รูปแบบกระดาษ:</span>
+                <select value={printOrientation} onChange={e => setPrintOrientation(e.target.value as 'portrait' | 'landscape')}
+                  className="px-2 py-1 border border-slate-200 rounded">
+                  <option value="landscape">แนวนอน (Landscape)</option>
+                  <option value="portrait">แนวตั้ง (Portrait)</option>
+                </select>
+                <select value={printMargin} onChange={e => setPrintMargin(e.target.value as 'normal' | 'narrow')}
+                  className="px-2 py-1 border border-slate-200 rounded">
+                  <option value="narrow">ขอบแคบ</option>
+                  <option value="normal">ขอบปกติ</option>
+                </select>
+              </div>
+            </div>
+            <CarryOverReportPrint
+              customer={selCustomer}
+              company={companyInfo}
+              catalog={linenCatalog}
+              linenForms={linenForms}
+              carryOverAdjustments={carryOverAdjustments}
+              startDate={coStartDate}
+              endDate={coEndDate}
+              mode={coMode}
+              view={coView}
+              showAdjustments={coShowAdjustments}
+              getCarryOver={getCarryOver}
+            />
+            <div className="flex justify-end mt-4 no-print">
+              <ExportButtons targetId="print-carryover-report" filename={`carryover-${selCustomer.shortName || selCustomer.name}-${coStartDate}-${coEndDate}`} showPrint={true} orientation={printOrientation} />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
