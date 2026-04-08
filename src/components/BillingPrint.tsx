@@ -102,12 +102,23 @@ export default function BillingPrint({ billing, customer, company }: BillingPrin
         </tfoot>
       </table>
 
-      {/* Payment Info */}
-      <div className="border border-slate-200 rounded p-3 mb-6 text-xs">
-        <p className="font-medium text-slate-700 mb-1">ข้อมูลการชำระเงิน:</p>
-        <p className="text-slate-600">{company.bankName} | ชื่อบัญชี: {company.bankAccountName}</p>
-        <p className="text-slate-600">เลขบัญชี: {company.bankAccountNumber}</p>
-      </div>
+      {/* Payment Info (78: resolve customer.selectedBankAccountId → company.bankAccounts) */}
+      {(() => {
+        const acc = customer.selectedBankAccountId && company.bankAccounts?.length > 0
+          ? company.bankAccounts.find(a => a.id === customer.selectedBankAccountId)
+          : null
+        const bankName = acc?.bankName || company.bankName
+        const accountName = acc?.accountName || company.bankAccountName
+        const accountNumber = acc?.accountNumber || company.bankAccountNumber
+        if (!bankName && !accountName && !accountNumber) return null
+        return (
+          <div className="border border-slate-200 rounded p-3 mb-6 text-xs">
+            <p className="font-medium text-slate-700 mb-1">ข้อมูลการชำระเงิน:</p>
+            <p className="text-slate-600">{bankName} | ชื่อบัญชี: {accountName}</p>
+            <p className="text-slate-600">เลขบัญชี: {accountNumber}</p>
+          </div>
+        )
+      })()}
 
       {/* Signatures */}
       <div className="grid grid-cols-2 gap-16 mt-12 text-xs text-center">

@@ -103,12 +103,24 @@ export default function TaxInvoicePrint({ invoice, customer, company, withholdin
         </div>
       )}
 
-      {/* Receipt Confirmation */}
-      <div className="border border-emerald-300 rounded-lg p-4 mb-6 bg-emerald-50">
-        <p className="text-sm font-medium text-emerald-800 mb-1">ใบเสร็จรับเงิน / Receipt</p>
-        <p className="text-xs text-emerald-700">ได้รับเงินจำนวน <strong>{formatCurrency(net)}</strong> บาท เรียบร้อยแล้ว</p>
-        <p className="text-xs text-emerald-600 mt-1">ชำระเข้า: {company.bankName} | {company.bankAccountName} | เลขบัญชี: {company.bankAccountNumber}</p>
-      </div>
+      {/* Receipt Confirmation (78: resolve customer.selectedBankAccountId) */}
+      {(() => {
+        const acc = customer.selectedBankAccountId && company.bankAccounts?.length > 0
+          ? company.bankAccounts.find(a => a.id === customer.selectedBankAccountId)
+          : null
+        const bankName = acc?.bankName || company.bankName
+        const accountName = acc?.accountName || company.bankAccountName
+        const accountNumber = acc?.accountNumber || company.bankAccountNumber
+        return (
+          <div className="border border-emerald-300 rounded-lg p-4 mb-6 bg-emerald-50">
+            <p className="text-sm font-medium text-emerald-800 mb-1">ใบเสร็จรับเงิน / Receipt</p>
+            <p className="text-xs text-emerald-700">ได้รับเงินจำนวน <strong>{formatCurrency(net)}</strong> บาท เรียบร้อยแล้ว</p>
+            {(bankName || accountName || accountNumber) && (
+              <p className="text-xs text-emerald-600 mt-1">ชำระเข้า: {bankName} | {accountName} | เลขบัญชี: {accountNumber}</p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Signatures */}
       <div className="grid grid-cols-2 gap-16 mt-8 text-xs text-center">

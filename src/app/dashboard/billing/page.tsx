@@ -2080,18 +2080,41 @@ export default function BillingPage() {
                 ))}
               </select>
               <button type="button" onClick={() => {
+                // 77: เลือกทั้งหมด — เคารพ filter ปัจจุบัน (search + category)
                 const existingCodes = new Set(quItems.map(i => i.code))
+                const matchesFilter = (item: typeof linenCatalog[number]) => {
+                  if (quFilterCat !== 'all' && item.category !== quFilterCat) return false
+                  if (quSearch) {
+                    const s = quSearch.toLowerCase()
+                    if (!item.code.toLowerCase().includes(s) && !item.name.toLowerCase().includes(s) && !(item.nameEn || '').toLowerCase().includes(s)) return false
+                  }
+                  return true
+                }
                 const newItems = [...linenCatalog]
-                  .filter(i => !existingCodes.has(i.code))
+                  .filter(i => !existingCodes.has(i.code) && matchesFilter(i))
                   .sort((a, b) => a.sortOrder - b.sortOrder)
                   .map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice > 0 ? i.defaultPrice : null }))
                 setQuItems([...quItems, ...newItems])
               }}
-                className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
+                className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                title="เลือกทุกรายการที่ตรงกับ filter ปัจจุบัน">
                 เลือกทั้งหมด
               </button>
-              <button type="button" onClick={() => setQuItems([])}
-                className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
+              <button type="button" onClick={() => {
+                // 77: ไม่เลือกเลย — เคารพ filter ปัจจุบัน (ลบเฉพาะที่ match filter)
+                const matchesFilter = (item: { code: string; name: string }) => {
+                  const cat = linenCatalog.find(c => c.code === item.code)
+                  if (quFilterCat !== 'all' && cat?.category !== quFilterCat) return false
+                  if (quSearch) {
+                    const s = quSearch.toLowerCase()
+                    if (!item.code.toLowerCase().includes(s) && !item.name.toLowerCase().includes(s) && !(cat?.nameEn || '').toLowerCase().includes(s)) return false
+                  }
+                  return true
+                }
+                setQuItems(quItems.filter(i => !matchesFilter(i)))
+              }}
+                className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                title="ยกเลิกเฉพาะรายการที่ตรงกับ filter ปัจจุบัน">
                 ไม่เลือกเลย
               </button>
               {/* 59: Clear all prices */}
