@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Zap, Check } from 'lucide-react'
 import type { LinenFormRow, Customer, LinenItemDef, LinenFormStatus, QuotationItem } from '@/types'
 import { cn } from '@/lib/utils'
+import { wasSynced } from '@/lib/sync-discrepancy'
 
 interface LinenFormGridProps {
   customer: Customer
@@ -18,6 +19,8 @@ interface LinenFormGridProps {
   readOnly?: boolean
   editableColumns?: ('col1' | 'col2' | 'col3' | 'col4' | 'col5' | 'col6' | 'note')[]
   formStatus?: LinenFormStatus
+  /** 70+73+74+75: One-click sync (⚡) — ถ้ามี = แสดงปุ่ม ⚡ ที่ row ที่มี discrepancy */
+  onApproveSync?: (code: string) => void
 }
 
 const COL_LABELS = [
@@ -49,6 +52,7 @@ export default function LinenFormGrid({
   readOnly = false,
   editableColumns = ['col2', 'col3', 'col4', 'col5', 'col6', 'note'],
   formStatus,
+  onApproveSync,
 }: LinenFormGridProps) {
   // ถ้ามี qtItems → ใช้ลำดับ + ชื่อจาก QT, fallback ไป catalog
   const enabledItems: LinenItemDef[] = qtItems
@@ -429,29 +433,46 @@ export default function LinenFormGrid({
 
                   {/* Col 4 - ลูกค้านับกลับ */}
                   <td className={cn('px-1 py-1 text-center', hasCountBackDisc && 'bg-red-50')}>
-                    {isEditable('col4') ? (
-                      <input
-                        type="text" inputMode="numeric" pattern="[0-9]*"
-                        data-row={rowIndex} data-col={COL_NAV_INDEX.col4}
-                        value={row.col4_factoryApproved || ''}
-                        onChange={e => {
-                          const v = e.target.value
-                          if (v === '' || /^\d+$/.test(v))
-                            updateRow(item.code, 'col4_factoryApproved', v === '' ? 0 : parseInt(v, 10))
-                        }}
-                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
-                        onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col4)}
-                        className={cn(
-                          'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
-                          hasCountBackDisc ? 'border-red-400 bg-red-50' : 'border-slate-200'
-                        )}
-                      />
-                    ) : (
-                      <span className={cn('text-slate-700', hasCountBackDisc && 'text-red-600 font-medium')}>
-                        {row.col4_factoryApproved || '-'}
-                        {hasCountBackDisc && ' ⚠'}
-                      </span>
-                    )}
+                    <div className="flex items-center justify-center gap-1">
+                      {isEditable('col4') ? (
+                        <input
+                          type="text" inputMode="numeric" pattern="[0-9]*"
+                          data-row={rowIndex} data-col={COL_NAV_INDEX.col4}
+                          value={row.col4_factoryApproved || ''}
+                          onChange={e => {
+                            const v = e.target.value
+                            if (v === '' || /^\d+$/.test(v))
+                              updateRow(item.code, 'col4_factoryApproved', v === '' ? 0 : parseInt(v, 10))
+                          }}
+                          onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                          onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col4)}
+                          className={cn(
+                            'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
+                            hasCountBackDisc ? 'border-red-400 bg-red-50' : 'border-slate-200'
+                          )}
+                        />
+                      ) : (
+                        <span className={cn('text-slate-700', hasCountBackDisc && 'text-red-600 font-medium')}>
+                          {row.col4_factoryApproved || '-'}
+                          {hasCountBackDisc && ' ⚠'}
+                        </span>
+                      )}
+                      {/* 70+73+74+75: ⚡ One-click sync button */}
+                      {hasCountBackDisc && onApproveSync && (
+                        <button type="button" onClick={() => onApproveSync(item.code)}
+                          title={`Sync col6 = col4 (${row.col4_factoryApproved}) — ผ้าจริง`}
+                          className="p-0.5 rounded hover:bg-amber-100 text-amber-600 transition-colors">
+                          <Zap className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {/* 70+73+74+75: ✓ Synced badge */}
+                      {wasSynced(row) && !hasCountBackDisc && (
+                        <span title={`เคย sync จาก col6=${row.originalCol6}/col4=${row.originalCol4} เมื่อ ${row.syncedAt?.slice(0, 10)}`}
+                          className="text-emerald-500">
+                          <Check className="w-3 h-3" />
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )

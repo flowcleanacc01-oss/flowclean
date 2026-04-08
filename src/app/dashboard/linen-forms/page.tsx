@@ -7,6 +7,7 @@ import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
+import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
 import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
@@ -19,6 +20,7 @@ import { exportCSV } from '@/lib/export'
 
 export default function LinenFormsPage() {
   const {
+    currentUser,
     linenForms, addLinenForm, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
     customers, getCustomer, getCarryOver, linenCatalog, quotations, deliveryNotes, companyInfo,
   } = useStore()
@@ -480,7 +482,15 @@ export default function LinenFormsPage() {
                     </td>
                     <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(form.date)}</td>
                     <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}><span className="truncate block max-w-[120px]">{customer?.shortName || customer?.name || '-'}</span></td>
-                    <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('formNumber'))}>{form.formNumber}</td>
+                    <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('formNumber'))}>
+                      <span className="inline-flex items-center gap-1">
+                        {form.formNumber}
+                        {/* 70+73+74+75: Synced badge — เคยมี discrepancy + sync แล้ว */}
+                        {lfHasSyncedRows(form) && (
+                          <span title="LF นี้มี row ที่เคยถูก sync col6+col4 (เก็บประวัติใน Type 2 Resolved)">📝</span>
+                        )}
+                      </span>
+                    </td>
                     <td className={cn("px-4 py-3 text-center", sortedBg('alert'))}>
                       {disc1 && <span title="โรงซักนับเข้า ≠ นับส่ง+เคลม"><AlertTriangle className="w-4 h-4 text-amber-500 inline" /></span>}
                       {disc2 && <span title="ลูกค้านับกลับ ≠ แพคส่ง"><AlertTriangle className="w-4 h-4 text-red-500 inline" /></span>}
@@ -856,6 +866,21 @@ export default function LinenFormsPage() {
                 detailForm.status === 'delivered' ? ['col4'] :
                 []
               }
+              onApproveSync={(code) => {
+                // 70+73+74+75: One-click sync — col6 = col4 = newQty
+                const row = detailForm.rows.find(r => r.code === code)
+                if (!row) return
+                const newQty = row.col4_factoryApproved
+                const oldCol6 = row.col6_factoryPackSend
+                if (!confirm(`Sync ค่า ${code}:\n\ncol6 (โรงซักแพคส่ง): ${oldCol6} → ${newQty}\ncol4 (ลูกค้านับกลับ): ${newQty} (เดิม)\n\nระบบจะบันทึก audit log + ค่าเดิมเก็บไว้สำหรับรายงาน Type 2`)) return
+                const updatedRows = applyRowsSync(
+                  detailForm.rows,
+                  [{ code, newQty }],
+                  'lf_manual',
+                  currentUser?.name || 'unknown',
+                )
+                updateLinenForm(detailForm.id, { rows: updatedRows })
+              }}
             />
 
             {detailForm.notes && (

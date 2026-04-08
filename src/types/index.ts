@@ -164,6 +164,13 @@ export interface LinenFormRow {
   col5_factoryClaimApproved: number // โรงซักนับเข้า (auto-fill=col3, editable)
   col6_factoryPackSend: number     // โรงซักแพคส่ง
   note: string                      // หมายเหตุ
+  // 70+73+74+75 — Discrepancy sync tracking
+  // เมื่อ user "approve" col4 ↔ col6 sync — เก็บค่าเดิมไว้สำหรับ history + รายงาน Type 2 (Resolved)
+  originalCol6?: number            // ค่า col6 เดิม (ก่อน sync) — ถ้า > 0 = "เคยถูก sync"
+  originalCol4?: number            // ค่า col4 เดิม (ก่อน sync)
+  syncedAt?: string                // วันที่ sync (ISO datetime)
+  syncedBy?: string                // user ที่ sync
+  syncSource?: 'lf_manual' | 'sd_create' | 'sd_edit'  // มาจากไหน
 }
 
 export type LinenFormStatus = 'draft' | 'received' | 'sorting' | 'washing' | 'packed' | 'delivered' | 'confirmed'

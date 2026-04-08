@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { formatNumber, formatCurrency, formatDateShort, cn, todayISO } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, ALL_LINEN_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus } from '@/types'
@@ -18,7 +18,9 @@ import {
   Banknote,
   Receipt,
   Trophy,
+  Wrench,
 } from 'lucide-react'
+import DiscrepancyHelperModal from '@/components/DiscrepancyHelperModal'
 
 export default function DashboardPage() {
   const {
@@ -29,6 +31,7 @@ export default function DashboardPage() {
 
   const today = todayISO()
   const showFinancial = canViewFinancialDashboard(currentUser)
+  const [helperOpen, setHelperOpen] = useState(false)
 
   // Stats
   const stats = useMemo(() => {
@@ -369,10 +372,18 @@ export default function DashboardPage() {
                 className="flex items-center gap-2 text-sm text-slate-600 hover:text-[#1B3A5C] transition-colors py-1">
                 <CheckCircle2 className="w-4 h-4" />สร้างใบวางบิล
               </Link>
+              {/* 75: Discrepancy Helper */}
+              <button onClick={() => setHelperOpen(true)}
+                className="flex items-center gap-2 text-sm text-slate-600 hover:text-[#1B3A5C] transition-colors py-1 w-full text-left">
+                <Wrench className="w-4 h-4 text-amber-500" />ลูกค้าแจ้งนับผ้าไม่ตรง
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* 75: Discrepancy Helper Modal */}
+      <DiscrepancyHelperModal open={helperOpen} onClose={() => setHelperOpen(false)} />
     </div>
   )
 }

@@ -12,6 +12,7 @@ import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import { canViewSD } from '@/lib/permissions'
+import { applyRowsSync } from '@/lib/sync-discrepancy'
 import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
@@ -23,7 +24,7 @@ export default function DeliveryPage() {
   const {
     currentUser,
     deliveryNotes, addDeliveryNote, updateDeliveryNote, deleteDeliveryNote,
-    linenForms, customers, getCustomer, companyInfo, linenCatalog,
+    linenForms, updateLinenForm, customers, getCustomer, companyInfo, linenCatalog,
     billingStatements, quotations,
   } = useStore()
   const [showPrint, setShowPrint] = useState(false)
@@ -207,6 +208,59 @@ export default function DeliveryPage() {
     const hasAcceptedQT = quotations.some(q => q.customerId === selCustomerId && q.status === 'accepted')
     if (!hasAcceptedQT) {
       if (!confirm('⚠ ลูกค้านี้ไม่มีใบเสนอราคาที่ตกลงแล้ว — ราคาทุกรายการจะเป็น 0\n\nกรุณาสร้างและกดตกลง QT ก่อน\n\nยืนยันสร้าง SD ต่อหรือไม่?')) return
+    }
+
+    // 70+73+74+75: Detect overwrite (SD quantity ≠ LF.col6) → sync LF
+    const isMultiLF = selFormIds.length > 1
+    const overwrites: { code: string; oldQty: number; newQty: number }[] = []
+    if (selFormIds.length === 1) {
+      const lf = linenForms.find(f => f.id === selFormIds[0])
+      if (lf) {
+        for (const item of deliveryItems) {
+          if (item.isClaim) continue
+          const lfRow = lf.rows.find(r => r.code === item.code)
+          if (lfRow && (lfRow.col6_factoryPackSend || 0) !== item.quantity) {
+            overwrites.push({
+              code: item.code,
+              oldQty: lfRow.col6_factoryPackSend || 0,
+              newQty: item.quantity,
+            })
+          }
+        }
+      }
+    } else if (isMultiLF) {
+      // Multi-LF: ห้ามแก้จำนวน — block ถ้า aggregated qty ≠ deliveryItems
+      const aggregatedQty: Record<string, number> = {}
+      for (const fId of selFormIds) {
+        const f = linenForms.find(lf => lf.id === fId)
+        if (!f) continue
+        for (const r of f.rows) {
+          aggregatedQty[r.code] = (aggregatedQty[r.code] || 0) + (r.col6_factoryPackSend || 0)
+        }
+      }
+      for (const item of deliveryItems) {
+        if (item.isClaim) continue
+        if (item.quantity !== (aggregatedQty[item.code] || 0)) {
+          alert(`⚠ ไม่สามารถแก้จำนวน ${item.code} ได้\n\nSD นี้ link กับ ${selFormIds.length} LF — ห้ามแก้จำนวน เพราะระบบไม่รู้ว่าจะ apply กับ LF ไหน\n\nกรุณาไปแก้ที่ LF ตรงๆ`)
+          return
+        }
+      }
+    }
+
+    if (overwrites.length > 0) {
+      const summary = overwrites.map(o => `• ${o.code}: ${o.oldQty} → ${o.newQty}`).join('\n')
+      if (!confirm(`คุณกำลังแก้จำนวนใน SD จากค่าเดิมใน LF:\n\n${summary}\n\nระบบจะอัพเดต LF.col6 + col4 = ค่าใหม่ (sync ทั้ง 2)\n+ บันทึก audit log\n\nดำเนินการต่อ?`)) return
+      // Apply sync to LF
+      const lf = linenForms.find(f => f.id === selFormIds[0])
+      if (lf) {
+        const updatedRows = applyRowsSync(
+          lf.rows,
+          overwrites.map(o => ({ code: o.code, newQty: o.newQty })),
+          'sd_create',
+          currentUser?.name || 'unknown',
+        )
+        updateLinenForm(lf.id, { rows: updatedRows })
+      }
     }
 
     // Calculate item subtotal for trip fee
@@ -764,7 +818,53 @@ export default function DeliveryPage() {
                               />
                               {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
                             </td>
-                            <td className="px-3 py-1.5 text-right">{formatNumber(item.quantity)}</td>
+                            <td className="px-3 py-1.5 text-right">
+                              {(() => {
+                                // 70+73+74+75: editable quantity ใน SD detail (sync to LF)
+                                const isBilled = !!detailNote.isBilled
+                                const isMultiLF = detailNote.linenFormIds.length > 1
+                                const canEdit = !isBilled && !isMultiLF && !item.isClaim
+                                if (!canEdit) {
+                                  return (
+                                    <span title={isBilled ? 'SD วางบิลแล้ว — ลบ WB ก่อนจึงจะแก้ได้' : isMultiLF ? 'SD link หลาย LF — ห้ามแก้จำนวน' : ''}>
+                                      {formatNumber(item.quantity)}
+                                    </span>
+                                  )
+                                }
+                                return (
+                                  <input type="number" min={0} value={item.quantity}
+                                    onFocus={e => e.currentTarget.select()}
+                                    onChange={e => {
+                                      const newQty = parseInt(e.target.value) || 0
+                                      const updated = detailNote.items.map((di, i) => i === idx ? { ...di, quantity: newQty } : di)
+                                      updateDeliveryNote(detailNote.id, { items: updated })
+                                    }}
+                                    onBlur={() => {
+                                      // Sync LF row when user finishes editing
+                                      const lf = linenForms.find(f => f.id === detailNote.linenFormIds[0])
+                                      if (!lf) return
+                                      const lfRow = lf.rows.find(r => r.code === item.code)
+                                      if (!lfRow) return
+                                      const oldQty = lfRow.col6_factoryPackSend || 0
+                                      if (oldQty === item.quantity) return
+                                      if (!confirm(`Sync LF-${lf.formNumber}:\n\n${item.code}: col6+col4 = ${oldQty} → ${item.quantity}\n\nระบบจะอัพเดต LF + บันทึก audit log\n\nดำเนินการต่อ?`)) {
+                                        // Revert
+                                        const reverted = detailNote.items.map((di, i) => i === idx ? { ...di, quantity: oldQty } : di)
+                                        updateDeliveryNote(detailNote.id, { items: reverted })
+                                        return
+                                      }
+                                      const updatedRows = applyRowsSync(
+                                        lf.rows,
+                                        [{ code: item.code, newQty: item.quantity }],
+                                        'sd_edit',
+                                        currentUser?.name || 'unknown',
+                                      )
+                                      updateLinenForm(lf.id, { rows: updatedRows })
+                                    }}
+                                    className="w-20 px-2 py-0.5 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                                )
+                              })()}
+                            </td>
                             {isPer && <td className="px-3 py-1.5 text-right">{formatCurrency(price)}</td>}
                             {isPer && <td className="px-3 py-1.5 text-right">{formatCurrency(item.quantity * price)}</td>}
                           </tr>

@@ -236,42 +236,54 @@ export default function ReportsPage() {
     const monthForms = linenForms.filter(f => f.date.startsWith(selMonth))
 
     // Per-customer counts
-    const custCount: Record<string, { name: string; type1: number; type2: number; total: number }> = {}
+    const custCount: Record<string, { name: string; type1: number; type2Pending: number; type2Resolved: number; total: number }> = {}
     // Per-item counts
-    const itemCount: Record<string, { type1: number; type2: number; total: number }> = {}
-    // col6 != col4 (ลูกค้านับกลับไม่ตรงแพคส่ง) — case where we may need to fix col6
-    let col6col4Mismatch = 0
-    const col6col4Customers: Record<string, number> = {}
+    const itemCount: Record<string, { type1: number; type2Pending: number; type2Resolved: number; total: number }> = {}
+    // Type 2 breakdown
+    let type2Pending = 0
+    let type2Resolved = 0
+    const type2Customers: Record<string, number> = {}
 
     for (const f of monthForms) {
       const cust = getCustomer(f.customerId)
       if (!cust) continue
       if (!custCount[f.customerId]) {
-        custCount[f.customerId] = { name: cust.shortName || cust.name, type1: 0, type2: 0, total: 0 }
+        custCount[f.customerId] = { name: cust.shortName || cust.name, type1: 0, type2Pending: 0, type2Resolved: 0, total: 0 }
       }
       for (const r of f.rows) {
         const expected12 = r.col2_hotelCountIn + r.col3_hotelClaimCount
         const countIn = r.col5_factoryClaimApproved
         const packSend = r.col6_factoryPackSend || 0
         const countBack = r.col4_factoryApproved
+        const isResolved = r.originalCol6 !== undefined && r.originalCol4 !== undefined
 
         // Type 1: col5 ≠ col2+col3
         if (countIn > 0 && countIn !== expected12) {
           custCount[f.customerId].type1++
           custCount[f.customerId].total++
-          if (!itemCount[r.code]) itemCount[r.code] = { type1: 0, type2: 0, total: 0 }
+          if (!itemCount[r.code]) itemCount[r.code] = { type1: 0, type2Pending: 0, type2Resolved: 0, total: 0 }
           itemCount[r.code].type1++
           itemCount[r.code].total++
         }
-        // Type 2: col4 ≠ col6
+        // Type 2 Pending: col4 ≠ col6 (active discrepancy)
         if (countBack > 0 && packSend > 0 && countBack !== packSend) {
-          custCount[f.customerId].type2++
+          custCount[f.customerId].type2Pending++
           custCount[f.customerId].total++
-          if (!itemCount[r.code]) itemCount[r.code] = { type1: 0, type2: 0, total: 0 }
-          itemCount[r.code].type2++
+          if (!itemCount[r.code]) itemCount[r.code] = { type1: 0, type2Pending: 0, type2Resolved: 0, total: 0 }
+          itemCount[r.code].type2Pending++
           itemCount[r.code].total++
-          col6col4Mismatch++
-          col6col4Customers[f.customerId] = (col6col4Customers[f.customerId] || 0) + 1
+          type2Pending++
+          type2Customers[f.customerId] = (type2Customers[f.customerId] || 0) + 1
+        }
+        // Type 2 Resolved: row ที่เคยถูก sync แล้ว
+        if (isResolved) {
+          custCount[f.customerId].type2Resolved++
+          custCount[f.customerId].total++
+          if (!itemCount[r.code]) itemCount[r.code] = { type1: 0, type2Pending: 0, type2Resolved: 0, total: 0 }
+          itemCount[r.code].type2Resolved++
+          itemCount[r.code].total++
+          type2Resolved++
+          type2Customers[f.customerId] = (type2Customers[f.customerId] || 0) + 1
         }
       }
     }
@@ -288,12 +300,12 @@ export default function ReportsPage() {
       .sort((a, b) => b.total - a.total)
       .slice(0, 10)
 
-    const topCol6Customers = Object.entries(col6col4Customers)
+    const topType2Customers = Object.entries(type2Customers)
       .map(([id, count]) => ({ id, name: getCustomer(id)?.shortName || getCustomer(id)?.name || id, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5)
 
-    return { topCustomers, topItems, col6col4Mismatch, topCol6Customers }
+    return { topCustomers, topItems, type2Pending, type2Resolved, topType2Customers }
   }, [linenForms, selMonth, getCustomer, itemNameMap])
 
   /** Adjustment records for this customer in date range (for history display) */
@@ -814,9 +826,10 @@ export default function ReportsPage() {
                     <tr>
                       <th className="text-left px-3 py-2 font-medium text-slate-600 w-8">#</th>
                       <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
-                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-16">Type 1</th>
-                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-16">Type 2</th>
-                      <th className="text-right px-3 py-2 font-medium text-slate-600 w-16">รวม</th>
+                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-14">T1</th>
+                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-14" title="Type 2 Pending — col4 ≠ col6 ที่ยังไม่ได้แก้">T2 รอ</th>
+                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-14" title="Type 2 Resolved — เคย sync col6+col4 แล้ว">T2 ✓</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600 w-14">รวม</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -827,7 +840,8 @@ export default function ReportsPage() {
                           <Link href={`/dashboard/customers/${c.id}`} className="text-slate-700 hover:text-[#1B3A5C] hover:underline">{c.name}</Link>
                         </td>
                         <td className="text-right px-2 py-2 font-mono text-amber-600">{c.type1}</td>
-                        <td className="text-right px-2 py-2 font-mono text-orange-600">{c.type2}</td>
+                        <td className="text-right px-2 py-2 font-mono text-orange-600">{c.type2Pending}</td>
+                        <td className="text-right px-2 py-2 font-mono text-emerald-600">{c.type2Resolved}</td>
                         <td className="text-right px-3 py-2 font-mono font-semibold text-slate-800">{c.total}</td>
                       </tr>
                     ))}
@@ -849,9 +863,10 @@ export default function ReportsPage() {
                     <tr>
                       <th className="text-left px-3 py-2 font-medium text-slate-600 w-8">#</th>
                       <th className="text-left px-3 py-2 font-medium text-slate-600">รายการ</th>
-                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-16">Type 1</th>
-                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-16">Type 2</th>
-                      <th className="text-right px-3 py-2 font-medium text-slate-600 w-16">รวม</th>
+                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-14">T1</th>
+                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-14">T2 รอ</th>
+                      <th className="text-right px-2 py-2 font-medium text-slate-600 w-14">T2 ✓</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600 w-14">รวม</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -863,7 +878,8 @@ export default function ReportsPage() {
                           <span className="text-slate-700">{it.name}</span>
                         </td>
                         <td className="text-right px-2 py-2 font-mono text-amber-600">{it.type1}</td>
-                        <td className="text-right px-2 py-2 font-mono text-orange-600">{it.type2}</td>
+                        <td className="text-right px-2 py-2 font-mono text-orange-600">{it.type2Pending}</td>
+                        <td className="text-right px-2 py-2 font-mono text-emerald-600">{it.type2Resolved}</td>
                         <td className="text-right px-3 py-2 font-mono font-semibold text-slate-800">{it.total}</td>
                       </tr>
                     ))}
@@ -873,31 +889,35 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* col4 ≠ col6 Summary */}
+          {/* Type 2 Summary — split Pending vs Resolved (74) */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <h3 className="text-sm font-semibold text-slate-700 mb-2">สรุป Type 2: ลูกค้านับกลับ ≠ โรงซักแพคส่ง</h3>
             <p className="text-xs text-slate-500 mb-3">
-              เคสที่ "ลูกค้านับผ้ากลับ" ไม่ตรงกับ "โรงซักแพคส่ง" — ทางโรงซักอาจต้องตรวจสอบและแก้ col6 ตามความเป็นจริง
+              <strong className="text-orange-600">Pending</strong> = ยังไม่ได้แก้ (col4 ≠ col6 active) | <strong className="text-emerald-600">Resolved</strong> = แก้แล้ว (เคย sync col6+col4)
             </p>
-            <div className="flex items-center gap-6">
-              <div>
-                <p className="text-2xl font-bold text-orange-600">{discrepancyAnalytics.col6col4Mismatch}</p>
-                <p className="text-xs text-slate-500">ครั้งทั้งหมด เดือนนี้</p>
+            <div className="grid grid-cols-2 gap-4 mb-3">
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                <p className="text-2xl font-bold text-orange-600">{discrepancyAnalytics.type2Pending}</p>
+                <p className="text-xs text-orange-700">🟠 Pending — ยังไม่ได้แก้</p>
               </div>
-              {discrepancyAnalytics.topCol6Customers.length > 0 && (
-                <div className="flex-1 border-l border-slate-200 pl-6">
-                  <p className="text-xs font-medium text-slate-600 mb-1">ลูกค้าที่นับไม่ตรงบ่อย:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {discrepancyAnalytics.topCol6Customers.map(c => (
-                      <Link key={c.id} href={`/dashboard/customers/${c.id}`}
-                        className="text-xs bg-orange-50 text-orange-700 px-2 py-1 rounded hover:bg-orange-100">
-                        {c.name} <span className="font-mono">({c.count})</span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                <p className="text-2xl font-bold text-emerald-600">{discrepancyAnalytics.type2Resolved}</p>
+                <p className="text-xs text-emerald-700">✓ Resolved — sync แล้ว</p>
+              </div>
             </div>
+            {discrepancyAnalytics.topType2Customers.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-slate-600 mb-1">ลูกค้าที่นับไม่ตรงบ่อย:</p>
+                <div className="flex flex-wrap gap-2">
+                  {discrepancyAnalytics.topType2Customers.map(c => (
+                    <Link key={c.id} href={`/dashboard/customers/${c.id}`}
+                      className="text-xs bg-slate-50 text-slate-700 px-2 py-1 rounded hover:bg-slate-100 border border-slate-200">
+                      {c.name} <span className="font-mono">({c.count})</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
