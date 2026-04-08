@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { format } from 'date-fns'
@@ -10,6 +11,7 @@ import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, calculateBillingT
 import { calculateTransportFeeTrip } from '@/lib/transport-fee'
 import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2 } from 'lucide-react'
 import Modal from '@/components/Modal'
+import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
 import DateFilter from '@/components/DateFilter'
@@ -89,9 +91,6 @@ export default function BillingPage() {
 
   const router = useRouter()
 
-  // Post-reverse toast
-  const [reversedDnInfo, setReversedDnInfo] = useState<{ dnIds: string[]; wbNumber: string } | null>(null)
-
   // Row highlight
   const [activeWbId, setActiveWbId] = useState<string | null>(null)
   const [activeIvId, setActiveIvId] = useState<string | null>(null)
@@ -100,6 +99,36 @@ export default function BillingPage() {
   // Bulk select state (WB, IV)
   const [selectedWbIds, setSelectedWbIds] = useState<string[]>([])
   const [selectedIvIds, setSelectedIvIds] = useState<string[]>([])
+
+  // Focus mode (50): from ?focus=ID1,ID2 — apply to active tab (billing/invoice/quotation)
+  const [focusIds, setFocusIds] = useState<string[]>(() => {
+    const f = searchParams.get('focus')
+    return f ? f.split(',').filter(Boolean) : []
+  })
+  const focusMode = focusIds.length > 0
+
+  // Auto-open detail modal if focusing on single document (only on mount)
+  const focusAutoOpenedRef = useRef(false)
+  useEffect(() => {
+    if (focusAutoOpenedRef.current || focusIds.length !== 1) return
+    focusAutoOpenedRef.current = true
+    const id = focusIds[0]
+    // Detect which entity this ID belongs to + open it
+    if (billingStatements.some(b => b.id === id)) {
+      setTab('billing')
+      setActiveWbId(id)
+      setShowDetail(id)
+    } else if (taxInvoices.some(i => i.id === id)) {
+      setTab('invoice')
+      setActiveIvId(id)
+      setShowInvoiceDetail(id)
+    }
+  }, [focusIds, billingStatements, taxInvoices])
+
+  const exitFocus = () => {
+    setFocusIds([])
+    router.replace('/dashboard/billing')
+  }
   const [showWbPrintList, setShowWbPrintList] = useState(false)
   const [showIvPrintList, setShowIvPrintList] = useState(false)
   const [showWbBulkPrint, setShowWbBulkPrint] = useState(false)
@@ -212,6 +241,9 @@ export default function BillingPage() {
   // Billing list
   const filteredBilling = useMemo(() => {
     return billingStatements.filter(b => {
+      // Focus mode (50): bypass all other filters
+      if (focusMode && tab === 'billing') return focusIds.includes(b.id)
+
       if (search) {
         const customer = getCustomer(b.customerId)
         const q = search.toLowerCase()
@@ -243,7 +275,7 @@ export default function BillingPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [billingStatements, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, wbFilter, taxInvoices])
+  }, [billingStatements, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, wbFilter, taxInvoices, focusMode, focusIds, tab])
 
   // Preview for billing creation
   const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
@@ -608,49 +640,43 @@ export default function BillingPage() {
     exportCSV(headers, rows, 'รายการใบกำกับภาษี')
   }
 
-  // Reverse WB: block if IV exists, else mark SDs unbilled + delete WB
-  const handleReverseWB = (billingId: string) => {
-    const billing = billingStatements.find(b => b.id === billingId)
-    if (!billing) return
-    const hasIV = taxInvoices.some(ti => ti.billingStatementId === billingId)
-    if (hasIV) {
-      alert('ไม่สามารถย้อน WB ได้ เนื่องจากมีใบกำกับภาษี (IV) อยู่แล้ว\nกรุณาย้อน IV ก่อน')
-      return
-    }
-    const customer = getCustomer(billing.customerId)
-    const dnNumbers = billing.deliveryNoteIds
-      .map(id => deliveryNotes.find(d => d.id === id)?.noteNumber)
-      .filter(Boolean).join(', ')
-    if (confirm(`ยืนยันการลบใบวางบิล ${billing.billingNumber}?\n\nSD ที่จะถูกยกเลิกการวางบิล:\n${dnNumbers || '-'}\n\nลูกค้า: ${customer?.name || '-'}`)) {
-      const dnIds = [...billing.deliveryNoteIds]
-      const wbNumber = billing.billingNumber
-      for (const dnId of billing.deliveryNoteIds) {
-        updateDeliveryNote(dnId, { isBilled: false })
-      }
-      deleteBillingStatement(billingId)
-      setShowDetail(null)
-      setShowPrint(false)
-      setReversedDnInfo({ dnIds, wbNumber })
-    }
-  }
+  // Reverse IV (50.2): use DeleteWithRedirectModal — เลือก "อยู่หน้านี้" หรือ "ไปแก้ WB"
+  const [pendingReverseIV, setPendingReverseIV] = useState<{ id: string; number: string; linkedWbId: string; linkedWbNumber: string } | null>(null)
 
-  // Reverse IV: delete IV (unlocks WB reversal)
-  const handleReverseIV = (invoiceId: string) => {
+  const openReverseIVConfirm = (invoiceId: string) => {
     const inv = taxInvoices.find(i => i.id === invoiceId)
     if (!inv) return
     const linkedWB = billingStatements.find(b => b.id === inv.billingStatementId)
-    if (confirm(`ยืนยันการลบใบกำกับภาษี ${inv.invoiceNumber}?\n\nใบวางบิลที่เกี่ยวข้อง: ${linkedWB?.billingNumber || '-'}`)) {
-      const linkedWBId = inv.billingStatementId
-      deleteTaxInvoice(invoiceId)
-      setShowInvoiceDetail(null)
-      setShowInvoicePrint(false)
-      // Navigate to linked WB after IV delete
-      if (linkedWBId) {
-        setTab('billing')
-        setActiveWbId(linkedWBId)
-        setShowDetail(linkedWBId)
-        scrollToActiveRow(linkedWBId)
-      }
+    setPendingReverseIV({
+      id: invoiceId,
+      number: inv.invoiceNumber,
+      linkedWbId: inv.billingStatementId,
+      linkedWbNumber: linkedWB?.billingNumber || '-',
+    })
+  }
+
+  const handleReverseIVAndStay = () => {
+    if (!pendingReverseIV) return
+    deleteTaxInvoice(pendingReverseIV.id)
+    setShowInvoiceDetail(null)
+    setShowInvoicePrint(false)
+    setPendingReverseIV(null)
+  }
+
+  const handleReverseIVAndRedirect = () => {
+    if (!pendingReverseIV) return
+    const wbId = pendingReverseIV.linkedWbId
+    deleteTaxInvoice(pendingReverseIV.id)
+    setShowInvoiceDetail(null)
+    setShowInvoicePrint(false)
+    setPendingReverseIV(null)
+    // Switch to billing tab + focus mode + auto-open detail
+    if (wbId) {
+      setTab('billing')
+      setFocusIds([wbId])
+      setActiveWbId(wbId)
+      setShowDetail(wbId)
+      scrollToActiveRow(wbId)
     }
   }
 
@@ -742,28 +768,18 @@ export default function BillingPage() {
 
   return (
     <div>
-      {/* Post-Reverse WB Toast */}
-      {reversedDnInfo && (
-        <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm">
-          <div className="flex items-center gap-2 text-emerald-800">
-            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>ย้อน <span className="font-semibold">{reversedDnInfo.wbNumber}</span> สำเร็จ — SD {reversedDnInfo.dnIds.length} ใบ พร้อมวางบิลใหม่แล้ว</span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => {
-                const ids = reversedDnInfo.dnIds.join(',')
-                setReversedDnInfo(null)
-                router.push(`/dashboard/delivery?preselect=${ids}`)
-              }}
-              className="px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1">
-              ดู SD ที่เกี่ยวข้อง →
-            </button>
-            <button onClick={() => setReversedDnInfo(null)} className="text-emerald-500 hover:text-emerald-700 p-0.5">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+      {/* Focus Mode Banner (50) */}
+      {focusMode && (
+        <FocusBanner
+          count={focusIds.length}
+          docNumbers={focusIds.map(id =>
+            billingStatements.find(b => b.id === id)?.billingNumber ||
+            taxInvoices.find(i => i.id === id)?.invoiceNumber ||
+            ''
+          ).filter(Boolean)}
+          docType={tab === 'billing' ? 'ใบวางบิล' : tab === 'invoice' ? 'ใบกำกับภาษี' : 'เอกสาร'}
+          onExit={exitFocus}
+        />
       )}
 
       {/* Header */}
@@ -1537,47 +1553,50 @@ export default function BillingPage() {
         )}
       </Modal>
 
-      {/* Delete Confirmation Modal */}
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
-        {(() => {
-          const hasLinkedIV = taxInvoices.some(ti => ti.billingStatementId === confirmDeleteId)
-          const wbToDelete = billingStatements.find(b => b.id === confirmDeleteId)
-          return (
-            <div className="space-y-4">
-              {hasLinkedIV ? (
-                <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-700">
-                  <span className="font-medium">⚠ ไม่สามารถลบได้</span> — มีใบกำกับภาษี (IV) อยู่แล้ว<br />
-                  กรุณาย้อน IV ก่อน แล้วค่อยลบ WB
-                </div>
-              ) : (
-                <div>
-                  <p className="text-sm text-slate-600">ต้องการลบใบวางบิลนี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
-                  {(wbToDelete?.deliveryNoteIds?.length ?? 0) > 0 && (
-                    <p className="mt-1 text-xs text-orange-600">SD {wbToDelete!.deliveryNoteIds.length} ใบที่เกี่ยวข้องจะถูกยกเลิกการวางบิลโดยอัตโนมัติ</p>
-                  )}
-                </div>
-              )}
-              <div className="flex justify-end gap-3">
-                <button onClick={() => setConfirmDeleteId(null)}
-                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-                {!hasLinkedIV && (
-                  <button onClick={() => {
-                    if (confirmDeleteId && wbToDelete) {
-                      for (const dnId of wbToDelete.deliveryNoteIds) {
-                        updateDeliveryNote(dnId, { isBilled: false })
-                      }
-                      deleteBillingStatement(confirmDeleteId)
-                      setConfirmDeleteId(null)
-                      setShowDetail(null)
-                    }
-                  }}
-                    className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
-                )}
-              </div>
-            </div>
-          )
-        })()}
-      </Modal>
+      {/* Delete WB Confirmation Modal (50.1) — DeleteWithRedirectModal */}
+      {(() => {
+        const wbToDelete = billingStatements.find(b => b.id === confirmDeleteId)
+        const hasLinkedIV = taxInvoices.some(ti => ti.billingStatementId === confirmDeleteId)
+        const linkedDnIds = wbToDelete?.deliveryNoteIds || []
+
+        const doDelete = () => {
+          if (!confirmDeleteId || !wbToDelete) return
+          for (const dnId of wbToDelete.deliveryNoteIds) {
+            updateDeliveryNote(dnId, { isBilled: false })
+          }
+          deleteBillingStatement(confirmDeleteId)
+        }
+
+        const handleDeleteAndStay = () => {
+          doDelete()
+          setConfirmDeleteId(null)
+          setShowDetail(null)
+        }
+
+        const handleDeleteAndRedirect = () => {
+          doDelete()
+          setConfirmDeleteId(null)
+          setShowDetail(null)
+          if (linkedDnIds.length > 0) {
+            router.push(`/dashboard/delivery?focus=${linkedDnIds.join(',')}`)
+          }
+        }
+
+        return (
+          <DeleteWithRedirectModal
+            open={!!confirmDeleteId}
+            onClose={() => setConfirmDeleteId(null)}
+            docNumber={wbToDelete?.billingNumber || ''}
+            message="ต้องการลบใบวางบิลนี้หรือไม่? หลังลบ ระบบจะปลดล็อค SD ที่เกี่ยวข้องให้กลับไปแก้ไขได้"
+            warning={linkedDnIds.length > 0 ? `SD ที่เกี่ยวข้อง ${linkedDnIds.length} ใบจะถูกยกเลิกการวางบิลโดยอัตโนมัติ` : undefined}
+            redirectLabel={linkedDnIds.length > 0 ? 'ไปแก้ SD' : undefined}
+            onDeleteAndStay={handleDeleteAndStay}
+            onDeleteAndRedirect={linkedDnIds.length > 0 ? handleDeleteAndRedirect : undefined}
+            blocked={hasLinkedIV}
+            blockedReason="มีใบกำกับภาษี (IV) อยู่แล้ว — กรุณาย้อน IV ก่อน แล้วค่อยลบ WB"
+          />
+        )
+      })()}
 
       {/* Billing Print Preview Modal */}
       <Modal open={showPrint && !!detailBilling} onClose={() => setShowPrint(false)} title="ตรวจสอบข้อมูลก่อนพิมพ์" size="xl" className="print-target">
@@ -1593,7 +1612,7 @@ export default function BillingPage() {
               ) : (
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input type="checkbox" checked={true}
-                    onChange={() => handleReverseWB(detailBilling.id)}
+                    onChange={() => setConfirmDeleteId(detailBilling.id)}
                     className="w-4 h-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500" />
                   <span className="text-sm font-medium text-emerald-700">สถานะเปลี่ยนผ่านใบวางบิล WB</span>
                 </label>
@@ -1705,7 +1724,7 @@ export default function BillingPage() {
             <div className="flex justify-between pt-2">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input type="checkbox" checked={true}
-                  onChange={() => handleReverseIV(detailInvoice.id)}
+                  onChange={() => openReverseIVConfirm(detailInvoice.id)}
                   className="w-4 h-4 rounded border-purple-300 text-purple-600 focus:ring-purple-500" />
                 <span className="text-sm font-medium text-purple-700">สถานะเปลี่ยนผ่านใบกำกับภาษี IV</span>
               </label>
@@ -1725,7 +1744,7 @@ export default function BillingPage() {
             <div className="flex items-center mb-2 no-print">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input type="checkbox" checked={true}
-                  onChange={() => handleReverseIV(detailInvoice.id)}
+                  onChange={() => openReverseIVConfirm(detailInvoice.id)}
                   className="w-4 h-4 rounded border-purple-300 text-purple-600 focus:ring-purple-500" />
                 <span className="text-sm font-medium text-purple-700">สถานะเปลี่ยนผ่านใบกำกับภาษี IV</span>
               </label>
@@ -2582,6 +2601,18 @@ export default function BillingPage() {
           )
         })()}
       </Modal>
+
+      {/* IV Reverse Confirm Modal (50.2) */}
+      <DeleteWithRedirectModal
+        open={!!pendingReverseIV}
+        onClose={() => setPendingReverseIV(null)}
+        docNumber={pendingReverseIV?.number || ''}
+        message={`ต้องการลบใบกำกับภาษีนี้หรือไม่? หลังลบ ระบบจะปลดล็อคใบวางบิล (WB) ที่เกี่ยวข้องให้กลับไปแก้ไขได้`}
+        warning={pendingReverseIV ? `ใบวางบิลที่เกี่ยวข้อง: ${pendingReverseIV.linkedWbNumber}` : undefined}
+        redirectLabel="ไปแก้ WB"
+        onDeleteAndStay={handleReverseIVAndStay}
+        onDeleteAndRedirect={handleReverseIVAndRedirect}
+      />
     </div>
   )
 }

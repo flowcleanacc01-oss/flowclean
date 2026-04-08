@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
+import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
@@ -46,11 +47,33 @@ export default function LinenFormsPage() {
 
   const [activeRowId, setActiveRowId] = useState<string | null>(null)
 
-  // Bulk select state (pre-populated from URL param e.g. after SD delete)
-  const [selectedLfIds, setSelectedLfIds] = useState<string[]>(() => {
-    const p = searchParams.get('select')
-    return p ? p.split(',').filter(Boolean) : []
+  // Focus mode (50): from ?focus=ID1,ID2 — override date filter + auto-open detail
+  const [focusIds, setFocusIds] = useState<string[]>(() => {
+    const f = searchParams.get('focus')
+    return f ? f.split(',').filter(Boolean) : []
   })
+  const focusMode = focusIds.length > 0
+
+  // Bulk select state — pre-populated from focus mode
+  const [selectedLfIds, setSelectedLfIds] = useState<string[]>(() => {
+    const f = searchParams.get('focus')
+    return f ? f.split(',').filter(Boolean) : []
+  })
+
+  // Auto-open detail modal if focusing on single document (only on mount)
+  const autoOpenedRef = useRef(false)
+  useEffect(() => {
+    if (!autoOpenedRef.current && focusIds.length === 1) {
+      autoOpenedRef.current = true
+      setShowDetail(focusIds[0])
+    }
+  }, [focusIds])
+
+  const exitFocus = () => {
+    setFocusIds([])
+    setSelectedLfIds([])
+    router.replace('/dashboard/linen-forms')
+  }
   const [showLfPrintList, setShowLfPrintList] = useState(false)
   const [showLfBulkPrint, setShowLfBulkPrint] = useState(false)
 
@@ -127,6 +150,9 @@ export default function LinenFormsPage() {
 
   const filtered = useMemo(() => {
     return linenForms.filter(f => {
+      // Focus mode (50): bypass all other filters except focus IDs
+      if (focusMode) return focusIds.includes(f.id)
+
       if (statusFilter !== 'all' && f.status !== statusFilter) return false
       if (customerFilter !== 'all' && f.customerId !== customerFilter) return false
       if (search) {
@@ -179,7 +205,7 @@ export default function LinenFormsPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [linenForms, statusFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, alertFilter, linkedLFMap])
+  }, [linenForms, statusFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, alertFilter, linkedLFMap, focusMode, focusIds])
 
   const statuses: (LinenFormStatus | 'all')[] = ['all', ...ALL_LINEN_STATUSES]
 
@@ -306,6 +332,16 @@ export default function LinenFormsPage() {
 
   return (
     <div>
+      {/* Focus Mode Banner */}
+      {focusMode && (
+        <FocusBanner
+          count={focusIds.length}
+          docNumbers={focusIds.map(id => linenForms.find(f => f.id === id)?.formNumber).filter(Boolean) as string[]}
+          docType="ใบรับส่งผ้า"
+          onExit={exitFocus}
+        />
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>

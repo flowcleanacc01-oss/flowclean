@@ -1,20 +1,22 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { type DeliveryNoteItem } from '@/types'
 import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
 import Modal from '@/components/Modal'
+import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
 import { exportCSV } from '@/lib/export'
 
-type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed' | 'preselected'
+type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed'
 
 export default function DeliveryPage() {
   const {
@@ -31,15 +33,35 @@ export default function DeliveryPage() {
   const router = useRouter()
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-  const [dnFilter, setDnFilter] = useState<DNFilter>(() => {
-    const p = searchParams.get('preselect')
-    return p ? 'preselected' : 'all'
+  const [dnFilter, setDnFilter] = useState<DNFilter>('all')
+
+  // Focus mode (50): from ?focus=ID1,ID2 — override all filters + auto-open detail
+  const [focusIds, setFocusIds] = useState<string[]>(() => {
+    const f = searchParams.get('focus')
+    return f ? f.split(',').filter(Boolean) : []
   })
+  const focusMode = focusIds.length > 0
+
   const [selectedDnIds, setSelectedDnIds] = useState<string[]>(() => {
-    const p = searchParams.get('preselect')
-    return p ? p.split(',').filter(Boolean) : []
+    const f = searchParams.get('focus')
+    return f ? f.split(',').filter(Boolean) : []
   })
   const [activeRowId, setActiveRowId] = useState<string | null>(() => searchParams.get('detail'))
+
+  // Auto-open detail modal if focusing on single document (only on mount)
+  const autoOpenedRef = useRef(false)
+  useEffect(() => {
+    if (!autoOpenedRef.current && focusIds.length === 1) {
+      autoOpenedRef.current = true
+      setShowDetail(focusIds[0])
+    }
+  }, [focusIds])
+
+  const exitFocus = () => {
+    setFocusIds([])
+    setSelectedDnIds([])
+    router.replace('/dashboard/delivery')
+  }
   const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false)
   const [showPrintList, setShowPrintList] = useState(false)
   const [showBulkPrint, setShowBulkPrint] = useState(false)
@@ -81,6 +103,9 @@ export default function DeliveryPage() {
 
   const filtered = useMemo(() => {
     return deliveryNotes.filter(dn => {
+      // Focus mode (50): bypass all other filters
+      if (focusMode) return focusIds.includes(dn.id)
+
       if (customerFilter !== 'all' && dn.customerId !== customerFilter) return false
       if (search) {
         const customer = getCustomer(dn.customerId)
@@ -100,7 +125,6 @@ export default function DeliveryPage() {
       if (dnFilter === 'printed' && !dn.isPrinted) return false
       if (dnFilter === 'not-billed' && dn.isBilled) return false
       if (dnFilter === 'billed' && !dn.isBilled) return false
-      if (dnFilter === 'preselected' && !selectedDnIds.includes(dn.id)) return false
       return true
     }).sort((a, b) => {
       let va: string | number, vb: string | number
@@ -118,7 +142,7 @@ export default function DeliveryPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [deliveryNotes, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter, billingStatements, selectedDnIds])
+  }, [deliveryNotes, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter, billingStatements, selectedDnIds, focusMode, focusIds])
 
   // Forms available for delivery (confirmed status)
   const availableForms = useMemo(() => {
@@ -290,7 +314,12 @@ export default function DeliveryPage() {
     exportCSV(headers, rows, 'รายการใบส่งของ')
   }
 
-  const handleBulkDelete = () => {
+  /**
+   * 50.5: Bulk delete SD — เพิ่ม redirect logic ให้ตรงกับ single delete
+   * - ถ้ามี linked LFs → redirect ไป LF page ใน focus mode
+   * - ถ้าไม่มี → stay บน SD page
+   */
+  const handleBulkDeleteAndStay = () => {
     const billedCount = selectedDnIds.filter(id =>
       billingStatements.some(b => b.deliveryNoteIds.includes(id))
     ).length
@@ -303,7 +332,32 @@ export default function DeliveryPage() {
     }
     setSelectedDnIds([])
     setConfirmBulkDeleteOpen(false)
-    if (dnFilter === 'preselected') setDnFilter('all')
+  }
+
+  const handleBulkDeleteAndRedirect = () => {
+    const billedCount = selectedDnIds.filter(id =>
+      billingStatements.some(b => b.deliveryNoteIds.includes(id))
+    ).length
+    if (billedCount > 0) {
+      alert(`ไม่สามารถลบได้ — มี SD ที่วางบิลแล้ว ${billedCount} ใบ\nกรุณายกเลิกการเลือก SD ที่วางบิลแล้วก่อน`)
+      return
+    }
+    // Collect linked LF IDs from all selected SDs before deleting
+    const linkedLfIds = new Set<string>()
+    for (const id of selectedDnIds) {
+      const dn = deliveryNotes.find(d => d.id === id)
+      if (dn) for (const lfId of dn.linenFormIds) linkedLfIds.add(lfId)
+    }
+    // Delete
+    for (const id of selectedDnIds) {
+      deleteDeliveryNote(id)
+    }
+    setSelectedDnIds([])
+    setConfirmBulkDeleteOpen(false)
+    // Redirect to LF page in focus mode
+    if (linkedLfIds.size > 0) {
+      router.push(`/dashboard/linen-forms?focus=${[...linkedLfIds].join(',')}`)
+    }
   }
 
   const filterOptions: { key: DNFilter; label: string }[] = [
@@ -379,26 +433,16 @@ export default function DeliveryPage() {
             {f.label}
           </button>
         ))}
-        {selectedDnIds.length > 0 && (
-          <button onClick={() => setDnFilter('preselected')}
-            className={cn(
-              'px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1',
-              dnFilter === 'preselected' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-            )}>
-            ที่เลือก ({selectedDnIds.length})
-          </button>
-        )}
       </div>
 
-      {/* Preselect banner — shown when navigated from WB reverse */}
-      {searchParams.get('preselect') && selectedDnIds.length > 0 && (
-        <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700">
-          <Check className="w-3.5 h-3.5 shrink-0" />
-          <span>SD {selectedDnIds.length} ใบนี้มาจาก WB ที่ย้อนสถานะแล้ว — พร้อมวางบิลใหม่</span>
-          <button onClick={() => { setSelectedDnIds([]); setDnFilter('all') }} className="ml-auto text-emerald-500 hover:text-emerald-700">
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
+      {/* Focus Mode Banner (50) — shown when navigated from WB/IV reverse */}
+      {focusMode && (
+        <FocusBanner
+          count={focusIds.length}
+          docNumbers={focusIds.map(id => deliveryNotes.find(d => d.id === id)?.noteNumber).filter(Boolean) as string[]}
+          docType="ใบส่งของ"
+          onExit={exitFocus}
+        />
       )}
 
       {/* Date Filter */}
@@ -799,80 +843,104 @@ export default function DeliveryPage() {
         )}
       </Modal>
 
-      {/* Bulk Delete Confirmation Modal */}
+      {/* Bulk Delete Confirmation Modal — 2 ปุ่ม (50.5) */}
       <Modal open={confirmBulkDeleteOpen} onClose={() => setConfirmBulkDeleteOpen(false)} title="ยืนยันการลบ">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">
-            ต้องการลบใบส่งของที่เลือกทั้งหมด <span className="font-semibold text-red-600">{selectedDnIds.length} ใบ</span> หรือไม่?
-          </p>
-          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            ⚠️ SD ที่มีใบวางบิลอยู่จะไม่ถูกลบ — ระบบจะหยุดและแจ้งเตือนให้ยกเลิกการเลือกก่อน
-          </p>
-          <div className="flex justify-end gap-3">
-            <button onClick={() => setConfirmBulkDeleteOpen(false)}
-              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={handleBulkDelete}
-              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-1">
-              <Trash2 className="w-4 h-4" />ลบ {selectedDnIds.length} ใบ
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Delete Confirmation Modal */}
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
         {(() => {
-          const hasLinkedWB = billingStatements.some(b => b.deliveryNoteIds.includes(confirmDeleteId || ''))
+          const linkedLfCount = new Set(selectedDnIds.flatMap(id =>
+            deliveryNotes.find(d => d.id === id)?.linenFormIds || []
+          )).size
           return (
-        <div className="space-y-4">
-          {hasLinkedWB ? (
-            <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-700">
-              <span className="font-medium">⚠ ไม่สามารถลบได้</span> — SD นี้มีใบวางบิลอยู่<br />
-              กรุณาย้อน WB ก่อน แล้วค่อยลบ SD
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">
+                ต้องการลบใบส่งของที่เลือกทั้งหมด <span className="font-semibold text-red-600">{selectedDnIds.length} ใบ</span> หรือไม่?
+              </p>
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                ⚠️ SD ที่มีใบวางบิลอยู่จะไม่ถูกลบ — ระบบจะหยุดและแจ้งเตือนให้ยกเลิกการเลือกก่อน
+              </p>
+              {linkedLfCount > 0 && (
+                <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+                  หลังลบ ระบบจะปลดล็อค LF ที่เกี่ยวข้อง <strong>{linkedLfCount} ใบ</strong> ให้กลับไปแก้ไขได้
+                </p>
+              )}
+              <div className="flex flex-wrap justify-end gap-2">
+                <button onClick={() => setConfirmBulkDeleteOpen(false)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+                <button onClick={handleBulkDeleteAndStay}
+                  className="px-4 py-2 text-sm bg-red-100 text-red-700 hover:bg-red-200 rounded-lg flex items-center gap-1.5 font-medium">
+                  <Trash2 className="w-3.5 h-3.5" />ลบ + อยู่หน้านี้
+                </button>
+                {linkedLfCount > 0 && (
+                  <button onClick={handleBulkDeleteAndRedirect}
+                    className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 rounded-lg flex items-center gap-1.5 font-medium">
+                    <Trash2 className="w-3.5 h-3.5" />ลบ + ไปแก้ LF
+                  </button>
+                )}
+              </div>
             </div>
-          ) : (
-            <p className="text-sm text-slate-600">ต้องการลบใบส่งของนี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
-          )}
-          <div className="flex justify-end gap-3">
-            <button onClick={() => setConfirmDeleteId(null)}
-              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            {!hasLinkedWB && (<button onClick={() => {
-              if (!confirmDeleteId) return
-              const deletedDN = deliveryNotes.find(d => d.id === confirmDeleteId)
-              deleteDeliveryNote(confirmDeleteId)
-              // Reassign monthly fee if deleted DN had one
-              if (deletedDN && deletedDN.transportFeeMonth > 0) {
-                const month = deletedDN.date.slice(0, 7)
-                const customer = getCustomer(deletedDN.customerId)
-                const remainingDNs = deliveryNotes
-                  .filter(d => d.id !== confirmDeleteId && d.customerId === deletedDN.customerId && d.date.startsWith(month))
-                  .sort((a, b) => b.date.localeCompare(a.date))
-                if (remainingDNs.length > 0 && customer && customer.enableMinPerMonth) {
-                  const newLastDN = remainingDNs[0]
-                  const otherDNs = remainingDNs.filter(d => d.id !== newLastDN.id)
-                  const existingTotal = otherDNs.reduce((s, d) => {
-                    return s + calculateDNSubtotal(d, customer) + (d.transportFeeTrip || 0)
-                  }, 0)
-                  const lastDNSubtotal = calculateDNSubtotal(newLastDN, customer) + (newLastDN.transportFeeTrip || 0)
-                  const monthTotal = existingTotal + lastDNSubtotal
-                  const newMonthFee = monthTotal < customer.monthlyFlatRate ? customer.monthlyFlatRate - monthTotal : 0
-                  updateDeliveryNote(newLastDN.id, { transportFeeMonth: newMonthFee })
-                }
-              }
-              setConfirmDeleteId(null)
-              setShowDetail(null)
-              // Navigate to LF page with linked LF IDs pre-selected
-              if (deletedDN && deletedDN.linenFormIds.length > 0) {
-                router.push(`/dashboard/linen-forms?select=${deletedDN.linenFormIds.join(',')}`)
-              }
-            }}
-              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
-            )}
-          </div>
-        </div>
           )
         })()}
       </Modal>
+
+      {/* Delete SD Confirmation Modal (50.3) — DeleteWithRedirectModal */}
+      {(() => {
+        const dnToDelete = deliveryNotes.find(d => d.id === confirmDeleteId)
+        const hasLinkedWB = billingStatements.some(b => b.deliveryNoteIds.includes(confirmDeleteId || ''))
+        const linkedLfIds = dnToDelete?.linenFormIds || []
+
+        const doDelete = () => {
+          if (!confirmDeleteId || !dnToDelete) return
+          deleteDeliveryNote(confirmDeleteId)
+          // Reassign monthly fee if deleted DN had one
+          if (dnToDelete.transportFeeMonth > 0) {
+            const month = dnToDelete.date.slice(0, 7)
+            const customer = getCustomer(dnToDelete.customerId)
+            const remainingDNs = deliveryNotes
+              .filter(d => d.id !== confirmDeleteId && d.customerId === dnToDelete.customerId && d.date.startsWith(month))
+              .sort((a, b) => b.date.localeCompare(a.date))
+            if (remainingDNs.length > 0 && customer && customer.enableMinPerMonth) {
+              const newLastDN = remainingDNs[0]
+              const otherDNs = remainingDNs.filter(d => d.id !== newLastDN.id)
+              const existingTotal = otherDNs.reduce((s, d) => {
+                return s + calculateDNSubtotal(d, customer) + (d.transportFeeTrip || 0)
+              }, 0)
+              const lastDNSubtotal = calculateDNSubtotal(newLastDN, customer) + (newLastDN.transportFeeTrip || 0)
+              const monthTotal = existingTotal + lastDNSubtotal
+              const newMonthFee = monthTotal < customer.monthlyFlatRate ? customer.monthlyFlatRate - monthTotal : 0
+              updateDeliveryNote(newLastDN.id, { transportFeeMonth: newMonthFee })
+            }
+          }
+        }
+
+        const handleDeleteAndStay = () => {
+          doDelete()
+          setConfirmDeleteId(null)
+          setShowDetail(null)
+        }
+
+        const handleDeleteAndRedirect = () => {
+          doDelete()
+          setConfirmDeleteId(null)
+          setShowDetail(null)
+          if (linkedLfIds.length > 0) {
+            router.push(`/dashboard/linen-forms?focus=${linkedLfIds.join(',')}`)
+          }
+        }
+
+        return (
+          <DeleteWithRedirectModal
+            open={!!confirmDeleteId}
+            onClose={() => setConfirmDeleteId(null)}
+            docNumber={dnToDelete?.noteNumber || ''}
+            message="ต้องการลบใบส่งของนี้หรือไม่? หลังลบ ระบบจะปลดล็อค LF ที่เกี่ยวข้องให้กลับไปแก้ไขได้"
+            warning={linkedLfIds.length > 0 ? `LF ที่เกี่ยวข้อง: ${linkedLfIds.length} ใบ` : undefined}
+            redirectLabel={linkedLfIds.length > 0 ? 'ไปแก้ LF' : undefined}
+            onDeleteAndStay={handleDeleteAndStay}
+            onDeleteAndRedirect={linkedLfIds.length > 0 ? handleDeleteAndRedirect : undefined}
+            blocked={hasLinkedWB}
+            blockedReason="SD นี้มีใบวางบิล (WB) อยู่ — กรุณาย้อน WB ก่อน แล้วค่อยลบ SD"
+          />
+        )
+      })()}
 
       {/* Print List Modal — พิมพ์รายการ SD */}
       <Modal open={showPrintList} onClose={() => setShowPrintList(false)} title="รายการใบส่งของ" size="xl" className="print-target">
