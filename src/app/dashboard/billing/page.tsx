@@ -439,10 +439,13 @@ export default function BillingPage() {
       grandTotal: billing.grandTotal,
       notes: '',
     })
-    setActiveIvId(newIV.id)
-    scrollToActiveRow(newIV.id)
+    // 65: หลังออก IV → switch ไป IV tab + เปิด IV detail modal ทันที
     setShowCreateIV(null)
     setShowDetail(null)
+    setTab('invoice')
+    setActiveIvId(newIV.id)
+    setShowInvoiceDetail(newIV.id)
+    scrollToActiveRow(newIV.id)
   }
 
   const handleCreateQuotation = () => {
