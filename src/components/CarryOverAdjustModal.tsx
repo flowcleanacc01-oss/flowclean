@@ -20,14 +20,46 @@ interface Props {
 }
 
 export default function CarryOverAdjustModal({ open, onClose, customerId, customerName, editing }: Props) {
-  const { getCarryOver, addCarryOverAdjustment, updateCarryOverAdjustment, linenCatalog, customers } = useStore()
+  const { getCarryOver, addCarryOverAdjustment, updateCarryOverAdjustment, linenCatalog, customers, linenForms, quotations } = useStore()
 
   const customer = customers.find(c => c.id === customerId)
-  const enabledCodes = customer?.enabledItems || []
-  const enabledItems = useMemo(
-    () => linenCatalog.filter(it => enabledCodes.includes(it.code)),
-    [linenCatalog, enabledCodes],
-  )
+
+  /**
+   * Resolve รายการผ้าของลูกค้า — ใช้ priority เดียวกับ LinenFormGrid:
+   * 1. QT accepted (ถ้ามี)
+   * 2. customer.enabledItems (legacy)
+   * 3. codes ที่ปรากฏใน LF history ของลูกค้านี้ (fallback กรณีไม่มี QT/enabledItems)
+   * 4. linenCatalog ทั้งหมด (สุดท้าย — กรณีลูกค้าใหม่)
+   */
+  const enabledItems = useMemo(() => {
+    if (!customer) return []
+
+    // Priority 1: QT accepted
+    const acceptedQT = quotations.find(q => q.customerId === customer.id && q.status === 'accepted')
+    if (acceptedQT && acceptedQT.items.length > 0) {
+      return acceptedQT.items
+        .map(qi => linenCatalog.find(c => c.code === qi.code))
+        .filter((it): it is NonNullable<typeof it> => !!it)
+    }
+
+    // Priority 2: customer.enabledItems
+    if (customer.enabledItems && customer.enabledItems.length > 0) {
+      return linenCatalog.filter(it => customer.enabledItems.includes(it.code))
+    }
+
+    // Priority 3: codes จาก LF history
+    const lfCodes = new Set<string>()
+    for (const f of linenForms) {
+      if (f.customerId !== customer.id) continue
+      for (const r of f.rows) lfCodes.add(r.code)
+    }
+    if (lfCodes.size > 0) {
+      return linenCatalog.filter(it => lfCodes.has(it.code))
+    }
+
+    // Fallback: catalog ทั้งหมด
+    return linenCatalog
+  }, [customer, linenCatalog, linenForms, quotations])
 
   // ---- State ----
   const [type, setType] = useState<CarryOverAdjustmentType>('adjust')
