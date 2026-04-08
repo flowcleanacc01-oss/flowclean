@@ -1722,12 +1722,10 @@ export default function BillingPage() {
             </div>
 
             <div className="flex justify-between pt-2">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={true}
-                  onChange={() => openReverseIVConfirm(detailInvoice.id)}
-                  className="w-4 h-4 rounded border-purple-300 text-purple-600 focus:ring-purple-500" />
-                <span className="text-sm font-medium text-purple-700">สถานะเปลี่ยนผ่านใบกำกับภาษี IV</span>
-              </label>
+              <button onClick={() => openReverseIVConfirm(detailInvoice.id)}
+                className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1">
+                <X className="w-3.5 h-3.5" />ลบ
+              </button>
               <button onClick={() => setShowInvoicePrint(true)}
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
                 <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสาร
