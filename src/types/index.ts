@@ -333,6 +333,7 @@ export interface BillingStatement {
   status: BillingStatus
   paidDate: string | null
   paidAmount: number
+  paidBankId?: string  // 82: bank account ที่รับเงิน (ref company.bankAccounts.id)
   notes: string
   isPrinted?: boolean
   isExported?: boolean

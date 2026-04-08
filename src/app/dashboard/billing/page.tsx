@@ -13,6 +13,7 @@ import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDo
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import ExportButtons from '@/components/ExportButtons'
+import PaymentRecordModal from '@/components/PaymentRecordModal'
 import { canViewBilling } from '@/lib/permissions'
 import { exportCSV } from '@/lib/export'
 import DateFilter from '@/components/DateFilter'
@@ -145,6 +146,8 @@ export default function BillingPage() {
   const [ivIssueDate, setIvIssueDate] = useState(todayISO())
   // 72: เลือก WB เพื่อสร้าง IV (จาก IV tab)
   const [showSelectWbForIv, setShowSelectWbForIv] = useState(false)
+  // 82: Payment Record Modal
+  const [paymentModalWbId, setPaymentModalWbId] = useState<string | null>(null)
 
   // Quotation state
   const [showCreateQU, setShowCreateQU] = useState(false)
@@ -1100,12 +1103,23 @@ export default function BillingPage() {
                         })()}
                       </td>
                       <td className={cn("px-3 py-3 text-center", sortedBg('paid'))} onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={() => updateBillingStatus(b.id, b.status === 'paid' ? 'sent' : 'paid')}
-                          className={cn('px-2 py-0.5 rounded-full text-xs font-medium transition-colors',
-                            b.status === 'paid' ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
-                          {b.status === 'paid' ? 'ชำระแล้ว' : 'ยังไม่ชำระ'}
-                        </button>
+                        {(() => {
+                          // 82: คลิก → เปิด PaymentRecordModal
+                          const isPaid = b.status === 'paid'
+                          const hasPartial = !isPaid && b.paidAmount > 0
+                          return (
+                            <button
+                              onClick={() => setPaymentModalWbId(b.id)}
+                              title={hasPartial ? `รับเงินบางส่วน: ${formatCurrency(b.paidAmount)}` : ''}
+                              className={cn('px-2 py-0.5 rounded-full text-xs font-medium transition-colors inline-flex items-center gap-1',
+                                isPaid ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                  : hasPartial ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-300'
+                                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
+                              {hasPartial && <span title="รับเงินบางส่วน">⚠</span>}
+                              {isPaid ? 'ชำระแล้ว' : hasPartial ? 'ยังไม่ชำระ' : 'ยังไม่ชำระ'}
+                            </button>
+                          )
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1 justify-end">
@@ -2779,6 +2793,21 @@ export default function BillingPage() {
         onDeleteAndStay={handleReverseIVAndStay}
         onDeleteAndRedirect={handleReverseIVAndRedirect}
       />
+
+      {/* 82: Payment Record Modal */}
+      {(() => {
+        const wb = paymentModalWbId ? billingStatements.find(b => b.id === paymentModalWbId) : null
+        const cust = wb ? getCustomer(wb.customerId) : null
+        if (!wb || !cust) return null
+        return (
+          <PaymentRecordModal
+            open={!!paymentModalWbId}
+            onClose={() => setPaymentModalWbId(null)}
+            billing={wb}
+            customer={cust}
+          />
+        )
+      })()}
 
       {/* 72: Select WB to create IV (จาก IV tab) */}
       <Modal open={showSelectWbForIv} onClose={() => setShowSelectWbForIv(false)} title="เลือกใบวางบิลที่จะออกใบกำกับภาษี" size="lg">
