@@ -15,9 +15,9 @@ import Modal from '@/components/Modal'
 import CarryOverAdjustModal from '@/components/CarryOverAdjustModal'
 import { CARRY_OVER_MODE_CONFIG, CARRY_OVER_REASON_CONFIG } from '@/types'
 import { canViewReports } from '@/lib/permissions'
-import type { CarryOverMode, CarryOverAdjustment } from '@/types'
+import type { CarryOverMode, CarryOverAdjustment, BillingStatement } from '@/types'
 
-type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation'
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation'
 
 export default function ReportsPage() {
   const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations, carryOverAdjustments, deleteCarryOverAdjustment } = useStore()
@@ -58,6 +58,7 @@ export default function ReportsPage() {
     { key: 'customer', label: 'ตามลูกค้า' },
     { key: 'item', label: 'ตามสินค้า' },
     { key: 'pnl', label: 'กำไร-ขาดทุน' },
+    { key: 'aging', label: 'บิลค้างชำระ' },
     { key: 'carryover', label: 'ผ้าค้าง' },
     { key: 'discrepancy', label: 'ความแตกต่างการนับ' },
     { key: 'delivery', label: 'รายงานส่งของ' },
@@ -222,6 +223,70 @@ export default function ReportsPage() {
       4: getCarryOver(selCustomerId, end, 4, coShowAdjustments),
     } as Record<CarryOverMode, Record<string, number>>
   }, [selCustomerId, coMode, coEndDate, getCarryOver, coShowAdjustments])
+
+  // ============================================================
+  // Aging Report (B1) — บิลค้างชำระ aging
+  // ============================================================
+  const agingReport = useMemo(() => {
+    const today = todayISO()
+    const todayMs = new Date(today).getTime()
+
+    type Bucket = 'not_due' | '1_30' | '31_60' | '61_90' | '90_plus'
+    const buckets: Record<Bucket, { label: string; color: string; bills: BillingStatement[]; total: number }> = {
+      not_due: { label: 'ยังไม่ถึงกำหนด', color: 'text-slate-600', bills: [], total: 0 },
+      '1_30':  { label: '1-30 วัน',     color: 'text-blue-600', bills: [], total: 0 },
+      '31_60': { label: '31-60 วัน',    color: 'text-amber-600', bills: [], total: 0 },
+      '61_90': { label: '61-90 วัน',    color: 'text-orange-600', bills: [], total: 0 },
+      '90_plus': { label: 'มากกว่า 90 วัน', color: 'text-red-600', bills: [], total: 0 },
+    }
+
+    // Per-customer aging
+    const custAging: Record<string, { name: string; not_due: number; '1_30': number; '31_60': number; '61_90': number; '90_plus': number; total: number }> = {}
+
+    // Filter unpaid bills (status sent or overdue, not paid)
+    const unpaidBills = billingStatements.filter(b => b.status !== 'paid' && b.status !== 'draft')
+
+    for (const b of unpaidBills) {
+      // Outstanding amount = netPayable - paidAmount (handle partial payments)
+      const cust = getCustomer(b.customerId)
+      const target = cust?.enableVat
+        ? cust.enableWithholding ? b.netPayable : b.grandTotal
+        : b.subtotal
+      const outstanding = Math.max(0, target - (b.paidAmount || 0))
+      if (outstanding === 0) continue
+
+      const dueMs = new Date(b.dueDate).getTime()
+      const daysPast = Math.floor((todayMs - dueMs) / (1000 * 60 * 60 * 24))
+
+      let bucket: Bucket
+      if (daysPast <= 0) bucket = 'not_due'
+      else if (daysPast <= 30) bucket = '1_30'
+      else if (daysPast <= 60) bucket = '31_60'
+      else if (daysPast <= 90) bucket = '61_90'
+      else bucket = '90_plus'
+
+      buckets[bucket].bills.push(b)
+      buckets[bucket].total += outstanding
+
+      // Per-customer
+      if (!custAging[b.customerId]) {
+        custAging[b.customerId] = {
+          name: cust?.shortName || cust?.name || '-',
+          not_due: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0, total: 0,
+        }
+      }
+      custAging[b.customerId][bucket] += outstanding
+      custAging[b.customerId].total += outstanding
+    }
+
+    const grandTotal = Object.values(buckets).reduce((s, b) => s + b.total, 0)
+    const overdueTotal = buckets['1_30'].total + buckets['31_60'].total + buckets['61_90'].total + buckets['90_plus'].total
+    const customerList = Object.entries(custAging)
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => b.total - a.total)
+
+    return { buckets, customerList, grandTotal, overdueTotal }
+  }, [billingStatements, getCustomer])
 
   // ============================================================
   // Discrepancy Analytics (53.1) — ความแตกต่างการนับ
@@ -493,6 +558,78 @@ export default function ReportsPage() {
                 {formatCurrency(pnl.profit)}
               </span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* B1: Aging Report Tab */}
+      {tab === 'aging' && (
+        <div className="space-y-4">
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {(Object.entries(agingReport.buckets) as [string, typeof agingReport.buckets[keyof typeof agingReport.buckets]][]).map(([key, b]) => (
+              <div key={key} className={cn('bg-white rounded-xl border p-4',
+                key === '90_plus' ? 'border-red-200' : key === '61_90' ? 'border-orange-200' : key === '31_60' ? 'border-amber-200' : key === '1_30' ? 'border-blue-200' : 'border-slate-200')}>
+                <p className={cn('text-xs font-medium', b.color)}>{b.label}</p>
+                <p className={cn('text-2xl font-bold mt-1', b.color)}>{formatCurrency(b.total)}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">{b.bills.length} บิล</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Total summary */}
+          <div className="bg-gradient-to-r from-[#1B3A5C] to-[#122740] rounded-xl p-4 text-white flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-300">รวมบิลค้างชำระทั้งหมด</p>
+              <p className="text-3xl font-bold mt-1">{formatCurrency(agingReport.grandTotal)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-slate-300">เกินกำหนด</p>
+              <p className="text-2xl font-bold text-red-300 mt-1">{formatCurrency(agingReport.overdueTotal)}</p>
+            </div>
+          </div>
+
+          {/* Per-customer aging */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+              <h3 className="text-sm font-semibold text-slate-700">รายลูกค้า ({agingReport.customerList.length})</h3>
+            </div>
+            {agingReport.customerList.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-sm">ไม่มีบิลค้างชำระ ✓</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
+                      <th className="text-right px-2 py-2 font-medium text-slate-600">ยังไม่ถึง</th>
+                      <th className="text-right px-2 py-2 font-medium text-blue-700">1-30</th>
+                      <th className="text-right px-2 py-2 font-medium text-amber-700">31-60</th>
+                      <th className="text-right px-2 py-2 font-medium text-orange-700">61-90</th>
+                      <th className="text-right px-2 py-2 font-medium text-red-700">90+</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-800">รวม</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {agingReport.customerList.map(c => (
+                      <tr key={c.id} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="px-3 py-2">
+                          <Link href={`/dashboard/customers/${c.id}`} className="text-slate-700 hover:text-[#1B3A5C] hover:underline font-medium">
+                            {c.name}
+                          </Link>
+                        </td>
+                        <td className="text-right px-2 py-2 font-mono text-slate-500">{c.not_due > 0 ? formatCurrency(c.not_due) : '-'}</td>
+                        <td className="text-right px-2 py-2 font-mono text-blue-600">{c['1_30'] > 0 ? formatCurrency(c['1_30']) : '-'}</td>
+                        <td className="text-right px-2 py-2 font-mono text-amber-600">{c['31_60'] > 0 ? formatCurrency(c['31_60']) : '-'}</td>
+                        <td className="text-right px-2 py-2 font-mono text-orange-600">{c['61_90'] > 0 ? formatCurrency(c['61_90']) : '-'}</td>
+                        <td className="text-right px-2 py-2 font-mono text-red-600 font-semibold">{c['90_plus'] > 0 ? formatCurrency(c['90_plus']) : '-'}</td>
+                        <td className="text-right px-3 py-2 font-mono font-bold text-slate-800">{formatCurrency(c.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
