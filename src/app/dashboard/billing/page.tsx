@@ -141,6 +141,8 @@ export default function BillingPage() {
   // IV creation confirm modal
   const [showCreateIV, setShowCreateIV] = useState<string | null>(null) // billingId
   const [ivIssueDate, setIvIssueDate] = useState(todayISO())
+  // 72: เลือก WB เพื่อสร้าง IV (จาก IV tab)
+  const [showSelectWbForIv, setShowSelectWbForIv] = useState(false)
 
   // Quotation state
   const [showCreateQU, setShowCreateQU] = useState(false)
@@ -878,6 +880,11 @@ export default function BillingPage() {
             <button onClick={() => setShowIvPrintList(true)} disabled={filteredInvoices.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
               <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
+            </button>
+            {/* 72: เพิ่มปุ่มสร้าง IV ใน IV tab — pattern เดียวกับ WB/QT */}
+            <button onClick={() => setShowSelectWbForIv(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+              <Plus className="w-4 h-4" />สร้างใบกำกับภาษี
             </button>
           </div>
         )}
@@ -2725,6 +2732,68 @@ export default function BillingPage() {
         onDeleteAndStay={handleReverseIVAndStay}
         onDeleteAndRedirect={handleReverseIVAndRedirect}
       />
+
+      {/* 72: Select WB to create IV (จาก IV tab) */}
+      <Modal open={showSelectWbForIv} onClose={() => setShowSelectWbForIv(false)} title="เลือกใบวางบิลที่จะออกใบกำกับภาษี" size="lg">
+        {(() => {
+          // WB ที่ยังไม่มี IV
+          const availableWbs = billingStatements
+            .filter(b => !taxInvoices.some(ti => ti.billingStatementId === b.id))
+            .sort((a, b) => b.issueDate.localeCompare(a.issueDate))
+
+          if (availableWbs.length === 0) {
+            return (
+              <div className="text-center py-12 text-slate-500 text-sm">
+                <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                ไม่มีใบวางบิลที่ยังไม่ได้ออกใบกำกับภาษี
+                <p className="text-xs text-slate-400 mt-1">ใบวางบิลทุกใบมี IV แล้ว หรือยังไม่มีใบวางบิลในระบบ</p>
+              </div>
+            )
+          }
+
+          return (
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500 mb-3">เลือกใบวางบิลที่ต้องการออกใบกำกับภาษี ({availableWbs.length} ใบที่ยังไม่ได้ออก IV)</p>
+              <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[60vh] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 sticky top-0">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">เลขที่ WB</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600 w-24">วันที่ออก</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600 w-28">ยอดรวม</th>
+                      <th className="text-center px-3 py-2 font-medium text-slate-600 w-20"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {availableWbs.map(wb => {
+                      const customer = getCustomer(wb.customerId)
+                      return (
+                        <tr key={wb.id} className="border-t border-slate-100 hover:bg-slate-50">
+                          <td className="px-3 py-2 font-mono text-xs text-slate-600">{wb.billingNumber}</td>
+                          <td className="px-3 py-2 text-slate-700">{customer?.shortName || customer?.name || '-'}</td>
+                          <td className="px-3 py-2 text-slate-500 text-xs">{formatDate(wb.issueDate)}</td>
+                          <td className="px-3 py-2 text-right font-medium">{formatCurrency(wb.grandTotal)}</td>
+                          <td className="px-3 py-2 text-center">
+                            <button onClick={() => {
+                              setShowSelectWbForIv(false)
+                              setIvIssueDate(todayISO())
+                              setShowCreateIV(wb.id)
+                            }}
+                              className="px-3 py-1 text-xs bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium">
+                              เลือก
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
     </div>
   )
 }
