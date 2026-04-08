@@ -1989,6 +1989,17 @@ export default function BillingPage() {
                 className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
                 ไม่เลือกเลย
               </button>
+              {/* 59: Clear all prices */}
+              {quItems.length > 0 && (
+                <button type="button" onClick={() => {
+                  if (!confirm('ต้องการเคลียร์ราคาทั้งหมดหรือไม่?\n\nระบบจะรีเซ็ตช่อง "ราคา/หน่วย" ของทุกรายการเป็นว่าง\n\n⚠ ไม่สามารถเรียกคืนได้')) return
+                  setQuItems(quItems.map(i => ({ ...i, pricePerUnit: null })))
+                }}
+                  title="เคลียร์ราคาทุกรายการ"
+                  className="text-xs px-2 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1">
+                  <Trash2 className="w-3 h-3" />เคลียร์ราคาทั้งหมด
+                </button>
+              )}
             </div>
             <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
               <table className="w-full text-sm">

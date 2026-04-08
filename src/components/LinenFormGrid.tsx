@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { Trash2 } from 'lucide-react'
 import type { LinenFormRow, Customer, LinenItemDef, LinenFormStatus, QuotationItem } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -93,6 +94,23 @@ export default function LinenFormGrid({
     }
     setLocalRows(updated)
     onChange(updated)
+  }
+
+  // 59: Clear all editable cells in this grid
+  const handleClearAll = () => {
+    if (readOnly) return
+    if (!confirm('ต้องการเคลียร์ข้อมูลทั้งหมดในตารางนี้หรือไม่?\n\nระบบจะรีเซ็ตค่าทุก cell ที่กรอกได้ (col2, col3, col4, col5, col6, หมายเหตุ) เป็น 0 / ค่าว่าง\n\n⚠ ไม่สามารถเรียกคืนได้')) return
+    const cleared = localRows.map(r => ({
+      ...r,
+      ...(editableColumns.includes('col2') ? { col2_hotelCountIn: 0 } : {}),
+      ...(editableColumns.includes('col3') ? { col3_hotelClaimCount: 0 } : {}),
+      ...(editableColumns.includes('col4') ? { col4_factoryApproved: 0 } : {}),
+      ...(editableColumns.includes('col5') ? { col5_factoryClaimApproved: 0 } : {}),
+      ...(editableColumns.includes('col6') ? { col6_factoryPackSend: 0 } : {}),
+      ...(editableColumns.includes('note') ? { note: '' } : {}),
+    }))
+    setLocalRows(cleared)
+    onChange(cleared)
   }
 
   // Arrow key + Enter navigation — เลื่อน cell ใน grid เท่านั้น (ข้ามกล่อง/ปุ่มใช้ Tab/Shift+Tab)
@@ -224,8 +242,18 @@ export default function LinenFormGrid({
           <thead className="sticky top-0 z-10 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
             {headerLabel && (
               <tr className="bg-[#1B3A5C]">
-                <th colSpan={99} className="text-left px-3 py-2 text-sm font-semibold text-white tracking-wide">
-                  {headerLabel}
+                <th colSpan={99} className="px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-white tracking-wide">{headerLabel}</span>
+                    {!readOnly && (
+                      <button onClick={handleClearAll}
+                        title="เคลียร์ข้อมูลทั้งหมดในตาราง"
+                        className="px-2 py-0.5 text-[11px] font-medium text-white/80 hover:text-white hover:bg-white/10 rounded flex items-center gap-1 transition-colors">
+                        <Trash2 className="w-3 h-3" />
+                        เคลียร์ทั้งหมด
+                      </button>
+                    )}
+                  </div>
                 </th>
               </tr>
             )}
