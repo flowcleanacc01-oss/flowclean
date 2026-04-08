@@ -435,7 +435,14 @@ export default function DeliveryPage() {
         ))}
       </div>
 
-      {/* Focus Mode Banner (50) — shown when navigated from WB/IV reverse */}
+      {/* Date Filter */}
+      <div className="mb-4">
+        <DateFilter dateFrom={dateFrom} dateTo={dateTo} mode={dateFilterMode}
+          onModeChange={setDateFilterMode} onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo} onClear={() => { setDateFrom(''); setDateTo('') }} />
+      </div>
+
+      {/* Focus Mode Banner (50, 71: ใต้ filters เหนือ table) */}
       {focusMode && (
         <FocusBanner
           count={focusIds.length}
@@ -444,13 +451,6 @@ export default function DeliveryPage() {
           onExit={exitFocus}
         />
       )}
-
-      {/* Date Filter */}
-      <div className="mb-4">
-        <DateFilter dateFrom={dateFrom} dateTo={dateTo} mode={dateFilterMode}
-          onModeChange={setDateFilterMode} onDateFromChange={setDateFrom}
-          onDateToChange={setDateTo} onClear={() => { setDateFrom(''); setDateTo('') }} />
-      </div>
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
