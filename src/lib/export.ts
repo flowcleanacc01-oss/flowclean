@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas-pro'
 import { jsPDF } from 'jspdf'
+import { PAPER_SIZES, MARGIN_PRESETS, type Orientation, type PaperSize, type MarginPreset } from './print-utils'
 
 export async function exportJPG(elementId: string, filename: string) {
   const el = document.getElementById(elementId)
@@ -11,15 +12,21 @@ export async function exportJPG(elementId: string, filename: string) {
   link.click()
 }
 
-export async function exportPDF(elementId: string, filename: string, orientation: 'portrait' | 'landscape' = 'portrait') {
+export async function exportPDF(
+  elementId: string,
+  filename: string,
+  orientation: Orientation = 'portrait',
+  paperSize: PaperSize = 'A4',
+  marginPreset: MarginPreset = 'normal',
+) {
   const el = document.getElementById(elementId)
   if (!el) return
   const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
   const imgData = canvas.toDataURL('image/jpeg', 0.95)
-  const pdf = new jsPDF(orientation, 'mm', 'a4')
+  const pdf = new jsPDF(orientation, 'mm', PAPER_SIZES[paperSize].jsPdfFormat)
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
-  const margin = 10
+  const margin = MARGIN_PRESETS[marginPreset].value
   const imgWidth = pageWidth - margin * 2
   const imgHeight = (canvas.height * imgWidth) / canvas.width
 

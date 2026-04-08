@@ -32,9 +32,18 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* Print styles — proper A4 output for mobile and desktop */
+/*
+ * Note: @page rule is INJECTED dynamically by lib/print-utils.ts (applyPrintSettings)
+ * based on user's selection (orientation/paperSize/margin).
+ * The rule below is a fallback/default if no settings injected yet.
+ *
+ * Browser headers/footers (#57): can't be hidden via CSS reliably.
+ * Solution: instruct user to disable in browser print dialog
+ * (PrintSettingsDropdown shows this tip).
+ */
 @media print {
   @page {
-    size: A4;
+    size: A4 portrait;
     margin: 10mm;
   }
 
