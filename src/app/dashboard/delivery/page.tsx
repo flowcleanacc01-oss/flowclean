@@ -11,6 +11,7 @@ import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
+import { canViewSD } from '@/lib/permissions'
 import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
@@ -20,6 +21,7 @@ type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed'
 
 export default function DeliveryPage() {
   const {
+    currentUser,
     deliveryNotes, addDeliveryNote, updateDeliveryNote, deleteDeliveryNote,
     linenForms, customers, getCustomer, companyInfo, linenCatalog,
     billingStatements, quotations,
@@ -367,6 +369,15 @@ export default function DeliveryPage() {
     { key: 'not-billed', label: 'ยังไม่วางบิล' },
     { key: 'billed', label: 'วางบิลแล้ว' },
   ]
+
+  // 69: Page-level guard
+  if (!canViewSD(currentUser)) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-slate-400">เฉพาะ Driver/Staff/Accountant/Admin เท่านั้น</p>
+      </div>
+    )
+  }
 
   return (
     <div>

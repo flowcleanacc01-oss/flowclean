@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs'
-import type { AppUser } from '@/types'
+import type { AppUser, UserRole } from '@/types'
 
 // ============================================================
 // Password Hashing
@@ -28,7 +28,7 @@ interface SessionData {
   userId: string
   userName: string
   userEmail: string
-  userRole: 'admin' | 'staff'
+  userRole: UserRole
   expiresAt: number
 }
 

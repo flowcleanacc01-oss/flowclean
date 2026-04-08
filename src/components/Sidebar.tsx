@@ -23,20 +23,35 @@ import {
 import { useStore } from '@/lib/store'
 import { useState } from 'react'
 import Image from 'next/image'
+import { USER_ROLE_CONFIG, type UserRole } from '@/types'
+import {
+  canViewLF, canViewSD, canViewCustomers, canViewBilling,
+  canViewReports, canViewExpenses, canManageItems, canManageSettings,
+} from '@/lib/permissions'
+import type { AppUser } from '@/types'
 
-const NAV_ITEMS = [
+interface NavItem {
+  href: string
+  label: string
+  icon: typeof LayoutDashboard
+  guard?: (u: AppUser | null) => boolean
+  separator?: boolean
+}
+
+// 69: each nav item has its own guard function from lib/permissions
+const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'แดชบอร์ด', icon: LayoutDashboard },
-  { href: '/dashboard/items', label: 'รายการผ้า', icon: Package },
-  { href: '/dashboard/customers', label: 'ลูกค้า', icon: Building2 },
-  { href: '/dashboard/billing?tab=quotation', label: 'ใบเสนอราคา (QT)', icon: FileText },
-  { href: '/dashboard/linen-forms', label: '1. ใบส่งรับผ้า (LF)', icon: ClipboardList },
-  { href: '/dashboard/delivery', label: '2. ใบส่งของชั่วคราว (SD)', icon: Truck },
-  { href: '/dashboard/billing?tab=billing', label: '3. ใบวางบิล (WB)', icon: FileCheck },
-  { href: '/dashboard/billing?tab=invoice', label: '4. ใบกำกับภาษี/ใบเสร็จ (IV)', icon: Receipt },
-  { href: '/dashboard/reports', label: 'รายงาน', icon: BarChart3, adminOnly: true },
-  { href: '/dashboard/expenses', label: 'รายจ่าย', icon: Wallet, adminOnly: true },
+  { href: '/dashboard/items', label: 'รายการผ้า', icon: Package, guard: canManageItems },
+  { href: '/dashboard/customers', label: 'ลูกค้า', icon: Building2, guard: canViewCustomers },
+  { href: '/dashboard/billing?tab=quotation', label: 'ใบเสนอราคา (QT)', icon: FileText, guard: canViewBilling },
+  { href: '/dashboard/linen-forms', label: '1. ใบส่งรับผ้า (LF)', icon: ClipboardList, guard: canViewLF },
+  { href: '/dashboard/delivery', label: '2. ใบส่งของชั่วคราว (SD)', icon: Truck, guard: canViewSD },
+  { href: '/dashboard/billing?tab=billing', label: '3. ใบวางบิล (WB)', icon: FileCheck, guard: canViewBilling },
+  { href: '/dashboard/billing?tab=invoice', label: '4. ใบกำกับภาษี/ใบเสร็จ (IV)', icon: Receipt, guard: canViewBilling },
+  { href: '/dashboard/reports', label: 'รายงาน', icon: BarChart3, guard: canViewReports },
+  { href: '/dashboard/expenses', label: 'รายจ่าย', icon: Wallet, guard: canViewExpenses },
   { href: '/dashboard/guide', label: 'คู่มือการใช้งาน', icon: BookOpen, separator: true },
-  { href: '/dashboard/settings', label: 'ตั้งค่า', icon: Settings, adminOnly: true },
+  { href: '/dashboard/settings', label: 'ตั้งค่า', icon: Settings, guard: canManageSettings },
 ]
 
 export default function Sidebar() {
@@ -81,7 +96,8 @@ export default function Sidebar() {
         {NAV_ITEMS.map(item => {
           const active = isActive(item.href)
           const Icon = item.icon
-          if ('adminOnly' in item && item.adminOnly && currentUser?.role === 'staff') return null
+          // 69: hide menu if user role doesn't pass guard
+          if (item.guard && !item.guard(currentUser)) return null
           return (
             <div key={item.href}>
               {'separator' in item && item.separator && (
@@ -111,18 +127,26 @@ export default function Sidebar() {
           'border-t border-slate-700 pt-4',
           collapsed ? 'px-1' : 'px-2'
         )}>
-          {!collapsed && currentUser && (
-            <div className="mb-3">
-              <p className="text-sm text-white font-medium truncate">{currentUser.name}</p>
-              <p className="text-xs text-slate-500 truncate">{currentUser.email}</p>
-              <span className={cn(
-                'inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full',
-                currentUser.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-teal-500/20 text-teal-400'
-              )}>
-                {currentUser.role === 'admin' ? 'Admin' : 'Staff'}
-              </span>
-            </div>
-          )}
+          {!collapsed && currentUser && (() => {
+            const cfg = USER_ROLE_CONFIG[currentUser.role as UserRole] || USER_ROLE_CONFIG.staff
+            // Sidebar uses dark theme — pick role colors that work on dark bg
+            const darkRoleClass = {
+              admin:      'bg-amber-500/20 text-amber-400',
+              accountant: 'bg-purple-500/20 text-purple-300',
+              staff:      'bg-teal-500/20 text-teal-400',
+              driver:     'bg-blue-500/20 text-blue-300',
+              operator:   'bg-slate-500/20 text-slate-300',
+            }[currentUser.role as UserRole] || 'bg-teal-500/20 text-teal-400'
+            return (
+              <div className="mb-3">
+                <p className="text-sm text-white font-medium truncate">{currentUser.name}</p>
+                <p className="text-xs text-slate-500 truncate">{currentUser.email}</p>
+                <span className={cn('inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full', darkRoleClass)}>
+                  {cfg.label}
+                </span>
+              </div>
+            )
+          })()}
           <button
             onClick={logout}
             className="flex items-center gap-2 text-slate-400 hover:text-red-400 text-sm w-full px-1 py-1.5 rounded transition-colors"

@@ -13,6 +13,7 @@ import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDo
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import ExportButtons from '@/components/ExportButtons'
+import { canViewBilling } from '@/lib/permissions'
 import { exportCSV } from '@/lib/export'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
@@ -24,6 +25,7 @@ type TabKey = 'billing' | 'invoice' | 'quotation'
 
 export default function BillingPage() {
   const {
+    currentUser,
     billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
     taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
     quotations, addQuotation, updateQuotation, updateQuotationStatus, deleteQuotation,
@@ -838,6 +840,15 @@ export default function BillingPage() {
     billingStatements.forEach(b => { counts[b.status] = (counts[b.status] || 0) + 1 })
     return counts
   }, [billingStatements])
+
+  // 69: Page-level guard
+  if (!canViewBilling(currentUser)) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-slate-400">เฉพาะ Accountant และ Admin เท่านั้น</p>
+      </div>
+    )
+  }
 
   return (
     <div>

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react'
 import { useStore } from '@/lib/store'
+import { canManageItems } from '@/lib/permissions'
 import { cn, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import type { LinenItemDef, LinenCategoryDef } from '@/types'
 import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
@@ -194,7 +195,7 @@ export default function ItemsPage() {
     }
   }
 
-  if (currentUser?.role !== 'admin') {
+  if (!canManageItems(currentUser)) {
     return (
       <div className="text-center py-20">
         <p className="text-slate-400">เฉพาะ Admin เท่านั้น</p>

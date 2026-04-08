@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatNumber, cn, formatDate } from '@/lib/utils'
+import { canViewPrice } from '@/lib/permissions'
 import {
   ArrowLeft, Building2, Phone, Mail, MapPin, FileText, CreditCard,
   Truck, Receipt, ClipboardCheck, TrendingUp, Package, AlertTriangle, Link2, ExternalLink,
@@ -18,11 +19,13 @@ export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const {
+    currentUser,
     getCustomer, linenForms, deliveryNotes, billingStatements,
     taxInvoices, checklists, getCarryOver, linenCatalog, quotations, getCustomerCategoryLabel,
   } = useStore()
 
   const customer = getCustomer(id)
+  const showPrice = canViewPrice(currentUser)
 
   // All docs for this customer
   const custForms = useMemo(() =>
@@ -218,7 +221,7 @@ export default function CustomerDetailPage() {
                     <thead>
                       <tr className="bg-emerald-50">
                         <th className="text-left px-3 py-1.5 font-medium text-emerald-700">รายการ</th>
-                        <th className="text-right px-3 py-1.5 font-medium text-emerald-700">ราคา/หน่วย</th>
+                        {showPrice && <th className="text-right px-3 py-1.5 font-medium text-emerald-700">ราคา/หน่วย</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -227,9 +230,11 @@ export default function CustomerDetailPage() {
                           <td className="px-3 py-1 text-slate-600">
                             <span className="font-mono text-slate-400 mr-1">{item.code}</span>{item.name}
                           </td>
-                          <td className="px-3 py-1 text-right text-slate-700 font-medium">
-                            {item.pricePerUnit > 0 ? formatCurrency(item.pricePerUnit) : <span className="text-slate-300">-</span>}
-                          </td>
+                          {showPrice && (
+                            <td className="px-3 py-1 text-right text-slate-700 font-medium">
+                              {item.pricePerUnit > 0 ? formatCurrency(item.pricePerUnit) : <span className="text-slate-300">-</span>}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

@@ -420,12 +420,28 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategory, { label: string; icon: 
 // ============================================================
 // App User
 // ============================================================
+// 5 roles (69):
+// - operator: พนักงานในโรงซัก (อัพเดต status 4/7-6/7)
+// - driver: คนขับรถส่งผ้า (1/7-3/7, 6/7-7/7, สร้าง LF/SD)
+// - staff: พนักงานทั่วไป (LF/SD ทั้งหมด, ไม่เห็นราคา/บิล)
+// - accountant: พนักงานบัญชี (+WB/IV/QT/ราคา/รายงานการเงิน/ค่าใช้จ่าย)
+// - admin: เจ้าของ/ผู้จัดการ (ทุกอย่าง + settings + users)
+export type UserRole = 'operator' | 'driver' | 'staff' | 'accountant' | 'admin'
+
+export const USER_ROLE_CONFIG: Record<UserRole, { label: string; color: string; bgColor: string; description: string }> = {
+  operator:   { label: 'Operator',   color: 'text-slate-700',   bgColor: 'bg-slate-100',   description: 'พนักงานโรงซัก — อัพเดตสถานะการซัก แพค ส่ง' },
+  driver:     { label: 'Driver',     color: 'text-blue-700',    bgColor: 'bg-blue-100',    description: 'คนขับรถ — รับ-ส่งผ้า สร้าง LF/SD' },
+  staff:      { label: 'Staff',      color: 'text-teal-700',    bgColor: 'bg-teal-100',    description: 'พนักงานทั่วไป — LF/SD ทั้งหมด ไม่เห็นบัญชี' },
+  accountant: { label: 'Accountant', color: 'text-purple-700',  bgColor: 'bg-purple-100',  description: 'บัญชี — WB/IV/QT/ราคา/รายงานการเงิน' },
+  admin:      { label: 'Admin',      color: 'text-amber-700',   bgColor: 'bg-amber-100',   description: 'เจ้าของ/ผู้จัดการ — ทุกอย่าง' },
+}
+
 export interface AppUser {
   id: string
   name: string
   email: string
   passwordHash: string
-  role: 'admin' | 'staff'
+  role: UserRole
   isActive: boolean
 }
 

@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store'
 import { formatNumber, formatCurrency, formatDateShort, cn, todayISO } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, ALL_LINEN_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus } from '@/types'
 import { hasDiscrepancies } from '@/lib/discrepancy'
+import { canViewFinancialDashboard } from '@/lib/permissions'
 import Link from 'next/link'
 import {
   Package,
@@ -21,11 +22,13 @@ import {
 
 export default function DashboardPage() {
   const {
+    currentUser,
     linenForms, billingStatements,
     customers, getCustomer, getCarryOver,
   } = useStore()
 
   const today = todayISO()
+  const showFinancial = canViewFinancialDashboard(currentUser)
 
   // Stats
   const stats = useMemo(() => {
@@ -153,31 +156,33 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Financial Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-emerald-50 text-emerald-600">
-              <Banknote className="w-5 h-5" />
+      {/* Financial Cards (69: เฉพาะ accountant + admin) */}
+      {showFinancial && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-emerald-50 text-emerald-600">
+                <Banknote className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-slate-800">{formatCurrency(financialStats.revenueThisMonth)}</p>
+                <p className="text-xs text-slate-500">รายได้เดือนนี้ (ก่อน VAT)</p>
+              </div>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-800">{formatCurrency(financialStats.revenueThisMonth)}</p>
-              <p className="text-xs text-slate-500">รายได้เดือนนี้ (ก่อน VAT)</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center gap-3">
+              <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', financialStats.overdueCount > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400')}>
+                <Receipt className="w-5 h-5" />
+              </div>
+              <div>
+                <p className={cn('text-2xl font-bold', financialStats.overdueCount > 0 ? 'text-red-600' : 'text-slate-800')}>{formatCurrency(financialStats.overdueTotal)}</p>
+                <p className="text-xs text-slate-500">บิลค้างชำระ ({financialStats.overdueCount} ใบ)</p>
+              </div>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', financialStats.overdueCount > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400')}>
-              <Receipt className="w-5 h-5" />
-            </div>
-            <div>
-              <p className={cn('text-2xl font-bold', financialStats.overdueCount > 0 ? 'text-red-600' : 'text-slate-800')}>{formatCurrency(financialStats.overdueTotal)}</p>
-              <p className="text-xs text-slate-500">บิลค้างชำระ ({financialStats.overdueCount} ใบ)</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Pipeline — 7 สถานะหลัก */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
@@ -271,8 +276,8 @@ export default function DashboardPage() {
 
         {/* Side Panel */}
         <div className="space-y-4">
-          {/* Top 5 Customers */}
-          {financialStats.top5Customers.length > 0 && (
+          {/* Top 5 Customers (69: เฉพาะ accountant + admin) */}
+          {showFinancial && financialStats.top5Customers.length > 0 && (
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2 mb-3">
                 <Trophy className="w-4 h-4 text-amber-500" />
@@ -314,8 +319,8 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Overdue Billing */}
-          {overdueBilling.length > 0 && (
+          {/* Overdue Billing (69: เฉพาะ accountant + admin) */}
+          {showFinancial && overdueBilling.length > 0 && (
             <div className="bg-white rounded-xl border border-red-200 p-4">
               <h3 className="text-sm font-semibold text-red-700 flex items-center gap-2 mb-3">
                 <AlertTriangle className="w-4 h-4" />

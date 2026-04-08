@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
+import { canViewExpenses } from '@/lib/permissions'
 import { formatCurrency, formatDate, todayISO, sanitizeNumber, cn, scrollToActiveRow } from '@/lib/utils'
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type Expense } from '@/types'
 import Modal from '@/components/Modal'
@@ -45,10 +46,10 @@ export default function ExpensesPage() {
     return acc
   }, {} as Record<string, number>)
 
-  if (currentUser?.role !== 'admin') {
+  if (!canViewExpenses(currentUser)) {
     return (
       <div className="text-center py-20">
-        <p className="text-slate-400">เฉพาะ Admin เท่านั้น</p>
+        <p className="text-slate-400">เฉพาะ Accountant และ Admin เท่านั้น</p>
       </div>
     )
   }

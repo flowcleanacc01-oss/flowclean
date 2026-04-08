@@ -3,10 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
+import { canManageSettings } from '@/lib/permissions'
 import { cn, formatDate } from '@/lib/utils'
 import { validatePassword } from '@/lib/auth'
 import { fetchAuditLogs } from '@/lib/supabase-service'
-import type { AuditLog, BankAccount } from '@/types'
+import type { AuditLog, BankAccount, UserRole } from '@/types'
+import { USER_ROLE_CONFIG } from '@/types'
 import { Plus, Trash2, RotateCcw, Check, KeyRound, X } from 'lucide-react'
 import { genId } from '@/lib/utils'
 
@@ -59,7 +61,7 @@ export default function SettingsPage() {
   const [newName, setNewName] = useState('')
   const [newEmail, setNewEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
-  const [newRole, setNewRole] = useState<'admin' | 'staff'>('staff')
+  const [newRole, setNewRole] = useState<UserRole>('staff')
   const [addUserError, setAddUserError] = useState('')
 
   // Reset password
@@ -113,7 +115,7 @@ export default function SettingsPage() {
     }
   }, [tab])
 
-  if (currentUser?.role !== 'admin') {
+  if (!canManageSettings(currentUser)) {
     return (
       <div className="text-center py-20">
         <p className="text-slate-400">เฉพาะ Admin เท่านั้น</p>
@@ -214,10 +216,14 @@ export default function SettingsPage() {
                     <td className="px-4 py-3 text-slate-800 font-medium">{u.name}</td>
                     <td className="px-4 py-3 text-slate-600">{u.email}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
-                        u.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700')}>
-                        {u.role}
-                      </span>
+                      {(() => {
+                        const cfg = USER_ROLE_CONFIG[u.role as UserRole] || USER_ROLE_CONFIG.staff
+                        return (
+                          <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>
+                            {cfg.label}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button onClick={() => updateUser(u.id, { isActive: !u.isActive })}
@@ -284,10 +290,11 @@ export default function SettingsPage() {
                 className="flex-1 min-w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="รหัสผ่าน (6+ ตัว)"
                 className="flex-1 min-w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-              <select value={newRole} onChange={e => setNewRole(e.target.value as 'admin' | 'staff')}
+              <select value={newRole} onChange={e => setNewRole(e.target.value as UserRole)}
                 className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
-                <option value="staff">Staff</option>
-                <option value="admin">Admin</option>
+                {(Object.keys(USER_ROLE_CONFIG) as UserRole[]).map(r => (
+                  <option key={r} value={r}>{USER_ROLE_CONFIG[r].label}</option>
+                ))}
               </select>
               <button onClick={handleAddUser} disabled={!newName || !newEmail || !newPassword}
                 className="px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] text-sm rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors flex items-center gap-1">

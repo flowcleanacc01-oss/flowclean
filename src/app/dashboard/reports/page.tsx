@@ -14,6 +14,7 @@ import CarryOverReportPrint from '@/components/CarryOverReportPrint'
 import Modal from '@/components/Modal'
 import CarryOverAdjustModal from '@/components/CarryOverAdjustModal'
 import { CARRY_OVER_MODE_CONFIG, CARRY_OVER_REASON_CONFIG } from '@/types'
+import { canViewReports } from '@/lib/permissions'
 import type { CarryOverMode, CarryOverAdjustment } from '@/types'
 
 type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation'
@@ -309,10 +310,10 @@ export default function ReportsPage() {
       .sort((a, b) => b.date.localeCompare(a.date))
   }, [carryOverAdjustments, selCustomerId, coStartDate, coEndDate, coShowAdjustments])
 
-  if (currentUser?.role !== 'admin') {
+  if (!canViewReports(currentUser)) {
     return (
       <div className="text-center py-20">
-        <p className="text-slate-400">เฉพาะ Admin เท่านั้น</p>
+        <p className="text-slate-400">เฉพาะ Staff/Accountant/Admin เท่านั้น</p>
       </div>
     )
   }
