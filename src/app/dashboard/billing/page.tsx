@@ -2029,11 +2029,25 @@ export default function BillingPage() {
                         <td className="px-3 py-1 text-xs text-slate-400">{catItem?.unit || 'ชิ้น'}</td>
                         <td className="px-1 py-1 text-right">
                           <input type="number" min={0} step={0.5}
+                            data-qt-row={idx}
                             value={item.pricePerUnit === null ? '' : item.pricePerUnit}
+                            onFocus={e => e.currentTarget.select()}
                             onChange={e => {
                               const updated = [...quItems]
                               updated[idx] = { ...item, pricePerUnit: e.target.value === '' ? null : sanitizeNumber(e.target.value) }
                               setQuItems(updated)
+                            }}
+                            onKeyDown={e => {
+                              // Keyboard navigation (57-58): Arrow Up/Down + Enter (= next row first cell)
+                              if (e.key === 'Enter' || e.key === 'ArrowDown') {
+                                e.preventDefault()
+                                const next = document.querySelector<HTMLInputElement>(`input[data-qt-row="${idx + 1}"]`)
+                                if (next) { next.focus(); next.select() }
+                              } else if (e.key === 'ArrowUp') {
+                                e.preventDefault()
+                                const prev = document.querySelector<HTMLInputElement>(`input[data-qt-row="${idx - 1}"]`)
+                                if (prev) { prev.focus(); prev.select() }
+                              }
                             }}
                             className={cn("w-24 px-2 py-1 border rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none",
                               item.pricePerUnit === null ? "border-red-400 bg-red-50"

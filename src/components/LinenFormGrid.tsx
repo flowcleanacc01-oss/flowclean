@@ -121,15 +121,33 @@ export default function LinenFormGrid({
     rowIndex: number,
     colIndex: number
   ) => {
+    const container = gridRef.current
+    if (!container) return
+
+    // Enter (58): jump to first editable cell of next row
+    if (e.key === 'Enter') {
+      const nextRowInputs = Array.from(
+        container.querySelectorAll<HTMLInputElement>(`input[data-row="${rowIndex + 1}"]`)
+      ).sort((a, b) => Number(a.dataset.col) - Number(b.dataset.col))
+      const first = nextRowInputs[0]
+      if (first) {
+        e.preventDefault()
+        first.focus()
+        first.select()
+        setActiveRowIdx(rowIndex + 1)
+        const tr = first.closest('tr')
+        if (tr) scrollCellVisible(tr)
+      }
+      return
+    }
+
+    // Arrow keys: ปกติ
     let dRow = 0, dCol = 0
     if (e.key === 'ArrowUp') dRow = -1
-    else if (e.key === 'ArrowDown' || e.key === 'Enter') dRow = 1
+    else if (e.key === 'ArrowDown') dRow = 1
     else if (e.key === 'ArrowLeft') dCol = -1
     else if (e.key === 'ArrowRight') dCol = 1
     else return
-
-    const container = gridRef.current
-    if (!container) return
 
     if (dRow !== 0) {
       const target = container.querySelector<HTMLInputElement>(
