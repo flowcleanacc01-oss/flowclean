@@ -91,6 +91,7 @@ const FIELD_MAP: Record<string, string> = {
   netPayable: 'net_payable',
   paidDate: 'paid_date',
   paidAmount: 'paid_amount',
+  isPaid: 'is_paid',
   invoiceNumber: 'invoice_number',
   billingStatementId: 'billing_statement_id',
   quotationNumber: 'quotation_number',

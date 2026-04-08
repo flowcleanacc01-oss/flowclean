@@ -1083,7 +1083,13 @@ export default function BillingPage() {
                         {(() => {
                           const ivInfo = wbInvoiceMap.get(b.id)
                           return ivInfo ? (
-                            <button onClick={() => setShowInvoiceDetail(ivInfo.invoiceId)}
+                            <button onClick={() => {
+                              // 81: switch ไป IV tab + open detail
+                              setTab('invoice')
+                              setActiveIvId(ivInfo.invoiceId)
+                              setShowInvoiceDetail(ivInfo.invoiceId)
+                              scrollToActiveRow(ivInfo.invoiceId)
+                            }}
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
                               <span className="font-mono">{ivInfo.invoiceNumber}</span>
                               <ExternalLink className="w-3 h-3" />
@@ -1573,7 +1579,14 @@ export default function BillingPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-600 font-medium">ใบกำกับภาษี (IV):</span>
                     {ivInfo ? (
-                      <button onClick={() => { setShowDetail(null); setShowInvoiceDetail(ivInfo.invoiceId) }}
+                      <button onClick={() => {
+                        // 81: switch ไป IV tab + open detail
+                        setShowDetail(null)
+                        setTab('invoice')
+                        setActiveIvId(ivInfo.invoiceId)
+                        setShowInvoiceDetail(ivInfo.invoiceId)
+                        scrollToActiveRow(ivInfo.invoiceId)
+                      }}
                         className="inline-flex items-center gap-1 text-sm font-medium text-purple-700 hover:text-purple-900">
                         <span className="font-mono">{ivInfo.invoiceNumber}</span>
                         <ExternalLink className="w-3.5 h-3.5" />
