@@ -839,20 +839,6 @@ export default function BillingPage() {
 
   return (
     <div>
-      {/* Focus Mode Banner (50) */}
-      {focusMode && (
-        <FocusBanner
-          count={focusIds.length}
-          docNumbers={focusIds.map(id =>
-            billingStatements.find(b => b.id === id)?.billingNumber ||
-            taxInvoices.find(i => i.id === id)?.invoiceNumber ||
-            ''
-          ).filter(Boolean)}
-          docType={tab === 'billing' ? 'ใบวางบิล' : tab === 'invoice' ? 'ใบกำกับภาษี' : 'เอกสาร'}
-          onExit={exitFocus}
-        />
-      )}
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -1006,6 +992,20 @@ export default function BillingPage() {
             </button>
           ))}
         </div>
+      )}
+
+      {/* Focus Mode Banner (50, 67: ตำแหน่งเดียวกับ SD/LF — เหนือตาราง) */}
+      {focusMode && (
+        <FocusBanner
+          count={focusIds.length}
+          docNumbers={focusIds.map(id =>
+            billingStatements.find(b => b.id === id)?.billingNumber ||
+            taxInvoices.find(i => i.id === id)?.invoiceNumber ||
+            ''
+          ).filter(Boolean)}
+          docType={tab === 'billing' ? 'ใบวางบิล' : tab === 'invoice' ? 'ใบกำกับภาษี' : 'เอกสาร'}
+          onExit={exitFocus}
+        />
       )}
 
       {/* Billing Tab */}
