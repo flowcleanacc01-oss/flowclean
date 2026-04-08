@@ -156,6 +156,77 @@ export function aggregateDeliveryItemsByDate(
 }
 
 /**
+ * Aggregate delivery notes into single "ค่าบริการซักวันที่ X-Y" line (by_total mode, 66)
+ * เหมือน format ที่ IV ใช้ — รวมค่าซักทั้งหมดเป็น 1 บรรทัด + transport/extra/discount แยก
+ */
+export function aggregateDeliveryItemsByTotal(
+  notes: DeliveryNote[],
+  customer: Customer,
+  qtItems?: QuotationItem[],
+): BillingLineItem[] {
+  const fallbackPriceMap = qtItems
+    ? Object.fromEntries(qtItems.map(i => [i.code, i.pricePerUnit]))
+    : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+
+  let serviceTotal = 0
+  let totalTransportTrip = 0
+  let totalTransportMonth = 0
+  let totalDiscount = 0
+  let totalExtraCharge = 0
+  const discountNotes: string[] = []
+  const extraChargeNotes: string[] = []
+
+  for (const note of notes) {
+    const pm = getDNPriceMap(note, fallbackPriceMap)
+    for (const item of note.items) {
+      if (item.isClaim) continue
+      serviceTotal += item.quantity * (pm[item.code] ?? 0)
+    }
+    totalTransportTrip += note.transportFeeTrip || 0
+    totalTransportMonth += note.transportFeeMonth || 0
+    totalDiscount += note.discount || 0
+    totalExtraCharge += note.extraCharge || 0
+    if ((note.discount || 0) > 0 && note.discountNote) discountNotes.push(note.discountNote)
+    if ((note.extraCharge || 0) > 0 && note.extraChargeNote) extraChargeNotes.push(note.extraChargeNote)
+  }
+
+  // Date range label
+  const sortedDates = notes.map(n => n.date).sort()
+  const dateLabel = sortedDates.length === 0
+    ? ''
+    : sortedDates[0] === sortedDates[sortedDates.length - 1]
+      ? formatDate(sortedDates[0])
+      : `${formatDate(sortedDates[0])} - ${formatDate(sortedDates[sortedDates.length - 1])}`
+
+  const result: BillingLineItem[] = []
+  if (serviceTotal > 0) {
+    result.push({
+      code: 'SERVICE',
+      name: `ค่าบริการซักวันที่ ${dateLabel}`,
+      quantity: 1,
+      pricePerUnit: serviceTotal,
+      amount: serviceTotal,
+    })
+  }
+  if (totalTransportTrip > 0) {
+    result.push({ code: 'TRANSPORT_TRIP', name: 'ค่ารถ (ครั้ง)', quantity: 1, pricePerUnit: totalTransportTrip, amount: totalTransportTrip })
+  }
+  if (totalTransportMonth > 0) {
+    result.push({ code: 'TRANSPORT_MONTH', name: 'ค่ารถ (เดือน)', quantity: 1, pricePerUnit: totalTransportMonth, amount: totalTransportMonth })
+  }
+  if (totalExtraCharge > 0) {
+    const note = extraChargeNotes.length > 0 ? ` (${extraChargeNotes.join(', ')})` : ''
+    result.push({ code: 'EXTRA_CHARGE', name: `ค่าใช้จ่ายเพิ่มเติม${note}`, quantity: 1, pricePerUnit: totalExtraCharge, amount: totalExtraCharge })
+  }
+  if (totalDiscount > 0) {
+    const note = discountNotes.length > 0 ? ` (${discountNotes.join(', ')})` : ''
+    result.push({ code: 'DISCOUNT', name: `ส่วนลด${note}`, quantity: 1, pricePerUnit: -totalDiscount, amount: -totalDiscount })
+  }
+
+  return result
+}
+
+/**
  * Calculate billing totals from line items
  * vatRate / whtRate: percent (e.g. 7, 3). Pass 0 to disable.
  */

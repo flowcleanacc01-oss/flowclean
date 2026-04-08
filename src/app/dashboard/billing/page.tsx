@@ -7,7 +7,7 @@ import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
-import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
+import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, aggregateDeliveryItemsByTotal, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { calculateTransportFeeTrip } from '@/lib/transport-fee'
 import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2 } from 'lucide-react'
 import Modal from '@/components/Modal'
@@ -205,7 +205,7 @@ export default function BillingPage() {
   , [linenCategories])
 
   // Billing mode (5.1)
-  const [billingMode, setBillingMode] = useState<'by_date' | 'by_item'>('by_date')
+  const [billingMode, setBillingMode] = useState<'by_date' | 'by_item' | 'by_total'>('by_date')
 
   // Create billing state
   const [selCustomerId, setSelCustomerId] = useState('')
@@ -344,7 +344,9 @@ export default function BillingPage() {
       const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerId === selCustomer.id)
       baseItems = billingMode === 'by_date'
         ? aggregateDeliveryItemsByDate(selectedNotes, selCustomer, linkedQT?.items)
-        : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog, linkedQT?.items)
+        : billingMode === 'by_total'
+          ? aggregateDeliveryItemsByTotal(selectedNotes, selCustomer, linkedQT?.items)
+          : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog, linkedQT?.items)
     }
     let lineItems = [...baseItems]
     if (billingExtraCharge > 0) {
@@ -1341,7 +1343,7 @@ export default function BillingPage() {
 
           {/* 5.1: Billing mode toggle */}
           {selCustomer && (selCustomer.enablePerPiece ?? true) && selDnIds.length > 0 && (
-            <div className="flex items-center gap-4 py-2 px-3 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex flex-wrap items-center gap-4 py-2 px-3 bg-slate-50 rounded-lg border border-slate-200">
               <span className="text-sm font-medium text-slate-600">รูปแบบวางบิล:</span>
               <label className="flex items-center gap-1.5 cursor-pointer">
                 <input type="radio" name="billingMode" value="by_date" checked={billingMode === 'by_date'}
@@ -1352,6 +1354,11 @@ export default function BillingPage() {
                 <input type="radio" name="billingMode" value="by_item" checked={billingMode === 'by_item'}
                   onChange={() => setBillingMode('by_item')} className="text-[#1B3A5C]" />
                 <span className="text-sm text-slate-700">แยกตามรายการผ้า</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="billingMode" value="by_total" checked={billingMode === 'by_total'}
+                  onChange={() => setBillingMode('by_total')} className="text-[#1B3A5C]" />
+                <span className="text-sm text-slate-700">ยอดรวม (เหมือน IV)</span>
               </label>
             </div>
           )}

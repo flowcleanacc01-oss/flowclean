@@ -329,7 +329,7 @@ export interface BillingStatement {
   notes: string
   isPrinted?: boolean
   isExported?: boolean
-  billingMode?: 'by_date' | 'by_item' // how line items were grouped
+  billingMode?: 'by_date' | 'by_item' | 'by_total' // how line items were grouped
 }
 
 // ============================================================
