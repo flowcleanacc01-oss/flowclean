@@ -332,16 +332,6 @@ export default function LinenFormsPage() {
 
   return (
     <div>
-      {/* Focus Mode Banner */}
-      {focusMode && (
-        <FocusBanner
-          count={focusIds.length}
-          docNumbers={focusIds.map(id => linenForms.find(f => f.id === id)?.formNumber).filter(Boolean) as string[]}
-          docType="ใบรับส่งผ้า"
-          onExit={exitFocus}
-        />
-      )}
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -430,6 +420,16 @@ export default function LinenFormsPage() {
           </button>
         ))}
       </div>
+
+      {/* Focus Mode Banner (62: ตำแหน่งเดียวกับ SD page — หลัง filters, ก่อน table) */}
+      {focusMode && (
+        <FocusBanner
+          count={focusIds.length}
+          docNumbers={focusIds.map(id => linenForms.find(f => f.id === id)?.formNumber).filter(Boolean) as string[]}
+          docType="ใบรับส่งผ้า"
+          onExit={exitFocus}
+        />
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
