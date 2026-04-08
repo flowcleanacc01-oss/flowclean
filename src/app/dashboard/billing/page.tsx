@@ -41,6 +41,10 @@ export default function BillingPage() {
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')
   const [dateFrom, setDateFrom] = useState(() => startOfMonthISO())
   const [dateTo, setDateTo] = useState(() => endOfMonthISO())
+  // 64: QT tab uses separate date filter state — default = empty (show all)
+  const [qtDateFilterMode, setQtDateFilterMode] = useState<'single' | 'range'>('range')
+  const [qtDateFrom, setQtDateFrom] = useState('')
+  const [qtDateTo, setQtDateTo] = useState('')
   const [sortKey, setSortKey] = useState('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [showCreate, setShowCreate] = useState(false)
@@ -235,6 +239,15 @@ export default function BillingPage() {
     if (dateFilterMode === 'single') return date === dateFrom
     if (date < dateFrom) return false
     if (dateTo && date > dateTo) return false
+    return true
+  }
+
+  // 64: separate matcher for QT tab (uses qtDate* state)
+  const matchesQtDateFilter = (date: string) => {
+    if (!qtDateFrom) return true
+    if (qtDateFilterMode === 'single') return date === qtDateFrom
+    if (date < qtDateFrom) return false
+    if (qtDateTo && date > qtDateTo) return false
     return true
   }
 
@@ -746,7 +759,7 @@ export default function BillingPage() {
         const s = search.toLowerCase()
         if (!q.quotationNumber.toLowerCase().includes(s) && !q.customerName.toLowerCase().includes(s)) return false
       }
-      if (!matchesDateFilter(q.date)) return false
+      if (!matchesQtDateFilter(q.date)) return false
       return true
     }).sort((a, b) => {
       let va: string | number, vb: string | number
@@ -761,7 +774,7 @@ export default function BillingPage() {
       const cmp = String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [quotations, qtCustomerFilter, search, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
+  }, [quotations, qtCustomerFilter, search, qtDateFrom, qtDateTo, qtDateFilterMode, sortKey, sortDir])
 
   // Invoice list (filtered + sorted)
   const filteredInvoices = useMemo(() => {
@@ -938,9 +951,16 @@ export default function BillingPage() {
       </div>
 
       <div className="mb-4">
-        <DateFilter dateFrom={dateFrom} dateTo={dateTo} mode={dateFilterMode}
-          onModeChange={setDateFilterMode} onDateFromChange={setDateFrom}
-          onDateToChange={setDateTo} onClear={() => { setDateFrom(''); setDateTo('') }} />
+        {tab === 'quotation' ? (
+          // 64: QT tab uses separate date state — default = empty (show all)
+          <DateFilter dateFrom={qtDateFrom} dateTo={qtDateTo} mode={qtDateFilterMode}
+            onModeChange={setQtDateFilterMode} onDateFromChange={setQtDateFrom}
+            onDateToChange={setQtDateTo} onClear={() => { setQtDateFrom(''); setQtDateTo('') }} />
+        ) : (
+          <DateFilter dateFrom={dateFrom} dateTo={dateTo} mode={dateFilterMode}
+            onModeChange={setDateFilterMode} onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo} onClear={() => { setDateFrom(''); setDateTo('') }} />
+        )}
       </div>
 
       {/* WB Filter tabs */}
