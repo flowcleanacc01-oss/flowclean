@@ -13,6 +13,7 @@ import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import { canViewSD } from '@/lib/permissions'
 import { applyRowsSync } from '@/lib/sync-discrepancy'
+import { trackRecentCustomer, sortCustomersWithRecent, getRecentCustomerIds } from '@/lib/recent-customers'
 import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
@@ -160,6 +161,7 @@ export default function DeliveryPage() {
 
   const handleCustomerSelect = (custId: string) => {
     setSelCustomerId(custId)
+    if (custId) trackRecentCustomer(custId)
     setSelFormIds([])
     setDeliveryItems([])
     setDnDate(todayISO())
@@ -611,9 +613,24 @@ export default function DeliveryPage() {
             <select value={selCustomerId} onChange={e => handleCustomerSelect(e.target.value)}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
               <option value="">เลือกโรงแรม</option>
-              {customers.filter(c => c.isActive).map(c => (
-                <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
-              ))}
+              {(() => {
+                const sorted = sortCustomersWithRecent(customers)
+                const recentIds = new Set(getRecentCustomerIds())
+                const recents = sorted.filter(c => recentIds.has(c.id))
+                const rest = sorted.filter(c => !recentIds.has(c.id))
+                return (
+                  <>
+                    {recents.length > 0 && (
+                      <optgroup label="⭐ ใช้ล่าสุด">
+                        {recents.map(c => <option key={c.id} value={c.id}>{c.shortName || c.name}</option>)}
+                      </optgroup>
+                    )}
+                    <optgroup label={recents.length > 0 ? 'ทั้งหมด' : ''}>
+                      {rest.map(c => <option key={c.id} value={c.id}>{c.shortName || c.name}</option>)}
+                    </optgroup>
+                  </>
+                )
+              })()}
             </select>
           </div>
 
