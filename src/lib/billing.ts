@@ -157,7 +157,8 @@ export function aggregateDeliveryItemsByDate(
 
 /**
  * Aggregate delivery notes into single "ค่าบริการซักวันที่ X-Y" line (by_total mode, 66 + 76)
- * รวมทุกอย่าง (service + transport + extra - discount) เป็น 1 บรรทัดเดียว
+ * 85: ค่าบริการ + ค่ารถ รวมเป็น 1 บรรทัด, แต่ DN-level discount/extraCharge แยกออกมาเป็นบรรทัดต่างหาก
+ * เพื่อให้ user เห็นการชี้แจงชัดเจนในใบวางบิล
  */
 export function aggregateDeliveryItemsByTotal(
   notes: DeliveryNote[],
@@ -168,18 +169,24 @@ export function aggregateDeliveryItemsByTotal(
     ? Object.fromEntries(qtItems.map(i => [i.code, i.pricePerUnit]))
     : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
 
-  let total = 0
+  let serviceTotal = 0
+  let totalDiscount = 0
+  let totalExtraCharge = 0
+  const discountNotes: string[] = []
+  const extraChargeNotes: string[] = []
 
   for (const note of notes) {
     const pm = getDNPriceMap(note, fallbackPriceMap)
     for (const item of note.items) {
       if (item.isClaim) continue
-      total += item.quantity * (pm[item.code] ?? 0)
+      serviceTotal += item.quantity * (pm[item.code] ?? 0)
     }
-    total += note.transportFeeTrip || 0
-    total += note.transportFeeMonth || 0
-    total += note.extraCharge || 0
-    total -= note.discount || 0
+    serviceTotal += note.transportFeeTrip || 0
+    serviceTotal += note.transportFeeMonth || 0
+    totalDiscount += note.discount || 0
+    totalExtraCharge += note.extraCharge || 0
+    if ((note.discount || 0) > 0 && note.discountNote) discountNotes.push(note.discountNote)
+    if ((note.extraCharge || 0) > 0 && note.extraChargeNote) extraChargeNotes.push(note.extraChargeNote)
   }
 
   // Date range label
@@ -190,15 +197,25 @@ export function aggregateDeliveryItemsByTotal(
       ? formatDate(sortedDates[0])
       : `${formatDate(sortedDates[0])} - ${formatDate(sortedDates[sortedDates.length - 1])}`
 
-  if (total === 0) return []
-
-  return [{
-    code: 'SERVICE',
-    name: `ค่าบริการซักวันที่ ${dateLabel}`,
-    quantity: 1,
-    pricePerUnit: total,
-    amount: total,
-  }]
+  const result: BillingLineItem[] = []
+  if (serviceTotal > 0) {
+    result.push({
+      code: 'SERVICE',
+      name: `ค่าบริการซักวันที่ ${dateLabel}`,
+      quantity: 1,
+      pricePerUnit: serviceTotal,
+      amount: serviceTotal,
+    })
+  }
+  if (totalExtraCharge > 0) {
+    const note = extraChargeNotes.length > 0 ? ` (${extraChargeNotes.join(', ')})` : ''
+    result.push({ code: 'EXTRA_CHARGE', name: `ค่าใช้จ่ายเพิ่มเติม${note}`, quantity: 1, pricePerUnit: totalExtraCharge, amount: totalExtraCharge })
+  }
+  if (totalDiscount > 0) {
+    const note = discountNotes.length > 0 ? ` (${discountNotes.join(', ')})` : ''
+    result.push({ code: 'DISCOUNT', name: `ส่วนลด${note}`, quantity: 1, pricePerUnit: -totalDiscount, amount: -totalDiscount })
+  }
+  return result
 }
 
 /**

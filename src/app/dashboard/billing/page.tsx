@@ -415,12 +415,17 @@ export default function BillingPage() {
     const billing = billingStatements.find(b => b.id === showCreateIV)
     if (!billing) return
 
-    // 5.4.1: by_date WB → collapse service lines to single "ค่าบริการซักวันที่ start - end"
+    // 85: Collapse service lines → 1 line สำหรับ ทุก billing mode (by_date / by_item / by_total)
+    // ค่าบริการซัก = 1 บรรทัดเดียวตามช่วงเวลา (ก่อน discount/extra)
+    // ค่ารถ + DN-level/billing-level discount/extra → แสดงแยกบรรทัดเพื่อชี้แจง
+    // Skip flat-rate (no DN) — keep original line as-is
     let ivLineItems = billing.lineItems
-    if (billing.billingMode === 'by_date') {
+    if (billing.deliveryNoteIds.length > 0) {
       const transportCodes = new Set(['TRANSPORT_TRIP', 'TRANSPORT_MONTH'])
-      const serviceLines = billing.lineItems.filter(i => !transportCodes.has(i.code))
+      const adjustmentCodes = new Set(['EXTRA_CHARGE', 'DISCOUNT'])
+      const serviceLines = billing.lineItems.filter(i => !transportCodes.has(i.code) && !adjustmentCodes.has(i.code))
       const transportLines = billing.lineItems.filter(i => transportCodes.has(i.code))
+      const adjustmentLines = billing.lineItems.filter(i => adjustmentCodes.has(i.code))
       if (serviceLines.length > 0) {
         const serviceTotal = serviceLines.reduce((s, i) => s + i.amount, 0)
         const dnDates = billing.deliveryNoteIds
@@ -435,6 +440,7 @@ export default function BillingPage() {
         ivLineItems = [
           { code: 'SERVICE', name: `ค่าบริการซักวันที่ ${dateLabel}`, quantity: 1, pricePerUnit: serviceTotal, amount: serviceTotal },
           ...transportLines,
+          ...adjustmentLines,
         ]
       }
     }
