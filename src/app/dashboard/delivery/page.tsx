@@ -778,11 +778,11 @@ export default function DeliveryPage() {
       </Modal>
 
       {/* Detail Modal */}
-      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={detailNote?.noteNumber || ''} size="lg">
+      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={`ใบส่งของชั่วคราว ${detailNote?.noteNumber || ''}`} size="lg">
         {detailNote && detailCustomer && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
+              <div><span className="text-slate-500">ลูกค้า:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
               <div><span className="text-slate-500">วันที่:</span> {formatDate(detailNote.date)}</div>
               <div><span className="text-slate-500">คนขับ:</span> {detailNote.driverName || '-'}</div>
               <div><span className="text-slate-500">ทะเบียน:</span> {detailNote.vehiclePlate || '-'}</div>
@@ -895,7 +895,7 @@ export default function DeliveryPage() {
               const dnExtraCharge = detailNote.extraCharge || 0
               const grandTotal = itemSubtotal + tripFee + monthFee + dnExtraCharge - dnDiscount
               return (
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <div className="border border-[#3DD8D8] rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-slate-50">

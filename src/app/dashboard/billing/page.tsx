@@ -1552,11 +1552,11 @@ export default function BillingPage() {
       </Modal>
 
       {/* Detail Modal */}
-      <Modal open={!!showDetail} onClose={() => { setShowDetail(null); setShowPrint(false) }} title={detailBilling?.billingNumber || ''} size="lg">
+      <Modal open={!!showDetail} onClose={() => { setShowDetail(null); setShowPrint(false) }} title={`ใบวางบิล ${detailBilling?.billingNumber || ''}`} size="lg">
         {detailBilling && detailCustomer && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
+              <div><span className="text-slate-500">ลูกค้า:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
               <div><span className="text-slate-500">เดือน:</span> {detailBilling.billingMonth}</div>
               <div><span className="text-slate-500">วันที่ออก:</span> {formatDate(detailBilling.issueDate)}</div>
               <div><span className="text-slate-500">ครบกำหนด:</span> {formatDate(detailBilling.dueDate)}</div>
@@ -1656,7 +1656,7 @@ export default function BillingPage() {
               )
             })()}
 
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <div className="border border-[#3DD8D8] rounded-lg overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50">
@@ -1814,11 +1814,11 @@ export default function BillingPage() {
       </Modal>
 
       {/* Invoice Detail Modal */}
-      <Modal open={!!showInvoiceDetail} onClose={() => { setShowInvoiceDetail(null); setShowInvoicePrint(false) }} title={detailInvoice?.invoiceNumber || ''} size="lg">
+      <Modal open={!!showInvoiceDetail} onClose={() => { setShowInvoiceDetail(null); setShowInvoicePrint(false) }} title={`ใบกำกับภาษี ${detailInvoice?.invoiceNumber || ''}`} size="lg">
         {detailInvoice && detailInvoiceCustomer && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailInvoiceCustomer.shortName || detailInvoiceCustomer.name}</strong></div>
+              <div><span className="text-slate-500">ลูกค้า:</span> <strong>{detailInvoiceCustomer.shortName || detailInvoiceCustomer.name}</strong></div>
               <div><span className="text-slate-500">วันที่ออก:</span> {formatDate(detailInvoice.issueDate)}</div>
             </div>
 
@@ -1876,7 +1876,7 @@ export default function BillingPage() {
               )
             })()}
 
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <div className="border border-[#3DD8D8] rounded-lg overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50">
