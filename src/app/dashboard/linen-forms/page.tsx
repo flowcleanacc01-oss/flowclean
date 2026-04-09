@@ -578,10 +578,10 @@ export default function LinenFormsPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">โรงแรม</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">ลูกค้า</label>
               <select value={newCustomerId} onChange={e => handleCustomerSelect(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
-                <option value="">เลือกโรงแรม</option>
+                <option value="">เลือกลูกค้า</option>
                 {(() => {
                   const sorted = sortCustomersWithRecent(customers)
                   const recentIds = new Set(getRecentCustomerIds())

@@ -1313,10 +1313,10 @@ export default function BillingPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">โรงแรม</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">ลูกค้า</label>
               <select value={selCustomerId} onChange={e => { setSelCustomerId(e.target.value); if (e.target.value) trackRecentCustomer(e.target.value) }}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
-                <option value="">เลือกโรงแรม</option>
+                <option value="">เลือกลูกค้า</option>
                 {(() => {
                   // A2: Recent customers ด้านบน
                   const sorted = sortCustomersWithRecent(customers)
@@ -1995,7 +1995,7 @@ export default function BillingPage() {
           return (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-slate-500">โรงแรม:</span> <strong>{customer.name}</strong></div>
+                <div><span className="text-slate-500">ลูกค้า:</span> <strong>{customer.name}</strong></div>
                 <div><span className="text-slate-500">ใบวางบิล:</span> <span className="font-mono font-medium">{billing.billingNumber}</span></div>
                 <div><span className="text-slate-500">เดือน:</span> {billing.billingMonth}</div>
                 <div>

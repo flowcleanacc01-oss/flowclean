@@ -619,10 +619,10 @@ export default function DeliveryPage() {
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งของชั่วคราว" size="lg">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">โรงแรม</label>
+            <label className="block text-sm font-medium text-slate-600 mb-1">ลูกค้า</label>
             <select value={selCustomerId} onChange={e => handleCustomerSelect(e.target.value)}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
-              <option value="">เลือกโรงแรม</option>
+              <option value="">เลือกลูกค้า</option>
               {(() => {
                 const sorted = sortCustomersWithRecent(customers)
                 const recentIds = new Set(getRecentCustomerIds())
