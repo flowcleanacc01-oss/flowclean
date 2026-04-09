@@ -476,7 +476,7 @@ export default function ChecklistPage() {
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ" closeLabel="cancel">
         <div className="space-y-4">
           <p className="text-sm text-slate-600">ต้องการลบใบเช็คสินค้านี้หรือไม่? การลบไม่สามารถเรียกคืนได้</p>
           <div className="flex justify-end gap-3">

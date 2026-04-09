@@ -1155,7 +1155,7 @@ export default function DeliveryPage() {
       </Modal>
 
       {/* Bulk Delete Confirmation Modal — 2 ปุ่ม (50.5) */}
-      <Modal open={confirmBulkDeleteOpen} onClose={() => setConfirmBulkDeleteOpen(false)} title="ยืนยันการลบ">
+      <Modal open={confirmBulkDeleteOpen} onClose={() => setConfirmBulkDeleteOpen(false)} title="ยืนยันการลบ" closeLabel="cancel">
         {(() => {
           const linkedLfCount = new Set(selectedDnIds.flatMap(id =>
             deliveryNotes.find(d => d.id === id)?.linenFormIds || []

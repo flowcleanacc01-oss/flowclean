@@ -1058,7 +1058,7 @@ export default function LinenFormsPage() {
       </Modal>
 
       {/* Delete Confirmation Modal — ต้องอยู่หลัง Detail Modal เพื่อให้แสดงด้านหน้า */}
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ">
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบ" closeLabel="cancel">
         {(() => {
           const hasLinkedSD = confirmDeleteId ? linkedLFMap.has(confirmDeleteId) : false
           const linkedSD = confirmDeleteId ? linkedLFMap.get(confirmDeleteId) : null

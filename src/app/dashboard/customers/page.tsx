@@ -402,7 +402,7 @@ export default function CustomersPage() {
       )}
 
       {/* Form Modal */}
-      <Modal open={showForm} onClose={() => setShowForm(false)} title={editId ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า'} size="xl">
+      <Modal open={showForm} onClose={() => setShowForm(false)} title={editId ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า'} size="xl" closeLabel="cancel">
         <div className="space-y-4 text-sm">
           <div>
             <label className="block font-medium text-slate-600 mb-1">ชื่อย่อลูกค้า * <span className="text-xs text-slate-400 font-normal">(ใช้ในงานประจำวัน เช่น WOV, Bell, SWD)</span></label>
