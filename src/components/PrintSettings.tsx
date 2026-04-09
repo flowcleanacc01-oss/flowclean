@@ -25,6 +25,7 @@ interface Props {
 export default function PrintSettingsDropdown({ settings, onChange }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   // Close on outside click
   useEffect(() => {
@@ -48,6 +49,15 @@ export default function PrintSettingsDropdown({ settings, onChange }: Props) {
     return () => document.removeEventListener('keydown', handler)
   }, [open])
 
+  // 91: Auto-scroll dropdown into view when opened (for modals where button is at bottom)
+  useEffect(() => {
+    if (!open) return
+    const timer = setTimeout(() => {
+      panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }, 50)
+    return () => clearTimeout(timer)
+  }, [open])
+
   const marginOrder: MarginPreset[] = ['none', 'narrow', 'normal', 'wide']
 
   return (
@@ -61,7 +71,7 @@ export default function PrintSettingsDropdown({ settings, onChange }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 animate-fadeIn">
+        <div ref={panelRef} className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 animate-fadeIn">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
