@@ -12,7 +12,7 @@ import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import { canViewSD } from '@/lib/permissions'
-import { applyRowsSync } from '@/lib/sync-discrepancy'
+import { applyRowsSync, recalcTransportAfterSync } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer, sortCustomersWithRecent, getRecentCustomerIds } from '@/lib/recent-customers'
 import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
@@ -89,6 +89,16 @@ export default function DeliveryPage() {
   const [dnDiscountNote, setDnDiscountNote] = useState('')
   const [dnExtraCharge, setDnExtraCharge] = useState(0)
   const [dnExtraChargeNote, setDnExtraChargeNote] = useState('')
+
+  // 84: SD edit sync confirmation modal — แก้ quantity → recalc transport fees
+  const [pendingSdSync, setPendingSdSync] = useState<{
+    dnId: string
+    lfId: string
+    itemCode: string
+    oldQty: number
+    newQty: number
+  } | null>(null)
+  const [sdSyncRecalcMode, setSdSyncRecalcMode] = useState<'recalc' | 'keep'>('recalc')
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -857,26 +867,21 @@ export default function DeliveryPage() {
                                       updateDeliveryNote(detailNote.id, { items: updated })
                                     }}
                                     onBlur={() => {
-                                      // Sync LF row when user finishes editing
+                                      // 84: เปิด modal แสดง preview + recalc transport fees
                                       const lf = linenForms.find(f => f.id === detailNote.linenFormIds[0])
                                       if (!lf) return
                                       const lfRow = lf.rows.find(r => r.code === item.code)
                                       if (!lfRow) return
                                       const oldQty = lfRow.col6_factoryPackSend || 0
                                       if (oldQty === item.quantity) return
-                                      if (!confirm(`Sync LF-${lf.formNumber}:\n\n${item.code}: col6+col4 = ${oldQty} → ${item.quantity}\n\nระบบจะอัพเดต LF + บันทึก audit log\n\nดำเนินการต่อ?`)) {
-                                        // Revert
-                                        const reverted = detailNote.items.map((di, i) => i === idx ? { ...di, quantity: oldQty } : di)
-                                        updateDeliveryNote(detailNote.id, { items: reverted })
-                                        return
-                                      }
-                                      const updatedRows = applyRowsSync(
-                                        lf.rows,
-                                        [{ code: item.code, newQty: item.quantity }],
-                                        'sd_edit',
-                                        currentUser?.name || 'unknown',
-                                      )
-                                      updateLinenForm(lf.id, { rows: updatedRows })
+                                      setPendingSdSync({
+                                        dnId: detailNote.id,
+                                        lfId: lf.id,
+                                        itemCode: item.code,
+                                        oldQty,
+                                        newQty: item.quantity,
+                                      })
+                                      setSdSyncRecalcMode('recalc')
                                     }}
                                     className="w-20 px-2 py-0.5 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                                 )
@@ -1258,6 +1263,177 @@ export default function DeliveryPage() {
             }}
           />
         </div>
+      </Modal>
+
+      {/* 84: SD Sync Confirmation Modal — แก้ quantity → preview + recalc transport fees */}
+      <Modal
+        open={!!pendingSdSync}
+        onClose={() => {
+          // Cancel: revert DN items
+          if (pendingSdSync) {
+            const dn = deliveryNotes.find(d => d.id === pendingSdSync.dnId)
+            if (dn) {
+              const reverted = dn.items.map(di =>
+                di.code === pendingSdSync.itemCode ? { ...di, quantity: pendingSdSync.oldQty } : di
+              )
+              updateDeliveryNote(dn.id, { items: reverted })
+            }
+          }
+          setPendingSdSync(null)
+        }}
+        title="ยืนยันการแก้ไข SD"
+        size="lg"
+      >
+        {(() => {
+          if (!pendingSdSync) return null
+          const p = pendingSdSync
+          const dn = deliveryNotes.find(d => d.id === p.dnId)
+          const lf = linenForms.find(f => f.id === p.lfId)
+          const cust = dn ? getCustomer(dn.customerId) : null
+          if (!dn || !lf || !cust) return null
+
+          // Recalc preview (uses dn with new quantity from onChange)
+          const recalcResults = recalcTransportAfterSync(dn, cust, deliveryNotes, quotations)
+          const thisDnRecalc = recalcResults.find(r => r.dnId === dn.id)
+          const otherDnRecalc = recalcResults.find(r => r.dnId !== dn.id)
+          const otherDn = otherDnRecalc ? deliveryNotes.find(d => d.id === otherDnRecalc.dnId) : null
+
+          const oldTripFee = dn.transportFeeTrip || 0
+          const newTripFee = thisDnRecalc?.newTripFee ?? oldTripFee
+          const oldMonthFee = dn.transportFeeMonth || 0
+          const newMonthFee = thisDnRecalc?.newMonthFee
+
+          const tripChanged = newTripFee !== oldTripFee
+          const thisMonthChanged = newMonthFee !== undefined && newMonthFee !== oldMonthFee
+          const otherMonthChanged = !!otherDnRecalc && otherDnRecalc.newMonthFee !== undefined && otherDnRecalc.newMonthFee !== (otherDn?.transportFeeMonth || 0)
+          const anyFeeChanged = tripChanged || thisMonthChanged || otherMonthChanged
+
+          const itemName = linenCatalog.find(i => i.code === p.itemCode)?.name || p.itemCode
+
+          return (
+            <div className="space-y-4">
+              <div className="text-sm text-slate-600">
+                ลูกค้า: <strong>{cust.shortName || cust.name}</strong> | SD: <strong>{dn.noteNumber}</strong> | LF: <strong>{lf.formNumber}</strong>
+              </div>
+
+              {/* Quantity diff */}
+              <div className="border border-amber-200 rounded-lg overflow-hidden">
+                <div className="bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                  จะ sync col6 (โรงซักแพคส่ง) + col4 (ลูกค้านับกลับ) ใน LF
+                </div>
+                <table className="w-full text-sm">
+                  <thead><tr className="bg-slate-50 text-xs"><th className="text-left px-3 py-1.5">รายการ</th><th className="text-right px-3 py-1.5">เดิม</th><th className="text-center px-3 py-1.5">→</th><th className="text-right px-3 py-1.5">ใหม่</th></tr></thead>
+                  <tbody>
+                    <tr className="border-t border-slate-100">
+                      <td className="px-3 py-1.5"><span className="font-mono text-xs text-slate-400 mr-1">{p.itemCode}</span>{itemName}</td>
+                      <td className="px-3 py-1.5 text-right text-red-600 line-through">{formatNumber(p.oldQty)}</td>
+                      <td className="px-3 py-1.5 text-center text-slate-400">→</td>
+                      <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatNumber(p.newQty)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Recalc preview */}
+              {anyFeeChanged && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 space-y-3">
+                  <p className="text-sm font-medium text-blue-800">⚠ ค่ารถจะเปลี่ยนเพราะจำนวนชิ้นเปลี่ยน</p>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {tripChanged && (
+                        <tr className="border-b border-blue-100">
+                          <td className="py-1.5 text-slate-700">ค่ารถ (ครั้ง) — SD นี้</td>
+                          <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(oldTripFee)}</td>
+                          <td className="py-1.5 text-center text-slate-400 px-1">→</td>
+                          <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newTripFee)}</td>
+                        </tr>
+                      )}
+                      {thisMonthChanged && (
+                        <tr className="border-b border-blue-100">
+                          <td className="py-1.5 text-slate-700">ค่ารถ (เดือน) — SD นี้</td>
+                          <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(oldMonthFee)}</td>
+                          <td className="py-1.5 text-center text-slate-400 px-1">→</td>
+                          <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newMonthFee || 0)}</td>
+                        </tr>
+                      )}
+                      {otherMonthChanged && otherDn && (
+                        <tr>
+                          <td className="py-1.5 text-slate-700">ค่ารถ (เดือน) — SD ใบสุดท้าย <span className="font-mono text-xs text-slate-400">({otherDn.noteNumber})</span></td>
+                          <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(otherDn.transportFeeMonth || 0)}</td>
+                          <td className="py-1.5 text-center text-slate-400 px-1">→</td>
+                          <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(otherDnRecalc?.newMonthFee || 0)}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+
+                  <div className="space-y-2 pt-2 border-t border-blue-200">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="radio" name="sdSyncMode" checked={sdSyncRecalcMode === 'recalc'} onChange={() => setSdSyncRecalcMode('recalc')} className="accent-[#1B3A5C]" />
+                      <span className="text-slate-700">อัปเดตค่ารถตามจำนวนใหม่ <span className="text-slate-400">(แนะนำ)</span></span>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="radio" name="sdSyncMode" checked={sdSyncRecalcMode === 'keep'} onChange={() => setSdSyncRecalcMode('keep')} className="accent-[#1B3A5C]" />
+                      <span className="text-slate-700">เก็บค่ารถเดิม <span className="text-slate-400">(ไม่ recalc)</span></span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-slate-50 rounded-lg px-3 py-2 text-xs text-slate-500">
+                <strong>หมายเหตุ:</strong> ระบบจะ sync LF.col6 + col4 = {formatNumber(p.newQty)} (ทั้ง 2 ค่า) + บันทึก audit log
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    // Cancel: revert DN items
+                    const reverted = dn.items.map(di =>
+                      di.code === p.itemCode ? { ...di, quantity: p.oldQty } : di
+                    )
+                    updateDeliveryNote(dn.id, { items: reverted })
+                    setPendingSdSync(null)
+                  }}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={() => {
+                    // Confirm: apply sync to LF + recalc fees if opted in
+                    const updatedRows = applyRowsSync(
+                      lf.rows,
+                      [{ code: p.itemCode, newQty: p.newQty }],
+                      'sd_edit',
+                      currentUser?.name || 'unknown',
+                    )
+                    updateLinenForm(lf.id, { rows: updatedRows })
+
+                    if (sdSyncRecalcMode === 'recalc' && anyFeeChanged) {
+                      for (const r of recalcResults) {
+                        const update: { transportFeeTrip?: number; transportFeeMonth?: number } = {}
+                        if (r.dnId === dn.id) {
+                          update.transportFeeTrip = r.newTripFee
+                        }
+                        if (r.newMonthFee !== undefined) {
+                          update.transportFeeMonth = r.newMonthFee
+                        }
+                        if (Object.keys(update).length > 0) {
+                          updateDeliveryNote(r.dnId, update)
+                        }
+                      }
+                    }
+
+                    setPendingSdSync(null)
+                  }}
+                  className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors"
+                >
+                  ยืนยัน
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
     </div>
   )
