@@ -100,19 +100,43 @@ export default function DeliveryPage() {
   } | null>(null)
   const [sdSyncRecalcMode, setSdSyncRecalcMode] = useState<'recalc' | 'keep'>('recalc')
 
+  // 106: Local state for SD adjustment editing (ไม่ save ทันที — รอ confirm)
+  const [adjExtra, setAdjExtra] = useState(0)
+  const [adjExtraNote, setAdjExtraNote] = useState('')
+  const [adjDiscount, setAdjDiscount] = useState(0)
+  const [adjDiscountNote, setAdjDiscountNote] = useState('')
+  const [showAdjustConfirm, setShowAdjustConfirm] = useState(false)
+  const adjInitRef = useRef({ extra: 0, extraNote: '', discount: 0, discountNote: '' })
+
+  // Init adjust fields when detail modal opens
+  useEffect(() => {
+    if (showDetail) {
+      const dn = deliveryNotes.find(d => d.id === showDetail)
+      if (dn) {
+        const init = { extra: dn.extraCharge || 0, extraNote: dn.extraChargeNote || '', discount: dn.discount || 0, discountNote: dn.discountNote || '' }
+        adjInitRef.current = init
+        setAdjExtra(init.extra)
+        setAdjExtraNote(init.extraNote)
+        setAdjDiscount(init.discount)
+        setAdjDiscountNote(init.discountNote)
+      }
+    }
+    setShowAdjustConfirm(false)
+  }, [showDetail, deliveryNotes])
+
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
   }
   const sortedBg = (key: string) => sortKey === key ? 'bg-[#1B3A5C]/[0.04]' : ''
 
-  // Calculate total amount for a DN (items subtotal + transport fees)
+  // Calculate total amount for a DN (items subtotal + transport fees + adjustments)
   const getDNTotalAmount = (dn: typeof deliveryNotes[number]): number => {
     const customer = getCustomer(dn.customerId)
     if (!customer || !(customer.enablePerPiece ?? true)) return 0
     const priceMap = getDNPrices(dn)
     const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
-    return itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0)
+    return itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0) + (dn.extraCharge || 0) - (dn.discount || 0)
   }
 
   const filtered = useMemo(() => {
@@ -1044,46 +1068,58 @@ export default function DeliveryPage() {
               )
             })()}
 
-            {/* 101: การปรับยอด (editable) — discount + extraCharge + notes */}
-            {!detailNote.isBilled ? (
-              <div className="border border-slate-200 rounded-lg p-3 space-y-3 bg-slate-50">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">การปรับยอด (ถ้ามี)</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">ค่าใช้จ่ายเพิ่มเติม (บาท)</label>
-                    <input type="number" min={0} step={0.01} value={detailNote.extraCharge || ''}
-                      onFocus={e => e.currentTarget.select()}
-                      onChange={e => updateDeliveryNote(detailNote.id, { extraCharge: Math.max(0, parseFloat(e.target.value) || 0) })}
-                      placeholder="0.00"
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+            {/* 101+106: การปรับยอด — local state + ปุ่มยืนยัน (ไม่ save ทันที) */}
+            {!detailNote.isBilled ? (() => {
+              const adjChanged = adjExtra !== adjInitRef.current.extra || adjDiscount !== adjInitRef.current.discount
+                || adjExtraNote !== adjInitRef.current.extraNote || adjDiscountNote !== adjInitRef.current.discountNote
+              return (
+                <div className="border border-slate-200 rounded-lg p-3 space-y-3 bg-slate-50">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">การปรับยอด (ถ้ามี)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">ค่าใช้จ่ายเพิ่มเติม (บาท)</label>
+                      <input type="number" min={0} step={0.01} value={adjExtra || ''}
+                        onFocus={e => e.currentTarget.select()}
+                        onChange={e => setAdjExtra(Math.max(0, parseFloat(e.target.value) || 0))}
+                        placeholder="0.00"
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุค่าใช้จ่าย</label>
+                      <input type="text" value={adjExtraNote}
+                        onChange={e => setAdjExtraNote(e.target.value)}
+                        placeholder="เช่น ค่าส่งพิเศษ"
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุค่าใช้จ่าย</label>
-                    <input type="text" value={detailNote.extraChargeNote || ''}
-                      onChange={e => updateDeliveryNote(detailNote.id, { extraChargeNote: e.target.value })}
-                      placeholder="เช่น ค่าส่งพิเศษ"
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">ส่วนลด (บาท)</label>
+                      <input type="number" min={0} step={0.01} value={adjDiscount || ''}
+                        onFocus={e => e.currentTarget.select()}
+                        onChange={e => setAdjDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
+                        placeholder="0.00"
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-orange-300 focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุส่วนลด</label>
+                      <input type="text" value={adjDiscountNote}
+                        onChange={e => setAdjDiscountNote(e.target.value)}
+                        placeholder="เช่น หักค่าเสียหาย"
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                    </div>
                   </div>
+                  {adjChanged && (
+                    <div className="flex justify-end pt-1">
+                      <button onClick={() => setShowAdjustConfirm(true)}
+                        className="px-4 py-1.5 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors">
+                        ยืนยันการปรับยอด
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">ส่วนลด (บาท)</label>
-                    <input type="number" min={0} step={0.01} value={detailNote.discount || ''}
-                      onFocus={e => e.currentTarget.select()}
-                      onChange={e => updateDeliveryNote(detailNote.id, { discount: Math.max(0, parseFloat(e.target.value) || 0) })}
-                      placeholder="0.00"
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-orange-300 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุส่วนลด</label>
-                    <input type="text" value={detailNote.discountNote || ''}
-                      onChange={e => updateDeliveryNote(detailNote.id, { discountNote: e.target.value })}
-                      placeholder="เช่น หักค่าเสียหาย"
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                  </div>
-                </div>
-              </div>
-            ) : (
+              )
+            })() : (
               (detailNote.extraCharge || 0) > 0 || (detailNote.discount || 0) > 0 ? (
                 <div className="border border-slate-200 rounded-lg p-3 space-y-1 bg-slate-50">
                   <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">การปรับยอด <span className="text-orange-600">(ล็อค — SD วางบิลแล้ว)</span></p>
@@ -1398,6 +1434,88 @@ export default function DeliveryPage() {
             }}
           />
         </div>
+      </Modal>
+
+      {/* 106: Modal ยืนยันการปรับยอด SD — extraCharge / discount */}
+      <Modal
+        open={showAdjustConfirm && !!showDetail}
+        onClose={() => setShowAdjustConfirm(false)}
+        title="ยืนยันการปรับยอด SD"
+        size="lg"
+      >
+        {(() => {
+          const dn = showDetail ? deliveryNotes.find(d => d.id === showDetail) : null
+          const cust = dn ? getCustomer(dn.customerId) : null
+          if (!dn || !cust) return null
+          const init = adjInitRef.current
+          const extraChanged = adjExtra !== init.extra || adjExtraNote !== init.extraNote
+          const discountChanged = adjDiscount !== init.discount || adjDiscountNote !== init.discountNote
+          // Preview new total
+          const priceMap = getDNPrices(dn)
+          const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
+          const oldTotal = itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0) + init.extra - init.discount
+          const newTotal = itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0) + adjExtra - adjDiscount
+          return (
+            <div className="space-y-4">
+              <div className="text-sm text-slate-600">
+                ลูกค้า: <strong>{cust.shortName || cust.name}</strong> | SD: <strong>{dn.noteNumber}</strong>
+              </div>
+
+              <div className="border border-amber-200 rounded-lg overflow-hidden">
+                <div className="bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">การเปลี่ยนแปลง</div>
+                <table className="w-full text-sm">
+                  <thead><tr className="bg-slate-50 text-xs"><th className="text-left px-3 py-1.5">รายการ</th><th className="text-right px-3 py-1.5">เดิม</th><th className="text-center px-2 py-1.5">→</th><th className="text-right px-3 py-1.5">ใหม่</th></tr></thead>
+                  <tbody>
+                    {extraChanged && (
+                      <tr className="border-t border-slate-100">
+                        <td className="px-3 py-1.5 text-blue-700">ค่าใช้จ่ายเพิ่มเติม {adjExtraNote && `(${adjExtraNote})`}</td>
+                        <td className="px-3 py-1.5 text-right text-red-600 line-through">{formatCurrency(init.extra)}</td>
+                        <td className="px-3 py-1.5 text-center text-slate-400">→</td>
+                        <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(adjExtra)}</td>
+                      </tr>
+                    )}
+                    {discountChanged && (
+                      <tr className="border-t border-slate-100">
+                        <td className="px-3 py-1.5 text-orange-700">ส่วนลด {adjDiscountNote && `(${adjDiscountNote})`}</td>
+                        <td className="px-3 py-1.5 text-right text-red-600 line-through">-{formatCurrency(init.discount)}</td>
+                        <td className="px-3 py-1.5 text-center text-slate-400">→</td>
+                        <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">-{formatCurrency(adjDiscount)}</td>
+                      </tr>
+                    )}
+                    <tr className="border-t-2 border-slate-300 bg-slate-50 font-medium">
+                      <td className="px-3 py-2">ยอดรวม SD</td>
+                      <td className="px-3 py-2 text-right text-red-600 line-through">{formatCurrency(oldTotal)}</td>
+                      <td className="px-3 py-2 text-center text-slate-400">→</td>
+                      <td className="px-3 py-2 text-right text-emerald-600 font-bold">{formatCurrency(newTotal)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="bg-slate-50 rounded-lg px-3 py-2 text-xs text-slate-500">
+                <strong>หมายเหตุ:</strong> ค่ารถ (ครั้ง/เดือน) ไม่เปลี่ยน — คำนวณจากจำนวนชิ้นเท่านั้น
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button onClick={() => setShowAdjustConfirm(false)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+                <button onClick={() => {
+                  updateDeliveryNote(dn.id, {
+                    extraCharge: adjExtra,
+                    extraChargeNote: adjExtraNote,
+                    discount: adjDiscount,
+                    discountNote: adjDiscountNote,
+                  })
+                  adjInitRef.current = { extra: adjExtra, extraNote: adjExtraNote, discount: adjDiscount, discountNote: adjDiscountNote }
+                  setShowAdjustConfirm(false)
+                }}
+                  className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors">
+                  ยืนยัน
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
 
       {/* 84: SD Sync Confirmation Modal — แก้ quantity → preview + recalc transport fees */}
