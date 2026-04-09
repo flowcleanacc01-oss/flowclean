@@ -11,6 +11,8 @@ interface ModalProps {
   children: ReactNode
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'wide' | 'full'
   className?: string
+  /** 104: Close button label — 'close' (ปิด), 'saved' (บันทึกแล้ว), 'cancel' (ยกเลิก) */
+  closeLabel?: 'close' | 'saved' | 'cancel'
 }
 
 const SIZE_MAP = {
@@ -22,7 +24,7 @@ const SIZE_MAP = {
   full: 'max-w-7xl',
 }
 
-export default function Modal({ open, onClose, title, children, size = 'md', className }: ModalProps) {
+export default function Modal({ open, onClose, title, children, size = 'md', className, closeLabel = 'close' }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -53,9 +55,14 @@ export default function Modal({ open, onClose, title, children, size = 'md', cla
           <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <span className={cn('text-xs font-medium',
+              closeLabel === 'saved' ? 'text-emerald-500' : 'text-slate-400'
+            )}>
+              {closeLabel === 'saved' ? 'บันทึกแล้ว' : closeLabel === 'cancel' ? 'ยกเลิก' : 'ปิด'}
+            </span>
+            <X className="w-4 h-4 text-slate-400" />
           </button>
         </div>
         {/* Body */}

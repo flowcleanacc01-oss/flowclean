@@ -92,7 +92,7 @@ export default function PaymentRecordModal({ open, onClose, billing, customer }:
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`💰 บันทึกการชำระเงิน — ${billing.billingNumber}`} size="lg">
+    <Modal open={open} onClose={onClose} title={`💰 บันทึกการชำระเงิน — ${billing.billingNumber}`} size="lg" closeLabel="cancel">
       <div className="space-y-4">
         {/* Customer + Target info */}
         <div className="bg-slate-50 rounded-lg px-4 py-3 space-y-1">

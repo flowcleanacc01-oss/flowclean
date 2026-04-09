@@ -145,7 +145,7 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="🔧 ลูกค้าแจ้งจำนวนผ้านับไม่ตรง" size="xl">
+    <Modal open={open} onClose={onClose} title="🔧 ลูกค้าแจ้งจำนวนผ้านับไม่ตรง" size="xl" closeLabel="cancel">
       <div className="space-y-4">
         {/* Help text */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-2 text-xs text-blue-800">

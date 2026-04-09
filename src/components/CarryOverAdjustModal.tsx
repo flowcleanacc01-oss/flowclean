@@ -158,7 +158,7 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
   const colorOf = (n: number) => n < 0 ? 'text-red-600' : n > 0 ? 'text-emerald-600' : 'text-slate-400'
 
   return (
-    <Modal open={open} onClose={onClose} title={editing ? 'แก้ไขการปรับยอด' : 'ปรับยอดผ้าค้าง/คืน'} size="xl">
+    <Modal open={open} onClose={onClose} title={editing ? 'แก้ไขการปรับยอด' : 'ปรับยอดผ้าค้าง/คืน'} size="xl" closeLabel="cancel">
       <div className="space-y-4">
         {/* Customer + Date */}
         <div className="bg-slate-50 rounded-lg px-4 py-3 flex items-center gap-4">
