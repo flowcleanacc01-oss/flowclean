@@ -1009,7 +1009,7 @@ export default function DeliveryPage() {
                           </td>
                         </tr>
                       )}
-                      {/* ค่าใช้จ่ายเพิ่มเติม */}
+                      {/* ค่าใช้จ่ายเพิ่มเติม — read-only display in table */}
                       {isPer && dnExtraCharge > 0 && (
                         <tr className="border-t border-blue-200 bg-blue-50/50">
                           <td className="px-3 py-1.5" colSpan={2}>
@@ -1020,7 +1020,7 @@ export default function DeliveryPage() {
                           <td className="px-3 py-1.5 text-right text-blue-700">{formatCurrency(dnExtraCharge)}</td>
                         </tr>
                       )}
-                      {/* ส่วนลด */}
+                      {/* ส่วนลด — read-only display in table */}
                       {isPer && dnDiscount > 0 && (
                         <tr className="border-t border-orange-200 bg-orange-50/50">
                           <td className="px-3 py-1.5" colSpan={2}>
@@ -1043,6 +1043,59 @@ export default function DeliveryPage() {
                 </div>
               )
             })()}
+
+            {/* 101: การปรับยอด (editable) — discount + extraCharge + notes */}
+            {!detailNote.isBilled ? (
+              <div className="border border-slate-200 rounded-lg p-3 space-y-3 bg-slate-50">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">การปรับยอด (ถ้ามี)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">ค่าใช้จ่ายเพิ่มเติม (บาท)</label>
+                    <input type="number" min={0} step={0.01} value={detailNote.extraCharge || ''}
+                      onFocus={e => e.currentTarget.select()}
+                      onChange={e => updateDeliveryNote(detailNote.id, { extraCharge: Math.max(0, parseFloat(e.target.value) || 0) })}
+                      placeholder="0.00"
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุค่าใช้จ่าย</label>
+                    <input type="text" value={detailNote.extraChargeNote || ''}
+                      onChange={e => updateDeliveryNote(detailNote.id, { extraChargeNote: e.target.value })}
+                      placeholder="เช่น ค่าส่งพิเศษ"
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">ส่วนลด (บาท)</label>
+                    <input type="number" min={0} step={0.01} value={detailNote.discount || ''}
+                      onFocus={e => e.currentTarget.select()}
+                      onChange={e => updateDeliveryNote(detailNote.id, { discount: Math.max(0, parseFloat(e.target.value) || 0) })}
+                      placeholder="0.00"
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-orange-300 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุส่วนลด</label>
+                    <input type="text" value={detailNote.discountNote || ''}
+                      onChange={e => updateDeliveryNote(detailNote.id, { discountNote: e.target.value })}
+                      placeholder="เช่น หักค่าเสียหาย"
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              (detailNote.extraCharge || 0) > 0 || (detailNote.discount || 0) > 0 ? (
+                <div className="border border-slate-200 rounded-lg p-3 space-y-1 bg-slate-50">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">การปรับยอด <span className="text-orange-600">(ล็อค — SD วางบิลแล้ว)</span></p>
+                  {(detailNote.extraCharge || 0) > 0 && (
+                    <p className="text-sm text-blue-700">ค่าใช้จ่ายเพิ่มเติม: {formatCurrency(detailNote.extraCharge || 0)} {detailNote.extraChargeNote && `(${detailNote.extraChargeNote})`}</p>
+                  )}
+                  {(detailNote.discount || 0) > 0 && (
+                    <p className="text-sm text-orange-700">ส่วนลด: -{formatCurrency(detailNote.discount || 0)} {detailNote.discountNote && `(${detailNote.discountNote})`}</p>
+                  )}
+                </div>
+              ) : null
+            )}
 
             <div className="flex justify-between pt-2">
               <button onClick={() => setConfirmDeleteId(detailNote.id)}
