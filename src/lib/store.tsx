@@ -140,9 +140,12 @@ function dbSave(promise: Promise<void>, onError?: () => void) {
   promise.catch(err => {
     console.error('[DB save error]', err)
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('flowclean:db-error', {
-        detail: 'บันทึกข้อมูลไม่สำเร็จ กรุณาลองอีกครั้ง',
-      }))
+      // Show real error message to help debug — fallback to generic
+      const errMsg = err instanceof Error ? err.message : String(err)
+      const detail = errMsg && errMsg.length > 0
+        ? `บันทึกไม่สำเร็จ: ${errMsg}`
+        : 'บันทึกข้อมูลไม่สำเร็จ กรุณาลองอีกครั้ง'
+      window.dispatchEvent(new CustomEvent('flowclean:db-error', { detail }))
     }
     if (onError) onError()
   })
