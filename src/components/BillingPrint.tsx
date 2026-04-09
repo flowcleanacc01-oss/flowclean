@@ -29,15 +29,15 @@ export default function BillingPrint({ billing, customer, company }: BillingPrin
           <h2 className="text-lg font-bold text-[#1B3A5C]">ใบวางบิล</h2>
           <p className="text-xs text-slate-500">Billing Statement</p>
           <p className="font-mono text-sm font-medium mt-2">{billing.billingNumber}</p>
-          <p className="text-xs text-slate-500">วันที่: {formatDate(billing.issueDate)}</p>
-          <p className="text-xs text-slate-500">ครบกำหนด: {formatDate(billing.dueDate)}</p>
+          <p className="text-sm font-semibold text-[#1B3A5C]">วันที่: {formatDate(billing.issueDate)}</p>
+          <p className="text-sm font-semibold text-[#1B3A5C]">ครบกำหนด: {formatDate(billing.dueDate)}</p>
         </div>
       </div>
 
       {/* Customer Info */}
       <div className="mb-6 text-xs">
         <p className="text-slate-500">เรียน:</p>
-        <p className="font-medium text-slate-800">{customer.name}</p>
+        <p className="text-base font-bold text-slate-900">{customer.name}</p>
         <p className="text-slate-500">{customer.address}</p>
         <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxId} ({formatBranch(customer.branch)})</p>
       </div>

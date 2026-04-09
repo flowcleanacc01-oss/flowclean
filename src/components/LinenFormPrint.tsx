@@ -42,7 +42,7 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
           <h2 className="text-sm font-bold text-[#1B3A5C]">ใบส่งรับผ้า</h2>
           <p className="text-[10px] text-slate-500">Linen Form</p>
           <p className="font-mono text-xs font-medium mt-1">{form.formNumber}</p>
-          <p className="text-[10px] text-slate-500">วันที่: {formatDate(form.date)}</p>
+          <p className="text-xs font-semibold text-[#1B3A5C]">วันที่: {formatDate(form.date)}</p>
         </div>
       </div>
 
@@ -50,7 +50,7 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
       <div className="grid grid-cols-2 gap-3 mb-3 text-[11px] print:mb-2">
         <div>
           <p className="text-slate-500">ลูกค้า:</p>
-          <p className="font-medium text-slate-800">{customer.shortName || customer.name}</p>
+          <p className="text-sm font-bold text-slate-900">{customer.shortName || customer.name}</p>
         </div>
         <div className="text-right">
           {form.bagsSentCount > 0 && (

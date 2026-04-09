@@ -33,14 +33,14 @@ export default function TaxInvoicePrint({ invoice, customer, company, withholdin
           <h2 className="text-lg font-bold text-[#1B3A5C]">ใบกำกับภาษี/ใบเสร็จรับเงิน</h2>
           <p className="text-xs text-slate-500">Tax Invoice / Receipt</p>
           <p className="font-mono text-sm font-medium mt-2">{invoice.invoiceNumber}</p>
-          <p className="text-xs text-slate-500">วันที่: {formatDate(invoice.issueDate)}</p>
+          <p className="text-sm font-semibold text-[#1B3A5C]">วันที่: {formatDate(invoice.issueDate)}</p>
         </div>
       </div>
 
       {/* Customer Info */}
       <div className="mb-4 text-xs">
         <p className="text-slate-500">ลูกค้า / Customer:</p>
-        <p className="font-medium text-slate-800">{customer.name}</p>
+        <p className="text-base font-bold text-slate-900">{customer.name}</p>
         {customer.nameEn && <p className="text-slate-500">{customer.nameEn}</p>}
         <p className="text-slate-500 mt-1">{customer.address}</p>
         <p className="text-slate-500">เลขผู้เสียภาษี: {customer.taxId} | {formatBranch(customer.branch)}</p>

@@ -28,7 +28,7 @@ export default function ChecklistPrint({ checklist, customer, company }: Checkli
           <h2 className="text-lg font-bold text-[#1B3A5C]">ใบเช็คสินค้า</h2>
           <p className="text-xs text-slate-500">{CHECKLIST_TYPE_CONFIG[checklist.type].label}</p>
           <p className="font-mono text-sm font-medium mt-2">{checklist.checklistNumber}</p>
-          <p className="text-xs text-slate-500">วันที่: {formatDate(checklist.date)}</p>
+          <p className="text-sm font-semibold text-[#1B3A5C]">วันที่: {formatDate(checklist.date)}</p>
         </div>
       </div>
 
@@ -36,7 +36,7 @@ export default function ChecklistPrint({ checklist, customer, company }: Checkli
       <div className="grid grid-cols-2 gap-4 mb-4 text-xs">
         <div>
           <p className="text-slate-500">ลูกค้า:</p>
-          <p className="font-medium text-slate-800">{customer.name}</p>
+          <p className="text-base font-bold text-slate-900">{customer.name}</p>
         </div>
         <div>
           <p className="text-slate-500">เอกสารอ้างอิง:</p>

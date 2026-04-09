@@ -28,7 +28,7 @@ export default function QuotationPrint({ quotation, company }: QuotationPrintPro
           <h2 className="text-lg font-bold text-[#1B3A5C]">ใบเสนอราคา</h2>
           <p className="text-xs text-slate-500">Quotation</p>
           <p className="font-mono text-sm font-medium mt-2">{quotation.quotationNumber}</p>
-          <p className="text-xs text-slate-500">วันที่: {formatDate(quotation.date)}</p>
+          <p className="text-sm font-semibold text-[#1B3A5C]">วันที่: {formatDate(quotation.date)}</p>
           <p className="text-xs text-slate-500">ใช้ได้ถึง: {formatDate(quotation.validUntil)}</p>
         </div>
       </div>
@@ -36,7 +36,7 @@ export default function QuotationPrint({ quotation, company }: QuotationPrintPro
       {/* Customer Info */}
       <div className="mb-6 text-xs">
         <p className="text-slate-500">เรียน:</p>
-        <p className="font-medium text-slate-800">{quotation.customerName}</p>
+        <p className="text-base font-bold text-slate-900">{quotation.customerName}</p>
         {quotation.customerContact && (
           <p className="text-slate-500">ติดต่อ: {quotation.customerContact}</p>
         )}

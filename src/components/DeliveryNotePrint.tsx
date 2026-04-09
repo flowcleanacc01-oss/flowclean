@@ -46,7 +46,7 @@ export default function DeliveryNotePrint({ note, customer, company, catalog, pr
           <h2 className="text-lg font-bold text-[#1B3A5C]">ใบส่งของชั่วคราว</h2>
           <p className="text-xs text-slate-500">Delivery Note</p>
           <p className="font-mono text-sm font-medium mt-2">{note.noteNumber}</p>
-          <p className="text-xs text-slate-500">วันที่: {formatDate(note.date)}</p>
+          <p className="text-sm font-semibold text-[#1B3A5C]">วันที่: {formatDate(note.date)}</p>
         </div>
       </div>
 
@@ -54,7 +54,7 @@ export default function DeliveryNotePrint({ note, customer, company, catalog, pr
       <div className="grid grid-cols-2 gap-4 mb-4 text-xs print:mb-3">
         <div>
           <p className="text-slate-500">ลูกค้า:</p>
-          <p className="font-medium text-slate-800">{customer.shortName || customer.name}</p>
+          <p className="text-base font-bold text-slate-900">{customer.shortName || customer.name}</p>
           <p className="text-slate-500">{customer.address}</p>
         </div>
         <div className="text-right">
