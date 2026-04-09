@@ -246,7 +246,7 @@ export default function DashboardPage() {
               <thead>
                 <tr className="bg-slate-50">
                   <th className="text-left px-4 py-2 font-medium text-slate-500 text-xs">ฟอร์ม</th>
-                  <th className="text-left px-4 py-2 font-medium text-slate-500 text-xs">โรงแรม</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-500 text-xs">ลูกค้า</th>
                   <th className="text-left px-4 py-2 font-medium text-slate-500 text-xs">วันที่</th>
                   <th className="text-right px-4 py-2 font-medium text-slate-500 text-xs">ชิ้น</th>
                   <th className="text-center px-4 py-2 font-medium text-slate-500 text-xs">สถานะ</th>

@@ -640,7 +640,7 @@ export default function DeliveryPage() {
       </div>
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งของชั่วคราว" size="lg">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งของชั่วคราว" size="lg" closeLabel="cancel">
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">ลูกค้า</label>
@@ -802,7 +802,7 @@ export default function DeliveryPage() {
       </Modal>
 
       {/* Detail Modal */}
-      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={`ใบส่งของชั่วคราว ${detailNote?.noteNumber || ''}`} size="lg">
+      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={`ใบส่งของชั่วคราว ${detailNote?.noteNumber || ''}`} size="lg" closeLabel="saved">
         {detailNote && detailCustomer && (
           <div className="space-y-4">
             {/* Navy bar — ลูกค้า + วันที่ (ID ของเอกสาร) pattern เดียวกับ LF Grid headerLabel */}
@@ -1266,7 +1266,7 @@ export default function DeliveryPage() {
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
                       <th className="text-left px-3 py-2 font-medium text-slate-600">เลขที่</th>
-                      <th className="text-left px-3 py-2 font-medium text-slate-600">โรงแรม</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
                       <th className="text-left px-3 py-2 font-medium text-slate-600">วันที่</th>
                       <th className="text-right px-3 py-2 font-medium text-slate-600">จำนวนชิ้น</th>
                       <th className="text-right px-3 py-2 font-medium text-slate-600">ยอดรวม</th>
@@ -1442,6 +1442,7 @@ export default function DeliveryPage() {
         onClose={() => setShowAdjustConfirm(false)}
         title="ยืนยันการปรับยอด SD"
         size="lg"
+        closeLabel="cancel"
       >
         {(() => {
           const dn = showDetail ? deliveryNotes.find(d => d.id === showDetail) : null
@@ -1536,6 +1537,7 @@ export default function DeliveryPage() {
         }}
         title="ยืนยันการแก้ไข SD"
         size="lg"
+        closeLabel="cancel"
       >
         {(() => {
           if (!pendingSdSync) return null

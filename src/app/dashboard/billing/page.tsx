@@ -708,7 +708,7 @@ export default function BillingPage() {
 
   // List CSV handlers for bulk export
   const handleWbListCSV = (items: BillingStatement[]) => {
-    const headers = ['ลำดับ', 'เลขที่ WB', 'โรงแรม', 'เดือน', 'ยอดจ่ายสุทธิ', 'สถานะ']
+    const headers = ['ลำดับ', 'เลขที่ WB', 'ลูกค้า', 'เดือน', 'ยอดจ่ายสุทธิ', 'สถานะ']
     const rows = items.map((b, idx) => [
       String(idx + 1), b.billingNumber, getCustomer(b.customerId)?.name || '-',
       b.billingMonth, String(b.netPayable), BILLING_STATUS_CONFIG[b.status]?.label || b.status,
@@ -717,7 +717,7 @@ export default function BillingPage() {
   }
 
   const handleIvListCSV = (items: TaxInvoice[]) => {
-    const headers = ['ลำดับ', 'เลขที่ IV', 'โรงแรม', 'วันที่ออก', 'ยอดรวม']
+    const headers = ['ลำดับ', 'เลขที่ IV', 'ลูกค้า', 'วันที่ออก', 'ยอดรวม']
     const rows = items.map((inv, idx) => [
       String(idx + 1), inv.invoiceNumber, getCustomer(inv.customerId)?.name || '-',
       inv.issueDate, String(inv.grandTotal),
@@ -1309,7 +1309,7 @@ export default function BillingPage() {
       </>})()}
 
       {/* Create Billing Modal */}
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); setBillingDiscount(0); setBillingDiscountNote(''); setBillingExtraCharge(0); setBillingExtraChargeNote('') }} title="สร้างใบวางบิล" size="lg">
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setBillingDiscount(0); setBillingDiscountNote(''); setBillingExtraCharge(0); setBillingExtraChargeNote('') }} title="สร้างใบวางบิล" size="lg" closeLabel="cancel">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -1552,7 +1552,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* Detail Modal */}
-      <Modal open={!!showDetail} onClose={() => { setShowDetail(null); setShowPrint(false) }} title={`ใบวางบิล ${detailBilling?.billingNumber || ''}`} size="lg">
+      <Modal open={!!showDetail} onClose={() => { setShowDetail(null); setShowPrint(false) }} title={`ใบวางบิล ${detailBilling?.billingNumber || ''}`} size="lg" closeLabel="saved">
         {detailBilling && detailCustomer && (
           <div className="space-y-4">
             {/* Navy bar — ลูกค้า + วันที่ออก (ID ของเอกสาร) pattern เดียวกับ LF Grid headerLabel */}
@@ -1818,7 +1818,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* Invoice Detail Modal */}
-      <Modal open={!!showInvoiceDetail} onClose={() => { setShowInvoiceDetail(null); setShowInvoicePrint(false) }} title={`ใบกำกับภาษี ${detailInvoice?.invoiceNumber || ''}`} size="lg">
+      <Modal open={!!showInvoiceDetail} onClose={() => { setShowInvoiceDetail(null); setShowInvoicePrint(false) }} title={`ใบกำกับภาษี ${detailInvoice?.invoiceNumber || ''}`} size="lg" closeLabel="saved">
         {detailInvoice && detailInvoiceCustomer && (
           <div className="space-y-4">
             {/* Navy bar — ลูกค้า + วันที่ออก (ID ของเอกสาร) pattern เดียวกับ LF Grid headerLabel */}
@@ -1987,7 +1987,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* IV Creation Confirm Modal */}
-      <Modal open={!!showCreateIV} onClose={() => setShowCreateIV(null)} title="ยืนยันออกใบกำกับภาษี" size="lg">
+      <Modal open={!!showCreateIV} onClose={() => setShowCreateIV(null)} title="ยืนยันออกใบกำกับภาษี" size="lg" closeLabel="cancel">
         {(() => {
           const billing = showCreateIV ? billingStatements.find(b => b.id === showCreateIV) : null
           const customer = billing ? getCustomer(billing.customerId) : null
@@ -2062,7 +2062,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* Create/Edit Quotation Modal */}
-      <Modal open={showCreateQU} onClose={() => { setShowCreateQU(false); setEditQuId(null); setShowLoadFromQT(false) }} title={editQuId ? 'แก้ไขใบเสนอราคา (ย้อนกลับเป็นร่าง)' : 'สร้างใบเสนอราคา'} size="xl">
+      <Modal open={showCreateQU} onClose={() => { setShowCreateQU(false); setEditQuId(null); setShowLoadFromQT(false) }} title={editQuId ? 'แก้ไขใบเสนอราคา (ย้อนกลับเป็นร่าง)' : 'สร้างใบเสนอราคา'} size="xl" closeLabel="cancel">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -2565,7 +2565,7 @@ export default function BillingPage() {
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
                       <th className="text-left px-3 py-2 font-medium text-slate-600">เลขที่ WB</th>
-                      <th className="text-left px-3 py-2 font-medium text-slate-600">โรงแรม</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
                       <th className="text-left px-3 py-2 font-medium text-slate-600">เดือน</th>
                       <th className="text-right px-3 py-2 font-medium text-slate-600">ยอดจ่ายสุทธิ</th>
                       <th className="text-center px-3 py-2 font-medium text-slate-600">สถานะ</th>
@@ -2625,7 +2625,7 @@ export default function BillingPage() {
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
                       <th className="text-left px-3 py-2 font-medium text-slate-600">เลขที่ IV</th>
-                      <th className="text-left px-3 py-2 font-medium text-slate-600">โรงแรม</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
                       <th className="text-left px-3 py-2 font-medium text-slate-600">วันที่ออก</th>
                       <th className="text-right px-3 py-2 font-medium text-slate-600">ยอดรวม VAT</th>
                     </tr>
@@ -2786,7 +2786,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* QT Accept Confirmation Modal — price diff + SD update options */}
-      <Modal open={!!pendingAcceptQTId} onClose={() => setPendingAcceptQTId(null)} title="ยืนยันตกลงใบเสนอราคา" size="lg">
+      <Modal open={!!pendingAcceptQTId} onClose={() => setPendingAcceptQTId(null)} title="ยืนยันตกลงใบเสนอราคา" size="lg" closeLabel="cancel">
         {(() => {
           const qt = pendingAcceptQTId ? quotations.find(q => q.id === pendingAcceptQTId) : null
           if (!qt) return null
@@ -2905,7 +2905,7 @@ export default function BillingPage() {
       })()}
 
       {/* 72: Select WB to create IV (จาก IV tab) */}
-      <Modal open={showSelectWbForIv} onClose={() => setShowSelectWbForIv(false)} title="เลือกใบวางบิลที่จะออกใบกำกับภาษี" size="lg">
+      <Modal open={showSelectWbForIv} onClose={() => setShowSelectWbForIv(false)} title="เลือกใบวางบิลที่จะออกใบกำกับภาษี" size="lg" closeLabel="cancel">
         {(() => {
           // WB ที่ยังไม่มี IV
           const availableWbs = billingStatements

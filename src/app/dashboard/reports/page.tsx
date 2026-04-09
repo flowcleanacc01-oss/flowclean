@@ -489,7 +489,7 @@ export default function ReportsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-4 py-3 font-medium text-slate-600">โรงแรม</th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">ลูกค้า</th>
                 <th className="text-right px-4 py-3 font-medium text-slate-600">ยอดวางบิล</th>
                 <th className="text-center px-4 py-3 font-medium text-slate-600">จำนวนบิล</th>
               </tr>

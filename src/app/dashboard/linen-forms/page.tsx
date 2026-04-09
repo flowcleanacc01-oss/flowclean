@@ -115,7 +115,7 @@ export default function LinenFormsPage() {
   }
 
   const handleLfListCSV = (items: typeof filtered) => {
-    const headers = ['ลำดับ', 'เลขที่ LF', 'โรงแรม', 'วันที่', 'จำนวนชิ้น', 'สถานะ']
+    const headers = ['ลำดับ', 'เลขที่ LF', 'ลูกค้า', 'วันที่', 'จำนวนชิ้น', 'สถานะ']
     const rows = items.map((f, idx) => {
       const customer = getCustomer(f.customerId)
       const pieces = f.rows.reduce((s, r) => s + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0)
@@ -568,7 +568,7 @@ export default function LinenFormsPage() {
       </div>
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งรับผ้าใหม่ (Create New LF)" size="wide">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งรับผ้าใหม่ (Create New LF)" size="wide" closeLabel="cancel">
         <div className="space-y-4">
           <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2.5 text-sm text-teal-700">
             <span className="font-medium">สิ่งที่ทำ: {LINEN_FORM_STATUS_CONFIG.draft.todoLabel}</span>
@@ -673,7 +673,7 @@ export default function LinenFormsPage() {
       </Modal>
 
       {/* Detail Modal */}
-      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={`ใบส่งรับผ้า ${detailForm?.formNumber || ''}`} size="wide">
+      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={`ใบส่งรับผ้า ${detailForm?.formNumber || ''}`} size="wide" closeLabel="saved">
         {detailForm && detailCustomer && (
           <div className="space-y-4">
             <div id="linen-form-detail" className="space-y-4 bg-white p-2">
@@ -1105,7 +1105,7 @@ export default function LinenFormsPage() {
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
                       <th className="text-left px-3 py-2 font-medium text-slate-600">เลขที่ LF</th>
-                      <th className="text-left px-3 py-2 font-medium text-slate-600">โรงแรม</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
                       <th className="text-left px-3 py-2 font-medium text-slate-600">วันที่</th>
                       <th className="text-right px-3 py-2 font-medium text-slate-600">จำนวนชิ้น</th>
                       <th className="text-center px-3 py-2 font-medium text-slate-600">สถานะ</th>

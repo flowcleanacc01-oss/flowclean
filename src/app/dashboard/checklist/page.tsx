@@ -182,7 +182,7 @@ export default function ChecklistPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="ค้นหาเลขที่, ชื่อโรงแรม..."
+            placeholder="ค้นหาเลขที่, ชื่อลูกค้า..."
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
         <div className="flex gap-1.5">
@@ -204,7 +204,7 @@ export default function ChecklistPage() {
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-4 py-3 font-medium text-slate-600">เลขที่</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">ประเภท</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">โรงแรม</th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">ลูกค้า</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">เอกสารอ้างอิง</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">วันที่</th>
                 <th className="text-center px-4 py-3 font-medium text-slate-600">ผ่าน/รวม</th>
@@ -261,7 +261,7 @@ export default function ChecklistPage() {
       </div>
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบเช็คสินค้า" size="xl">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบเช็คสินค้า" size="xl" closeLabel="cancel">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -373,11 +373,11 @@ export default function ChecklistPage() {
       </Modal>
 
       {/* Detail Modal */}
-      <Modal open={!!showDetail} onClose={() => { setShowDetail(null); setShowPrint(false) }} title={detailCL?.checklistNumber || ''} size="xl">
+      <Modal open={!!showDetail} onClose={() => { setShowDetail(null); setShowPrint(false) }} title={detailCL?.checklistNumber || ''} size="xl" closeLabel="saved">
         {detailCL && detailCustomer && (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-4 text-sm">
-              <div><span className="text-slate-500">โรงแรม:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
+              <div><span className="text-slate-500">ลูกค้า:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
               <div><span className="text-slate-500">ประเภท:</span> {CHECKLIST_TYPE_CONFIG[detailCL.type].label}</div>
               <div><span className="text-slate-500">อ้างอิง:</span> <span className="font-mono text-xs">{detailCL.linkedDocumentNumber}</span></div>
               <div><span className="text-slate-500">วันที่:</span> {formatDate(detailCL.date)}</div>

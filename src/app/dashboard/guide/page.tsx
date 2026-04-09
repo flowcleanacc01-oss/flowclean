@@ -7,13 +7,13 @@ import { ArrowRight, ArrowDown, CheckSquare, HelpCircle } from 'lucide-react'
 const STATUS_ORDER: LinenFormStatus[] = ['draft', 'received', 'sorting', 'washing', 'packed', 'delivered', 'confirmed']
 
 const STEP_DETAILS: Record<LinenFormStatus, { who: string; what: string; editCols: string; bagField: string }> = {
-  draft:     { who: 'ลูกค้า (โรงแรม)', what: 'นับผ้าส่งซัก แยกประเภท + นับเคลม', editCols: 'ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ', bagField: 'จำนวนถุงกระสอบส่งซัก' },
+  draft:     { who: 'ลูกค้า', what: 'นับผ้าส่งซัก แยกประเภท + นับเคลม', editCols: 'ลูกค้านับผ้าส่งซัก, ลูกค้านับผ้าส่งเคลม, หมายเหตุ', bagField: 'จำนวนถุงกระสอบส่งซัก' },
   received:  { who: 'คนขับรถ / ขนส่ง', what: 'นับผ้ารับจากลูกค้า ตรวจจำนวน', editCols: 'โรงซักนับเข้า, หมายเหตุ', bagField: '-' },
   sorting:   { who: 'โรงซัก (แผนกรับเข้า)', what: 'คัดแยกผ้า เตรียมซัก', editCols: 'หมายเหตุ', bagField: '-' },
   washing:   { who: 'โรงซัก (แผนกซัก)', what: 'ซักอบผ้า → เสร็จแล้วกรอกจำนวนแพค', editCols: 'โรงซักแพคส่ง, หมายเหตุ', bagField: '-' },
   packed:    { who: 'โรงซัก (แผนกแพค)', what: 'แพคผ้าใส่ถุง นับจำนวนถุง', editCols: '-', bagField: 'จำนวนถุงแพคส่ง' },
   delivered: { who: 'คนขับรถ / ขนส่ง', what: 'ส่งผ้ากลับลูกค้า นับถุง ลูกค้านับผ้ากลับ', editCols: 'ลูกค้านับผ้ากลับ', bagField: 'จำนวนถุงแพคส่ง' },
-  confirmed: { who: 'ลูกค้า (โรงแรม)', what: 'ลูกค้ารับผ้าคืนแล้ว ยืนยันจำนวน', editCols: '-', bagField: '-' },
+  confirmed: { who: 'ลูกค้า', what: 'ลูกค้ารับผ้าคืนแล้ว ยืนยันจำนวน', editCols: '-', bagField: '-' },
 }
 
 const DEPT_CHECKBOXES = [
@@ -25,7 +25,7 @@ const DEPT_CHECKBOXES = [
 
 const COL_EXPLAIN = [
   { name: 'ยกยอดมา (±)', desc: 'ยอดค้างจากรอบก่อน: ลบ = มีผ้าค้างอยู่, บวก = มีผ้าคืนค้าง', auto: true },
-  { name: 'ลูกค้านับผ้าส่งซัก', desc: 'จำนวนผ้าที่ลูกค้า (โรงแรม) นับส่งมาซัก', auto: false },
+  { name: 'ลูกค้านับผ้าส่งซัก', desc: 'จำนวนผ้าที่ลูกค้านับส่งมาซัก', auto: false },
   { name: 'ลูกค้านับผ้าส่งเคลม', desc: 'จำนวนผ้าที่ลูกค้าแจ้งเคลม (ชำรุด/เสียหาย)', auto: false },
   { name: 'โรงซักนับเข้า', desc: 'จำนวนผ้าที่โรงซักนับรับเข้าจริง (อาจไม่ตรงกับลูกค้านับส่ง)', auto: false },
   { name: 'โรงซักแพคส่ง', desc: 'จำนวนผ้าที่โรงซักแพคส่งกลับลูกค้า', auto: false },
