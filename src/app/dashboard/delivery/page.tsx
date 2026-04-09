@@ -782,7 +782,7 @@ export default function DeliveryPage() {
         {detailNote && detailCustomer && (
           <div className="space-y-4">
             {/* Navy bar — ลูกค้า + วันที่ (ID ของเอกสาร) pattern เดียวกับ LF Grid headerLabel */}
-            <div className="bg-[#1B3A5C] rounded-lg px-4 py-2.5">
+            <div className="bg-[#1B3A5C] rounded-lg px-4 py-2.5 sticky top-0 z-10">
               <span className="text-sm font-semibold text-white tracking-wide">
                 ลูกค้า: {detailCustomer.shortName || detailCustomer.name} | วันที่: {formatDate(detailNote.date)}
               </span>
