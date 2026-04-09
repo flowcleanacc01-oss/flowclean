@@ -5,7 +5,7 @@ import { Wrench, Info, AlertTriangle, Check } from 'lucide-react'
 import Modal from './Modal'
 import { useStore } from '@/lib/store'
 import { cn, formatDate } from '@/lib/utils'
-import { applyRowsSync } from '@/lib/sync-discrepancy'
+import { applyRowsSync, recalcTransportAfterSync } from '@/lib/sync-discrepancy'
 import { useRouter } from 'next/navigation'
 
 interface Props {
@@ -34,7 +34,7 @@ interface Props {
 export default function DiscrepancyHelperModal({ open, onClose, initialCustomerId, initialLfId }: Props) {
   const {
     currentUser, customers, linenForms, deliveryNotes, billingStatements,
-    updateLinenForm, updateDeliveryNote,
+    updateLinenForm, updateDeliveryNote, quotations, getCustomer,
   } = useStore()
   const router = useRouter()
 
@@ -111,7 +111,7 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
     // Update LF
     updateLinenForm(selLf.id, { rows: updatedRows })
 
-    // Update SD if exists
+    // Update SD if exists + recalc transport fees (84 fix for tool)
     if (linkedSD) {
       const updatedItems = linkedSD.items.map(it => {
         const change = changes.find(c => c.code === it.code)
@@ -119,6 +119,20 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
         return it
       })
       updateDeliveryNote(linkedSD.id, { items: updatedItems })
+
+      // Recalc transport fees — use virtualDN with new items to avoid stale state
+      const customer = getCustomer(linkedSD.customerId)
+      if (customer) {
+        const virtualDN = { ...linkedSD, items: updatedItems }
+        const virtualDNs = deliveryNotes.map(d => d.id === linkedSD.id ? virtualDN : d)
+        const results = recalcTransportAfterSync(virtualDN, customer, virtualDNs, quotations)
+        for (const r of results) {
+          const update: { transportFeeTrip?: number; transportFeeMonth?: number } = {}
+          if (r.dnId === linkedSD.id) update.transportFeeTrip = r.newTripFee
+          if (r.newMonthFee !== undefined) update.transportFeeMonth = r.newMonthFee
+          if (Object.keys(update).length > 0) updateDeliveryNote(r.dnId, update)
+        }
+      }
     }
 
     onClose()
