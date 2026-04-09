@@ -383,7 +383,7 @@ export default function BillingPage() {
       grandTotal: previewBilling.grandTotal,
       withholdingTax: previewBilling.withholdingTax,
       netPayable: previewBilling.netPayable,
-      status: 'draft',
+      status: 'sent',
       paidDate: null,
       paidAmount: 0,
       notes: '',
@@ -1129,12 +1129,7 @@ export default function BillingPage() {
                         })()}
                       </td>
                       <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                        <div className="flex gap-1 justify-end">
-                          {b.status === 'draft' && (
-                            <button onClick={() => updateBillingStatus(b.id, 'sent')}
-                              className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100">วางบิล</button>
-                          )}
-                        </div>
+                        {/* 93/Option B: ลบปุ่ม "วางบิล" — สร้าง WB → status='sent' เลย ไม่ผ่าน draft */}
                       </td>
                     </tr>
                   )
