@@ -105,7 +105,8 @@ export default function DeliveryPage() {
   const [adjExtraNote, setAdjExtraNote] = useState('')
   const [adjDiscount, setAdjDiscount] = useState(0)
   const [adjDiscountNote, setAdjDiscountNote] = useState('')
-  const [adjRecalcMode, setAdjRecalcMode] = useState<'keep' | 'recalc'>('keep')
+  const [adjRecalcTrip, setAdjRecalcTrip] = useState(false)
+  const [adjRecalcMonth, setAdjRecalcMonth] = useState(false)
   const [showAdjustConfirm, setShowAdjustConfirm] = useState(false)
   const adjInitRef = useRef({ extra: 0, extraNote: '', discount: 0, discountNote: '', tripFee: 0, monthFee: 0 })
 
@@ -120,7 +121,8 @@ export default function DeliveryPage() {
         setAdjExtraNote(init.extraNote)
         setAdjDiscount(init.discount)
         setAdjDiscountNote(init.discountNote)
-        setAdjRecalcMode('keep')
+        setAdjRecalcTrip(false)
+        setAdjRecalcMonth(false)
       }
     }
     setShowAdjustConfirm(false)
@@ -1457,36 +1459,49 @@ export default function DeliveryPage() {
           const extraChanged = adjExtra !== init.extra || adjExtraNote !== init.extraNote
           const discountChanged = adjDiscount !== init.discount || adjDiscountNote !== init.discountNote
 
-          // 107: Auto-recalc preview
-          const recalcResults107 = recalcTransportAfterAdj(dn, cust, deliveryNotes, quotations, adjExtra, adjDiscount)
-          const thisDnRecalc107 = recalcResults107.find(r => r.dnId === dn.id)
-          const otherDnRecalc107 = recalcResults107.find(r => r.dnId !== dn.id)
-          const otherDn107 = otherDnRecalc107 ? deliveryNotes.find(d => d.id === otherDnRecalc107.dnId) : null
-          const newTripFeeCalc = thisDnRecalc107?.newTripFee ?? init.tripFee
-          const newMonthFeeCalc = thisDnRecalc107?.newMonthFee
-          const otherNewMonthFee = otherDnRecalc107?.newMonthFee
+          // 111: Auto-recalc preview
+          const recalcResults111 = recalcTransportAfterAdj(dn, cust, deliveryNotes, quotations, adjExtra, adjDiscount)
+          const thisDnRecalc111 = recalcResults111.find(r => r.dnId === dn.id)
+          const otherDnRecalc111 = recalcResults111.find(r => r.dnId !== dn.id)
+          const otherDn111 = otherDnRecalc111 ? deliveryNotes.find(d => d.id === otherDnRecalc111.dnId) : null
+          const newTripFeeCalc = thisDnRecalc111?.newTripFee ?? init.tripFee
+          const newMonthFeeCalc = thisDnRecalc111?.newMonthFee        // defined only when this DN is last of month
+          const otherNewMonthFee = otherDnRecalc111?.newMonthFee      // defined only when other DN is last of month
           const tripFeeWillChange = newTripFeeCalc !== init.tripFee
           const monthFeeWillChange = newMonthFeeCalc !== undefined && newMonthFeeCalc !== init.monthFee
-          const otherMonthFeeWillChange = otherNewMonthFee !== undefined && otherNewMonthFee !== (otherDn107?.transportFeeMonth || 0)
+          const otherMonthFeeWillChange = otherNewMonthFee !== undefined && otherNewMonthFee !== (otherDn111?.transportFeeMonth || 0)
           const anyFeeWillChange = tripFeeWillChange || monthFeeWillChange || otherMonthFeeWillChange
 
-          const tripChanged = adjRecalcMode === 'recalc' && tripFeeWillChange
-          const monthChanged = adjRecalcMode === 'recalc' && monthFeeWillChange
+          // DN that carries the month fee (last of month — may differ from current SD)
+          const monthFeeDn = otherDn111 ?? (monthFeeWillChange ? dn : null)
+          const monthFeeDnNewFee = otherDn111 ? otherNewMonthFee : newMonthFeeCalc
 
-          // Effective fees for total preview
-          const effectiveTripFee = adjRecalcMode === 'recalc' ? newTripFeeCalc : init.tripFee
-          const effectiveMonthFee = adjRecalcMode === 'recalc' ? (newMonthFeeCalc ?? init.monthFee) : init.monthFee
+          // 111: Month overview table (all SDs this month, sorted latest→earliest)
+          const month111 = dn.date.slice(0, 7)
+          const monthDNs111 = deliveryNotes
+            .filter(d => d.customerId === cust.id && d.date.startsWith(month111))
+            .sort((a, b) => b.date.localeCompare(a.date) || b.noteNumber.localeCompare(a.noteNumber))
+          const lastDnOfMonth111 = monthDNs111[0]
+
+          // Effective fees for this SD's total preview
+          const effectiveTripFee = adjRecalcTrip && tripFeeWillChange ? newTripFeeCalc : init.tripFee
+          const effectiveMonthFee = adjRecalcMonth && monthFeeWillChange ? (newMonthFeeCalc ?? init.monthFee) : init.monthFee
 
           const priceMap = getDNPrices(dn)
           const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
           const oldTotal = itemSubtotal + init.tripFee + init.monthFee + init.extra - init.discount
           const newTotal = itemSubtotal + effectiveTripFee + effectiveMonthFee + adjExtra - adjDiscount
+
+          const tripChanged = adjRecalcTrip && tripFeeWillChange
+          const monthChanged = adjRecalcMonth && monthFeeWillChange
+
           return (
             <div className="space-y-4">
               <div className="text-sm text-slate-600">
                 ลูกค้า: <strong>{cust.shortName || cust.name}</strong> | SD: <strong>{dn.noteNumber}</strong>
               </div>
 
+              {/* Changes table */}
               <div className="border border-amber-200 rounded-lg overflow-hidden">
                 <div className="bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">การเปลี่ยนแปลง</div>
                 <table className="w-full text-sm">
@@ -1495,7 +1510,7 @@ export default function DeliveryPage() {
                     {tripChanged && (
                       <tr className="border-t border-slate-100">
                         <td className="px-3 py-1.5 text-amber-700">ค่ารถ (ครั้ง)</td>
-                        <td className="px-3 py-1.5 text-right text-red-600 line-through">{formatCurrency(init.tripFee)}</td>
+                        <td className="px-3 py-1.5 text-right text-red-500 line-through">{formatCurrency(init.tripFee)}</td>
                         <td className="px-3 py-1.5 text-center text-slate-400">→</td>
                         <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newTripFeeCalc)}</td>
                       </tr>
@@ -1503,15 +1518,15 @@ export default function DeliveryPage() {
                     {monthChanged && (
                       <tr className="border-t border-slate-100">
                         <td className="px-3 py-1.5 text-purple-700">ค่ารถ (เดือน)</td>
-                        <td className="px-3 py-1.5 text-right text-red-600 line-through">{formatCurrency(init.monthFee)}</td>
+                        <td className="px-3 py-1.5 text-right text-red-500 line-through">{formatCurrency(init.monthFee)}</td>
                         <td className="px-3 py-1.5 text-center text-slate-400">→</td>
                         <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newMonthFeeCalc || 0)}</td>
                       </tr>
                     )}
                     {extraChanged && (
                       <tr className="border-t border-slate-100">
-                        <td className="px-3 py-1.5 text-blue-700">ค่าใช้จ่ายเพิ่มเติม {adjExtraNote && `(${adjExtraNote})`}</td>
-                        <td className="px-3 py-1.5 text-right text-red-600 line-through">{formatCurrency(init.extra)}</td>
+                        <td className="px-3 py-1.5 text-blue-700">extra {adjExtraNote && `(${adjExtraNote})`}</td>
+                        <td className="px-3 py-1.5 text-right text-red-500 line-through">{formatCurrency(init.extra)}</td>
                         <td className="px-3 py-1.5 text-center text-slate-400">→</td>
                         <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(adjExtra)}</td>
                       </tr>
@@ -1519,14 +1534,14 @@ export default function DeliveryPage() {
                     {discountChanged && (
                       <tr className="border-t border-slate-100">
                         <td className="px-3 py-1.5 text-orange-700">ส่วนลด {adjDiscountNote && `(${adjDiscountNote})`}</td>
-                        <td className="px-3 py-1.5 text-right text-red-600 line-through">-{formatCurrency(init.discount)}</td>
+                        <td className="px-3 py-1.5 text-right text-red-500 line-through">-{formatCurrency(init.discount)}</td>
                         <td className="px-3 py-1.5 text-center text-slate-400">→</td>
                         <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">-{formatCurrency(adjDiscount)}</td>
                       </tr>
                     )}
                     <tr className="border-t-2 border-slate-300 bg-slate-50 font-medium">
-                      <td className="px-3 py-2">ยอดรวม SD</td>
-                      <td className="px-3 py-2 text-right text-red-600 line-through">{formatCurrency(oldTotal)}</td>
+                      <td className="px-3 py-2">ยอดรวม SD นี้</td>
+                      <td className="px-3 py-2 text-right text-red-500 line-through">{formatCurrency(oldTotal)}</td>
                       <td className="px-3 py-2 text-center text-slate-400">→</td>
                       <td className="px-3 py-2 text-right text-emerald-600 font-bold">{formatCurrency(newTotal)}</td>
                     </tr>
@@ -1534,51 +1549,100 @@ export default function DeliveryPage() {
                 </table>
               </div>
 
-              {/* 107: ค่ารถ — เก็บเดิม / คำนวณใหม่ */}
+              {/* 111: ค่ารถ — ภาพรวมทั้งเดือน + checkbox แยกกัน */}
               {anyFeeWillChange && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 space-y-3">
-                  <p className="text-sm font-medium text-blue-800">ค่ารถอาจเปลี่ยนเมื่อ extra/discount เปลี่ยน</p>
+                <div className="border border-blue-200 rounded-lg overflow-hidden">
+                  <div className="bg-blue-100 px-3 py-2 text-xs font-medium text-blue-800">
+                    ผลกระทบต่อค่ารถ — เดือน {month111}
+                  </div>
 
-                  {adjRecalcMode === 'recalc' && (
-                    <table className="w-full text-sm">
+                  {/* Month overview table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                          <th className="text-left px-3 py-1.5 font-medium">เลขที่</th>
+                          <th className="text-center px-2 py-1.5 font-medium">วันที่</th>
+                          <th className="text-right px-3 py-1.5 font-medium">ค่ารถ (ครั้ง)</th>
+                          <th className="text-right px-3 py-1.5 font-medium">ค่ารถ (เดือน)</th>
+                          <th className="px-2 py-1.5"></th>
+                        </tr>
+                      </thead>
                       <tbody>
-                        {tripFeeWillChange && (
-                          <tr className="border-b border-blue-100">
-                            <td className="py-1.5 text-slate-700">ค่ารถ (ครั้ง) — SD นี้</td>
-                            <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(init.tripFee)}</td>
-                            <td className="py-1.5 text-center text-slate-400 px-1">→</td>
-                            <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newTripFeeCalc)}</td>
-                          </tr>
-                        )}
-                        {monthFeeWillChange && (
-                          <tr className="border-b border-blue-100">
-                            <td className="py-1.5 text-slate-700">ค่ารถ (เดือน) — SD นี้</td>
-                            <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(init.monthFee)}</td>
-                            <td className="py-1.5 text-center text-slate-400 px-1">→</td>
-                            <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newMonthFeeCalc || 0)}</td>
-                          </tr>
-                        )}
-                        {otherMonthFeeWillChange && otherDn107 && (
-                          <tr>
-                            <td className="py-1.5 text-slate-700">ค่ารถ (เดือน) — SD ใบสุดท้าย <span className="font-mono text-xs text-slate-400">({otherDn107.noteNumber})</span></td>
-                            <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(otherDn107.transportFeeMonth || 0)}</td>
-                            <td className="py-1.5 text-center text-slate-400 px-1">→</td>
-                            <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(otherNewMonthFee || 0)}</td>
-                          </tr>
-                        )}
+                        {monthDNs111.map(d => {
+                          const isThis = d.id === dn.id
+                          const isLast = d.id === lastDnOfMonth111?.id
+                          const showNewTrip = isThis && adjRecalcTrip && tripFeeWillChange
+                          const showNewMonth = isLast && adjRecalcMonth && (monthFeeWillChange || otherMonthFeeWillChange)
+                          return (
+                            <tr key={d.id} className={cn(
+                              'border-t border-slate-100',
+                              isThis ? 'bg-amber-50' : 'hover:bg-slate-50',
+                            )}>
+                              <td className={cn('px-3 py-1.5 font-mono', isThis && 'font-semibold text-amber-700')}>
+                                {d.noteNumber}
+                              </td>
+                              <td className="px-2 py-1.5 text-center text-slate-500">{formatDate(d.date)}</td>
+                              <td className="px-3 py-1.5 text-right">
+                                {showNewTrip ? (
+                                  <span>
+                                    <span className="line-through text-red-400 mr-1">{formatCurrency(d.transportFeeTrip || 0)}</span>
+                                    <span className="text-emerald-600 font-medium">{formatCurrency(newTripFeeCalc)}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-600">{formatCurrency(d.transportFeeTrip || 0)}</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-1.5 text-right">
+                                {showNewMonth ? (
+                                  <span>
+                                    <span className="line-through text-red-400 mr-1">{formatCurrency(d.transportFeeMonth || 0)}</span>
+                                    <span className="text-emerald-600 font-medium">{formatCurrency(monthFeeDnNewFee || 0)}</span>
+                                  </span>
+                                ) : (
+                                  <span className={cn(d.transportFeeMonth ? 'text-purple-700 font-medium' : 'text-slate-400')}>
+                                    {formatCurrency(d.transportFeeMonth || 0)}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                                {isThis && isLast && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">กำลังแก้ · ใบสุดท้าย</span>}
+                                {isThis && !isLast && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">กำลังแก้</span>}
+                                {!isThis && isLast && <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">ใบสุดท้าย</span>}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
-                  )}
+                  </div>
 
-                  <div className="space-y-2 pt-2 border-t border-blue-200">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="radio" name="adjRecalcMode" checked={adjRecalcMode === 'recalc'} onChange={() => setAdjRecalcMode('recalc')} className="accent-[#1B3A5C]" />
-                      <span className="text-slate-700">คำนวณค่ารถใหม่ (รวม extra/discount) <span className="text-slate-400">(แนะนำ)</span></span>
-                    </label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="radio" name="adjRecalcMode" checked={adjRecalcMode === 'keep'} onChange={() => setAdjRecalcMode('keep')} className="accent-[#1B3A5C]" />
-                      <span className="text-slate-700">เก็บค่ารถเดิม <span className="text-slate-400">(ไม่ recalc)</span></span>
-                    </label>
+                  {/* Checkbox controls */}
+                  <div className="px-3 py-3 space-y-2.5 border-t border-blue-200 bg-blue-50">
+                    {tripFeeWillChange && (
+                      <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input type="checkbox" checked={adjRecalcTrip} onChange={e => setAdjRecalcTrip(e.target.checked)}
+                          className="accent-[#1B3A5C] mt-0.5 shrink-0" />
+                        <span className="text-sm text-slate-700">
+                          ปรับค่ารถ (ครั้ง) ของ SD นี้:
+                          <span className="mx-1 text-red-500 line-through">{formatCurrency(init.tripFee)}</span>→
+                          <span className="ml-1 text-emerald-600 font-medium">{formatCurrency(newTripFeeCalc)}</span>
+                        </span>
+                      </label>
+                    )}
+                    {(monthFeeWillChange || otherMonthFeeWillChange) && monthFeeDn && (
+                      <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input type="checkbox" checked={adjRecalcMonth} onChange={e => setAdjRecalcMonth(e.target.checked)}
+                          className="accent-[#1B3A5C] mt-0.5 shrink-0" />
+                        <span className="text-sm text-slate-700">
+                          ปรับค่ารถ (เดือน) ของ
+                          <span className="font-mono text-xs text-slate-500 mx-1">({monthFeeDn.noteNumber})</span>
+                          {monthFeeDn.id !== dn.id && <span className="text-purple-600 text-xs mr-1">[ใบสุดท้าย]</span>}:
+                          <span className="mx-1 text-red-500 line-through">{formatCurrency(monthFeeDn.transportFeeMonth || 0)}</span>→
+                          <span className="ml-1 text-emerald-600 font-medium">{formatCurrency(monthFeeDnNewFee || 0)}</span>
+                        </span>
+                      </label>
+                    )}
                   </div>
                 </div>
               )}
@@ -1587,24 +1651,25 @@ export default function DeliveryPage() {
                 <button onClick={() => setShowAdjustConfirm(false)}
                   className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
                 <button onClick={() => {
-                  const saveTrip = adjRecalcMode === 'recalc' && tripFeeWillChange
-                  const saveMonth = adjRecalcMode === 'recalc' && monthFeeWillChange
+                  const saveTrip = adjRecalcTrip && tripFeeWillChange
+                  const saveThisMonth = adjRecalcMonth && monthFeeWillChange
+                  const saveOtherMonth = adjRecalcMonth && otherMonthFeeWillChange
                   updateDeliveryNote(dn.id, {
                     extraCharge: adjExtra,
                     extraChargeNote: adjExtraNote,
                     discount: adjDiscount,
                     discountNote: adjDiscountNote,
                     ...(saveTrip ? { transportFeeTrip: newTripFeeCalc } : {}),
-                    ...(saveMonth ? { transportFeeMonth: newMonthFeeCalc } : {}),
+                    ...(saveThisMonth ? { transportFeeMonth: newMonthFeeCalc } : {}),
                   })
-                  if (adjRecalcMode === 'recalc' && otherMonthFeeWillChange && otherDn107) {
-                    updateDeliveryNote(otherDn107.id, { transportFeeMonth: otherNewMonthFee })
+                  if (saveOtherMonth && otherDn111) {
+                    updateDeliveryNote(otherDn111.id, { transportFeeMonth: otherNewMonthFee })
                   }
                   adjInitRef.current = {
                     extra: adjExtra, extraNote: adjExtraNote,
                     discount: adjDiscount, discountNote: adjDiscountNote,
                     tripFee: saveTrip ? newTripFeeCalc : init.tripFee,
-                    monthFee: saveMonth ? (newMonthFeeCalc ?? init.monthFee) : init.monthFee,
+                    monthFee: saveThisMonth ? (newMonthFeeCalc ?? init.monthFee) : init.monthFee,
                   }
                   setShowAdjustConfirm(false)
                 }}
