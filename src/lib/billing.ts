@@ -116,6 +116,8 @@ export function aggregateDeliveryItems(
 /**
  * Aggregate delivery notes into billing line items grouped by DN (by_date mode)
  * Each DN uses its own priceSnapshot for correct historical pricing
+ * 92.1.1: DN-level discount/extraCharge แยกออกมาเป็นบรรทัดต่างหาก
+ * (ไม่ฝังใน DATE_xxx เพื่อให้ collapse ใน IV เห็นชัดเจน + consistent กับ by_item/by_total)
  */
 export function aggregateDeliveryItemsByDate(
   notes: DeliveryNote[],
@@ -128,6 +130,11 @@ export function aggregateDeliveryItemsByDate(
   const result: BillingLineItem[] = []
   const sortedNotes = [...notes].sort((a, b) => a.date.localeCompare(b.date))
 
+  let totalDiscount = 0
+  let totalExtraCharge = 0
+  const discountNotes: string[] = []
+  const extraChargeNotes: string[] = []
+
   for (const note of sortedNotes) {
     const pm = getDNPriceMap(note, fallbackPriceMap)
     let total = 0
@@ -135,21 +142,31 @@ export function aggregateDeliveryItemsByDate(
       if (item.isClaim) continue
       total += item.quantity * (pm[item.code] ?? 0)
     }
+    // ค่ารถถูก add ไปใน SD แต่ละวันแล้ว → รวมใน DATE_xxx total
     total += note.transportFeeTrip || 0
     total += note.transportFeeMonth || 0
-    total += note.extraCharge || 0
-    total -= note.discount || 0
-    const adjNotes: string[] = []
-    if ((note.extraCharge || 0) > 0 && note.extraChargeNote) adjNotes.push(`+${note.extraChargeNote}`)
-    if ((note.discount || 0) > 0 && note.discountNote) adjNotes.push(`-${note.discountNote}`)
-    const nameSuffix = adjNotes.length > 0 ? ` [${adjNotes.join(', ')}]` : ''
+    // DN-level discount/extra → สะสมแยก ไม่ฝังใน DATE_xxx
+    totalDiscount += note.discount || 0
+    totalExtraCharge += note.extraCharge || 0
+    if ((note.discount || 0) > 0 && note.discountNote) discountNotes.push(note.discountNote)
+    if ((note.extraCharge || 0) > 0 && note.extraChargeNote) extraChargeNotes.push(note.extraChargeNote)
+
     result.push({
       code: `DATE_${note.id}`,
-      name: `ค่าบริการซักวันที่ ${formatDate(note.date)}${nameSuffix}`,
+      name: `ค่าบริการซักวันที่ ${formatDate(note.date)}`,
       quantity: 1,
       pricePerUnit: total,
       amount: total,
     })
+  }
+
+  if (totalExtraCharge > 0) {
+    const note = extraChargeNotes.length > 0 ? ` (${extraChargeNotes.join(', ')})` : ''
+    result.push({ code: 'EXTRA_CHARGE', name: `ค่าใช้จ่ายเพิ่มเติม${note}`, quantity: 1, pricePerUnit: totalExtraCharge, amount: totalExtraCharge })
+  }
+  if (totalDiscount > 0) {
+    const note = discountNotes.length > 0 ? ` (${discountNotes.join(', ')})` : ''
+    result.push({ code: 'DISCOUNT', name: `ส่วนลด${note}`, quantity: 1, pricePerUnit: -totalDiscount, amount: -totalDiscount })
   }
 
   return result
