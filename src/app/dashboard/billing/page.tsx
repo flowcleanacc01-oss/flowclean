@@ -2445,13 +2445,17 @@ export default function BillingPage() {
       </Modal>
 
       {/* Quotation Detail Modal */}
-      <Modal open={!!showQuDetail} onClose={() => { setShowQuDetail(null); setShowQuPrint(false) }} title={detailQuotation?.quotationNumber || ''} size="lg">
+      <Modal open={!!showQuDetail} onClose={() => { setShowQuDetail(null); setShowQuPrint(false) }} title={`ใบเสนอราคา ${detailQuotation?.quotationNumber || ''}`} size="lg">
         {detailQuotation && (
           <div className="space-y-4">
+            {/* 102+103: Navy bar sticky header — ลูกค้า + วันที่ */}
+            <div className="bg-[#1B3A5C] rounded-lg px-4 py-2.5 sticky top-0 z-10">
+              <span className="text-sm font-semibold text-white tracking-wide">
+                ลูกค้า: {detailQuotation.customerName} | วันที่: {formatDate(detailQuotation.date)}
+              </span>
+            </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-slate-500">ลูกค้า:</span> <strong>{detailQuotation.customerName}</strong></div>
               <div><span className="text-slate-500">ติดต่อ:</span> {detailQuotation.customerContact || '-'}</div>
-              <div><span className="text-slate-500">วันที่:</span> {formatDate(detailQuotation.date)}</div>
               <div><span className="text-slate-500">ใช้ได้ถึง:</span> {formatDate(detailQuotation.validUntil)}</div>
               <div>
                 <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
