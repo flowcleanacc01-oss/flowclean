@@ -1562,6 +1562,24 @@ export default function BillingPage() {
               <div><span className="text-slate-500">ครบกำหนด:</span> {formatDate(detailBilling.dueDate)}</div>
             </div>
 
+            {/* 94.2.1: SD Reference Section — link ย้อนกลับไปดู SD ที่เกี่ยวข้องในหน้า delivery */}
+            {detailBilling.deliveryNoteIds.length > 0 && (
+              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 border border-blue-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-600 font-medium">ใบส่งของ (SD):</span>
+                  <button onClick={() => {
+                    setShowDetail(null)
+                    router.push(`/dashboard/delivery?focus=${detailBilling.deliveryNoteIds.join(',')}`)
+                  }}
+                    className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-900">
+                    <span>{detailBilling.deliveryNoteIds.length} ใบ</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="text-sm text-slate-500">ย้อนไปดูใบส่งของที่เกี่ยวข้อง</div>
+              </div>
+            )}
+
             {/* Linked Delivery Notes */}
             {detailBilling.deliveryNoteIds.length > 0 && (() => {
               const linkedDNs = detailBilling.deliveryNoteIds
@@ -1804,7 +1822,7 @@ export default function BillingPage() {
               <div><span className="text-slate-500">วันที่ออก:</span> {formatDate(detailInvoice.issueDate)}</div>
             </div>
 
-            {/* WB Reference Section */}
+            {/* 94.1.1: WB Reference Section — link ย้อนกลับไปดู WB */}
             {(() => {
               const wbInfo = ivBillingMap.get(detailInvoice.id)
               const wb = wbInfo ? billingStatements.find(b => b.id === wbInfo.billingId) : null
@@ -1821,6 +1839,38 @@ export default function BillingPage() {
                   </div>
                   <div className="text-sm text-slate-500">
                     {formatDate(wb.issueDate)} · {formatCurrency(wb.netPayable)}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* 94.1.2: WB Source Table — แสดง WB ที่ IV นี้นำเข้าข้อมูลจาก */}
+            {(() => {
+              const wbInfo = ivBillingMap.get(detailInvoice.id)
+              const wb = wbInfo ? billingStatements.find(b => b.id === wbInfo.billingId) : null
+              if (!wb) return null
+              return (
+                <div>
+                  <h3 className="text-sm font-medium text-slate-700 mb-2">ใบวางบิลที่นำเข้าข้อมูล (1 ใบ)</h3>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-orange-50 border-b border-orange-100">
+                          <th className="text-left px-3 py-2 font-medium text-orange-800">เลขที่ WB</th>
+                          <th className="text-left px-3 py-2 font-medium text-orange-800">วันที่ออก</th>
+                          <th className="text-left px-3 py-2 font-medium text-orange-800">เดือน</th>
+                          <th className="text-right px-3 py-2 font-medium text-orange-800">ยอดสุทธิ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-t border-slate-100">
+                          <td className="px-3 py-1.5 font-mono text-xs">{wb.billingNumber}</td>
+                          <td className="px-3 py-1.5 text-slate-600">{formatDate(wb.issueDate)}</td>
+                          <td className="px-3 py-1.5 text-slate-600">{wb.billingMonth}</td>
+                          <td className="px-3 py-1.5 text-right">{formatCurrency(wb.netPayable)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )
