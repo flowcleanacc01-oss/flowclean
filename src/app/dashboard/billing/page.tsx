@@ -1555,9 +1555,13 @@ export default function BillingPage() {
       <Modal open={!!showDetail} onClose={() => { setShowDetail(null); setShowPrint(false) }} title={`ใบวางบิล ${detailBilling?.billingNumber || ''}`} size="lg">
         {detailBilling && detailCustomer && (
           <div className="space-y-4">
+            {/* Navy bar — ลูกค้า + วันที่ออก (ID ของเอกสาร) pattern เดียวกับ LF Grid headerLabel */}
+            <div className="bg-[#1B3A5C] rounded-lg px-4 py-2.5">
+              <span className="text-sm font-semibold text-white tracking-wide">
+                ลูกค้า: {detailCustomer.shortName || detailCustomer.name} | เดือน: {detailBilling.billingMonth}
+              </span>
+            </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-slate-500">ลูกค้า:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
-              <div><span className="text-slate-500">เดือน:</span> {detailBilling.billingMonth}</div>
               <div><span className="text-slate-500">วันที่ออก:</span> {formatDate(detailBilling.issueDate)}</div>
               <div><span className="text-slate-500">ครบกำหนด:</span> {formatDate(detailBilling.dueDate)}</div>
             </div>
@@ -1817,9 +1821,11 @@ export default function BillingPage() {
       <Modal open={!!showInvoiceDetail} onClose={() => { setShowInvoiceDetail(null); setShowInvoicePrint(false) }} title={`ใบกำกับภาษี ${detailInvoice?.invoiceNumber || ''}`} size="lg">
         {detailInvoice && detailInvoiceCustomer && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-slate-500">ลูกค้า:</span> <strong>{detailInvoiceCustomer.shortName || detailInvoiceCustomer.name}</strong></div>
-              <div><span className="text-slate-500">วันที่ออก:</span> {formatDate(detailInvoice.issueDate)}</div>
+            {/* Navy bar — ลูกค้า + วันที่ออก (ID ของเอกสาร) pattern เดียวกับ LF Grid headerLabel */}
+            <div className="bg-[#1B3A5C] rounded-lg px-4 py-2.5">
+              <span className="text-sm font-semibold text-white tracking-wide">
+                ลูกค้า: {detailInvoiceCustomer.shortName || detailInvoiceCustomer.name} | วันที่ออก: {formatDate(detailInvoice.issueDate)}
+              </span>
             </div>
 
             {/* 94.1.1: WB Reference Section — link ย้อนกลับไปดู WB */}

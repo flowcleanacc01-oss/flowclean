@@ -781,9 +781,13 @@ export default function DeliveryPage() {
       <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={`ใบส่งของชั่วคราว ${detailNote?.noteNumber || ''}`} size="lg">
         {detailNote && detailCustomer && (
           <div className="space-y-4">
+            {/* Navy bar — ลูกค้า + วันที่ (ID ของเอกสาร) pattern เดียวกับ LF Grid headerLabel */}
+            <div className="bg-[#1B3A5C] rounded-lg px-4 py-2.5">
+              <span className="text-sm font-semibold text-white tracking-wide">
+                ลูกค้า: {detailCustomer.shortName || detailCustomer.name} | วันที่: {formatDate(detailNote.date)}
+              </span>
+            </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-slate-500">ลูกค้า:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
-              <div><span className="text-slate-500">วันที่:</span> {formatDate(detailNote.date)}</div>
               <div><span className="text-slate-500">คนขับ:</span> {detailNote.driverName || '-'}</div>
               <div><span className="text-slate-500">ทะเบียน:</span> {detailNote.vehiclePlate || '-'}</div>
               <div><span className="text-slate-500">ผู้รับ:</span> {detailNote.receiverName || '-'}</div>
