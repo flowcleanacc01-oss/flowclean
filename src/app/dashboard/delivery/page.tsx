@@ -105,20 +105,24 @@ export default function DeliveryPage() {
   const [adjExtraNote, setAdjExtraNote] = useState('')
   const [adjDiscount, setAdjDiscount] = useState(0)
   const [adjDiscountNote, setAdjDiscountNote] = useState('')
+  const [adjTripFee, setAdjTripFee] = useState(0)
+  const [adjMonthFee, setAdjMonthFee] = useState(0)
   const [showAdjustConfirm, setShowAdjustConfirm] = useState(false)
-  const adjInitRef = useRef({ extra: 0, extraNote: '', discount: 0, discountNote: '' })
+  const adjInitRef = useRef({ extra: 0, extraNote: '', discount: 0, discountNote: '', tripFee: 0, monthFee: 0 })
 
   // Init adjust fields when detail modal opens
   useEffect(() => {
     if (showDetail) {
       const dn = deliveryNotes.find(d => d.id === showDetail)
       if (dn) {
-        const init = { extra: dn.extraCharge || 0, extraNote: dn.extraChargeNote || '', discount: dn.discount || 0, discountNote: dn.discountNote || '' }
+        const init = { extra: dn.extraCharge || 0, extraNote: dn.extraChargeNote || '', discount: dn.discount || 0, discountNote: dn.discountNote || '', tripFee: dn.transportFeeTrip || 0, monthFee: dn.transportFeeMonth || 0 }
         adjInitRef.current = init
         setAdjExtra(init.extra)
         setAdjExtraNote(init.extraNote)
         setAdjDiscount(init.discount)
         setAdjDiscountNote(init.discountNote)
+        setAdjTripFee(init.tripFee)
+        setAdjMonthFee(init.monthFee)
       }
     }
     setShowAdjustConfirm(false)
@@ -133,9 +137,12 @@ export default function DeliveryPage() {
   // Calculate total amount for a DN (items subtotal + transport fees + adjustments)
   const getDNTotalAmount = (dn: typeof deliveryNotes[number]): number => {
     const customer = getCustomer(dn.customerId)
-    if (!customer || !(customer.enablePerPiece ?? true)) return 0
-    const priceMap = getDNPrices(dn)
-    const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
+    if (!customer) return 0
+    const isPer = customer.enablePerPiece ?? true
+    const itemSubtotal = isPer ? (() => {
+      const priceMap = getDNPrices(dn)
+      return dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
+    })() : 0
     return itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0) + (dn.extraCharge || 0) - (dn.discount || 0)
   }
 
@@ -1436,11 +1443,11 @@ export default function DeliveryPage() {
         </div>
       </Modal>
 
-      {/* 106: Modal ยืนยันการปรับยอด SD — extraCharge / discount */}
+      {/* 106: Modal ยืนยันการปรับ SD — extraCharge / discount / transport fees */}
       <Modal
         open={showAdjustConfirm && !!showDetail}
         onClose={() => setShowAdjustConfirm(false)}
-        title="ยืนยันการปรับยอด SD"
+        title="ยืนยันการปรับ SD"
         size="lg"
         closeLabel="cancel"
       >
@@ -1451,11 +1458,13 @@ export default function DeliveryPage() {
           const init = adjInitRef.current
           const extraChanged = adjExtra !== init.extra || adjExtraNote !== init.extraNote
           const discountChanged = adjDiscount !== init.discount || adjDiscountNote !== init.discountNote
+          const tripChanged = adjTripFee !== init.tripFee
+          const monthChanged = adjMonthFee !== init.monthFee
           // Preview new total
           const priceMap = getDNPrices(dn)
           const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
-          const oldTotal = itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0) + init.extra - init.discount
-          const newTotal = itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0) + adjExtra - adjDiscount
+          const oldTotal = itemSubtotal + init.tripFee + init.monthFee + init.extra - init.discount
+          const newTotal = itemSubtotal + adjTripFee + adjMonthFee + adjExtra - adjDiscount
           return (
             <div className="space-y-4">
               <div className="text-sm text-slate-600">
@@ -1467,6 +1476,22 @@ export default function DeliveryPage() {
                 <table className="w-full text-sm">
                   <thead><tr className="bg-slate-50 text-xs"><th className="text-left px-3 py-1.5">รายการ</th><th className="text-right px-3 py-1.5">เดิม</th><th className="text-center px-2 py-1.5">→</th><th className="text-right px-3 py-1.5">ใหม่</th></tr></thead>
                   <tbody>
+                    {tripChanged && (
+                      <tr className="border-t border-slate-100">
+                        <td className="px-3 py-1.5 text-amber-700">ค่ารถ (ครั้ง)</td>
+                        <td className="px-3 py-1.5 text-right text-red-600 line-through">{formatCurrency(init.tripFee)}</td>
+                        <td className="px-3 py-1.5 text-center text-slate-400">→</td>
+                        <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(adjTripFee)}</td>
+                      </tr>
+                    )}
+                    {monthChanged && (
+                      <tr className="border-t border-slate-100">
+                        <td className="px-3 py-1.5 text-purple-700">ค่ารถ (เดือน)</td>
+                        <td className="px-3 py-1.5 text-right text-red-600 line-through">{formatCurrency(init.monthFee)}</td>
+                        <td className="px-3 py-1.5 text-center text-slate-400">→</td>
+                        <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(adjMonthFee)}</td>
+                      </tr>
+                    )}
                     {extraChanged && (
                       <tr className="border-t border-slate-100">
                         <td className="px-3 py-1.5 text-blue-700">ค่าใช้จ่ายเพิ่มเติม {adjExtraNote && `(${adjExtraNote})`}</td>
@@ -1493,8 +1518,27 @@ export default function DeliveryPage() {
                 </table>
               </div>
 
-              <div className="bg-slate-50 rounded-lg px-3 py-2 text-xs text-slate-500">
-                <strong>หมายเหตุ:</strong> ค่ารถ (ครั้ง/เดือน) ไม่เปลี่ยน — คำนวณจากจำนวนชิ้นเท่านั้น
+              {/* ปรับค่ารถ (ตัวเลือก) */}
+              <div className="border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">ปรับค่ารถ (ตัวเลือก)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-amber-600 mb-1">ค่ารถ (ครั้ง)</label>
+                    <input type="number" min={0} step={0.01} value={adjTripFee || ''}
+                      onFocus={e => e.currentTarget.select()}
+                      onChange={e => setAdjTripFee(Math.max(0, parseFloat(e.target.value) || 0))}
+                      placeholder="0.00"
+                      className="w-full px-3 py-1.5 border border-amber-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-amber-400 focus:outline-none bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-purple-600 mb-1">ค่ารถ (เดือน)</label>
+                    <input type="number" min={0} step={0.01} value={adjMonthFee || ''}
+                      onFocus={e => e.currentTarget.select()}
+                      onChange={e => setAdjMonthFee(Math.max(0, parseFloat(e.target.value) || 0))}
+                      placeholder="0.00"
+                      className="w-full px-3 py-1.5 border border-purple-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-purple-400 focus:outline-none bg-white" />
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
@@ -1506,8 +1550,10 @@ export default function DeliveryPage() {
                     extraChargeNote: adjExtraNote,
                     discount: adjDiscount,
                     discountNote: adjDiscountNote,
+                    transportFeeTrip: adjTripFee,
+                    transportFeeMonth: adjMonthFee,
                   })
-                  adjInitRef.current = { extra: adjExtra, extraNote: adjExtraNote, discount: adjDiscount, discountNote: adjDiscountNote }
+                  adjInitRef.current = { extra: adjExtra, extraNote: adjExtraNote, discount: adjDiscount, discountNote: adjDiscountNote, tripFee: adjTripFee, monthFee: adjMonthFee }
                   setShowAdjustConfirm(false)
                 }}
                   className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors">
