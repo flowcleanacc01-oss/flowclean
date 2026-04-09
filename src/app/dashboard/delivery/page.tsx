@@ -12,7 +12,7 @@ import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import { canViewSD } from '@/lib/permissions'
-import { applyRowsSync, recalcTransportAfterSync } from '@/lib/sync-discrepancy'
+import { applyRowsSync, recalcTransportAfterSync, recalcTransportAfterAdj } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer, sortCustomersWithRecent, getRecentCustomerIds } from '@/lib/recent-customers'
 import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
@@ -105,8 +105,7 @@ export default function DeliveryPage() {
   const [adjExtraNote, setAdjExtraNote] = useState('')
   const [adjDiscount, setAdjDiscount] = useState(0)
   const [adjDiscountNote, setAdjDiscountNote] = useState('')
-  const [adjTripFee, setAdjTripFee] = useState(0)
-  const [adjMonthFee, setAdjMonthFee] = useState(0)
+  const [adjRecalcMode, setAdjRecalcMode] = useState<'keep' | 'recalc'>('keep')
   const [showAdjustConfirm, setShowAdjustConfirm] = useState(false)
   const adjInitRef = useRef({ extra: 0, extraNote: '', discount: 0, discountNote: '', tripFee: 0, monthFee: 0 })
 
@@ -121,8 +120,7 @@ export default function DeliveryPage() {
         setAdjExtraNote(init.extraNote)
         setAdjDiscount(init.discount)
         setAdjDiscountNote(init.discountNote)
-        setAdjTripFee(init.tripFee)
-        setAdjMonthFee(init.monthFee)
+        setAdjRecalcMode('keep')
       }
     }
     setShowAdjustConfirm(false)
@@ -1458,13 +1456,31 @@ export default function DeliveryPage() {
           const init = adjInitRef.current
           const extraChanged = adjExtra !== init.extra || adjExtraNote !== init.extraNote
           const discountChanged = adjDiscount !== init.discount || adjDiscountNote !== init.discountNote
-          const tripChanged = adjTripFee !== init.tripFee
-          const monthChanged = adjMonthFee !== init.monthFee
-          // Preview new total
+
+          // 107: Auto-recalc preview
+          const recalcResults107 = recalcTransportAfterAdj(dn, cust, deliveryNotes, quotations, adjExtra, adjDiscount)
+          const thisDnRecalc107 = recalcResults107.find(r => r.dnId === dn.id)
+          const otherDnRecalc107 = recalcResults107.find(r => r.dnId !== dn.id)
+          const otherDn107 = otherDnRecalc107 ? deliveryNotes.find(d => d.id === otherDnRecalc107.dnId) : null
+          const newTripFeeCalc = thisDnRecalc107?.newTripFee ?? init.tripFee
+          const newMonthFeeCalc = thisDnRecalc107?.newMonthFee
+          const otherNewMonthFee = otherDnRecalc107?.newMonthFee
+          const tripFeeWillChange = newTripFeeCalc !== init.tripFee
+          const monthFeeWillChange = newMonthFeeCalc !== undefined && newMonthFeeCalc !== init.monthFee
+          const otherMonthFeeWillChange = otherNewMonthFee !== undefined && otherNewMonthFee !== (otherDn107?.transportFeeMonth || 0)
+          const anyFeeWillChange = tripFeeWillChange || monthFeeWillChange || otherMonthFeeWillChange
+
+          const tripChanged = adjRecalcMode === 'recalc' && tripFeeWillChange
+          const monthChanged = adjRecalcMode === 'recalc' && monthFeeWillChange
+
+          // Effective fees for total preview
+          const effectiveTripFee = adjRecalcMode === 'recalc' ? newTripFeeCalc : init.tripFee
+          const effectiveMonthFee = adjRecalcMode === 'recalc' ? (newMonthFeeCalc ?? init.monthFee) : init.monthFee
+
           const priceMap = getDNPrices(dn)
           const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
           const oldTotal = itemSubtotal + init.tripFee + init.monthFee + init.extra - init.discount
-          const newTotal = itemSubtotal + adjTripFee + adjMonthFee + adjExtra - adjDiscount
+          const newTotal = itemSubtotal + effectiveTripFee + effectiveMonthFee + adjExtra - adjDiscount
           return (
             <div className="space-y-4">
               <div className="text-sm text-slate-600">
@@ -1481,7 +1497,7 @@ export default function DeliveryPage() {
                         <td className="px-3 py-1.5 text-amber-700">ค่ารถ (ครั้ง)</td>
                         <td className="px-3 py-1.5 text-right text-red-600 line-through">{formatCurrency(init.tripFee)}</td>
                         <td className="px-3 py-1.5 text-center text-slate-400">→</td>
-                        <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(adjTripFee)}</td>
+                        <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newTripFeeCalc)}</td>
                       </tr>
                     )}
                     {monthChanged && (
@@ -1489,7 +1505,7 @@ export default function DeliveryPage() {
                         <td className="px-3 py-1.5 text-purple-700">ค่ารถ (เดือน)</td>
                         <td className="px-3 py-1.5 text-right text-red-600 line-through">{formatCurrency(init.monthFee)}</td>
                         <td className="px-3 py-1.5 text-center text-slate-400">→</td>
-                        <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(adjMonthFee)}</td>
+                        <td className="px-3 py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newMonthFeeCalc || 0)}</td>
                       </tr>
                     )}
                     {extraChanged && (
@@ -1518,42 +1534,78 @@ export default function DeliveryPage() {
                 </table>
               </div>
 
-              {/* ปรับค่ารถ (ตัวเลือก) */}
-              <div className="border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">ปรับค่ารถ (ตัวเลือก)</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-amber-600 mb-1">ค่ารถ (ครั้ง)</label>
-                    <input type="number" min={0} step={0.01} value={adjTripFee || ''}
-                      onFocus={e => e.currentTarget.select()}
-                      onChange={e => setAdjTripFee(Math.max(0, parseFloat(e.target.value) || 0))}
-                      placeholder="0.00"
-                      className="w-full px-3 py-1.5 border border-amber-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-amber-400 focus:outline-none bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-purple-600 mb-1">ค่ารถ (เดือน)</label>
-                    <input type="number" min={0} step={0.01} value={adjMonthFee || ''}
-                      onFocus={e => e.currentTarget.select()}
-                      onChange={e => setAdjMonthFee(Math.max(0, parseFloat(e.target.value) || 0))}
-                      placeholder="0.00"
-                      className="w-full px-3 py-1.5 border border-purple-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-purple-400 focus:outline-none bg-white" />
+              {/* 107: ค่ารถ — เก็บเดิม / คำนวณใหม่ */}
+              {anyFeeWillChange && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 space-y-3">
+                  <p className="text-sm font-medium text-blue-800">ค่ารถอาจเปลี่ยนเมื่อ extra/discount เปลี่ยน</p>
+
+                  {adjRecalcMode === 'recalc' && (
+                    <table className="w-full text-sm">
+                      <tbody>
+                        {tripFeeWillChange && (
+                          <tr className="border-b border-blue-100">
+                            <td className="py-1.5 text-slate-700">ค่ารถ (ครั้ง) — SD นี้</td>
+                            <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(init.tripFee)}</td>
+                            <td className="py-1.5 text-center text-slate-400 px-1">→</td>
+                            <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newTripFeeCalc)}</td>
+                          </tr>
+                        )}
+                        {monthFeeWillChange && (
+                          <tr className="border-b border-blue-100">
+                            <td className="py-1.5 text-slate-700">ค่ารถ (เดือน) — SD นี้</td>
+                            <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(init.monthFee)}</td>
+                            <td className="py-1.5 text-center text-slate-400 px-1">→</td>
+                            <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newMonthFeeCalc || 0)}</td>
+                          </tr>
+                        )}
+                        {otherMonthFeeWillChange && otherDn107 && (
+                          <tr>
+                            <td className="py-1.5 text-slate-700">ค่ารถ (เดือน) — SD ใบสุดท้าย <span className="font-mono text-xs text-slate-400">({otherDn107.noteNumber})</span></td>
+                            <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(otherDn107.transportFeeMonth || 0)}</td>
+                            <td className="py-1.5 text-center text-slate-400 px-1">→</td>
+                            <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(otherNewMonthFee || 0)}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  )}
+
+                  <div className="space-y-2 pt-2 border-t border-blue-200">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="radio" name="adjRecalcMode" checked={adjRecalcMode === 'recalc'} onChange={() => setAdjRecalcMode('recalc')} className="accent-[#1B3A5C]" />
+                      <span className="text-slate-700">คำนวณค่ารถใหม่ (รวม extra/discount) <span className="text-slate-400">(แนะนำ)</span></span>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="radio" name="adjRecalcMode" checked={adjRecalcMode === 'keep'} onChange={() => setAdjRecalcMode('keep')} className="accent-[#1B3A5C]" />
+                      <span className="text-slate-700">เก็บค่ารถเดิม <span className="text-slate-400">(ไม่ recalc)</span></span>
+                    </label>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-2">
                 <button onClick={() => setShowAdjustConfirm(false)}
                   className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
                 <button onClick={() => {
+                  const saveTrip = adjRecalcMode === 'recalc' && tripFeeWillChange
+                  const saveMonth = adjRecalcMode === 'recalc' && monthFeeWillChange
                   updateDeliveryNote(dn.id, {
                     extraCharge: adjExtra,
                     extraChargeNote: adjExtraNote,
                     discount: adjDiscount,
                     discountNote: adjDiscountNote,
-                    transportFeeTrip: adjTripFee,
-                    transportFeeMonth: adjMonthFee,
+                    ...(saveTrip ? { transportFeeTrip: newTripFeeCalc } : {}),
+                    ...(saveMonth ? { transportFeeMonth: newMonthFeeCalc } : {}),
                   })
-                  adjInitRef.current = { extra: adjExtra, extraNote: adjExtraNote, discount: adjDiscount, discountNote: adjDiscountNote, tripFee: adjTripFee, monthFee: adjMonthFee }
+                  if (adjRecalcMode === 'recalc' && otherMonthFeeWillChange && otherDn107) {
+                    updateDeliveryNote(otherDn107.id, { transportFeeMonth: otherNewMonthFee })
+                  }
+                  adjInitRef.current = {
+                    extra: adjExtra, extraNote: adjExtraNote,
+                    discount: adjDiscount, discountNote: adjDiscountNote,
+                    tripFee: saveTrip ? newTripFeeCalc : init.tripFee,
+                    monthFee: saveMonth ? (newMonthFeeCalc ?? init.monthFee) : init.monthFee,
+                  }
                   setShowAdjustConfirm(false)
                 }}
                   className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] font-medium transition-colors">

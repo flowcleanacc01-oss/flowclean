@@ -183,3 +183,73 @@ export function recalcTransportAfterSync(
 
   return results
 }
+
+/**
+ * Recalc transportFeeTrip + transportFeeMonth หลังปรับ extra/discount
+ *
+ * ใช้ (itemSubtotal + adjExtra - adjDiscount) เป็น effective amount สำหรับ threshold check:
+ * - extra เพิ่ม → effective สูงขึ้น → ค่ารถครั้งอาจลดเป็น 0
+ * - discount เพิ่ม → effective ต่ำลง → ค่ารถครั้งอาจเพิ่ม
+ * - month fee: recalc DN ใบสุดท้ายของเดือน (auto, เหมือน recalcTransportAfterSync)
+ *
+ * Returns: list ของ updates ที่ต้อง apply (อาจมี DN อื่นด้วย ถ้า month fee กระทบ)
+ */
+export function recalcTransportAfterAdj(
+  affectedDn: DeliveryNote,
+  customer: Customer,
+  allDeliveryNotes: DeliveryNote[],
+  quotations: Quotation[],
+  adjExtra: number,
+  adjDiscount: number,
+): RecalcResult[] {
+  const results: RecalcResult[] = []
+
+  const acceptedQT = quotations.find(q => q.customerId === customer.id && q.status === 'accepted')
+  const fallbackPriceMap = acceptedQT
+    ? Object.fromEntries(acceptedQT.items.map(i => [i.code, i.pricePerUnit]))
+    : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+  const pm = (affectedDn.priceSnapshot && Object.keys(affectedDn.priceSnapshot).length > 0)
+    ? affectedDn.priceSnapshot
+    : fallbackPriceMap
+
+  const itemSubtotal = affectedDn.items.reduce(
+    (s, i) => i.isClaim ? s : s + i.quantity * (pm[i.code] || 0),
+    0,
+  )
+  // ใช้ effective subtotal (รวม extra/discount) สำหรับ threshold check
+  const effectiveSubtotal = Math.max(0, itemSubtotal + adjExtra - adjDiscount)
+  const newTripFee = calculateTransportFeeTrip(effectiveSubtotal, customer)
+  results.push({ dnId: affectedDn.id, newTripFee })
+
+  // Recalc month fee for last DN of the month
+  if (customer.enableMinPerMonth && customer.monthlyFlatRate > 0) {
+    const month = affectedDn.date.slice(0, 7)
+    const monthDNs = allDeliveryNotes
+      .filter(d => d.customerId === customer.id && d.date.startsWith(month))
+      .sort((a, b) => b.date.localeCompare(a.date))
+    const lastDN = monthDNs[0]
+    if (lastDN && !lastDN.isBilled) {
+      let monthTotal = 0
+      for (const d of monthDNs) {
+        const isAffected = d.id === affectedDn.id
+        const dPm = isAffected ? pm : (d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0 ? d.priceSnapshot : fallbackPriceMap)
+        const dSubtotal = d.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (dPm[i.code] || 0), 0)
+        // affectedDn ใช้ effectiveSubtotal (รวม adj), DN อื่นใช้ subtotal ปกติ
+        const dEffective = isAffected ? effectiveSubtotal : dSubtotal
+        const dTripFee = isAffected ? newTripFee : (d.transportFeeTrip || 0)
+        monthTotal += dEffective + dTripFee
+      }
+      const newMonthFee = monthTotal < customer.monthlyFlatRate
+        ? Math.max(0, customer.monthlyFlatRate - monthTotal)
+        : 0
+      const existing = results.find(r => r.dnId === lastDN.id)
+      if (existing) {
+        existing.newMonthFee = newMonthFee
+      } else {
+        results.push({ dnId: lastDN.id, newTripFee: lastDN.transportFeeTrip || 0, newMonthFee })
+      }
+    }
+  }
+
+  return results
+}
