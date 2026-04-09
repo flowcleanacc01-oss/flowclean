@@ -489,7 +489,7 @@ export default function LinenFormsPage() {
                         {form.formNumber}
                         {/* 70+73+74+75: Synced badge — เคยมี discrepancy + sync แล้ว */}
                         {lfHasSyncedRows(form) && (
-                          <span title="LF นี้มี row ที่เคยถูก sync col6+col4 (เก็บประวัติใน Type 2 Resolved)">📝</span>
+                          <span title="LF นี้ มีรายการที่เคยปรับ จำนวนผ้าลูกค้านับกลับไม่ตรง แล้ว">📝</span>
                         )}
                       </span>
                     </td>

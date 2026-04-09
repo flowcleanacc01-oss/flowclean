@@ -138,7 +138,7 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
           <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div>
             ใช้ tool นี้เมื่อลูกค้าแจ้งว่านับผ้ากลับไม่ตรง — ระบบจะ smart detect สถานการณ์และ
-            sync ทั้ง <strong>col6 (โรงซักแพคส่ง)</strong> + <strong>col4 (ลูกค้านับกลับ)</strong> ให้ตรงกันอัตโนมัติ
+            ปรับ <strong>จำนวนโรงซักแพคส่ง</strong> ให้ตรงกับ <strong>จำนวนลูกค้านับกลับ</strong> ให้ตรงกันอัตโนมัติ
           </div>
         </div>
 
@@ -186,9 +186,9 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
                 <thead className="bg-slate-50 sticky top-0">
                   <tr>
                     <th className="text-left px-3 py-2 font-medium text-slate-600">รหัส</th>
-                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-20">col6 (แพคส่ง)</th>
-                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-20">col4 (นับกลับ)</th>
-                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-24">ลูกค้านับได้</th>
+                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-24">โรงซักแพคส่ง</th>
+                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-28">ลูกค้านับผ้ากลับ (เดิม)</th>
+                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-28">ลูกค้านับผ้ากลับ (ใหม่)</th>
                   </tr>
                 </thead>
                 <tbody>
