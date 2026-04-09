@@ -207,16 +207,23 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
                 </thead>
                 <tbody>
                   {selLf.rows.map(r => {
-                    const newQty = newQtyMap.get(r.code) ?? r.col6_factoryPackSend ?? 0
+                    const displayVal = newQtyMap.has(r.code) ? newQtyMap.get(r.code)! : ''
                     return (
                       <tr key={r.code} className="border-t border-slate-100">
                         <td className="px-3 py-1.5 font-mono text-slate-500">{r.code}</td>
                         <td className="text-right px-2 py-1.5 font-mono">{r.col6_factoryPackSend || 0}</td>
                         <td className="text-right px-2 py-1.5 font-mono">{r.col4_factoryApproved || 0}</td>
                         <td className="text-right px-2 py-1.5">
-                          <input type="number" min={0} value={newQty}
+                          <input type="number" min={0} value={displayVal}
+                            placeholder="-"
                             onFocus={e => e.currentTarget.select()}
-                            onChange={e => handleQtyChange(r.code, parseInt(e.target.value) || 0)}
+                            onChange={e => {
+                              if (e.target.value === '') {
+                                setNewQtyMap(prev => { const next = new Map(prev); next.delete(r.code); return next })
+                              } else {
+                                handleQtyChange(r.code, parseInt(e.target.value) || 0)
+                              }
+                            }}
                             className="w-20 px-2 py-1 border border-slate-200 rounded text-right text-xs focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]" />
                         </td>
                       </tr>

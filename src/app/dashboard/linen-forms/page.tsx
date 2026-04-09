@@ -673,7 +673,7 @@ export default function LinenFormsPage() {
       </Modal>
 
       {/* Detail Modal */}
-      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={detailForm?.formNumber || ''} size="wide">
+      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={`ใบส่งรับผ้า ${detailForm?.formNumber || ''}`} size="wide">
         {detailForm && detailCustomer && (
           <div className="space-y-4">
             <div id="linen-form-detail" className="space-y-4 bg-white p-2">
