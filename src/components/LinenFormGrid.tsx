@@ -460,7 +460,7 @@ export default function LinenFormGrid({
                       {/* 70+73+74+75: ⚡ One-click sync button */}
                       {hasCountBackDisc && onApproveSync && (
                         <button type="button" onClick={() => onApproveSync(item.code)}
-                          title={`Sync col6 = col4 (${row.col4_factoryApproved}) — ผ้าจริง`}
+                          title={`ปรับ AUTO โรงซักแพคส่ง = ลูกค้านับกลับ (${row.col4_factoryApproved}) — ตรวจสอบแล้ว`}
                           className="p-0.5 rounded hover:bg-amber-100 text-amber-600 transition-colors">
                           <Zap className="w-3.5 h-3.5" />
                         </button>
