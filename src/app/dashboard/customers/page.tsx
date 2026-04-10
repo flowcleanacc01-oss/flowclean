@@ -61,12 +61,12 @@ export default function CustomersPage() {
   }
   const sortedBg = (key: string) => sortKey === key ? 'bg-[#1B3A5C]/[0.04]' : ''
 
-  // Map customer name → linked accepted QT (must be before filtered useMemo)
+  // Map customerId → linked accepted QT (must be before filtered useMemo)
   const linkedQTMap = useMemo(() => {
     const map = new Map<string, { id: string; quotationNumber: string }>()
     for (const q of quotations) {
       if (q.status === 'accepted') {
-        map.set(q.customerName, { id: q.id, quotationNumber: q.quotationNumber })
+        map.set(q.customerId, { id: q.id, quotationNumber: q.quotationNumber })
       }
     }
     return map
@@ -91,7 +91,7 @@ export default function CustomersPage() {
         case 'billingModel': va = a.billingModel; vb = b.billingModel; break
         case 'creditDays': va = a.creditDays; vb = b.creditDays; break
         case 'tax': va = (a.enableVat !== false ? 2 : 0) + (a.enableWithholding !== false ? 1 : 0); vb = (b.enableVat !== false ? 2 : 0) + (b.enableWithholding !== false ? 1 : 0); break
-        case 'qt': va = linkedQTMap.has(a.name) ? 1 : 0; vb = linkedQTMap.has(b.name) ? 1 : 0; break
+        case 'qt': va = linkedQTMap.has(a.id) ? 1 : 0; vb = linkedQTMap.has(b.id) ? 1 : 0; break
         case 'contact': va = a.contactName || ''; vb = b.contactName || ''; break
         case 'isActive': va = a.isActive ? 0 : 1; vb = b.isActive ? 0 : 1; break
         default: va = a.name; vb = b.name
@@ -262,7 +262,7 @@ export default function CustomersPage() {
                       </td>
                       <td className={cn("px-4 py-3 text-center", sortedBg('qt'))}>
                         {(() => {
-                          const qt = linkedQTMap.get(c.name)
+                          const qt = linkedQTMap.get(c.id)
                           return qt ? (
                             <Link href={`/dashboard/billing?tab=quotation&openqt=${qt.id}`}
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
@@ -535,7 +535,7 @@ export default function CustomersPage() {
 
           {/* QT Link Status */}
           {editId && (() => {
-            const qt = linkedQTMap.get(form.name)
+            const qt = linkedQTMap.get(editId)
             return (
               <div className={cn('px-3 py-2.5 rounded-lg text-sm flex items-center gap-2', qt ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200')}>
                 <Link2 className={cn('w-4 h-4 flex-shrink-0', qt ? 'text-emerald-600' : 'text-amber-500')} />

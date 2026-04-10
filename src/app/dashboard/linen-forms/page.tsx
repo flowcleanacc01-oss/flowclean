@@ -212,11 +212,11 @@ export default function LinenFormsPage() {
 
   const statuses: (LinenFormStatus | 'all')[] = ['all', ...ALL_LINEN_STATUSES]
 
-  // Helper: get the linked accepted QT for a customer (match by customerId first, then customerName)
+  // Helper: get the linked accepted QT for a customer (match by customerId)
   const getLinkedQT = (custName: string, custId?: string) =>
     quotations.find(q =>
       q.status === 'accepted' &&
-      ((custId && q.customerId === custId) || q.customerName === custName)
+      custId && q.customerId === custId
     ) || null
 
   const buildRows = (codes: string[]) => codes.map(code => ({

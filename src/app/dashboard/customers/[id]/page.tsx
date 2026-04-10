@@ -76,9 +76,9 @@ export default function CustomerDetailPage() {
     Object.fromEntries(linenCatalog.map(i => [i.code, i.name])),
     [linenCatalog])
 
-  // Linked accepted QT for this customer (matched by customerName, only 1 allowed)
+  // Linked accepted QT for this customer (matched by customerId, only 1 allowed)
   const linkedQT = useMemo(() =>
-    customer ? quotations.find(q => q.status === 'accepted' && q.customerName === customer.name) || null : null,
+    customer ? quotations.find(q => q.status === 'accepted' && q.customerId === customer.id) || null : null,
     [quotations, customer])
 
   if (!customer) {
