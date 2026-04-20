@@ -14,7 +14,7 @@
  */
 
 import type { LinenForm, LinenFormRow, DeliveryNote, Customer, Quotation } from './../types'
-import { calculateTransportFeeTrip } from './transport-fee'
+import { calculateTransportFeeTrip, compareDNByLastOfMonth } from './transport-fee'
 
 export type SyncSource = 'lf_manual' | 'sd_create' | 'sd_edit'
 
@@ -159,7 +159,7 @@ export function recalcTransportAfterSync(
     const month = affectedDn.date.slice(0, 7)
     const monthDNs = allDeliveryNotes
       .filter(d => d.customerId === customer.id && d.date.startsWith(month))
-      .sort((a, b) => b.date.localeCompare(a.date))
+      .sort(compareDNByLastOfMonth)
     const lastDN = monthDNs[0]
     if (lastDN && !lastDN.isBilled) {
       // Calc month total — use effectiveSubtotal for affectedDn, original for others
@@ -230,7 +230,7 @@ export function recalcTransportAfterAdj(
     const month = affectedDn.date.slice(0, 7)
     const monthDNs = allDeliveryNotes
       .filter(d => d.customerId === customer.id && d.date.startsWith(month))
-      .sort((a, b) => b.date.localeCompare(a.date))
+      .sort(compareDNByLastOfMonth)
     const lastDN = monthDNs[0]
     if (lastDN && !lastDN.isBilled) {
       let monthTotal = 0

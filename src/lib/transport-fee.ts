@@ -1,6 +1,17 @@
 import type { Customer, DeliveryNote } from '@/types'
 
 /**
+ * Comparator สำหรับเรียง DN "ใบสุดท้ายของเดือน" ก่อน (Feature 118 fix)
+ * - Date desc เป็นหลัก
+ * - noteNumber desc เป็น tiebreaker (ป้องกันกรณีหลาย SD วันเดียวกัน)
+ *
+ * ใช้กับทุกจุดที่เลือก "ใบสุดท้ายของเดือน" สำหรับ month fee recalc
+ */
+export function compareDNByLastOfMonth<T extends { date: string; noteNumber: string }>(a: T, b: T): number {
+  return b.date.localeCompare(a.date) || b.noteNumber.localeCompare(a.noteNumber)
+}
+
+/**
  * Calculate DN item subtotal (before VAT, excluding transport fees)
  */
 export function calculateDNSubtotal(dn: DeliveryNote, customer: Customer, priceMap?: Record<string, number>): number {

@@ -14,6 +14,7 @@ import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import TransportFeeImpactPreview from '@/components/TransportFeeImpactPreview'
 import { canViewSD } from '@/lib/permissions'
 import { applyRowsSync, recalcTransportAfterSync, recalcTransportAfterAdj } from '@/lib/sync-discrepancy'
+import { compareDNByLastOfMonth } from '@/lib/transport-fee'
 import { trackRecentCustomer, sortCustomersWithRecent, getRecentCustomerIds } from '@/lib/recent-customers'
 import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
@@ -329,7 +330,7 @@ export default function DeliveryPage() {
       const monthDNs = deliveryNotes.filter(d => d.customerId === selCustomerId && d.date.startsWith(month))
 
       // Clear transportFeeMonth from previous last DN (will recalculate for this new one)
-      const prevLastDN = [...monthDNs].sort((a, b) => b.date.localeCompare(a.date))[0]
+      const prevLastDN = [...monthDNs].sort(compareDNByLastOfMonth)[0]
       if (prevLastDN && prevLastDN.transportFeeMonth > 0) {
         updateDeliveryNote(prevLastDN.id, { transportFeeMonth: 0 })
       }
@@ -1218,7 +1219,7 @@ export default function DeliveryPage() {
             const customer = getCustomer(dnToDelete.customerId)
             const remainingDNs = deliveryNotes
               .filter(d => d.id !== confirmDeleteId && d.customerId === dnToDelete.customerId && d.date.startsWith(month))
-              .sort((a, b) => b.date.localeCompare(a.date))
+              .sort(compareDNByLastOfMonth)
             if (remainingDNs.length > 0 && customer && customer.enableMinPerMonth) {
               const newLastDN = remainingDNs[0]
               const otherDNs = remainingDNs.filter(d => d.id !== newLastDN.id)
@@ -1352,7 +1353,7 @@ export default function DeliveryPage() {
                         const customer = getCustomer(deletedDN.customerId)
                         const remainingDNs = deliveryNotes
                           .filter(d => d.id !== deletedDN.id && d.customerId === deletedDN.customerId && d.date.startsWith(month))
-                          .sort((a, b) => b.date.localeCompare(a.date))
+                          .sort(compareDNByLastOfMonth)
                         if (remainingDNs.length > 0 && customer && customer.enableMinPerMonth) {
                           const newLastDN = remainingDNs[0]
                           const otherDNs = remainingDNs.filter(d => d.id !== newLastDN.id)
@@ -1491,7 +1492,7 @@ export default function DeliveryPage() {
           const month111 = dn.date.slice(0, 7)
           const monthDNs111 = deliveryNotes
             .filter(d => d.customerId === cust.id && d.date.startsWith(month111))
-            .sort((a, b) => b.date.localeCompare(a.date) || b.noteNumber.localeCompare(a.noteNumber))
+            .sort(compareDNByLastOfMonth)
           const lastDnOfMonth111 = monthDNs111[0]
 
           // Effective fees for this SD's total preview

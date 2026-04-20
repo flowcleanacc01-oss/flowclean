@@ -1,6 +1,7 @@
 'use client'
 
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { compareDNByLastOfMonth } from '@/lib/transport-fee'
 import type { DeliveryNote, Customer } from '@/types'
 import type { RecalcResult } from '@/lib/sync-discrepancy'
 
@@ -55,7 +56,7 @@ export default function TransportFeeImpactPreview({
   const month = affectedDn.date.slice(0, 7)
   const monthDNs = allDeliveryNotes
     .filter(d => d.customerId === customer.id && d.date.startsWith(month))
-    .sort((a, b) => b.date.localeCompare(a.date) || b.noteNumber.localeCompare(a.noteNumber))
+    .sort(compareDNByLastOfMonth)
   const lastDnOfMonth = monthDNs[0]
 
   // DN ที่ถือ month fee (= ใบสุดท้าย — อาจเป็น affectedDn เอง หรือใบอื่น)
