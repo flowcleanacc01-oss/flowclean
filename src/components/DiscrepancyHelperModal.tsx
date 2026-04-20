@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Wrench, Info, AlertTriangle, Check } from 'lucide-react'
 import Modal from './Modal'
 import { useStore } from '@/lib/store'
@@ -37,6 +37,7 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
     updateLinenForm, updateDeliveryNote, quotations, getCustomer,
   } = useStore()
   const router = useRouter()
+  const previewRef = useRef<HTMLDivElement>(null)
 
   const [selCustomerId, setSelCustomerId] = useState(initialCustomerId || '')
   const [selLfId, setSelLfId] = useState(initialLfId || '')
@@ -93,6 +94,26 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
   }, [selLf, newQtyMap])
 
   const canConfirm = changes.length > 0 && scenario !== 'sd_billed'
+
+  // 114.1+114.2: auto-scroll preview into view when it first appears
+  const hasPreview = changes.length > 0
+  useEffect(() => {
+    if (!hasPreview) return
+    const timer = setTimeout(() => {
+      previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 50)
+    return () => clearTimeout(timer)
+  }, [hasPreview])
+
+  // 114: arrow/enter navigation between quantity inputs
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter') {
+      e.preventDefault()
+      const nextIndex = rowIndex + (e.key === 'ArrowUp' ? -1 : 1)
+      const next = document.querySelector<HTMLInputElement>(`input[data-discrow="${nextIndex}"]`)
+      if (next) { next.focus(); next.select() }
+    }
+  }
 
   const handleQtyChange = (code: string, qty: number) => {
     setNewQtyMap(prev => {
@@ -206,7 +227,7 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
                   </tr>
                 </thead>
                 <tbody>
-                  {selLf.rows.map(r => {
+                  {selLf.rows.map((r, rowIndex) => {
                     const displayVal = newQtyMap.has(r.code) ? newQtyMap.get(r.code)! : ''
                     return (
                       <tr key={r.code} className="border-t border-slate-100">
@@ -216,7 +237,9 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
                         <td className="text-right px-2 py-1.5">
                           <input type="number" min={0} value={displayVal}
                             placeholder="-"
+                            data-discrow={rowIndex}
                             onFocus={e => e.currentTarget.select()}
+                            onKeyDown={e => handleInputKeyDown(e, rowIndex)}
                             onChange={e => {
                               if (e.target.value === '') {
                                 setNewQtyMap(prev => { const next = new Map(prev); next.delete(r.code); return next })
@@ -237,7 +260,7 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
 
         {/* Preview + Scenario */}
         {selLf && changes.length > 0 && (
-          <div className="space-y-2">
+          <div ref={previewRef} className="space-y-2">
             {scenario === 'sd_billed' ? (
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 flex gap-2 text-orange-800">
                 <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
