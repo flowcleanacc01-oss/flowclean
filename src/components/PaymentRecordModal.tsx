@@ -5,6 +5,7 @@ import { Wallet, AlertTriangle, Check } from 'lucide-react'
 import Modal from './Modal'
 import { useStore } from '@/lib/store'
 import { cn, todayISO, formatCurrency } from '@/lib/utils'
+import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import type { BillingStatement, Customer } from '@/types'
 
 interface Props {
@@ -146,6 +147,7 @@ export default function PaymentRecordModal({ open, onClose, billing, customer }:
           <label className="block text-xs font-medium text-slate-600 mb-1">จำนวนเงินที่รับ</label>
           <input type="number" min={0} step={0.01} value={paidAmount}
             onFocus={e => e.currentTarget.select()}
+            onKeyDown={blockNumberArrowKeys}
             onChange={e => setPaidAmount(parseFloat(e.target.value) || 0)}
             className={cn('w-full px-3 py-2 border rounded-lg text-sm text-right font-mono focus:outline-none focus:ring-2',
               isFullPayment ? 'border-emerald-300 focus:ring-emerald-300 bg-emerald-50' : 'border-amber-300 focus:ring-amber-300 bg-amber-50')} />

@@ -9,6 +9,7 @@ import type {
   CarryOverAdjustment, CarryOverMode, CarryOverAdjustmentType, CarryOverReasonCategory,
 } from '@/types'
 import { Plus, RotateCcw, Info } from 'lucide-react'
+import { tabularNumberNav } from '@/lib/modal-nav'
 
 interface Props {
   open: boolean
@@ -246,7 +247,7 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
               </tr>
             </thead>
             <tbody>
-              {enabledItems.map(item => {
+              {enabledItems.map((item, rowIndex) => {
                 const v1 = currentCarryOver[1][item.code] || 0
                 const v2 = currentCarryOver[2][item.code] || 0
                 const v3 = currentCarryOver[3][item.code] || 0
@@ -274,6 +275,9 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
                       <td className="px-2 py-1.5">
                         {isSelected ? (
                           <input type="number" value={delta}
+                            data-cornavrow={rowIndex}
+                            onFocus={e => e.currentTarget.select()}
+                            onKeyDown={e => tabularNumberNav(e, 'data-cornavrow', rowIndex, enabledItems.length - 1)}
                             onChange={e => setItemDelta(item.code, parseInt(e.target.value) || 0)}
                             className="w-full px-2 py-1 border border-slate-200 rounded text-right focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]" />
                         ) : (

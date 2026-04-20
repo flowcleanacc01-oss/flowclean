@@ -6,6 +6,7 @@ import Modal from './Modal'
 import { useStore } from '@/lib/store'
 import { cn, formatDate } from '@/lib/utils'
 import { applyRowsSync, recalcTransportAfterSync } from '@/lib/sync-discrepancy'
+import { tabularNumberNav } from '@/lib/modal-nav'
 import TransportFeeImpactPreview from './TransportFeeImpactPreview'
 import { useRouter } from 'next/navigation'
 
@@ -136,16 +137,6 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
     return () => clearTimeout(timer)
   }, [hasPreview])
 
-  // 114: arrow/enter navigation between quantity inputs
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number) => {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter') {
-      e.preventDefault()
-      const nextIndex = rowIndex + (e.key === 'ArrowUp' ? -1 : 1)
-      const next = document.querySelector<HTMLInputElement>(`input[data-discrow="${nextIndex}"]`)
-      if (next) { next.focus(); next.select() }
-    }
-  }
-
   const handleQtyChange = (code: string, qty: number) => {
     setNewQtyMap(prev => {
       const next = new Map(prev)
@@ -270,7 +261,7 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
                             placeholder="-"
                             data-discrow={rowIndex}
                             onFocus={e => e.currentTarget.select()}
-                            onKeyDown={e => handleInputKeyDown(e, rowIndex)}
+                            onKeyDown={e => tabularNumberNav(e, 'data-discrow', rowIndex, selLf.rows.length - 1)}
                             onChange={e => {
                               if (e.target.value === '') {
                                 setNewQtyMap(prev => { const next = new Map(prev); next.delete(r.code); return next })
