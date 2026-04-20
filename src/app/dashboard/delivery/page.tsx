@@ -11,6 +11,7 @@ import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
+import TransportFeeImpactPreview from '@/components/TransportFeeImpactPreview'
 import { canViewSD } from '@/lib/permissions'
 import { applyRowsSync, recalcTransportAfterSync, recalcTransportAfterAdj } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer, sortCustomersWithRecent, getRecentCustomerIds } from '@/lib/recent-customers'
@@ -98,7 +99,9 @@ export default function DeliveryPage() {
     oldQty: number
     newQty: number
   } | null>(null)
-  const [sdSyncRecalcMode, setSdSyncRecalcMode] = useState<'recalc' | 'keep'>('recalc')
+  // 115: 2 checkbox แยก (แทน radio) — pattern เดียวกับ Feature 111
+  const [sdSyncRecalcTrip, setSdSyncRecalcTrip] = useState(true)
+  const [sdSyncRecalcMonth, setSdSyncRecalcMonth] = useState(true)
 
   // 106: Local state for SD adjustment editing (ไม่ save ทันที — รอ confirm)
   const [adjExtra, setAdjExtra] = useState(0)
@@ -127,6 +130,14 @@ export default function DeliveryPage() {
     }
     setShowAdjustConfirm(false)
   }, [showDetail, deliveryNotes])
+
+  // 115: Reset SD Sync Modal checkboxes เมื่อเปิด modal
+  useEffect(() => {
+    if (pendingSdSync) {
+      setSdSyncRecalcTrip(true)
+      setSdSyncRecalcMonth(true)
+    }
+  }, [pendingSdSync])
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -994,7 +1005,7 @@ export default function DeliveryPage() {
                                         oldQty,
                                         newQty: item.quantity,
                                       })
-                                      setSdSyncRecalcMode('recalc')
+                                      // Reset 2 checkbox (115) — effect [pendingSdSync] จัดการด้วย
                                     }}
                                     className="w-20 px-2 py-0.5 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                                 )
@@ -1712,20 +1723,7 @@ export default function DeliveryPage() {
 
           // Recalc preview — pass existing extra/discount so threshold is accurate (115)
           const recalcResults = recalcTransportAfterSync(dn, cust, deliveryNotes, quotations, dn.extraCharge || 0, dn.discount || 0)
-          const thisDnRecalc = recalcResults.find(r => r.dnId === dn.id)
-          const otherDnRecalc = recalcResults.find(r => r.dnId !== dn.id)
-          const otherDn = otherDnRecalc ? deliveryNotes.find(d => d.id === otherDnRecalc.dnId) : null
-
-          const oldTripFee = dn.transportFeeTrip || 0
-          const newTripFee = thisDnRecalc?.newTripFee ?? oldTripFee
-          const oldMonthFee = dn.transportFeeMonth || 0
-          const newMonthFee = thisDnRecalc?.newMonthFee
-
-          const tripChanged = newTripFee !== oldTripFee
-          const thisMonthChanged = newMonthFee !== undefined && newMonthFee !== oldMonthFee
-          const otherMonthChanged = !!otherDnRecalc && otherDnRecalc.newMonthFee !== undefined && otherDnRecalc.newMonthFee !== (otherDn?.transportFeeMonth || 0)
-          const anyFeeChanged = tripChanged || thisMonthChanged || otherMonthChanged
-
+          const hasAdj = (dn.extraCharge || 0) > 0 || (dn.discount || 0) > 0
           const itemName = linenCatalog.find(i => i.code === p.itemCode)?.name || p.itemCode
 
           return (
@@ -1752,51 +1750,18 @@ export default function DeliveryPage() {
                 </table>
               </div>
 
-              {/* Recalc preview */}
-              {anyFeeChanged && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 space-y-3">
-                  <p className="text-sm font-medium text-blue-800">⚠ ค่ารถจะเปลี่ยนเพราะจำนวนชิ้นเปลี่ยน</p>
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {tripChanged && (
-                        <tr className="border-b border-blue-100">
-                          <td className="py-1.5 text-slate-700">ค่ารถ (ครั้ง) — SD นี้</td>
-                          <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(oldTripFee)}</td>
-                          <td className="py-1.5 text-center text-slate-400 px-1">→</td>
-                          <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newTripFee)}</td>
-                        </tr>
-                      )}
-                      {thisMonthChanged && (
-                        <tr className="border-b border-blue-100">
-                          <td className="py-1.5 text-slate-700">ค่ารถ (เดือน) — SD นี้</td>
-                          <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(oldMonthFee)}</td>
-                          <td className="py-1.5 text-center text-slate-400 px-1">→</td>
-                          <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(newMonthFee || 0)}</td>
-                        </tr>
-                      )}
-                      {otherMonthChanged && otherDn && (
-                        <tr>
-                          <td className="py-1.5 text-slate-700">ค่ารถ (เดือน) — SD ใบสุดท้าย <span className="font-mono text-xs text-slate-400">({otherDn.noteNumber})</span></td>
-                          <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(otherDn.transportFeeMonth || 0)}</td>
-                          <td className="py-1.5 text-center text-slate-400 px-1">→</td>
-                          <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(otherDnRecalc?.newMonthFee || 0)}</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-
-                  <div className="space-y-2 pt-2 border-t border-blue-200">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="radio" name="sdSyncMode" checked={sdSyncRecalcMode === 'recalc'} onChange={() => setSdSyncRecalcMode('recalc')} className="accent-[#1B3A5C]" />
-                      <span className="text-slate-700">อัปเดตค่ารถตามจำนวนใหม่ <span className="text-slate-400">(แนะนำ)</span></span>
-                    </label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="radio" name="sdSyncMode" checked={sdSyncRecalcMode === 'keep'} onChange={() => setSdSyncRecalcMode('keep')} className="accent-[#1B3A5C]" />
-                      <span className="text-slate-700">เก็บค่ารถเดิม <span className="text-slate-400">(ไม่ recalc)</span></span>
-                    </label>
-                  </div>
-                </div>
-              )}
+              {/* 115: Transport fee preview — shared pattern เดียวกับ Feature 111 */}
+              <TransportFeeImpactPreview
+                affectedDn={dn}
+                customer={cust}
+                allDeliveryNotes={deliveryNotes}
+                recalcResults={recalcResults}
+                recalcTrip={sdSyncRecalcTrip}
+                setRecalcTrip={setSdSyncRecalcTrip}
+                recalcMonth={sdSyncRecalcMonth}
+                setRecalcMonth={setSdSyncRecalcMonth}
+                hasAdj={hasAdj}
+              />
 
               <div className="bg-slate-50 rounded-lg px-3 py-2 text-xs text-slate-500">
                 <strong>หมายเหตุ:</strong> ระบบจะ sync LF.col6 + col4 = {formatNumber(p.newQty)} (ทั้ง 2 ค่า) + บันทึก audit log
@@ -1818,7 +1783,7 @@ export default function DeliveryPage() {
                 </button>
                 <button
                   onClick={() => {
-                    // Confirm: apply sync to LF + recalc fees if opted in
+                    // Confirm: apply sync to LF + recalc fees ตาม 2 checkbox แยกกัน (115)
                     const updatedRows = applyRowsSync(
                       lf.rows,
                       [{ code: p.itemCode, newQty: p.newQty }],
@@ -1827,18 +1792,16 @@ export default function DeliveryPage() {
                     )
                     updateLinenForm(lf.id, { rows: updatedRows })
 
-                    if (sdSyncRecalcMode === 'recalc' && anyFeeChanged) {
-                      for (const r of recalcResults) {
-                        const update: { transportFeeTrip?: number; transportFeeMonth?: number } = {}
-                        if (r.dnId === dn.id) {
-                          update.transportFeeTrip = r.newTripFee
-                        }
-                        if (r.newMonthFee !== undefined) {
-                          update.transportFeeMonth = r.newMonthFee
-                        }
-                        if (Object.keys(update).length > 0) {
-                          updateDeliveryNote(r.dnId, update)
-                        }
+                    for (const r of recalcResults) {
+                      const update: { transportFeeTrip?: number; transportFeeMonth?: number } = {}
+                      if (r.dnId === dn.id) {
+                        if (sdSyncRecalcTrip) update.transportFeeTrip = r.newTripFee
+                        if (sdSyncRecalcMonth && r.newMonthFee !== undefined) update.transportFeeMonth = r.newMonthFee
+                      } else {
+                        if (sdSyncRecalcMonth && r.newMonthFee !== undefined) update.transportFeeMonth = r.newMonthFee
+                      }
+                      if (Object.keys(update).length > 0) {
+                        updateDeliveryNote(r.dnId, update)
                       }
                     }
 

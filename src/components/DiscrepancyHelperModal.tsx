@@ -4,8 +4,9 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { Wrench, Info, AlertTriangle, Check } from 'lucide-react'
 import Modal from './Modal'
 import { useStore } from '@/lib/store'
-import { cn, formatDate, formatCurrency } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { applyRowsSync, recalcTransportAfterSync } from '@/lib/sync-discrepancy'
+import TransportFeeImpactPreview from './TransportFeeImpactPreview'
 import { useRouter } from 'next/navigation'
 
 interface Props {
@@ -42,7 +43,9 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
   const [selCustomerId, setSelCustomerId] = useState(initialCustomerId || '')
   const [selLfId, setSelLfId] = useState(initialLfId || '')
   const [newQtyMap, setNewQtyMap] = useState<Map<string, number>>(new Map())
-  const [discSyncRecalcMode, setDiscSyncRecalcMode] = useState<'recalc' | 'keep'>('recalc')
+  // 112.1: 2 checkbox แยก (แทน radio) — pattern เดียวกับ Feature 111
+  const [discSyncRecalcTrip, setDiscSyncRecalcTrip] = useState(true)
+  const [discSyncRecalcMonth, setDiscSyncRecalcMonth] = useState(true)
 
   // Reset state when modal opens
   useEffect(() => {
@@ -50,7 +53,8 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
     setSelCustomerId(initialCustomerId || '')
     setSelLfId(initialLfId || '')
     setNewQtyMap(new Map())
-    setDiscSyncRecalcMode('recalc')
+    setDiscSyncRecalcTrip(true)
+    setDiscSyncRecalcMonth(true)
   }, [open, initialCustomerId, initialLfId])
 
   // Customer's LFs (status confirmed only)
@@ -97,8 +101,8 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
 
   const canConfirm = changes.length > 0 && scenario !== 'sd_billed'
 
-  // 112.1/115: Compute transport fee recalc preview (considers existing extra/discount)
-  const recalcPreviewData = (() => {
+  // 112.1: Compute recalc for preview (เก็บ virtual DN ไว้ใช้ทั้ง render + save)
+  const recalcContext = (() => {
     if (!linkedSD || changes.length === 0 || scenario === 'sd_billed') return null
     const customer = getCustomer(linkedSD.customerId)
     if (!customer) return null
@@ -113,22 +117,11 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
       virtualDN, customer, virtualDNs, quotations,
       linkedSD.extraCharge || 0, linkedSD.discount || 0,
     )
-    const thisDn = results.find(r => r.dnId === linkedSD.id)
-    const otherDnResult = results.find(r => r.dnId !== linkedSD.id)
-    const otherDn = otherDnResult ? deliveryNotes.find(d => d.id === otherDnResult.dnId) : null
-    const oldTripFee = linkedSD.transportFeeTrip || 0
-    const newTripFee = thisDn?.newTripFee ?? oldTripFee
-    const oldMonthFee = linkedSD.transportFeeMonth || 0
-    const newMonthFee = thisDn?.newMonthFee
-    const tripChanged = newTripFee !== oldTripFee
-    const thisMonthChanged = newMonthFee !== undefined && newMonthFee !== oldMonthFee
-    const otherMonthChanged = !!otherDnResult && otherDnResult.newMonthFee !== undefined
-      && otherDnResult.newMonthFee !== (otherDn?.transportFeeMonth || 0)
-    if (!tripChanged && !thisMonthChanged && !otherMonthChanged) return null
     return {
-      oldTripFee, newTripFee, oldMonthFee, newMonthFee,
-      tripChanged, thisMonthChanged, otherMonthChanged,
-      otherDn, otherDnResult,
+      virtualDN,
+      virtualDNs,
+      customer,
+      results,
       hasAdj: (linkedSD.extraCharge || 0) > 0 || (linkedSD.discount || 0) > 0,
     }
   })()
@@ -170,32 +163,28 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
     // Update LF
     updateLinenForm(selLf.id, { rows: updatedRows })
 
-    // Update SD if exists + recalc transport fees (112.1 fix: respects existing extra/discount)
-    if (linkedSD) {
+    // Update SD if exists + recalc transport fees (112.1: 2 checkbox แยก)
+    if (linkedSD && recalcContext) {
+      updateDeliveryNote(linkedSD.id, { items: recalcContext.virtualDN.items })
+
+      for (const r of recalcContext.results) {
+        const update: { transportFeeTrip?: number; transportFeeMonth?: number } = {}
+        if (r.dnId === linkedSD.id) {
+          if (discSyncRecalcTrip) update.transportFeeTrip = r.newTripFee
+          if (discSyncRecalcMonth && r.newMonthFee !== undefined) update.transportFeeMonth = r.newMonthFee
+        } else {
+          if (discSyncRecalcMonth && r.newMonthFee !== undefined) update.transportFeeMonth = r.newMonthFee
+        }
+        if (Object.keys(update).length > 0) updateDeliveryNote(r.dnId, update)
+      }
+    } else if (linkedSD) {
+      // scenario 'sd_billed' ไม่ควรมาถึงนี่ — แต่ถ้า recalcContext null แปลว่าไม่ต้อง recalc
       const updatedItems = linkedSD.items.map(it => {
         const change = changes.find(c => c.code === it.code)
         if (change && !it.isClaim) return { ...it, quantity: change.newQty }
         return it
       })
       updateDeliveryNote(linkedSD.id, { items: updatedItems })
-
-      if (discSyncRecalcMode === 'recalc') {
-        const customer = getCustomer(linkedSD.customerId)
-        if (customer) {
-          const virtualDN = { ...linkedSD, items: updatedItems }
-          const virtualDNs = deliveryNotes.map(d => d.id === linkedSD.id ? virtualDN : d)
-          const results = recalcTransportAfterSync(
-            virtualDN, customer, virtualDNs, quotations,
-            linkedSD.extraCharge || 0, linkedSD.discount || 0,
-          )
-          for (const r of results) {
-            const update: { transportFeeTrip?: number; transportFeeMonth?: number } = {}
-            if (r.dnId === linkedSD.id) update.transportFeeTrip = r.newTripFee
-            if (r.newMonthFee !== undefined) update.transportFeeMonth = r.newMonthFee
-            if (Object.keys(update).length > 0) updateDeliveryNote(r.dnId, update)
-          }
-        }
-      }
     }
 
     onClose()
@@ -341,52 +330,19 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
                   </div>
                 </div>
 
-                {/* 112.1/115: Transport fee recalc preview */}
-                {recalcPreviewData && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 space-y-3">
-                    <p className="text-sm font-medium text-blue-800">⚠ ค่ารถจะเปลี่ยนเพราะจำนวนชิ้นเปลี่ยน</p>
-                    <table className="w-full text-sm">
-                      <tbody>
-                        {recalcPreviewData.tripChanged && (
-                          <tr className="border-b border-blue-100">
-                            <td className="py-1.5 text-slate-700">ค่ารถ (ครั้ง) — SD นี้</td>
-                            <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(recalcPreviewData.oldTripFee)}</td>
-                            <td className="py-1.5 text-center text-slate-400 px-1">→</td>
-                            <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(recalcPreviewData.newTripFee)}</td>
-                          </tr>
-                        )}
-                        {recalcPreviewData.thisMonthChanged && (
-                          <tr className="border-b border-blue-100">
-                            <td className="py-1.5 text-slate-700">ค่ารถ (เดือน) — SD นี้</td>
-                            <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(recalcPreviewData.oldMonthFee)}</td>
-                            <td className="py-1.5 text-center text-slate-400 px-1">→</td>
-                            <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(recalcPreviewData.newMonthFee || 0)}</td>
-                          </tr>
-                        )}
-                        {recalcPreviewData.otherMonthChanged && recalcPreviewData.otherDn && (
-                          <tr>
-                            <td className="py-1.5 text-slate-700">ค่ารถ (เดือน) — SD ใบสุดท้าย <span className="font-mono text-xs text-slate-400">({recalcPreviewData.otherDn.noteNumber})</span></td>
-                            <td className="py-1.5 text-right text-red-600 line-through pr-3">{formatCurrency(recalcPreviewData.otherDn.transportFeeMonth || 0)}</td>
-                            <td className="py-1.5 text-center text-slate-400 px-1">→</td>
-                            <td className="py-1.5 text-right text-emerald-600 font-medium">{formatCurrency(recalcPreviewData.otherDnResult?.newMonthFee || 0)}</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                    {recalcPreviewData.hasAdj && (
-                      <p className="text-xs text-blue-600">* คำนวณรวม extra/discount ที่มีอยู่ใน SD แล้ว</p>
-                    )}
-                    <div className="space-y-2 pt-2 border-t border-blue-200">
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="radio" name="discSyncMode" checked={discSyncRecalcMode === 'recalc'} onChange={() => setDiscSyncRecalcMode('recalc')} className="accent-[#1B3A5C]" />
-                        <span className="text-slate-700">อัปเดตค่ารถตามจำนวนใหม่ <span className="text-slate-400">(แนะนำ)</span></span>
-                      </label>
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="radio" name="discSyncMode" checked={discSyncRecalcMode === 'keep'} onChange={() => setDiscSyncRecalcMode('keep')} className="accent-[#1B3A5C]" />
-                        <span className="text-slate-700">เก็บค่ารถเดิม <span className="text-slate-400">(ไม่ recalc)</span></span>
-                      </label>
-                    </div>
-                  </div>
+                {/* 112.1: Transport fee preview — shared pattern เดียวกับ Feature 111 */}
+                {recalcContext && (
+                  <TransportFeeImpactPreview
+                    affectedDn={recalcContext.virtualDN}
+                    customer={recalcContext.customer}
+                    allDeliveryNotes={recalcContext.virtualDNs}
+                    recalcResults={recalcContext.results}
+                    recalcTrip={discSyncRecalcTrip}
+                    setRecalcTrip={setDiscSyncRecalcTrip}
+                    recalcMonth={discSyncRecalcMonth}
+                    setRecalcMonth={setDiscSyncRecalcMonth}
+                    hasAdj={recalcContext.hasAdj}
+                  />
                 )}
               </>
             )}
