@@ -131,6 +131,8 @@ export function recalcTransportAfterSync(
   customer: Customer,
   allDeliveryNotes: DeliveryNote[],
   quotations: Quotation[],
+  adjExtra = 0,    // 112.1/115: existing extra on SD (for accurate threshold)
+  adjDiscount = 0, // 112.1/115: existing discount on SD (for accurate threshold)
 ): RecalcResult[] {
   const results: RecalcResult[] = []
 
@@ -143,12 +145,13 @@ export function recalcTransportAfterSync(
     ? affectedDn.priceSnapshot
     : fallbackPriceMap
 
-  // Recalc trip fee for affected DN
-  const subtotal = affectedDn.items.reduce(
+  // Recalc trip fee for affected DN — use effectiveSubtotal (respects existing extra/discount)
+  const itemSubtotal = affectedDn.items.reduce(
     (s, i) => i.isClaim ? s : s + i.quantity * (pm[i.code] || 0),
     0,
   )
-  const newTripFee = calculateTransportFeeTrip(subtotal, customer)
+  const effectiveSubtotal = Math.max(0, itemSubtotal + adjExtra - adjDiscount)
+  const newTripFee = calculateTransportFeeTrip(effectiveSubtotal, customer)
   results.push({ dnId: affectedDn.id, newTripFee })
 
   // Recalc month fee for last DN of the month (if customer has minPerMonth)
@@ -159,14 +162,15 @@ export function recalcTransportAfterSync(
       .sort((a, b) => b.date.localeCompare(a.date))
     const lastDN = monthDNs[0]
     if (lastDN && !lastDN.isBilled) {
-      // Calc month total — use new tripFee for affectedDn, original for others
+      // Calc month total — use effectiveSubtotal for affectedDn, original for others
       let monthTotal = 0
       for (const d of monthDNs) {
         const isAffected = d.id === affectedDn.id
         const dPm = isAffected ? pm : (d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0 ? d.priceSnapshot : fallbackPriceMap)
         const dSubtotal = d.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (dPm[i.code] || 0), 0)
+        const dEffective = isAffected ? effectiveSubtotal : dSubtotal
         const dTripFee = isAffected ? newTripFee : (d.transportFeeTrip || 0)
-        monthTotal += dSubtotal + dTripFee
+        monthTotal += dEffective + dTripFee
       }
       const newMonthFee = monthTotal < customer.monthlyFlatRate
         ? customer.monthlyFlatRate - monthTotal

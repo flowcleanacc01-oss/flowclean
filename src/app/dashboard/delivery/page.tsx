@@ -1710,8 +1710,8 @@ export default function DeliveryPage() {
           const cust = dn ? getCustomer(dn.customerId) : null
           if (!dn || !lf || !cust) return null
 
-          // Recalc preview (uses dn with new quantity from onChange)
-          const recalcResults = recalcTransportAfterSync(dn, cust, deliveryNotes, quotations)
+          // Recalc preview — pass existing extra/discount so threshold is accurate (115)
+          const recalcResults = recalcTransportAfterSync(dn, cust, deliveryNotes, quotations, dn.extraCharge || 0, dn.discount || 0)
           const thisDnRecalc = recalcResults.find(r => r.dnId === dn.id)
           const otherDnRecalc = recalcResults.find(r => r.dnId !== dn.id)
           const otherDn = otherDnRecalc ? deliveryNotes.find(d => d.id === otherDnRecalc.dnId) : null
