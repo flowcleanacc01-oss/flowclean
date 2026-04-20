@@ -21,6 +21,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import DiscrepancyHelperModal from '@/components/DiscrepancyHelperModal'
+import RevenueTrendChart from '@/components/RevenueTrendChart'
 
 export default function DashboardPage() {
   const {
@@ -184,6 +185,13 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* B2: Revenue Trend Chart (accountant + admin only) */}
+      {showFinancial && (
+        <div className="mb-6">
+          <RevenueTrendChart billingStatements={billingStatements} months={12} />
         </div>
       )}
 
