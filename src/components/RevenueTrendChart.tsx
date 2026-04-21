@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, cn } from '@/lib/utils'
 import type { BillingStatement } from '@/types'
 
 interface Props {
@@ -71,13 +71,15 @@ export default function RevenueTrendChart({ billingStatements, months = 12 }: Pr
   // Chart dimensions
   const chartH = 180
   const barGap = 4
-  const bottomPad = 28 // for month labels
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-slate-700">แนวโน้มรายได้ ({months} เดือน)</h3>
+          <h3 className="text-sm font-semibold text-slate-700">
+            ยอดที่วางบิลแต่ละเดือน (ก่อน VAT)
+            <span className="text-slate-400 font-normal"> — แนวโน้มรายได้ ({months} เดือน)</span>
+          </h3>
           <p className="text-[11px] text-slate-500 mt-0.5">รวม {formatCurrency(total)} · เฉลี่ย/เดือน {formatCurrency(avg)}</p>
         </div>
         {prev > 0 && (
@@ -115,10 +117,10 @@ export default function RevenueTrendChart({ billingStatements, months = 12 }: Pr
         )}
       </div>
 
-      {/* Chart */}
+      {/* Chart — SVG bars (stretch) + HTML labels (no stretch) — 129.5 font fix */}
       <svg
-        viewBox={`0 0 ${data.length * 40} ${chartH + bottomPad}`}
-        className="w-full h-[208px]"
+        viewBox={`0 0 ${data.length * 40} ${chartH}`}
+        className="w-full h-[180px]"
         preserveAspectRatio="none"
       >
         {/* Horizontal gridlines (25/50/75%) */}
@@ -157,7 +159,7 @@ export default function RevenueTrendChart({ billingStatements, months = 12 }: Pr
               className="cursor-pointer"
             >
               {/* Invisible hit area */}
-              <rect x={i * 40} y="0" width="40" height={chartH + bottomPad} fill="transparent" />
+              <rect x={i * 40} y="0" width="40" height={chartH} fill="transparent" />
               {/* Bar */}
               <rect
                 x={x} y={y} width={w} height={h}
@@ -165,16 +167,6 @@ export default function RevenueTrendChart({ billingStatements, months = 12 }: Pr
                 fill={isHover ? '#1B3A5C' : isLast ? '#3DD8D8' : '#93c5fd'}
                 className="transition-colors"
               />
-              {/* Month label */}
-              <text
-                x={i * 40 + 20}
-                y={chartH + 14}
-                textAnchor="middle"
-                className={`text-[9px] ${isHover ? 'fill-slate-700 font-semibold' : 'fill-slate-500'}`}
-                style={{ fontSize: '10px' }}
-              >
-                {d.label}
-              </text>
               {/* Zero-value dash */}
               {d.value === 0 && (
                 <line x1={x} x2={x + w} y1={chartH - 1} y2={chartH - 1} stroke="#cbd5e1" strokeWidth="1" />
@@ -183,6 +175,30 @@ export default function RevenueTrendChart({ billingStatements, months = 12 }: Pr
           )
         })}
       </svg>
+
+      {/* X-axis labels — HTML (ไม่ stretch, font สัดส่วนปกติ) — 129.5 */}
+      <div className="flex mt-1.5 pb-1">
+        {data.map((d, i) => {
+          const isHover = hoverIdx === i
+          const isLast = i === data.length - 1
+          return (
+            <div
+              key={d.key}
+              onMouseEnter={() => setHoverIdx(i)}
+              onMouseLeave={() => setHoverIdx(null)}
+              onTouchStart={() => setHoverIdx(i)}
+              className={cn(
+                'flex-1 text-center text-[11px] cursor-pointer transition-colors select-none',
+                isHover ? 'text-[#1B3A5C] font-semibold'
+                  : isLast ? 'text-[#1B3A5C] font-medium'
+                  : 'text-slate-500'
+              )}
+            >
+              {d.label}
+            </div>
+          )
+        })}
+      </div>
 
       {/* Legend */}
       <div className="flex items-center gap-4 mt-2 text-[10px] text-slate-500">

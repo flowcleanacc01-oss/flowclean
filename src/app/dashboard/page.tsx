@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
-import { formatNumber, formatCurrency, formatDateShort, cn, todayISO } from '@/lib/utils'
+import { formatNumber, formatCurrency, formatDateShort, cn, todayISO, buildPriceMapFromQT } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, ALL_LINEN_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus } from '@/types'
 import { hasDiscrepancies } from '@/lib/discrepancy'
 import { canViewFinancialDashboard } from '@/lib/permissions'
@@ -26,7 +26,7 @@ import RevenueTrendChart from '@/components/RevenueTrendChart'
 export default function DashboardPage() {
   const {
     currentUser,
-    linenForms, billingStatements,
+    linenForms, billingStatements, deliveryNotes, quotations,
     customers, getCustomer, getCarryOver,
   } = useStore()
 
@@ -63,14 +63,31 @@ export default function DashboardPage() {
   const financialStats = useMemo(() => {
     const currentMonth = today.slice(0, 7) // YYYY-MM
 
-    // รายได้เดือนนี้ (subtotal ก่อน VAT)
+    // ยอดที่วางบิลเดือนนี้ (subtotal ก่อน VAT) — 129.2
     const monthBills = billingStatements.filter(b => b.billingMonth === currentMonth)
     const revenueThisMonth = monthBills.reduce((s, b) => s + b.subtotal, 0)
 
-    // บิลค้างชำระ (sent + เกินกำหนด)
-    const overdueBills = billingStatements.filter(b => b.status === 'sent' && b.dueDate < today)
-    const overdueTotal = overdueBills.reduce((s, b) => s + b.netPayable, 0)
-    const overdueCount = overdueBills.length
+    // บิลค้างชำระ — ทุกใบ status=sent (ไม่จำกัดเวลา, 128.2)
+    const unpaidBills = billingStatements.filter(b => b.status === 'sent')
+    const unpaidTotal = unpaidBills.reduce((s, b) => s + b.netPayable, 0)
+    const unpaidCount = unpaidBills.length
+    const overdueCount = unpaidBills.filter(b => b.dueDate < today).length
+    const overdueTotal = unpaidBills.filter(b => b.dueDate < today).reduce((s, b) => s + b.netPayable, 0)
+
+    // ยอดใบส่งของเดือนนี้ (ก่อน VAT) — sum SD totals ใน currentMonth (129.3)
+    const monthSDs = deliveryNotes.filter(d => d.date.startsWith(currentMonth))
+    const sdAmountThisMonth = monthSDs.reduce((sum, dn) => {
+      const customer = getCustomer(dn.customerId)
+      if (!customer) return sum
+      const isPer = customer.enablePerPiece ?? true
+      const priceMap = (dn.priceSnapshot && Object.keys(dn.priceSnapshot).length > 0)
+        ? dn.priceSnapshot
+        : buildPriceMapFromQT(dn.customerId, quotations)
+      const itemSubtotal = isPer
+        ? dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
+        : 0
+      return sum + itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0) + (dn.extraCharge || 0) - (dn.discount || 0)
+    }, 0)
 
     // ลูกค้า Top 5 เดือนนี้ (ตามยอด subtotal)
     const custRevMap = new Map<string, number>()
@@ -82,8 +99,8 @@ export default function DashboardPage() {
       .slice(0, 5)
       .map(([customerId, revenue]) => ({ customerId, revenue }))
 
-    return { revenueThisMonth, overdueTotal, overdueCount, top5Customers }
-  }, [billingStatements, today])
+    return { revenueThisMonth, unpaidTotal, unpaidCount, overdueTotal, overdueCount, sdAmountThisMonth, top5Customers }
+  }, [billingStatements, deliveryNotes, quotations, getCustomer, today])
 
   // Pipeline counts by status
   const pipeline = useMemo(() => {
@@ -160,28 +177,51 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Financial Cards (69: เฉพาะ accountant + admin) */}
+      {/* Financial Cards (69: เฉพาะ accountant + admin) — 129: 3 cards */}
       {showFinancial && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {/* 129.1: บิลค้างชำระ — ซ้ายสุด (ทุกใบค้างชำระ ไม่จำกัดเวลา, 128.2) */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-emerald-50 text-emerald-600">
-                <Banknote className="w-5 h-5" />
+              <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0',
+                financialStats.overdueCount > 0 ? 'bg-red-50 text-red-600' : financialStats.unpaidCount > 0 ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400')}>
+                <Receipt className="w-5 h-5" />
               </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-800">{formatCurrency(financialStats.revenueThisMonth)}</p>
-                <p className="text-xs text-slate-500">รายได้เดือนนี้ (ก่อน VAT)</p>
+              <div className="min-w-0">
+                <p className={cn('text-2xl font-bold',
+                  financialStats.overdueCount > 0 ? 'text-red-600' : 'text-slate-800')}>
+                  {formatCurrency(financialStats.unpaidTotal)}
+                </p>
+                <p className="text-xs text-slate-500">บิลค้างชำระ ({financialStats.unpaidCount} ใบ)</p>
+                {financialStats.overdueCount > 0 && (
+                  <p className="text-[11px] text-red-600 mt-0.5">⚠ ในนี้เกินกำหนด {financialStats.overdueCount} ใบ · {formatCurrency(financialStats.overdueTotal)}</p>
+                )}
               </div>
             </div>
           </div>
+
+          {/* 129.2: ยอดที่วางบิลเดือนนี้ (ก่อน VAT) — กลาง */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="flex items-center gap-3">
-              <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', financialStats.overdueCount > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400')}>
-                <Receipt className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-emerald-50 text-emerald-600 flex-shrink-0">
+                <Banknote className="w-5 h-5" />
               </div>
-              <div>
-                <p className={cn('text-2xl font-bold', financialStats.overdueCount > 0 ? 'text-red-600' : 'text-slate-800')}>{formatCurrency(financialStats.overdueTotal)}</p>
-                <p className="text-xs text-slate-500">บิลค้างชำระ ({financialStats.overdueCount} ใบ)</p>
+              <div className="min-w-0">
+                <p className="text-2xl font-bold text-slate-800">{formatCurrency(financialStats.revenueThisMonth)}</p>
+                <p className="text-xs text-slate-500">ยอดที่วางบิลเดือนนี้ (ก่อน VAT)</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 129.3: ยอดใบส่งของเดือนนี้ (ก่อน VAT) — ขวาสุด */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600 flex-shrink-0">
+                <Truck className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-2xl font-bold text-slate-800">{formatCurrency(financialStats.sdAmountThisMonth)}</p>
+                <p className="text-xs text-slate-500">ยอดใบส่งของเดือนนี้ (ก่อน VAT)</p>
               </div>
             </div>
           </div>
