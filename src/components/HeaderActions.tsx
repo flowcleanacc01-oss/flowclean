@@ -6,13 +6,13 @@ import GlobalSearchModal from './GlobalSearchModal'
 import NotificationBell from './NotificationBell'
 
 /**
- * HeaderActions (Features A1 + C1)
+ * HeaderActions (Features A1 + C1 + 121)
  *
- * Floating top-right bar ที่มี:
+ * Inline top bar actions (no fixed positioning):
  * - Search (Cmd+K / Ctrl+K) → GlobalSearchModal
  * - Bell 🔔 → NotificationBell panel
  *
- * Mounted ใน dashboard/layout.tsx
+ * Rendered inside sticky top bar in dashboard/layout.tsx (Feature 121)
  */
 export default function HeaderActions() {
   const [searchOpen, setSearchOpen] = useState(false)
@@ -31,7 +31,7 @@ export default function HeaderActions() {
 
   return (
     <>
-      <div className="fixed top-3 right-3 lg:top-4 lg:right-4 z-40 flex items-center gap-2">
+      <div className="flex items-center gap-2">
         {/* Search trigger */}
         <button
           onClick={() => setSearchOpen(true)}
