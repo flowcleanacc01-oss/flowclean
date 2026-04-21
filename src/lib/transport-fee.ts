@@ -1,14 +1,35 @@
-import type { Customer, DeliveryNote } from '@/types'
+import type { Customer, DeliveryNote, LinenForm } from '@/types'
 
 /**
- * Comparator สำหรับเรียง DN "ใบสุดท้ายของเดือน" ก่อน (Feature 118 fix)
- * - Date desc เป็นหลัก
- * - noteNumber desc เป็น tiebreaker (ป้องกันกรณีหลาย SD วันเดียวกัน)
+ * Operational date ของ DN — อิงกับ LF.date ล่าสุดที่ DN ผูกอยู่ (Feature 120)
+ *
+ * เหตุผล: LF = หลักฐานงานจริง, SD = paperwork ที่สร้างใหม่ได้
+ * การจัดลำดับ "ใบสุดท้ายของเดือน" ควรอิง operational (LF) ไม่ใช่ paperwork (SD.date)
+ *
+ * Fallback → SD.date ในเคสพิเศษ:
+ * - SD ไม่มี LF (linenFormIds ว่าง)
+ * - LF ที่ผูกถูกลบหมด (orphaned linenFormIds)
+ */
+export function getOperationalDate(dn: DeliveryNote, linenForms: LinenForm[]): string {
+  if (!dn.linenFormIds || dn.linenFormIds.length === 0) return dn.date
+  const linked = linenForms.filter(lf => dn.linenFormIds.includes(lf.id))
+  if (linked.length === 0) return dn.date
+  return linked.reduce((max, lf) => (lf.date > max ? lf.date : max), linked[0].date)
+}
+
+/**
+ * Comparator factory สำหรับเรียง DN "ใบสุดท้ายของเดือน" ก่อน (Feature 120)
+ * - Operational date (max LF.date) desc เป็นหลัก
+ * - noteNumber desc เป็น tiebreaker
  *
  * ใช้กับทุกจุดที่เลือก "ใบสุดท้ายของเดือน" สำหรับ month fee recalc
  */
-export function compareDNByLastOfMonth<T extends { date: string; noteNumber: string }>(a: T, b: T): number {
-  return b.date.localeCompare(a.date) || b.noteNumber.localeCompare(a.noteNumber)
+export function createDNLastOfMonthCompare(linenForms: LinenForm[]) {
+  return (a: DeliveryNote, b: DeliveryNote): number => {
+    const aDate = getOperationalDate(a, linenForms)
+    const bDate = getOperationalDate(b, linenForms)
+    return bDate.localeCompare(aDate) || b.noteNumber.localeCompare(a.noteNumber)
+  }
 }
 
 /**

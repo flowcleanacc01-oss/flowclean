@@ -1,8 +1,8 @@
 'use client'
 
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
-import { compareDNByLastOfMonth } from '@/lib/transport-fee'
-import type { DeliveryNote, Customer } from '@/types'
+import { createDNLastOfMonthCompare } from '@/lib/transport-fee'
+import type { DeliveryNote, Customer, LinenForm } from '@/types'
 import type { RecalcResult } from '@/lib/sync-discrepancy'
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
   customer: Customer
   /** DN ทั้งหมด (สำหรับ filter เดือนเดียวกัน) — อาจเป็น virtual (qty ใหม่) */
   allDeliveryNotes: DeliveryNote[]
+  /** LFs ทั้งหมด — ใช้คำนวณ operational date (120) สำหรับ sort "last of month" */
+  linenForms: LinenForm[]
   /** ผล recalc จาก recalcTransportAfterSync หรือ recalcTransportAfterAdj */
   recalcResults: RecalcResult[]
   recalcTrip: boolean
@@ -48,7 +50,7 @@ interface Props {
  * Render null ถ้าไม่มีค่ารถอะไรเปลี่ยน
  */
 export default function TransportFeeImpactPreview({
-  affectedDn, customer, allDeliveryNotes, recalcResults,
+  affectedDn, customer, allDeliveryNotes, linenForms, recalcResults,
   recalcTrip, setRecalcTrip, recalcMonth, setRecalcMonth, hasAdj, adjInfo,
 }: Props) {
   const thisDn = recalcResults.find(r => r.dnId === affectedDn.id)
@@ -73,7 +75,7 @@ export default function TransportFeeImpactPreview({
   const month = affectedDn.date.slice(0, 7)
   const monthDNs = allDeliveryNotes
     .filter(d => d.customerId === customer.id && d.date.startsWith(month))
-    .sort(compareDNByLastOfMonth)
+    .sort(createDNLastOfMonthCompare(linenForms))
   const lastDnOfMonth = monthDNs[0]
 
   // DN ที่ถือ month fee (= ใบสุดท้าย — อาจเป็น affectedDn เอง หรือใบอื่น)

@@ -5,8 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
-import { type DeliveryNoteItem } from '@/types'
-import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal } from '@/lib/transport-fee'
+import { type DeliveryNoteItem, LINEN_FORM_STATUS_CONFIG } from '@/types'
+import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal, getOperationalDate } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
@@ -14,7 +14,7 @@ import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import TransportFeeImpactPreview from '@/components/TransportFeeImpactPreview'
 import { canViewSD } from '@/lib/permissions'
 import { applyRowsSync, recalcTransportAfterSync, recalcTransportAfterAdj } from '@/lib/sync-discrepancy'
-import { compareDNByLastOfMonth } from '@/lib/transport-fee'
+import { createDNLastOfMonthCompare } from '@/lib/transport-fee'
 import { trackRecentCustomer, sortCustomersWithRecent, getRecentCustomerIds } from '@/lib/recent-customers'
 import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
@@ -207,16 +207,26 @@ export default function DeliveryPage() {
     })
   }, [deliveryNotes, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter, billingStatements, selectedDnIds, focusMode, focusIds])
 
-  // Forms available for delivery (confirmed status)
+  // Forms available for delivery (confirmed status) — sorted oldest first (122.4b)
   const availableForms = useMemo(() => {
     if (!selCustomerId) return []
     const linkedFormIds = new Set(deliveryNotes.flatMap(dn => dn.linenFormIds))
-    return linenForms.filter(f =>
-      f.customerId === selCustomerId &&
-      f.status === 'confirmed' &&
-      !linkedFormIds.has(f.id)
-    )
+    return linenForms
+      .filter(f =>
+        f.customerId === selCustomerId &&
+        f.status === 'confirmed' &&
+        !linkedFormIds.has(f.id)
+      )
+      .sort((a, b) => a.date.localeCompare(b.date) || a.formNumber.localeCompare(b.formNumber))
   }, [linenForms, selCustomerId, deliveryNotes])
+
+  // 122.4.1: Stuck LFs — ยังไม่ถึง 7/7 + customer เดียวกัน (ไม่แสดงใน availableForms)
+  const stuckFormsForCustomer = useMemo(() => {
+    if (!selCustomerId) return []
+    return linenForms
+      .filter(f => f.customerId === selCustomerId && f.status !== 'confirmed')
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [linenForms, selCustomerId])
 
   const handleCustomerSelect = (custId: string) => {
     setSelCustomerId(custId)
@@ -227,12 +237,12 @@ export default function DeliveryPage() {
   }
 
   const handleFormToggle = (formId: string) => {
-    const updated = selFormIds.includes(formId)
-      ? selFormIds.filter(id => id !== formId)
-      : [...selFormIds, formId]
+    // 122.4(a): Enforce 1:1 LF→SD — ใช้ radio pattern (เลือกแล้วเลือกใหม่แทน ไม่ใช่ toggle)
+    const isCurrentlySelected = selFormIds.includes(formId)
+    const updated = isCurrentlySelected ? [] : [formId]
     setSelFormIds(updated)
 
-    // Default date from first selected LF
+    // Default date from selected LF
     if (updated.length > 0) {
       const firstForm = linenForms.find(f => f.id === updated[0])
       if (firstForm) setDnDate(firstForm.date)
@@ -336,7 +346,7 @@ export default function DeliveryPage() {
       const monthDNs = deliveryNotes.filter(d => d.customerId === selCustomerId && d.date.startsWith(month))
 
       // Clear transportFeeMonth from previous last DN (will recalculate for this new one)
-      const prevLastDN = [...monthDNs].sort(compareDNByLastOfMonth)[0]
+      const prevLastDN = [...monthDNs].sort(createDNLastOfMonthCompare(linenForms))[0]
       if (prevLastDN && prevLastDN.transportFeeMonth > 0) {
         updateDeliveryNote(prevLastDN.id, { transportFeeMonth: 0 })
       }
@@ -695,25 +705,84 @@ export default function DeliveryPage() {
 
           {selCustomerId && (
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">เลือกใบส่งรับผ้า (ลูกค้านับผ้ากลับแล้ว)</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">
+                เลือกใบส่งรับผ้า <span className="text-slate-400 font-normal">(1 LF → 1 SD · เลือกได้ 1 ใบ)</span>
+              </label>
               {availableForms.length > 0 ? (
-                <div className="space-y-2">
-                  {availableForms.map(f => (
-                    <label key={f.id} className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={selFormIds.includes(f.id)}
-                        onChange={() => handleFormToggle(f.id)}
-                        className="rounded border-slate-300" />
-                      <span className="text-sm">
-                        {f.formNumber} — {formatDate(f.date)} ({f.rows.reduce((s, r) => s + (r.col6_factoryPackSend || 0), 0)} ชิ้น)
-                      </span>
-                    </label>
-                  ))}
+                <div className="space-y-1.5">
+                  {availableForms.map((f, idx) => {
+                    const isSelected = selFormIds.includes(f.id)
+                    const isOldest = idx === 0
+                    const selLf = selFormIds[0] ? linenForms.find(lf => lf.id === selFormIds[0]) : null
+                    const isSkippedOlder = selLf && f.date < selLf.date && !isSelected
+                    return (
+                      <label key={f.id} className={cn(
+                        'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer border',
+                        isSelected ? 'border-[#3DD8D8] bg-[#3DD8D8]/5' : 'border-transparent hover:bg-slate-50',
+                        isSkippedOlder && 'bg-amber-50 border-amber-200',
+                      )}>
+                        <input type="radio" name="lfSelect" checked={isSelected}
+                          onChange={() => handleFormToggle(f.id)}
+                          className="text-[#1B3A5C]" />
+                        <span className="text-sm flex-1">
+                          <span className="font-medium">{f.formNumber}</span>
+                          <span className="text-slate-500 mx-1.5">·</span>
+                          {formatDate(f.date)}
+                          <span className="text-slate-400 ml-2">({f.rows.reduce((s, r) => s + (r.col6_factoryPackSend || 0), 0)} ชิ้น)</span>
+                          {isOldest && <span className="ml-2 text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">เก่าสุด · แนะนำ</span>}
+                          {isSkippedOlder && <span className="ml-2 text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">⚠ เก่ากว่าที่เลือก</span>}
+                        </span>
+                      </label>
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700">
                   ไม่มีใบส่งรับผ้าที่สถานะ &quot;ลูกค้านับผ้ากลับแล้ว&quot; — ต้องเลื่อนสถานะใบส่งรับผ้าให้ถึง &quot;ลูกค้านับผ้ากลับแล้ว&quot; ก่อนจึงจะสร้างใบส่งของได้
                 </div>
               )}
+
+              {/* 122.4(b): Warn if user picked non-oldest confirmed LF */}
+              {(() => {
+                if (selFormIds.length === 0) return null
+                const selLf = linenForms.find(lf => lf.id === selFormIds[0])
+                if (!selLf) return null
+                const olderConfirmed = availableForms.filter(f => f.date < selLf.date)
+                if (olderConfirmed.length === 0) return null
+                return (
+                  <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+                    <strong>⚠ ข้ามลำดับ LF:</strong> ยังมี LF confirmed ที่เก่ากว่ายังไม่ได้ออก SD ({olderConfirmed.length} ใบ) — แนะนำออก LF เก่าก่อน
+                    <ul className="mt-1 ml-4 list-disc">
+                      {olderConfirmed.slice(0, 5).map(f => (
+                        <li key={f.id}>{f.formNumber} · {formatDate(f.date)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })()}
+
+              {/* 122.4.1: Warn if older LFs stuck at non-confirmed status (can't be selected) */}
+              {(() => {
+                if (selFormIds.length === 0) return null
+                const selLf = linenForms.find(lf => lf.id === selFormIds[0])
+                if (!selLf) return null
+                const olderStuck = stuckFormsForCustomer.filter(f => f.date < selLf.date)
+                if (olderStuck.length === 0) return null
+                return (
+                  <div className="mt-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-xs text-orange-800">
+                    <strong>⚠ LF เก่ากว่ายังไม่ถึง 7/7 (อาจตกค้าง):</strong> มี {olderStuck.length} ใบที่ยังไม่ confirmed — SD นี้ออกได้ แต่กรุณาตรวจสอบ LF ด้านล่างด้วย
+                    <ul className="mt-1 ml-4 list-disc">
+                      {olderStuck.slice(0, 5).map(f => (
+                        <li key={f.id}>
+                          {f.formNumber} · {formatDate(f.date)} ·{' '}
+                          <span className="font-medium">{(LINEN_FORM_STATUS_CONFIG[f.status]?.label) || f.status}</span>
+                        </li>
+                      ))}
+                      {olderStuck.length > 5 && <li className="italic">...และอีก {olderStuck.length - 5} ใบ</li>}
+                    </ul>
+                  </div>
+                )
+              })()}
             </div>
           )}
 
@@ -836,6 +905,35 @@ export default function DeliveryPage() {
                 ลูกค้า: {detailCustomer.shortName || detailCustomer.name} | วันที่: {formatDate(detailNote.date)}
               </span>
             </div>
+
+            {/* 122.5: Mismatch banner — SD ถือ month fee แต่ไม่ใช่ใบสุดท้ายของเดือนตาม LF.date */}
+            {(() => {
+              if (!(detailNote.transportFeeMonth > 0)) return null
+              if (detailNote.isBilled) return null
+              const month = detailNote.date.slice(0, 7)
+              const monthDNs = deliveryNotes
+                .filter(d => d.customerId === detailNote.customerId && d.date.startsWith(month))
+                .sort(createDNLastOfMonthCompare(linenForms))
+              const lastDN = monthDNs[0]
+              if (!lastDN || lastDN.id === detailNote.id) return null
+              return (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+                  <strong>⚠ ค่ารถเดือนอาจอยู่ผิดใบ:</strong> SD นี้ถือค่ารถเดือน ({formatCurrency(detailNote.transportFeeMonth)}) แต่ตาม logic ใหม่ (LF-based) ใบสุดท้ายของเดือนคือ{' '}
+                  <button onClick={() => { setShowDetail(null); setTimeout(() => setShowDetail(lastDN.id), 50) }}
+                    className="font-mono font-medium text-amber-900 hover:underline">
+                    {lastDN.noteNumber}
+                  </button>
+                  {' '}— แนะนำปรับยอดเพื่อย้ายค่ารถเดือนไปใบที่ถูกต้อง
+                </div>
+              )
+            })()}
+
+            {/* 122.4(a) legacy: Multi-LF SD warning — เคสเดิมที่มี linenFormIds > 1 */}
+            {detailNote.linenFormIds.length > 1 && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-xs text-orange-800">
+                <strong>⚠ SD นี้ผูกกับ {detailNote.linenFormIds.length} LF:</strong> ระบบใหม่บังคับ 1:1 (1 LF → 1 SD) — แนะนำลบ SD นี้แล้วสร้างใหม่แยกตาม LF
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div><span className="text-slate-500">คนขับ:</span> {detailNote.driverName || '-'}</div>
               <div><span className="text-slate-500">ทะเบียน:</span> {detailNote.vehiclePlate || '-'}</div>
@@ -1225,7 +1323,7 @@ export default function DeliveryPage() {
             const customer = getCustomer(dnToDelete.customerId)
             const remainingDNs = deliveryNotes
               .filter(d => d.id !== confirmDeleteId && d.customerId === dnToDelete.customerId && d.date.startsWith(month))
-              .sort(compareDNByLastOfMonth)
+              .sort(createDNLastOfMonthCompare(linenForms))
             if (remainingDNs.length > 0 && customer && customer.enableMinPerMonth) {
               const newLastDN = remainingDNs[0]
               const otherDNs = remainingDNs.filter(d => d.id !== newLastDN.id)
@@ -1359,7 +1457,7 @@ export default function DeliveryPage() {
                         const customer = getCustomer(deletedDN.customerId)
                         const remainingDNs = deliveryNotes
                           .filter(d => d.id !== deletedDN.id && d.customerId === deletedDN.customerId && d.date.startsWith(month))
-                          .sort(compareDNByLastOfMonth)
+                          .sort(createDNLastOfMonthCompare(linenForms))
                         if (remainingDNs.length > 0 && customer && customer.enableMinPerMonth) {
                           const newLastDN = remainingDNs[0]
                           const otherDNs = remainingDNs.filter(d => d.id !== newLastDN.id)
@@ -1481,7 +1579,7 @@ export default function DeliveryPage() {
           // 119.1: respect adjApplyAdj toggle — pass 0,0 if user chose ignore
           const effAdjExtra = adjApplyAdj ? adjExtra : 0
           const effAdjDiscount = adjApplyAdj ? adjDiscount : 0
-          const recalcResults111 = recalcTransportAfterAdj(dn, cust, deliveryNotes, quotations, effAdjExtra, effAdjDiscount)
+          const recalcResults111 = recalcTransportAfterAdj(dn, cust, deliveryNotes, quotations, linenForms, effAdjExtra, effAdjDiscount)
           const thisDnRecalc111 = recalcResults111.find(r => r.dnId === dn.id)
           const otherDnRecalc111 = recalcResults111.find(r => r.dnId !== dn.id)
           const otherDn111 = otherDnRecalc111 ? deliveryNotes.find(d => d.id === otherDnRecalc111.dnId) : null
@@ -1563,6 +1661,7 @@ export default function DeliveryPage() {
                 affectedDn={dn}
                 customer={cust}
                 allDeliveryNotes={deliveryNotes}
+                linenForms={linenForms}
                 recalcResults={recalcResults111}
                 recalcTrip={adjRecalcTrip}
                 setRecalcTrip={setAdjRecalcTrip}
@@ -1644,7 +1743,7 @@ export default function DeliveryPage() {
           // 119.2: respect sdSyncApplyAdj toggle — pass 0,0 if user chose ignore
           const effExtra = sdSyncApplyAdj ? (dn.extraCharge || 0) : 0
           const effDiscount = sdSyncApplyAdj ? (dn.discount || 0) : 0
-          const recalcResults = recalcTransportAfterSync(dn, cust, deliveryNotes, quotations, effExtra, effDiscount)
+          const recalcResults = recalcTransportAfterSync(dn, cust, deliveryNotes, quotations, linenForms, effExtra, effDiscount)
           const hasAdj = (dn.extraCharge || 0) > 0 || (dn.discount || 0) > 0
           const itemName = linenCatalog.find(i => i.code === p.itemCode)?.name || p.itemCode
 
@@ -1678,6 +1777,7 @@ export default function DeliveryPage() {
                 affectedDn={dn}
                 customer={cust}
                 allDeliveryNotes={deliveryNotes}
+                linenForms={linenForms}
                 recalcResults={recalcResults}
                 recalcTrip={sdSyncRecalcTrip}
                 setRecalcTrip={setSdSyncRecalcTrip}

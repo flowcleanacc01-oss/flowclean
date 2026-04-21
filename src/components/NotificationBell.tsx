@@ -2,16 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, AlertCircle, Clock, AlertTriangle, FileText, CheckCheck, Check, RotateCcw } from 'lucide-react'
+import { Bell, AlertCircle, Clock, AlertTriangle, FileText, CheckCheck, Check, RotateCcw, Hourglass } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { cn, formatCurrency, formatDate, todayISO } from '@/lib/utils'
 import { hasDiscrepancies } from '@/lib/discrepancy'
 import { canViewFinancialDashboard } from '@/lib/permissions'
 import { loadAcknowledged, saveAcknowledged, pruneStale } from '@/lib/acknowledged-alerts'
+import { LINEN_FORM_STATUS_CONFIG } from '@/types'
 
 interface Alert {
   id: string
-  kind: 'overdue' | 'dueSoon' | 'discrepancy' | 'qtPending'
+  kind: 'overdue' | 'dueSoon' | 'discrepancy' | 'qtPending' | 'lfStuck'
   icon: typeof Bell
   color: string
   primary: string
@@ -193,6 +194,37 @@ export default function NotificationBell() {
           color: 'text-slate-600',
         })
       }
+    }
+
+    // 5. 122.4.1: LF ค้างสถานะ > 7 วัน (ไม่ถึง confirmed)
+    const lfStuckThreshold = new Date(todayDate)
+    lfStuckThreshold.setDate(todayDate.getDate() - 7)
+    const lfStuckThresholdISO = lfStuckThreshold.toISOString().slice(0, 10)
+    const lfStuck = linenForms
+      .filter(f => f.status !== 'confirmed' && f.date < lfStuckThresholdISO)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(0, 15)
+      .map<Alert>(f => {
+        const c = custMap.get(f.customerId)
+        const days = Math.floor((todayDate.getTime() - new Date(f.date).getTime()) / (1000 * 60 * 60 * 24))
+        const statusLabel = LINEN_FORM_STATUS_CONFIG[f.status]?.label || f.status
+        return {
+          id: f.id,
+          kind: 'lfStuck',
+          icon: Hourglass,
+          color: 'text-purple-600',
+          primary: `${f.formNumber} · ${c?.shortName || c?.name || '-'}`,
+          secondary: `${formatDate(f.date)} · ค้างที่ ${statusLabel} มา ${days} วัน`,
+          href: `/dashboard/linen-forms?detail=${f.id}`,
+        }
+      })
+    if (lfStuck.length > 0) {
+      out.push({
+        title: 'LF ค้างสถานะ (>7 วัน)',
+        key: 'lfStuck',
+        alerts: lfStuck,
+        color: 'text-purple-600',
+      })
     }
 
     return out

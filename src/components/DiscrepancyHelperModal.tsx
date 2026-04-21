@@ -121,7 +121,7 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
     const effExtra = discSyncApplyAdj ? (linkedSD.extraCharge || 0) : 0
     const effDiscount = discSyncApplyAdj ? (linkedSD.discount || 0) : 0
     const results = recalcTransportAfterSync(
-      virtualDN, customer, virtualDNs, quotations,
+      virtualDN, customer, virtualDNs, quotations, linenForms,
       effExtra, effDiscount,
     )
     return {
@@ -336,6 +336,7 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
                     affectedDn={recalcContext.virtualDN}
                     customer={recalcContext.customer}
                     allDeliveryNotes={recalcContext.virtualDNs}
+                    linenForms={linenForms}
                     recalcResults={recalcContext.results}
                     recalcTrip={discSyncRecalcTrip}
                     setRecalcTrip={setDiscSyncRecalcTrip}
