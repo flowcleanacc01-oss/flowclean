@@ -112,179 +112,214 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
   const fmtN = (n: number) => (n === 0 ? '' : n.toLocaleString('en-US'))
   const fmtM = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  // Column width per SD
-  const colW = Math.max(12, Math.floor(110 / Math.max(notes.length, 1)))
+  // 123: Split SDs into pages — max 16 per page, distribute evenly (smaller pages first)
+  // e.g. N=30 → 15+15, N=31 → 15+16, N=47 → 15+16+16
+  const MAX_PER_PAGE = 16
+  const totalSds = notes.length
+  const numPages = totalSds === 0 ? 1 : Math.ceil(totalSds / MAX_PER_PAGE)
+  const baseCount = Math.floor(totalSds / numPages)
+  const extraPages = totalSds % numPages  // number of pages that get baseCount+1
+  const chunks: DeliveryNote[][] = []
+  let cursor = 0
+  for (let i = 0; i < numPages; i++) {
+    // Last `extraPages` pages get +1 (so the smaller page comes first — matches "15+16+16")
+    const size = i >= numPages - extraPages ? baseCount + 1 : baseCount
+    chunks.push(notes.slice(cursor, cursor + size))
+    cursor += size
+  }
+  if (chunks.length === 0) chunks.push([])  // guard zero-SD case
 
   return (
     <div
       id="print-consolidation"
-      style={{ fontFamily: "'Sarabun', 'TH Sarabun New', sans-serif", padding: '6mm 5mm', minWidth: '270mm' }}
+      style={{ fontFamily: "'Sarabun', 'TH Sarabun New', sans-serif" }}
     >
-      {/* Title */}
-      <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11pt', marginBottom: '6px', letterSpacing: '2px' }}>
-        {customer.shortName || customer.name}
-      </div>
-      <div style={{ textAlign: 'center', fontSize: '8pt', marginBottom: '8px', color: '#444' }}>
-        ประจำเดือน {thaiMonth} {thaiYear}
-      </div>
+      {chunks.map((chunk, pageIdx) => {
+        const isLastPage = pageIdx === chunks.length - 1
+        const pageColW = Math.max(12, Math.floor(110 / Math.max(chunk.length, 1)))
+        return (
+          <div
+            key={pageIdx}
+            style={{
+              padding: '6mm 5mm',
+              minWidth: '270mm',
+              pageBreakAfter: isLastPage ? 'auto' : 'always',
+              breakAfter: isLastPage ? 'auto' : 'page',
+            }}
+          >
+            {/* Title — repeat on each page */}
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11pt', marginBottom: '6px', letterSpacing: '2px' }}>
+              {customer.shortName || customer.name}
+            </div>
+            <div style={{ textAlign: 'center', fontSize: '8pt', marginBottom: '8px', color: '#444' }}>
+              ประจำเดือน {thaiMonth} {thaiYear}
+              {chunks.length > 1 && (
+                <span style={{ marginLeft: '8px', color: '#888' }}>(หน้า {pageIdx + 1}/{chunks.length})</span>
+              )}
+            </div>
 
-      {/* Main table — columns: one per SD */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-        <colgroup>
-          <col style={{ width: '18px' }} />   {/* No */}
-          <col style={{ width: '76px' }} />   {/* รายการ */}
-          <col style={{ width: '18px' }} />   {/* ราคา */}
-          <col style={{ width: '28px' }} />   {/* จำนวน */}
-          <col style={{ width: '38px' }} />   {/* เป็นเงิน */}
-          {notes.map(dn => <col key={dn.id} style={{ width: `${colW}px` }} />)}
-        </colgroup>
-        <thead>
-          <tr>
-            <th style={thS}>No</th>
-            <th style={{ ...thS, textAlign: 'left' }}>รายการ</th>
-            <th style={thS}>ราคา</th>
-            <th style={thS}>จำนวน</th>
-            <th style={thS}>เป็นเงิน</th>
-            {notes.map(dn => (
-              <th key={dn.id} style={{ ...thS, fontSize: '6pt', lineHeight: '1.3' }}>
-                <div>{parseInt(dn.date.split('-')[2])}</div>
-                <div style={{ fontSize: '5pt', color: '#888', fontWeight: 'normal' }}>{dn.noteNumber}</div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {/* Item rows */}
-          {items.map((item, idx) => (
-            <tr key={item.code}>
-              <td style={tdC}>{idx + 1}</td>
-              <td style={tdL}>{item.name}</td>
-              <td style={tdC}>{getPrice(item.code) || ''}</td>
-              <td style={tdR}>{fmtN(rowQty[item.code])}</td>
-              <td style={tdR}>{rowAmt[item.code] ? fmtM(rowAmt[item.code]) : ''}</td>
-              {notes.map(dn => (
-                <td key={dn.id} style={{ ...tdC, fontSize: '6pt' }}>
-                  {matrix[item.code][dn.id] ? matrix[item.code][dn.id] : ''}
-                </td>
-              ))}
-            </tr>
-          ))}
+            {/* Main table — columns: one per SD in this chunk */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: '18px' }} />   {/* No */}
+                <col style={{ width: '76px' }} />   {/* รายการ */}
+                <col style={{ width: '18px' }} />   {/* ราคา */}
+                <col style={{ width: '28px' }} />   {/* จำนวน */}
+                <col style={{ width: '38px' }} />   {/* เป็นเงิน */}
+                {chunk.map(dn => <col key={dn.id} style={{ width: `${pageColW}px` }} />)}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th style={thS}>No</th>
+                  <th style={{ ...thS, textAlign: 'left' }}>รายการ</th>
+                  <th style={thS}>ราคา</th>
+                  <th style={thS}>จำนวน</th>
+                  <th style={thS}>เป็นเงิน</th>
+                  {chunk.map(dn => (
+                    <th key={dn.id} style={{ ...thS, fontSize: '6pt', lineHeight: '1.3' }}>
+                      <div>{parseInt(dn.date.split('-')[2])}</div>
+                      <div style={{ fontSize: '5pt', color: '#888', fontWeight: 'normal' }}>{dn.noteNumber}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {/* Item rows — รวม/เป็นเงิน คอลัม แสดงยอดทั้งเดือน (context เต็มทุกหน้า) */}
+                {items.map((item, idx) => (
+                  <tr key={item.code}>
+                    <td style={tdC}>{idx + 1}</td>
+                    <td style={tdL}>{item.name}</td>
+                    <td style={tdC}>{getPrice(item.code) || ''}</td>
+                    <td style={tdR}>{fmtN(rowQty[item.code])}</td>
+                    <td style={tdR}>{rowAmt[item.code] ? fmtM(rowAmt[item.code]) : ''}</td>
+                    {chunk.map(dn => (
+                      <td key={dn.id} style={{ ...tdC, fontSize: '6pt' }}>
+                        {matrix[item.code][dn.id] ? matrix[item.code][dn.id] : ''}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
 
-          {/* ค่ารถ (ครั้ง) row — shown if any SD has trip fee */}
-          {hasTransportTrip && (
-            <tr>
-              <td style={tdC}></td>
-              <td style={tdL}>ค่ารถ (ครั้ง)</td>
-              <td style={tdC}></td>
-              <td style={tdR}></td>
-              <td style={tdR}>{totalTransportTrip ? fmtM(totalTransportTrip) : ''}</td>
-              {notes.map(dn => (
-                <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
-                  {(dn.transportFeeTrip || 0) > 0 ? fmtM(dn.transportFeeTrip) : ''}
-                </td>
-              ))}
-            </tr>
-          )}
+                {/* ค่ารถ (ครั้ง) row */}
+                {hasTransportTrip && (
+                  <tr>
+                    <td style={tdC}></td>
+                    <td style={tdL}>ค่ารถ (ครั้ง)</td>
+                    <td style={tdC}></td>
+                    <td style={tdR}></td>
+                    <td style={tdR}>{totalTransportTrip ? fmtM(totalTransportTrip) : ''}</td>
+                    {chunk.map(dn => (
+                      <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
+                        {(dn.transportFeeTrip || 0) > 0 ? fmtM(dn.transportFeeTrip) : ''}
+                      </td>
+                    ))}
+                  </tr>
+                )}
 
-          {/* ค่ารถ (เดือน) row — shown if any SD has month fee */}
-          {hasTransportMonth && (
-            <tr>
-              <td style={tdC}></td>
-              <td style={tdL}>ค่ารถ (เดือน)</td>
-              <td style={tdC}></td>
-              <td style={tdR}></td>
-              <td style={tdR}>{totalTransportMonth ? fmtM(totalTransportMonth) : ''}</td>
-              {notes.map(dn => (
-                <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
-                  {(dn.transportFeeMonth || 0) > 0 ? fmtM(dn.transportFeeMonth) : ''}
-                </td>
-              ))}
-            </tr>
-          )}
+                {/* ค่ารถ (เดือน) row */}
+                {hasTransportMonth && (
+                  <tr>
+                    <td style={tdC}></td>
+                    <td style={tdL}>ค่ารถ (เดือน)</td>
+                    <td style={tdC}></td>
+                    <td style={tdR}></td>
+                    <td style={tdR}>{totalTransportMonth ? fmtM(totalTransportMonth) : ''}</td>
+                    {chunk.map(dn => (
+                      <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
+                        {(dn.transportFeeMonth || 0) > 0 ? fmtM(dn.transportFeeMonth) : ''}
+                      </td>
+                    ))}
+                  </tr>
+                )}
 
-          {/* ค่าใช้จ่ายเพิ่มเติม row */}
-          {hasExtraCharge && (
-            <tr>
-              <td style={tdC}></td>
-              <td style={tdL}>ค่าใช้จ่ายเพิ่มเติม</td>
-              <td style={tdC}></td>
-              <td style={tdR}></td>
-              <td style={tdR}>{totalExtraCharge ? fmtM(totalExtraCharge) : ''}</td>
-              {notes.map(dn => (
-                <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
-                  {(dn.extraCharge || 0) > 0 ? fmtM(dn.extraCharge!) : ''}
-                </td>
-              ))}
-            </tr>
-          )}
+                {/* ค่าใช้จ่ายเพิ่มเติม row */}
+                {hasExtraCharge && (
+                  <tr>
+                    <td style={tdC}></td>
+                    <td style={tdL}>ค่าใช้จ่ายเพิ่มเติม</td>
+                    <td style={tdC}></td>
+                    <td style={tdR}></td>
+                    <td style={tdR}>{totalExtraCharge ? fmtM(totalExtraCharge) : ''}</td>
+                    {chunk.map(dn => (
+                      <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
+                        {(dn.extraCharge || 0) > 0 ? fmtM(dn.extraCharge!) : ''}
+                      </td>
+                    ))}
+                  </tr>
+                )}
 
-          {/* ส่วนลด row */}
-          {hasDiscount && (
-            <tr>
-              <td style={tdC}></td>
-              <td style={tdL}>ส่วนลด</td>
-              <td style={tdC}></td>
-              <td style={tdR}></td>
-              <td style={tdR}>{totalDiscount ? `-${fmtM(totalDiscount)}` : ''}</td>
-              {notes.map(dn => (
-                <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
-                  {(dn.discount || 0) > 0 ? `-${fmtM(dn.discount!)}` : ''}
-                </td>
-              ))}
-            </tr>
-          )}
+                {/* ส่วนลด row */}
+                {hasDiscount && (
+                  <tr>
+                    <td style={tdC}></td>
+                    <td style={tdL}>ส่วนลด</td>
+                    <td style={tdC}></td>
+                    <td style={tdR}></td>
+                    <td style={tdR}>{totalDiscount ? `-${fmtM(totalDiscount)}` : ''}</td>
+                    {chunk.map(dn => (
+                      <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
+                        {(dn.discount || 0) > 0 ? `-${fmtM(dn.discount!)}` : ''}
+                      </td>
+                    ))}
+                  </tr>
+                )}
 
-          {/* Footer: ยอดรวมทั้งหมด per SD (amount, not qty) */}
-          <tr style={{ borderTop: '1.5px solid #666' }}>
-            <td colSpan={2} style={{ ...tdL, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>
-              ยอดรวมทั้งหมด
-            </td>
-            <td style={{ ...tdC, backgroundColor: '#f0f0f0' }}></td>
-            <td style={{ ...tdR, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}></td>
-            <td style={{ ...tdR, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>{fmtM(subtotal)}</td>
-            {notes.map(dn => (
-              <td key={dn.id} style={{ ...tdR, fontWeight: 'bold', fontSize: '6pt', backgroundColor: '#f0f0f0' }}>
-                {fmtM(dnTotals[dn.id] ?? 0)}
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
+                {/* Footer: ยอดรวมทั้งหมด — left "เป็นเงิน" = subtotal เต็มเดือน, per-SD col = dnTotals */}
+                <tr style={{ borderTop: '1.5px solid #666' }}>
+                  <td colSpan={2} style={{ ...tdL, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>
+                    ยอดรวมทั้งหมด
+                  </td>
+                  <td style={{ ...tdC, backgroundColor: '#f0f0f0' }}></td>
+                  <td style={{ ...tdR, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}></td>
+                  <td style={{ ...tdR, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>{fmtM(subtotal)}</td>
+                  {chunk.map(dn => (
+                    <td key={dn.id} style={{ ...tdR, fontWeight: 'bold', fontSize: '6pt', backgroundColor: '#f0f0f0' }}>
+                      {fmtM(dnTotals[dn.id] ?? 0)}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
 
-      {/* Summary block */}
-      <div style={{ marginTop: '10px', display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-        <div style={{ fontSize: '7pt', color: '#777', minWidth: '120px' }}>
-          รวมหักค่าผ้าทั้งหมด
-        </div>
-        <table style={{ borderCollapse: 'collapse', fontSize: '8pt', minWidth: '200px' }}>
-          <tbody>
-            <tr>
-              <td style={{ padding: '2px 8px 2px 4px', textAlign: 'right', minWidth: '140px' }}>ยอดคงเหลือ</td>
-              <td style={{ padding: '2px 4px', textAlign: 'right', fontWeight: 'bold', minWidth: '70px', borderBottom: '0.5px solid #ccc' }}>{fmtM(subtotal)}</td>
-            </tr>
-            {customer.enableVat && (
-              <tr>
-                <td style={{ padding: '2px 8px 2px 4px', textAlign: 'right' }}>ภาษีมูลค่าเพิ่ม 7% (VAT)</td>
-                <td style={{ padding: '2px 4px', textAlign: 'right', borderBottom: '0.5px solid #ccc' }}>{fmtM(vat)}</td>
-              </tr>
+            {/* Summary block — show only on LAST page */}
+            {isLastPage && (
+              <div style={{ marginTop: '10px', display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+                <div style={{ fontSize: '7pt', color: '#777', minWidth: '120px' }}>
+                  รวมหักค่าผ้าทั้งหมด
+                </div>
+                <table style={{ borderCollapse: 'collapse', fontSize: '8pt', minWidth: '200px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: '2px 8px 2px 4px', textAlign: 'right', minWidth: '140px' }}>ยอดคงเหลือ</td>
+                      <td style={{ padding: '2px 4px', textAlign: 'right', fontWeight: 'bold', minWidth: '70px', borderBottom: '0.5px solid #ccc' }}>{fmtM(subtotal)}</td>
+                    </tr>
+                    {customer.enableVat && (
+                      <tr>
+                        <td style={{ padding: '2px 8px 2px 4px', textAlign: 'right' }}>ภาษีมูลค่าเพิ่ม 7% (VAT)</td>
+                        <td style={{ padding: '2px 4px', textAlign: 'right', borderBottom: '0.5px solid #ccc' }}>{fmtM(vat)}</td>
+                      </tr>
+                    )}
+                    <tr>
+                      <td style={{ padding: '2px 8px 2px 4px', textAlign: 'right' }}>ราคารวม VAT 7%</td>
+                      <td style={{ padding: '2px 4px', textAlign: 'right', borderBottom: '0.5px solid #ccc' }}>{fmtM(totalWithVat)}</td>
+                    </tr>
+                    {customer.enableWithholding && (
+                      <tr>
+                        <td style={{ padding: '2px 8px 2px 4px', textAlign: 'right' }}>ภาษีหัก ณ ที่จ่าย 3%</td>
+                        <td style={{ padding: '2px 4px', textAlign: 'right', borderBottom: '0.5px solid #ccc' }}>{fmtM(wht)}</td>
+                      </tr>
+                    )}
+                    <tr>
+                      <td style={{ padding: '3px 8px 2px 4px', textAlign: 'right', fontWeight: 'bold' }}>จำนวนสุทธิ</td>
+                      <td style={{ padding: '3px 4px', textAlign: 'right', fontWeight: 'bold', borderTop: '1px solid #888' }}>{fmtM(netAmount)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             )}
-            <tr>
-              <td style={{ padding: '2px 8px 2px 4px', textAlign: 'right' }}>ราคารวม VAT 7%</td>
-              <td style={{ padding: '2px 4px', textAlign: 'right', borderBottom: '0.5px solid #ccc' }}>{fmtM(totalWithVat)}</td>
-            </tr>
-            {customer.enableWithholding && (
-              <tr>
-                <td style={{ padding: '2px 8px 2px 4px', textAlign: 'right' }}>ภาษีหัก ณ ที่จ่าย 3%</td>
-                <td style={{ padding: '2px 4px', textAlign: 'right', borderBottom: '0.5px solid #ccc' }}>{fmtM(wht)}</td>
-              </tr>
-            )}
-            <tr>
-              <td style={{ padding: '3px 8px 2px 4px', textAlign: 'right', fontWeight: 'bold' }}>จำนวนสุทธิ</td>
-              <td style={{ padding: '3px 4px', textAlign: 'right', fontWeight: 'bold', borderTop: '1px solid #888' }}>{fmtM(netAmount)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

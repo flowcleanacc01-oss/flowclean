@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, AlertCircle, Clock, AlertTriangle, FileText, CheckCheck } from 'lucide-react'
+import { Bell, AlertCircle, Clock, AlertTriangle, FileText, CheckCheck, Check, RotateCcw } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { cn, formatCurrency, formatDate, todayISO } from '@/lib/utils'
 import { hasDiscrepancies } from '@/lib/discrepancy'
 import { canViewFinancialDashboard } from '@/lib/permissions'
+import { loadAcknowledged, saveAcknowledged, pruneStale } from '@/lib/acknowledged-alerts'
 
 interface Alert {
   id: string
@@ -43,6 +44,29 @@ export default function NotificationBell() {
     currentUser, linenForms, billingStatements, quotations, customers,
   } = useStore()
   const showFinancial = canViewFinancialDashboard(currentUser)
+
+  // 124: Acknowledged alerts — localStorage per user
+  const userId = currentUser?.id || 'anon'
+  const [acked, setAcked] = useState<Set<string>>(() => loadAcknowledged(userId))
+
+  // Reload on user switch
+  useEffect(() => {
+    setAcked(loadAcknowledged(userId))
+  }, [userId])
+
+  const alertKey = (kind: string, id: string) => `${kind}-${id}`
+  const isAcked = (key: string) => acked.has(key)
+
+  const mutateAcked = (next: Set<string>) => {
+    setAcked(next)
+    saveAcknowledged(userId, next)
+  }
+  const acknowledgeOne = (key: string) => {
+    const next = new Set(acked); next.add(key); mutateAcked(next)
+  }
+  const unacknowledgeOne = (key: string) => {
+    const next = new Set(acked); next.delete(key); mutateAcked(next)
+  }
 
   const custMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers])
 
@@ -174,7 +198,42 @@ export default function NotificationBell() {
     return out
   }, [linenForms, billingStatements, quotations, custMap, showFinancial])
 
-  const totalCount = useMemo(() => groups.reduce((s, g) => s + g.alerts.length, 0), [groups])
+  // 124: Active alert keys (for prune + split new/acked)
+  const activeKeys = useMemo(() => {
+    const s = new Set<string>()
+    for (const g of groups) for (const a of g.alerts) s.add(alertKey(a.kind, a.id))
+    return s
+  }, [groups])
+
+  // Auto-prune acked keys that no longer appear in active alerts
+  useEffect(() => {
+    const pruned = pruneStale(acked, activeKeys)
+    if (pruned.size !== acked.size) mutateAcked(pruned)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKeys])
+
+  // 124: Split groups into new (unacknowledged) and seen (acknowledged)
+  const splitGroups = useMemo(() => {
+    const newGroups: AlertGroup[] = []
+    const seenGroups: AlertGroup[] = []
+    for (const g of groups) {
+      const newAlerts = g.alerts.filter(a => !isAcked(alertKey(a.kind, a.id)))
+      const seenAlerts = g.alerts.filter(a => isAcked(alertKey(a.kind, a.id)))
+      if (newAlerts.length > 0) newGroups.push({ ...g, alerts: newAlerts })
+      if (seenAlerts.length > 0) seenGroups.push({ ...g, alerts: seenAlerts })
+    }
+    return { newGroups, seenGroups }
+  }, [groups, acked])
+
+  const newCount = useMemo(() => splitGroups.newGroups.reduce((s, g) => s + g.alerts.length, 0), [splitGroups])
+  const seenCount = useMemo(() => splitGroups.seenGroups.reduce((s, g) => s + g.alerts.length, 0), [splitGroups])
+  const totalCount = newCount + seenCount
+
+  const acknowledgeAll = () => {
+    const next = new Set(acked)
+    for (const g of splitGroups.newGroups) for (const a of g.alerts) next.add(alertKey(a.kind, a.id))
+    mutateAcked(next)
+  }
 
   // Close on outside click
   useEffect(() => {
@@ -218,9 +277,9 @@ export default function NotificationBell() {
         title={totalCount > 0 ? `${totalCount} การแจ้งเตือน` : 'ไม่มีการแจ้งเตือน'}
       >
         <Bell className="w-4 h-4" />
-        {totalCount > 0 && (
+        {newCount > 0 && (
           <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
-            {totalCount > 99 ? '99+' : totalCount}
+            {newCount > 99 ? '99+' : newCount}
           </span>
         )}
       </button>
@@ -232,41 +291,111 @@ export default function NotificationBell() {
               <Bell className="w-4 h-4 text-slate-500" />
               การแจ้งเตือน
             </h3>
-            <span className="text-[11px] text-slate-400">{totalCount} รายการ</span>
+            <div className="flex items-center gap-2">
+              {newCount > 0 && (
+                <button
+                  onClick={acknowledgeAll}
+                  className="text-[10px] text-slate-500 hover:text-[#1B3A5C] hover:bg-slate-100 px-2 py-1 rounded transition-colors flex items-center gap-1"
+                  title="รับทราบทุกการแจ้งเตือนใหม่"
+                >
+                  <CheckCheck className="w-3 h-3" />รับทราบทั้งหมด
+                </button>
+              )}
+              <span className="text-[11px] text-slate-400">
+                {newCount > 0 ? `ใหม่ ${newCount}` : `${seenCount} รายการ`}
+              </span>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {groups.length === 0 ? (
+            {totalCount === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-slate-400">
                 <CheckCheck className="w-10 h-10 mx-auto mb-2 text-emerald-200" />
                 <p>ไม่มีการแจ้งเตือน</p>
                 <p className="text-[11px] text-slate-400 mt-1">ทุกเอกสารเรียบร้อย 🎉</p>
               </div>
             ) : (
-              groups.map(g => (
-                <div key={g.key} className="border-b border-slate-100 last:border-b-0">
-                  <div className={cn('px-4 py-2 bg-slate-50 text-[11px] font-semibold flex items-center justify-between', g.color)}>
-                    <span>{g.title}</span>
-                    <span className="text-slate-400 font-normal">{g.alerts.length}</span>
-                  </div>
-                  {g.alerts.map(a => {
-                    const Icon = a.icon
-                    return (
-                      <button
-                        key={`${a.kind}-${a.id}`}
-                        onClick={() => goTo(a.href)}
-                        className="w-full flex items-start gap-2.5 px-4 py-2.5 hover:bg-slate-50 text-left transition-colors"
-                      >
-                        <Icon className={cn('w-4 h-4 flex-shrink-0 mt-0.5', a.color)} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-slate-800 truncate">{a.primary}</p>
-                          <p className="text-[11px] text-slate-500 truncate">{a.secondary}</p>
+              <>
+                {/* NEW section */}
+                {splitGroups.newGroups.map(g => (
+                  <div key={`new-${g.key}`} className="border-b border-slate-100 last:border-b-0">
+                    <div className={cn('px-4 py-2 bg-slate-50 text-[11px] font-semibold flex items-center justify-between', g.color)}>
+                      <span>{g.title}</span>
+                      <span className="text-slate-400 font-normal">{g.alerts.length}</span>
+                    </div>
+                    {g.alerts.map(a => {
+                      const Icon = a.icon
+                      const key = alertKey(a.kind, a.id)
+                      return (
+                        <div key={key} className="flex items-start hover:bg-slate-50 transition-colors">
+                          <button
+                            onClick={() => goTo(a.href)}
+                            className="flex-1 min-w-0 flex items-start gap-2.5 px-4 py-2.5 text-left"
+                          >
+                            <Icon className={cn('w-4 h-4 flex-shrink-0 mt-0.5', a.color)} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-slate-800 truncate">{a.primary}</p>
+                              <p className="text-[11px] text-slate-500 truncate">{a.secondary}</p>
+                            </div>
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); acknowledgeOne(key) }}
+                            className="flex-shrink-0 px-2 py-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            title="รับทราบ"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
                         </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              ))
+                      )
+                    })}
+                  </div>
+                ))}
+
+                {/* SEEN section (dimmed) */}
+                {splitGroups.seenGroups.length > 0 && (
+                  <>
+                    {splitGroups.newGroups.length > 0 && (
+                      <div className="px-4 py-1.5 bg-slate-100 text-[10px] text-slate-500 font-medium uppercase tracking-wide flex items-center gap-1.5">
+                        <CheckCheck className="w-3 h-3" />
+                        รับทราบแล้ว ({seenCount})
+                      </div>
+                    )}
+                    {splitGroups.seenGroups.map(g => (
+                      <div key={`seen-${g.key}`} className="border-b border-slate-100 last:border-b-0 opacity-60">
+                        <div className={cn('px-4 py-2 bg-slate-50/50 text-[11px] font-semibold flex items-center justify-between text-slate-500')}>
+                          <span>{g.title}</span>
+                          <span className="text-slate-400 font-normal">{g.alerts.length}</span>
+                        </div>
+                        {g.alerts.map(a => {
+                          const Icon = a.icon
+                          const key = alertKey(a.kind, a.id)
+                          return (
+                            <div key={key} className="flex items-start hover:bg-slate-50 transition-colors">
+                              <button
+                                onClick={() => goTo(a.href)}
+                                className="flex-1 min-w-0 flex items-start gap-2.5 px-4 py-2 text-left"
+                              >
+                                <Icon className="w-4 h-4 flex-shrink-0 mt-0.5 text-slate-400" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-slate-500 truncate">{a.primary}</p>
+                                  <p className="text-[11px] text-slate-400 truncate">{a.secondary}</p>
+                                </div>
+                              </button>
+                              <button
+                                onClick={e => { e.stopPropagation(); unacknowledgeOne(key) }}
+                                className="flex-shrink-0 px-2 py-2 text-slate-300 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                title="ยกเลิกการรับทราบ (กลับเป็นใหม่)"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </>
             )}
           </div>
         </div>
