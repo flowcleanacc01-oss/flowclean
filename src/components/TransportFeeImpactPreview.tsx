@@ -19,6 +19,21 @@ interface Props {
   setRecalcMonth: (v: boolean) => void
   /** true ถ้า SD มี extraCharge/discount ที่มีอยู่แล้ว → แสดง note อธิบาย */
   hasAdj?: boolean
+  /**
+   * Feature 119: Toggle "ให้ extra/discount มีผลกับเกณฑ์ขั้นต่ำค่ารถ (ครั้ง+เดือน)"
+   * - render toggle ถ้า extra > 0 หรือ discount > 0
+   * - parent ต้อง re-run recalc functions ใหม่เมื่อ applyToThreshold เปลี่ยน
+   *   (pass 0 แทน extra/discount เมื่อ false → fee คำนวณโดยไม่คิด extra/discount)
+   * - variant: 'existing' = extra/discount ที่มีอยู่แล้วใน SD (Sync modal)
+   *            'editing' = extra/discount ที่กำลังถูกแก้ไข (Adjust modal)
+   */
+  adjInfo?: {
+    extra: number
+    discount: number
+    applyToThreshold: boolean
+    setApplyToThreshold: (v: boolean) => void
+    variant: 'existing' | 'editing'
+  }
 }
 
 /**
@@ -34,7 +49,7 @@ interface Props {
  */
 export default function TransportFeeImpactPreview({
   affectedDn, customer, allDeliveryNotes, recalcResults,
-  recalcTrip, setRecalcTrip, recalcMonth, setRecalcMonth, hasAdj,
+  recalcTrip, setRecalcTrip, recalcMonth, setRecalcMonth, hasAdj, adjInfo,
 }: Props) {
   const thisDn = recalcResults.find(r => r.dnId === affectedDn.id)
   const otherDnResult = recalcResults.find(r => r.dnId !== affectedDn.id)
@@ -51,7 +66,9 @@ export default function TransportFeeImpactPreview({
   const otherMonthFeeWillChange = otherNewMonthFee !== undefined && otherNewMonthFee !== (otherDn?.transportFeeMonth || 0)
   const anyFeeWillChange = tripFeeWillChange || monthFeeWillChange || otherMonthFeeWillChange
 
-  if (!anyFeeWillChange) return null
+  // 119: Render toggle ถ้ามี extra/discount (ให้ user ควบคุมได้) — แม้ fee ไม่เปลี่ยน
+  const showAdjToggle = Boolean(adjInfo && (adjInfo.extra > 0 || adjInfo.discount > 0))
+  if (!anyFeeWillChange && !showAdjToggle) return null
 
   const month = affectedDn.date.slice(0, 7)
   const monthDNs = allDeliveryNotes
@@ -134,6 +151,26 @@ export default function TransportFeeImpactPreview({
 
       {/* Checkbox controls */}
       <div className="px-3 py-3 space-y-2.5 border-t border-blue-200 bg-blue-50">
+        {/* 119: Toggle — ให้ extra/discount มีผลกับเกณฑ์ขั้นต่ำค่ารถ */}
+        {showAdjToggle && adjInfo && (
+          <label className="flex items-start gap-2.5 cursor-pointer pb-2 border-b border-blue-200">
+            <input type="checkbox" checked={adjInfo.applyToThreshold}
+              onChange={e => adjInfo.setApplyToThreshold(e.target.checked)}
+              className="accent-[#1B3A5C] mt-0.5 shrink-0" />
+            <span className="text-sm text-slate-700">
+              รวม {adjInfo.variant === 'editing' ? 'extra/discount ที่กำลังปรับ' : 'extra/discount ที่มีอยู่ใน SD'}
+              {adjInfo.extra > 0 && <span className="mx-1 text-blue-700">+{formatCurrency(adjInfo.extra)}</span>}
+              {adjInfo.discount > 0 && <span className="mx-1 text-orange-700">-{formatCurrency(adjInfo.discount)}</span>}
+              <span className="text-slate-500">ในเกณฑ์ขั้นต่ำค่ารถ (ครั้ง+เดือน)</span>
+              <br />
+              <span className="text-[11px] text-slate-500">
+                {adjInfo.applyToThreshold
+                  ? '✓ คิดรวม — subtotal + extra - discount เทียบกับเกณฑ์'
+                  : '✗ ไม่คิดรวม — เทียบเฉพาะยอดสินค้ากับเกณฑ์'}
+              </span>
+            </span>
+          </label>
+        )}
         {tripFeeWillChange && (
           <label className="flex items-start gap-2.5 cursor-pointer">
             <input type="checkbox" checked={recalcTrip} onChange={e => setRecalcTrip(e.target.checked)}
@@ -158,7 +195,7 @@ export default function TransportFeeImpactPreview({
             </span>
           </label>
         )}
-        {hasAdj && (
+        {hasAdj && !adjInfo && (
           <p className="text-[11px] text-blue-600 pt-2 border-t border-blue-200 mt-1">
             * คำนวณรวม extra/discount ที่มีอยู่ใน SD แล้ว
           </p>

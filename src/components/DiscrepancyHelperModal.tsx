@@ -47,6 +47,8 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
   // 112.1: 2 checkbox แยก (แทน radio) — pattern เดียวกับ Feature 111
   const [discSyncRecalcTrip, setDiscSyncRecalcTrip] = useState(true)
   const [discSyncRecalcMonth, setDiscSyncRecalcMonth] = useState(true)
+  // 119.2: Toggle "รวม extra/discount ที่มีอยู่ใน SD ในเกณฑ์ขั้นต่ำค่ารถ"
+  const [discSyncApplyAdj, setDiscSyncApplyAdj] = useState(true)
 
   // Reset state when modal opens
   useEffect(() => {
@@ -56,6 +58,7 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
     setNewQtyMap(new Map())
     setDiscSyncRecalcTrip(true)
     setDiscSyncRecalcMonth(true)
+    setDiscSyncApplyAdj(true)
   }, [open, initialCustomerId, initialLfId])
 
   // Customer's LFs (status confirmed only)
@@ -114,9 +117,12 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
     })
     const virtualDN = { ...linkedSD, items: updatedItems }
     const virtualDNs = deliveryNotes.map(d => d.id === linkedSD.id ? virtualDN : d)
+    // 119.2: respect discSyncApplyAdj toggle — pass 0,0 if user chose ignore
+    const effExtra = discSyncApplyAdj ? (linkedSD.extraCharge || 0) : 0
+    const effDiscount = discSyncApplyAdj ? (linkedSD.discount || 0) : 0
     const results = recalcTransportAfterSync(
       virtualDN, customer, virtualDNs, quotations,
-      linkedSD.extraCharge || 0, linkedSD.discount || 0,
+      effExtra, effDiscount,
     )
     return {
       virtualDN,
@@ -124,6 +130,8 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
       customer,
       results,
       hasAdj: (linkedSD.extraCharge || 0) > 0 || (linkedSD.discount || 0) > 0,
+      existingExtra: linkedSD.extraCharge || 0,
+      existingDiscount: linkedSD.discount || 0,
     }
   })()
 
@@ -322,6 +330,7 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
                 </div>
 
                 {/* 112.1: Transport fee preview — shared pattern เดียวกับ Feature 111 */}
+                {/* 119.2: adjInfo toggle — ให้ user เลือกว่า extra/discount ที่มีอยู่ต้องคิดเข้าเกณฑ์ค่ารถไหม */}
                 {recalcContext && (
                   <TransportFeeImpactPreview
                     affectedDn={recalcContext.virtualDN}
@@ -333,6 +342,13 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
                     recalcMonth={discSyncRecalcMonth}
                     setRecalcMonth={setDiscSyncRecalcMonth}
                     hasAdj={recalcContext.hasAdj}
+                    adjInfo={recalcContext.hasAdj ? {
+                      extra: recalcContext.existingExtra,
+                      discount: recalcContext.existingDiscount,
+                      applyToThreshold: discSyncApplyAdj,
+                      setApplyToThreshold: setDiscSyncApplyAdj,
+                      variant: 'existing',
+                    } : undefined}
                   />
                 )}
               </>
