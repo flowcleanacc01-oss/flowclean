@@ -157,7 +157,8 @@ export default function CarryOverReportPrint(props: Props) {
   // ---- Title ----
   const titleByMode = mode === 'compare'
     ? 'เปรียบเทียบทุกเคส (1-4)'
-    : `เคส ${mode}: ${CARRY_OVER_MODE_CONFIG[mode].formula} — ${CARRY_OVER_MODE_CONFIG[mode].description}`
+    : `เคส ${mode}: ${CARRY_OVER_MODE_CONFIG[mode].label} (${CARRY_OVER_MODE_CONFIG[mode].description})`
+  const modeHint = mode !== 'compare' ? CARRY_OVER_MODE_CONFIG[mode].hint : undefined
   const titleByView = view === 'monthly' ? 'แจกแจงรายวัน' : 'แจกแจงรายเดือน'
 
   return (
@@ -168,6 +169,7 @@ export default function CarryOverReportPrint(props: Props) {
         <h1 className="text-base font-bold text-[#1B3A5C]">{company.name}</h1>
         <h2 className="text-sm font-bold text-[#1B3A5C] mt-1">รายงานผ้าค้าง/คืน</h2>
         <p className="text-[10px] text-slate-600 mt-1">{titleByMode}</p>
+        {modeHint && <p className="text-[10px] text-slate-500 mt-0.5 italic">({modeHint})</p>}
         <p className="text-[10px] text-slate-500 mt-1">
           ลูกค้า: <strong>{customer.name}</strong>
           {' | '}ช่วงเวลา: <strong>{formatDate(startDate)}</strong> ถึง <strong>{formatDate(endDate)}</strong>
@@ -182,10 +184,26 @@ export default function CarryOverReportPrint(props: Props) {
             <tr className="bg-[#e8eef5]">
               <th className="border border-slate-400 px-2 py-2 text-left w-14">รหัส</th>
               <th className="border border-slate-400 px-2 py-2 text-left">รายการ</th>
-              <th className="border border-slate-400 px-2 py-2 text-right w-24">เคส 1<br /><span className="text-[9px] font-normal text-slate-500">col6−col5</span></th>
-              <th className="border border-slate-400 px-2 py-2 text-right w-24">เคส 2<br /><span className="text-[9px] font-normal text-slate-500">col6−col2</span></th>
-              <th className="border border-slate-400 px-2 py-2 text-right w-24">เคส 3<br /><span className="text-[9px] font-normal text-slate-500">col4−col5</span></th>
-              <th className="border border-slate-400 px-2 py-2 text-right w-24">เคส 4<br /><span className="text-[9px] font-normal text-slate-500">col4−col2</span></th>
+              <th className="border border-slate-400 px-2 py-2 text-right w-28">
+                เคส 1<br />
+                <span className="text-[8.5px] font-normal text-slate-500 leading-tight block">{CARRY_OVER_MODE_CONFIG[1].label}</span>
+                <span className="text-[8px] font-normal text-slate-400 italic leading-tight block">({CARRY_OVER_MODE_CONFIG[1].description})</span>
+              </th>
+              <th className="border border-slate-400 px-2 py-2 text-right w-28">
+                เคส 2<br />
+                <span className="text-[8.5px] font-normal text-slate-500 leading-tight block">{CARRY_OVER_MODE_CONFIG[2].label}</span>
+                <span className="text-[8px] font-normal text-slate-400 italic leading-tight block">({CARRY_OVER_MODE_CONFIG[2].description})</span>
+              </th>
+              <th className="border border-slate-400 px-2 py-2 text-right w-28">
+                เคส 3<br />
+                <span className="text-[8.5px] font-normal text-slate-500 leading-tight block">{CARRY_OVER_MODE_CONFIG[3].label}</span>
+                <span className="text-[8px] font-normal text-slate-400 italic leading-tight block">({CARRY_OVER_MODE_CONFIG[3].description})</span>
+              </th>
+              <th className="border border-slate-400 px-2 py-2 text-right w-28">
+                เคส 4<br />
+                <span className="text-[8.5px] font-normal text-slate-500 leading-tight block">{CARRY_OVER_MODE_CONFIG[4].label}</span>
+                <span className="text-[8px] font-normal text-slate-400 italic leading-tight block">({CARRY_OVER_MODE_CONFIG[4].description})</span>
+              </th>
             </tr>
           </thead>
           <tbody>

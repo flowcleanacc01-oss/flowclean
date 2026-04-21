@@ -701,7 +701,10 @@ export default function ReportsPage() {
 
             {coMode !== 'compare' && (
               <div className="text-[11px] text-slate-500">
-                {CARRY_OVER_MODE_CONFIG[coMode as CarryOverMode].description}
+                ({CARRY_OVER_MODE_CONFIG[coMode as CarryOverMode].description})
+                {CARRY_OVER_MODE_CONFIG[coMode as CarryOverMode].hint && (
+                  <span className="ml-2 italic text-slate-400">({CARRY_OVER_MODE_CONFIG[coMode as CarryOverMode].hint})</span>
+                )}
               </div>
             )}
           </div>
@@ -713,10 +716,26 @@ export default function ReportsPage() {
                 <thead className="bg-slate-50">
                   <tr>
                     <th className="text-left px-4 py-2.5 font-medium text-slate-600">รายการ</th>
-                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-24">เคส 1</th>
-                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-24">เคส 2</th>
-                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-24">เคส 3</th>
-                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-24">เคส 4</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-32">
+                      เคส 1
+                      <span className="block text-[10px] font-normal text-slate-500 leading-tight">{CARRY_OVER_MODE_CONFIG[1].label}</span>
+                      <span className="block text-[10px] font-normal text-slate-400 italic leading-tight">({CARRY_OVER_MODE_CONFIG[1].description})</span>
+                    </th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-32">
+                      เคส 2
+                      <span className="block text-[10px] font-normal text-slate-500 leading-tight">{CARRY_OVER_MODE_CONFIG[2].label}</span>
+                      <span className="block text-[10px] font-normal text-slate-400 italic leading-tight">({CARRY_OVER_MODE_CONFIG[2].description})</span>
+                    </th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-32">
+                      เคส 3
+                      <span className="block text-[10px] font-normal text-slate-500 leading-tight">{CARRY_OVER_MODE_CONFIG[3].label}</span>
+                      <span className="block text-[10px] font-normal text-slate-400 italic leading-tight">({CARRY_OVER_MODE_CONFIG[3].description})</span>
+                    </th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-32">
+                      เคส 4
+                      <span className="block text-[10px] font-normal text-slate-500 leading-tight">{CARRY_OVER_MODE_CONFIG[4].label}</span>
+                      <span className="block text-[10px] font-normal text-slate-400 italic leading-tight">({CARRY_OVER_MODE_CONFIG[4].description})</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

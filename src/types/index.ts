@@ -558,11 +558,11 @@ export interface ProductChecklist {
  */
 export type CarryOverMode = 1 | 2 | 3 | 4
 
-export const CARRY_OVER_MODE_CONFIG: Record<CarryOverMode, { label: string; short: string; formula: string; description: string }> = {
-  1: { label: 'แพคส่ง − โรงซักนับเข้า', short: 'เคส 1', formula: 'col6 − col5', description: 'เชื่อใจฝั่งโรงซักล้วน (ใช้เปิดบิล)' },
-  2: { label: 'แพคส่ง − ลูกค้านับส่ง', short: 'เคส 2', formula: 'col6 − col2', description: 'เชื่อ 2 ฝั่ง (คนนับส่ง)' },
-  3: { label: 'ลูกค้านับกลับ − โรงซักนับเข้า', short: 'เคส 3', formula: 'col4 − col5', description: 'cross check / นับทวน — fair ที่สุด' },
-  4: { label: 'ลูกค้านับกลับ − ลูกค้านับส่ง', short: 'เคส 4', formula: 'col4 − col2', description: 'เชื่อใจฝั่งลูกค้าล้วน' },
+export const CARRY_OVER_MODE_CONFIG: Record<CarryOverMode, { label: string; short: string; formula: string; description: string; hint?: string }> = {
+  1: { label: 'โรงซักแพคส่ง − โรงซักนับเข้า', short: 'เคส 1', formula: 'โรงซักแพคส่ง − โรงซักนับเข้า', description: 'ตามโรงซักนับทั้งหมด', hint: 'ควรเท่ากับเคส 3 ถ้าแก้บิลให้ ลค เรียบร้อย' },
+  2: { label: 'โรงซักแพคส่ง − ลูกค้านับส่ง', short: 'เคส 2', formula: 'โรงซักแพคส่ง − ลูกค้านับส่ง', description: 'ตามฝั่งส่งนับส่ง' },
+  3: { label: 'ลูกค้านับกลับ − โรงซักนับเข้า', short: 'เคส 3', formula: 'ลูกค้านับกลับ − โรงซักนับเข้า', description: 'ตามฝั่งรับนับทวน' },
+  4: { label: 'ลูกค้านับกลับ − ลูกค้านับส่ง', short: 'เคส 4', formula: 'ลูกค้านับกลับ − ลูกค้านับส่ง', description: 'ตามลูกค้านับทั้งหมด' },
 }
 
 export type CarryOverAdjustmentType = 'adjust' | 'reset'
