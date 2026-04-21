@@ -670,6 +670,24 @@ export default function DeliveryPage() {
                 )
               })}
             </tbody>
+            {/* 127: Totals footer — sum of displayed SDs */}
+            {filtered.length > 0 && (() => {
+              const totalItems = filtered.reduce((s, dn) => s + dn.items.reduce((ss, i) => ss + i.quantity, 0), 0)
+              const totalAmount = filtered.reduce((s, dn) => s + getDNTotalAmount(dn), 0)
+              return (
+                <tfoot>
+                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                    <td className="px-2 py-3"></td>
+                    <td colSpan={3} className="px-4 py-3 text-slate-700">
+                      รวม {formatNumber(filtered.length)} รายการ
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-800">{formatNumber(totalItems)}</td>
+                    <td className="px-4 py-3 text-right text-[#1B3A5C]">{formatCurrency(totalAmount)}</td>
+                    <td colSpan={3}></td>
+                  </tr>
+                </tfoot>
+              )
+            })()}
           </table>
         </div>
       </div>

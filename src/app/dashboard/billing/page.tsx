@@ -1135,6 +1135,24 @@ export default function BillingPage() {
                   )
                 })}
               </tbody>
+              {/* 127: Totals footer — sum of displayed WBs */}
+              {filteredBilling.length > 0 && (() => {
+                const totalGrand = filteredBilling.reduce((s, b) => s + b.grandTotal, 0)
+                const totalNet = filteredBilling.reduce((s, b) => s + b.netPayable, 0)
+                return (
+                  <tfoot>
+                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                      <td className="px-2 py-3"></td>
+                      <td colSpan={4} className="px-4 py-3 text-slate-700">
+                        รวม {filteredBilling.length} รายการ
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-800">{formatCurrency(totalGrand)}</td>
+                      <td className="px-4 py-3 text-right text-[#1B3A5C]">{formatCurrency(totalNet)}</td>
+                      <td colSpan={4}></td>
+                    </tr>
+                  </tfoot>
+                )
+              })()}
             </table>
           </div>
         </div>
@@ -1216,6 +1234,22 @@ export default function BillingPage() {
                   )
                 })}
               </tbody>
+              {/* 127: Totals footer — sum of displayed IVs */}
+              {filteredInvoices.length > 0 && (() => {
+                const totalGrand = filteredInvoices.reduce((s, inv) => s + inv.grandTotal, 0)
+                return (
+                  <tfoot>
+                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                      <td className="px-2 py-3"></td>
+                      <td colSpan={3} className="px-4 py-3 text-slate-700">
+                        รวม {filteredInvoices.length} รายการ
+                      </td>
+                      <td className="px-4 py-3 text-right text-[#1B3A5C]">{formatCurrency(totalGrand)}</td>
+                      <td colSpan={3}></td>
+                    </tr>
+                  </tfoot>
+                )
+              })()}
             </table>
           </div>
         </div>
