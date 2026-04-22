@@ -6,7 +6,7 @@ import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { type DeliveryNoteItem, LINEN_FORM_STATUS_CONFIG } from '@/types'
-import { calculateTransportFeeTrip, calculateTransportFeeMonth, calculateDNSubtotal, getOperationalDate } from '@/lib/transport-fee'
+import { calculateTransportFeeTrip, calculateDNSubtotal } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
@@ -351,24 +351,13 @@ export default function DeliveryPage() {
 
     // Calculate item subtotal for trip fee
     let tripFee = 0
-    let monthFee = 0
     if (customer) {
       const priceMap = buildPriceMapFromQT(selCustomerId, quotations)
       const itemSubtotal = deliveryItems.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
       tripFee = calculateTransportFeeTrip(itemSubtotal, customer)
-
-      // Monthly fee: find existing DNs for same customer+month
-      const monthDNs = deliveryNotes.filter(d => d.customerId === selCustomerId && d.date.startsWith(month))
-
-      // Clear transportFeeMonth from previous last DN (will recalculate for this new one)
-      const prevLastDN = [...monthDNs].sort(createDNLastOfMonthCompare(linenForms))[0]
-      if (prevLastDN && prevLastDN.transportFeeMonth > 0) {
-        updateDeliveryNote(prevLastDN.id, { transportFeeMonth: 0 })
-      }
-
-      monthFee = calculateTransportFeeMonth(monthDNs, customer, itemSubtotal, tripFee, priceMap)
     }
 
+    // 133: Create SD first (month fee = 0 initially) — post-process จะกำหนดค่ารถเดือนใบที่ถูกต้อง
     const newDN = addDeliveryNote({
       customerId: selCustomerId,
       linenFormIds: selFormIds,
@@ -382,7 +371,7 @@ export default function DeliveryPage() {
       isExported: false,
       isBilled: false,
       transportFeeTrip: tripFee,
-      transportFeeMonth: monthFee,
+      transportFeeMonth: 0,
       discount: dnDiscount,
       discountNote: dnDiscountNote,
       extraCharge: dnExtraCharge,
@@ -390,6 +379,39 @@ export default function DeliveryPage() {
       priceSnapshot: buildPriceMapFromQT(selCustomerId, quotations),
       notes: dnNotes,
     })
+
+    // 133: Month fee post-process — robust against out-of-order SD creation
+    // เดิม: สมมติว่า SD ใหม่จะเป็นใบสุดท้ายเสมอ → เมื่อ user สร้าง SD สลับวัน, fee ค้างที่ใบผิด
+    // ใหม่: สร้าง SD ก่อน แล้ว (1) clear ALL stale month fees ในเดือน (2) re-sort หา true last (3) apply ครั้งเดียว
+    if (customer && customer.enableMinPerMonth && customer.monthlyFlatRate > 0) {
+      const monthDNsBeforeNew = deliveryNotes.filter(d => d.customerId === selCustomerId && d.date.startsWith(month))
+      const allDNsInMonth = [...monthDNsBeforeNew, newDN]
+
+      // (1) Clear ทุก stale month fee ในเดือน (defensive — กัน bug เก่า)
+      for (const d of monthDNsBeforeNew) {
+        if ((d.transportFeeMonth || 0) > 0) {
+          updateDeliveryNote(d.id, { transportFeeMonth: 0 })
+        }
+      }
+
+      // (2) หา true last-of-month โดยใช้ LF-based sort (รวม SD ใหม่ด้วย)
+      const lastDN = [...allDNsInMonth].sort(createDNLastOfMonthCompare(linenForms))[0]
+
+      // (3) คำนวณ month fee จากยอดรวมทั้งเดือน แล้ว apply ให้ใบที่ถูกต้อง
+      const monthTotal = allDNsInMonth.reduce((s, d) => {
+        const dPriceMap = d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0
+          ? d.priceSnapshot
+          : buildPriceMapFromQT(d.customerId, quotations)
+        return s + calculateDNSubtotal(d, customer, dPriceMap) + (d.transportFeeTrip || 0)
+      }, 0)
+      const computedMonthFee = monthTotal < customer.monthlyFlatRate
+        ? Math.max(0, customer.monthlyFlatRate - monthTotal)
+        : 0
+
+      if (computedMonthFee > 0) {
+        updateDeliveryNote(lastDN.id, { transportFeeMonth: computedMonthFee })
+      }
+    }
     setActiveRowId(newDN.id)
     scrollToActiveRow(newDN.id)
     setShowCreate(false)
