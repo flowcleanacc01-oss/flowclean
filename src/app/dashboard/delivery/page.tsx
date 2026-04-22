@@ -220,13 +220,28 @@ export default function DeliveryPage() {
       .sort((a, b) => a.date.localeCompare(b.date) || a.formNumber.localeCompare(b.formNumber))
   }, [linenForms, selCustomerId, deliveryNotes])
 
-  // 122.4.1: Stuck LFs — ยังไม่ถึง 7/7 + customer เดียวกัน (ไม่แสดงใน availableForms)
+  // 122.4.1: Stuck LFs — ยังไม่ถึง 7/7 + customer เดียวกัน (ไม่มี SD ผูกแล้ว)
   const stuckFormsForCustomer = useMemo(() => {
     if (!selCustomerId) return []
+    const linkedFormIds = new Set(deliveryNotes.flatMap(dn => dn.linenFormIds))
     return linenForms
-      .filter(f => f.customerId === selCustomerId && f.status !== 'confirmed')
-      .sort((a, b) => a.date.localeCompare(b.date))
-  }, [linenForms, selCustomerId])
+      .filter(f =>
+        f.customerId === selCustomerId &&
+        f.status !== 'confirmed' &&
+        !linkedFormIds.has(f.id)
+      )
+      .sort((a, b) => a.date.localeCompare(b.date) || a.formNumber.localeCompare(b.formNumber))
+  }, [linenForms, selCustomerId, deliveryNotes])
+
+  // 131: รวม confirmed (เลือกได้) + stuck (แสดงสีเทา) เรียงตาม date asc — ให้ user เห็น sequence LF เต็ม
+  const allFormsForSelect = useMemo(() => {
+    const items: Array<{ form: typeof linenForms[number]; selectable: boolean }> = []
+    for (const f of availableForms) items.push({ form: f, selectable: true })
+    for (const f of stuckFormsForCustomer) items.push({ form: f, selectable: false })
+    return items.sort((a, b) =>
+      a.form.date.localeCompare(b.form.date) || a.form.formNumber.localeCompare(b.form.formNumber)
+    )
+  }, [availableForms, stuckFormsForCustomer])
 
   const handleCustomerSelect = (custId: string) => {
     setSelCustomerId(custId)
@@ -724,15 +739,41 @@ export default function DeliveryPage() {
           {selCustomerId && (
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">
-                เลือกใบส่งรับผ้า <span className="text-slate-400 font-normal">(1 LF → 1 SD · เลือกได้ 1 ใบ)</span>
+                เลือกใบส่งรับผ้า <span className="text-slate-400 font-normal">(1 LF → 1 SD · เลือกได้ 1 ใบ · LF สีเทา = ยังไม่พร้อม)</span>
               </label>
-              {availableForms.length > 0 ? (
+              {allFormsForSelect.length > 0 ? (
                 <div className="space-y-1.5">
-                  {availableForms.map((f, idx) => {
+                  {allFormsForSelect.map(({ form: f, selectable }) => {
                     const isSelected = selFormIds.includes(f.id)
-                    const isOldest = idx === 0
+                    const firstSelectableId = availableForms[0]?.id
+                    const isOldestSelectable = f.id === firstSelectableId
                     const selLf = selFormIds[0] ? linenForms.find(lf => lf.id === selFormIds[0]) : null
-                    const isSkippedOlder = selLf && f.date < selLf.date && !isSelected
+                    const isSkippedOlder = selectable && selLf && f.date < selLf.date && !isSelected
+                    const statusCfg = LINEN_FORM_STATUS_CONFIG[f.status]
+                    const qty = f.rows.reduce((s, r) => s + (r.col6_factoryPackSend || 0), 0)
+
+                    if (!selectable) {
+                      // 131: stuck LF (non-confirmed) — แสดงสีเทา, disabled, มี status badge ด้านหลัง
+                      return (
+                        <div key={f.id}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded border border-dashed border-slate-200 bg-slate-50/50 opacity-70 cursor-not-allowed"
+                          title="LF นี้ยังไม่ถึงสถานะ 7/7 — ออก SD ยังไม่ได้ ต้องเลื่อนสถานะก่อน"
+                        >
+                          <input type="radio" disabled className="opacity-40" />
+                          <span className="text-sm flex-1 text-slate-500">
+                            <span className="font-medium text-slate-500 line-through decoration-slate-300">{f.formNumber}</span>
+                            <span className="text-slate-400 mx-1.5">·</span>
+                            <span className="text-slate-500">{formatDate(f.date)}</span>
+                            {qty > 0 && <span className="text-slate-400 ml-2">({qty} ชิ้น)</span>}
+                            <span className={cn('ml-2 text-[10px] px-1.5 py-0.5 rounded', statusCfg.bgColor, statusCfg.color)}>
+                              {statusCfg.label}
+                            </span>
+                            <span className="ml-1.5 text-[10px] text-slate-400 italic">ยังออก SD ไม่ได้</span>
+                          </span>
+                        </div>
+                      )
+                    }
+
                     return (
                       <label key={f.id} className={cn(
                         'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer border',
@@ -746,8 +787,8 @@ export default function DeliveryPage() {
                           <span className="font-medium">{f.formNumber}</span>
                           <span className="text-slate-500 mx-1.5">·</span>
                           {formatDate(f.date)}
-                          <span className="text-slate-400 ml-2">({f.rows.reduce((s, r) => s + (r.col6_factoryPackSend || 0), 0)} ชิ้น)</span>
-                          {isOldest && <span className="ml-2 text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">เก่าสุด · แนะนำ</span>}
+                          <span className="text-slate-400 ml-2">({qty} ชิ้น)</span>
+                          {isOldestSelectable && <span className="ml-2 text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">เก่าสุด · แนะนำ</span>}
                           {isSkippedOlder && <span className="ml-2 text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">⚠ เก่ากว่าที่เลือก</span>}
                         </span>
                       </label>
