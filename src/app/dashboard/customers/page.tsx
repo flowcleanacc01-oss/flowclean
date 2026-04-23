@@ -88,7 +88,12 @@ export default function CustomersPage() {
         case 'shortName': va = a.shortName || ''; vb = b.shortName || ''; break
         case 'name': va = a.name; vb = b.name; break
         case 'customerType': va = getCustomerCategoryLabel(a.customerType); vb = getCustomerCategoryLabel(b.customerType); break
-        case 'billingModel': va = a.billingModel; vb = b.billingModel; break
+        // 140 fix: sort ตาม flags จริงที่ column แสดง (enablePerPiece / enableMinPerTrip / enableMinPerMonth)
+        // ใช้ bitmask weight → จัด customers ที่มีรูปแบบเดียวกันไว้กลุ่มเดียวกัน
+        case 'billingModel': {
+          const weight = (c: typeof a) => ((c.enablePerPiece ?? true) ? 4 : 0) + (c.enableMinPerTrip ? 2 : 0) + (c.enableMinPerMonth ? 1 : 0)
+          va = weight(a); vb = weight(b); break
+        }
         case 'creditDays': va = a.creditDays; vb = b.creditDays; break
         case 'tax': va = (a.enableVat !== false ? 2 : 0) + (a.enableWithholding !== false ? 1 : 0); vb = (b.enableVat !== false ? 2 : 0) + (b.enableWithholding !== false ? 1 : 0); break
         case 'qt': va = linkedQTMap.has(a.id) ? 1 : 0; vb = linkedQTMap.has(b.id) ? 1 : 0; break
