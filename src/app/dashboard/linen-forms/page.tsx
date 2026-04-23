@@ -370,8 +370,14 @@ export default function LinenFormsPage() {
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
           />
         </div>
+        {/* 138: customer filter — teal เมื่อ active (ตรงกับปุ่มสร้าง) */}
         <select value={customerFilter} onChange={e => setCustomerFilter(e.target.value)}
-          className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+          className={cn(
+            'px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none font-medium transition-colors',
+            customerFilter === 'all'
+              ? 'border-slate-200 text-slate-600'
+              : 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]',
+          )}>
           <option value="all">ทุกลูกค้า</option>
           {customers.filter(c => c.isActive).map(c => (
             <option key={c.id} value={c.id}>{c.shortName || c.name}</option>

@@ -96,6 +96,9 @@ export default function BillingPage() {
   const [wbFilter, setWbFilter] = useState<WBFilter>('all')
   const [ivFilter, setIvFilter] = useState<IVFilter>('all')
   const [qtCustomerFilter, setQtCustomerFilter] = useState<string>('all')
+  // 138: customer filter สำหรับ WB + IV (pattern เดียวกับ QT/LF/SD)
+  const [wbCustomerFilter, setWbCustomerFilter] = useState<string>('all')
+  const [ivCustomerFilter, setIvCustomerFilter] = useState<string>('all')
 
   const router = useRouter()
 
@@ -265,6 +268,9 @@ export default function BillingPage() {
       // Focus mode (50): bypass all other filters
       if (focusMode && tab === 'billing') return focusIds.includes(b.id)
 
+      // 138: customer filter
+      if (wbCustomerFilter !== 'all' && b.customerId !== wbCustomerFilter) return false
+
       if (search) {
         const customer = getCustomer(b.customerId)
         const q = search.toLowerCase()
@@ -296,7 +302,7 @@ export default function BillingPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [billingStatements, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, wbFilter, taxInvoices, focusMode, focusIds, tab])
+  }, [billingStatements, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, wbFilter, wbCustomerFilter, taxInvoices, focusMode, focusIds, tab])
 
   // Preview for billing creation
   const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
@@ -798,6 +804,9 @@ export default function BillingPage() {
   // Invoice list (filtered + sorted)
   const filteredInvoices = useMemo(() => {
     return taxInvoices.filter(inv => {
+      // 138: customer filter
+      if (ivCustomerFilter !== 'all' && inv.customerId !== ivCustomerFilter) return false
+
       if (search) {
         const customer = getCustomer(inv.customerId)
         const q = search.toLowerCase()
@@ -824,7 +833,7 @@ export default function BillingPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [taxInvoices, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, ivFilter, billingStatements])
+  }, [taxInvoices, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, ivFilter, ivCustomerFilter, billingStatements])
 
   // Map WB id → IV info (for badge in WB list/detail)
   const wbInvoiceMap = useMemo(() => {
@@ -958,12 +967,46 @@ export default function BillingPage() {
             placeholder="ค้นหาเลขที่เอกสาร, ชื่อลูกค้า..."
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
+        {/* 138: customer filter toggle — teal เมื่อ active (ตรงกับปุ่มสร้าง) */}
         {tab === 'quotation' && (
           <select value={qtCustomerFilter} onChange={e => setQtCustomerFilter(e.target.value)}
-            className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+            className={cn(
+              'px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none font-medium transition-colors',
+              qtCustomerFilter === 'all'
+                ? 'border-slate-200 text-slate-600'
+                : 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]',
+            )}>
             <option value="all">ทุกลูกค้า</option>
             {qtCustomerNames.map(name => (
               <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        )}
+        {tab === 'billing' && (
+          <select value={wbCustomerFilter} onChange={e => setWbCustomerFilter(e.target.value)}
+            className={cn(
+              'px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none font-medium transition-colors',
+              wbCustomerFilter === 'all'
+                ? 'border-slate-200 text-slate-600'
+                : 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]',
+            )}>
+            <option value="all">ทุกลูกค้า</option>
+            {customers.filter(c => c.isActive).map(c => (
+              <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
+            ))}
+          </select>
+        )}
+        {tab === 'invoice' && (
+          <select value={ivCustomerFilter} onChange={e => setIvCustomerFilter(e.target.value)}
+            className={cn(
+              'px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none font-medium transition-colors',
+              ivCustomerFilter === 'all'
+                ? 'border-slate-200 text-slate-600'
+                : 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]',
+            )}>
+            <option value="all">ทุกลูกค้า</option>
+            {customers.filter(c => c.isActive).map(c => (
+              <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
             ))}
           </select>
         )}
