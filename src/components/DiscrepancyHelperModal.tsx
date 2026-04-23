@@ -233,7 +233,8 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
                   const wb = sd ? billingStatements.find(b => b.deliveryNoteIds.includes(sd.id)) : null
                   return (
                     <option key={f.id} value={f.id}>
-                      {f.formNumber} ({formatDate(f.date)}){sd ? ` — มี SD${wb ? ' + WB ❌' : ''}` : ' — ยังไม่มี SD'}
+                      {/* 135.1: วันที่ขึ้นก่อนเลขที่ LF */}
+                      ({formatDate(f.date)}) {f.formNumber}{sd ? ` — มี SD${wb ? ' + WB ❌' : ''}` : ' — ยังไม่มี SD'}
                     </option>
                   )
                 })}

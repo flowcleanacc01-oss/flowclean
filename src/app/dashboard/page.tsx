@@ -293,9 +293,10 @@ export default function DashboardPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50">
-                  <th className="text-left px-4 py-2 font-medium text-slate-500 text-xs">ฟอร์ม</th>
-                  <th className="text-left px-4 py-2 font-medium text-slate-500 text-xs">ลูกค้า</th>
+                  {/* 135.2 + 135.3: วันที่ ลูกค้า ฟอร์ม (doc reference order) */}
                   <th className="text-left px-4 py-2 font-medium text-slate-500 text-xs">วันที่</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-500 text-xs">ลูกค้า</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-500 text-xs">ฟอร์ม</th>
                   <th className="text-right px-4 py-2 font-medium text-slate-500 text-xs">ชิ้น</th>
                   <th className="text-center px-4 py-2 font-medium text-slate-500 text-xs">สถานะ</th>
                 </tr>
@@ -307,9 +308,10 @@ export default function DashboardPage() {
                   const cfg = LINEN_FORM_STATUS_CONFIG[form.status]
                   return (
                     <tr key={form.id} className="border-t border-slate-100">
-                      <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{form.formNumber}</td>
-                      <td className="px-4 py-2.5 text-slate-700">{customer?.shortName || customer?.name || '-'}</td>
-                      <td className="px-4 py-2.5 text-slate-500 text-xs">{formatDateShort(form.date)}</td>
+                      {/* 135.4: วันที่ + ลูกค้า = ตัวเด่น, ฟอร์ม = ตัวบาง/สีอ่อน */}
+                      <td className="px-4 py-2.5 text-slate-700 font-medium whitespace-nowrap">{formatDateShort(form.date)}</td>
+                      <td className="px-4 py-2.5 text-slate-800 font-medium">{customer?.shortName || customer?.name || '-'}</td>
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-slate-400">{form.formNumber}</td>
                       <td className="px-4 py-2.5 text-right text-slate-700">{totalPieces}</td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium', cfg.bgColor, cfg.color)}>
@@ -351,7 +353,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Discrepancy Alerts */}
+          {/* Discrepancy Alerts — 135.3+.4: date → customer (bold) → docNumber (muted) */}
           {discrepancyForms.length > 0 && (
             <div className="bg-white rounded-xl border border-orange-200 p-4">
               <h3 className="text-sm font-semibold text-orange-700 flex items-center gap-2 mb-3">
@@ -359,18 +361,24 @@ export default function DashboardPage() {
                 จำนวนไม่ตรง ({discrepancyForms.length})
               </h3>
               <div className="space-y-2">
-                {discrepancyForms.map(form => (
-                  <Link key={form.id} href={`/dashboard/linen-forms?detail=${form.id}`}
-                    className="block text-xs bg-orange-50 rounded-lg px-3 py-2 hover:bg-orange-100 transition-colors">
-                    <span className="font-mono text-orange-600">{form.formNumber}</span>
-                    <span className="text-slate-500 ml-2">{(() => { const c = getCustomer(form.customerId); return c?.shortName || c?.name })()}</span>
-                  </Link>
-                ))}
+                {discrepancyForms.map(form => {
+                  const c = getCustomer(form.customerId)
+                  return (
+                    <Link key={form.id} href={`/dashboard/linen-forms?detail=${form.id}`}
+                      className="block text-xs bg-orange-50 rounded-lg px-3 py-2 hover:bg-orange-100 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-700 whitespace-nowrap">{formatDateShort(form.date)}</span>
+                        <span className="font-medium text-slate-800 truncate flex-1">{c?.shortName || c?.name || '-'}</span>
+                      </div>
+                      <div className="font-mono text-[10px] text-slate-400 mt-0.5">{form.formNumber}</div>
+                    </Link>
+                  )
+                })}
               </div>
             </div>
           )}
 
-          {/* Overdue Billing (69: เฉพาะ accountant + admin) */}
+          {/* Overdue Billing — 135.3+.4 */}
           {showFinancial && overdueBilling.length > 0 && (
             <div className="bg-white rounded-xl border border-red-200 p-4">
               <h3 className="text-sm font-semibold text-red-700 flex items-center gap-2 mb-3">
@@ -378,13 +386,22 @@ export default function DashboardPage() {
                 บิลเกินกำหนด ({overdueBilling.length})
               </h3>
               <div className="space-y-2">
-                {overdueBilling.map(b => (
-                  <Link key={b.id} href={`/dashboard/billing?detail=${b.id}`}
-                    className="block text-xs bg-red-50 rounded-lg px-3 py-2 hover:bg-red-100 transition-colors">
-                    <span className="font-mono text-red-600">{b.billingNumber}</span>
-                    <span className="text-slate-500 ml-2">{formatCurrency(b.netPayable)}</span>
-                  </Link>
-                ))}
+                {overdueBilling.map(b => {
+                  const c = getCustomer(b.customerId)
+                  return (
+                    <Link key={b.id} href={`/dashboard/billing?detail=${b.id}`}
+                      className="block text-xs bg-red-50 rounded-lg px-3 py-2 hover:bg-red-100 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-700 whitespace-nowrap">{formatDateShort(b.issueDate)}</span>
+                        <span className="font-medium text-slate-800 truncate flex-1">{c?.shortName || c?.name || '-'}</span>
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <span className="font-mono text-[10px] text-slate-400">{b.billingNumber}</span>
+                        <span className="font-medium text-red-600">{formatCurrency(b.netPayable)}</span>
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
             </div>
           )}

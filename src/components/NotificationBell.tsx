@@ -15,8 +15,14 @@ interface Alert {
   kind: 'overdue' | 'dueSoon' | 'discrepancy' | 'qtPending' | 'lfStuck'
   icon: typeof Bell
   color: string
-  primary: string
-  secondary: string
+  /** 135.3+.4: วันที่เอกสาร (YYYY-MM-DD) — แสดงเด่นเป็นหลัก */
+  date: string
+  /** 135.3+.4: ชื่อย่อลูกค้า — แสดงเด่นเป็นหลัก */
+  customerName: string
+  /** 135.3+.4: เลขที่เอกสาร — แสดง muted (font-mono, text-slate-400) */
+  docNumber: string
+  /** รายละเอียดเสริม เช่น ยอดเงิน, วันเกินกำหนด, สถานะ — แสดงท้าย */
+  detail: string
   href: string
 }
 
@@ -97,8 +103,10 @@ export default function NotificationBell() {
             kind: 'overdue',
             icon: AlertCircle,
             color: 'text-red-600',
-            primary: `${b.billingNumber} · ${c?.shortName || c?.name || '-'}`,
-            secondary: `${formatCurrency(b.netPayable)} · เลยกำหนด ${daysLate} วัน`,
+            date: b.issueDate,
+            customerName: c?.shortName || c?.name || '-',
+            docNumber: b.billingNumber,
+            detail: `${formatCurrency(b.netPayable)} · เลยกำหนด ${daysLate} วัน`,
             href: `/dashboard/billing?tab=billing&detail=${b.id}`,
           }
         })
@@ -126,8 +134,10 @@ export default function NotificationBell() {
             kind: 'dueSoon',
             icon: Clock,
             color: 'text-amber-600',
-            primary: `${b.billingNumber} · ${c?.shortName || c?.name || '-'}`,
-            secondary: `${formatCurrency(b.netPayable)} · ครบกำหนดอีก ${days} วัน (${formatDate(b.dueDate)})`,
+            date: b.issueDate,
+            customerName: c?.shortName || c?.name || '-',
+            docNumber: b.billingNumber,
+            detail: `${formatCurrency(b.netPayable)} · ครบอีก ${days} วัน (${formatDate(b.dueDate)})`,
             href: `/dashboard/billing?tab=billing&detail=${b.id}`,
           }
         })
@@ -153,8 +163,10 @@ export default function NotificationBell() {
           kind: 'discrepancy',
           icon: AlertTriangle,
           color: 'text-orange-600',
-          primary: `${f.formNumber} · ${c?.shortName || c?.name || '-'}`,
-          secondary: `${formatDate(f.date)} · ตรวจสอบจำนวนผ้า`,
+          date: f.date,
+          customerName: c?.shortName || c?.name || '-',
+          docNumber: f.formNumber,
+          detail: 'ตรวจสอบจำนวนผ้า',
           href: `/dashboard/linen-forms?detail=${f.id}`,
         }
       })
@@ -181,8 +193,10 @@ export default function NotificationBell() {
             kind: 'qtPending',
             icon: FileText,
             color: 'text-slate-600',
-            primary: `${q.quotationNumber} · ${c?.shortName || c?.name || '-'}`,
-            secondary: `ส่งแล้ว ${days} วัน — ยังไม่ตอบรับ`,
+            date: q.date,
+            customerName: c?.shortName || c?.name || '-',
+            docNumber: q.quotationNumber,
+            detail: `ส่งแล้ว ${days} วัน — ยังไม่ตอบรับ`,
             href: `/dashboard/billing?tab=quotation&openqt=${q.id}`,
           }
         })
@@ -213,8 +227,10 @@ export default function NotificationBell() {
           kind: 'lfStuck',
           icon: Hourglass,
           color: 'text-purple-600',
-          primary: `${f.formNumber} · ${c?.shortName || c?.name || '-'}`,
-          secondary: `${formatDate(f.date)} · ค้างที่ ${statusLabel} มา ${days} วัน`,
+          date: f.date,
+          customerName: c?.shortName || c?.name || '-',
+          docNumber: f.formNumber,
+          detail: `ค้างที่ ${statusLabel} มา ${days} วัน`,
           href: `/dashboard/linen-forms?detail=${f.id}`,
         }
       })
@@ -366,8 +382,15 @@ export default function NotificationBell() {
                           >
                             <Icon className={cn('w-4 h-4 flex-shrink-0 mt-0.5', a.color)} />
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-slate-800 truncate">{a.primary}</p>
-                              <p className="text-[11px] text-slate-500 truncate">{a.secondary}</p>
+                              {/* 135.3+.4: date + shortName = ตัวเด่น, docNumber = muted */}
+                              <p className="text-xs truncate">
+                                <span className="font-medium text-slate-700 mr-1.5">{formatDate(a.date)}</span>
+                                <span className="font-medium text-slate-800">{a.customerName}</span>
+                              </p>
+                              <p className="text-[11px] text-slate-500 truncate">
+                                <span className="font-mono text-slate-400 mr-1.5">{a.docNumber}</span>
+                                {a.detail}
+                              </p>
                             </div>
                           </button>
                           <button
@@ -409,8 +432,14 @@ export default function NotificationBell() {
                               >
                                 <Icon className="w-4 h-4 flex-shrink-0 mt-0.5 text-slate-400" />
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-slate-500 truncate">{a.primary}</p>
-                                  <p className="text-[11px] text-slate-400 truncate">{a.secondary}</p>
+                                  <p className="text-xs truncate">
+                                    <span className="text-slate-500 mr-1.5">{formatDate(a.date)}</span>
+                                    <span className="text-slate-500">{a.customerName}</span>
+                                  </p>
+                                  <p className="text-[11px] text-slate-400 truncate">
+                                    <span className="font-mono mr-1.5">{a.docNumber}</span>
+                                    {a.detail}
+                                  </p>
                                 </div>
                               </button>
                               <button

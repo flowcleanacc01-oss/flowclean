@@ -677,9 +677,10 @@ export default function DeliveryPage() {
                         }}
                         className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                     </td>
-                    <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(dn.date)}</td>
+                    {/* 135.4: date + customer = ตัวเด่น, noteNumber = ตัวบาง + สีอ่อน */}
+                    <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(dn.date)}</td>
                     <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}><span className="truncate block max-w-[120px]">{customer?.shortName || customer?.name || '-'}</span></td>
-                    <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('noteNumber'))}>{dn.noteNumber}</td>
+                    <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('noteNumber'))}>{dn.noteNumber}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('items'))}>{formatNumber(totalItems)}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('amount'))}>{dnAmount > 0 ? formatCurrency(dnAmount) : '-'}</td>
                     <td className={cn("px-4 py-3 text-slate-600", sortedBg('driver'))}>{dn.driverName || '-'}</td>

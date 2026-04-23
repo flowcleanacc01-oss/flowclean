@@ -1077,9 +1077,10 @@ export default function BillingPage() {
                           onChange={e => { if (e.target.checked) setSelectedWbIds(prev => [...prev, b.id]); else setSelectedWbIds(prev => prev.filter(id => id !== b.id)) }}
                           className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                       </td>
-                      <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(b.issueDate)}</td>
+                      {/* 135.4: date + customer = เด่น, billingNumber = muted */}
+                      <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(b.issueDate)}</td>
                       <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
-                      <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('billingNumber'))}>{b.billingNumber}</td>
+                      <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('billingNumber'))}>{b.billingNumber}</td>
                       <td className={cn("px-4 py-3 text-slate-600", sortedBg('billingMonth'))}>{b.billingMonth}</td>
                       <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('grandTotal'))}>{formatCurrency(b.grandTotal)}</td>
                       <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('netPayable'))}>{formatCurrency(b.netPayable)}</td>
@@ -1197,9 +1198,10 @@ export default function BillingPage() {
                           onChange={e => { if (e.target.checked) setSelectedIvIds(prev => [...prev, inv.id]); else setSelectedIvIds(prev => prev.filter(id => id !== inv.id)) }}
                           className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                       </td>
-                      <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(inv.issueDate)}</td>
+                      {/* 135.4: date + customer = เด่น, invoiceNumber = muted */}
+                      <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(inv.issueDate)}</td>
                       <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
-                      <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('invoiceNumber'))}>{inv.invoiceNumber}</td>
+                      <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('invoiceNumber'))}>{inv.invoiceNumber}</td>
                       <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('grandTotal'))}>{formatCurrency(inv.grandTotal)}</td>
                       <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
@@ -1300,9 +1302,10 @@ export default function BillingPage() {
                       data-row-id={q.id}
                       className={cn("border-b border-slate-100 cursor-pointer", activeQtId === q.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                       onClick={() => { setActiveQtId(q.id); setShowQuDetail(q.id) }}>
-                      <td className={cn("px-4 py-3 text-slate-600", sortedBg('date'))}>{formatDate(q.date)}</td>
+                      {/* 135.4: date + customer = เด่น, quotationNumber = muted */}
+                      <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(q.date)}</td>
                       <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customerName'))}>{getCustomer(q.customerId)?.shortName || q.customerName}</td>
-                      <td className={cn("px-4 py-3 font-mono text-xs text-slate-600", sortedBg('quotationNumber'))}>{q.quotationNumber}</td>
+                      <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('quotationNumber'))}>{q.quotationNumber}</td>
                       <td className={cn("px-4 py-3 text-center text-slate-500", sortedBg('items'))}>{q.items.length}</td>
                       <td className={cn("px-4 py-3 text-slate-500 text-sm max-w-[160px] truncate", sortedBg('notes'))}>{q.notes || '-'}</td>
                       <td className={cn("px-4 py-3 text-center", sortedBg('status'))}>

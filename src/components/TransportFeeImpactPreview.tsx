@@ -89,13 +89,13 @@ export default function TransportFeeImpactPreview({
         ผลกระทบต่อค่ารถ — เดือน {month}
       </div>
 
-      {/* Month overview table */}
+      {/* Month overview table — 135: วันที่ col แรก (user มองวันที่เป็นหลัก) */}
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
+              <th className="text-left px-2 py-1.5 font-medium">วันที่</th>
               <th className="text-left px-3 py-1.5 font-medium">เลขที่</th>
-              <th className="text-center px-2 py-1.5 font-medium">วันที่</th>
               <th className="text-right px-3 py-1.5 font-medium">ค่ารถ (ครั้ง)</th>
               <th className="text-right px-3 py-1.5 font-medium">ค่ารถ (เดือน)</th>
               <th className="px-2 py-1.5"></th>
@@ -113,10 +113,12 @@ export default function TransportFeeImpactPreview({
                   'border-t border-slate-100',
                   isThis ? 'bg-amber-50' : 'hover:bg-slate-50',
                 )}>
-                  <td className={cn('px-3 py-1.5 font-mono', isThis && 'font-semibold text-amber-700')}>
+                  <td className={cn('px-2 py-1.5 whitespace-nowrap', isThis ? 'font-semibold text-amber-700' : 'font-medium text-slate-700')}>
+                    {formatDate(d.date)}
+                  </td>
+                  <td className={cn('px-3 py-1.5 font-mono text-[11px]', isThis ? 'text-amber-600' : 'text-slate-400')}>
                     {d.noteNumber}
                   </td>
-                  <td className="px-2 py-1.5 text-center text-slate-500">{formatDate(d.date)}</td>
                   <td className="px-3 py-1.5 text-right">
                     {showNewTrip ? (
                       <span>

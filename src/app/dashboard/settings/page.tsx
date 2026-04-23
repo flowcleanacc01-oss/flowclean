@@ -216,12 +216,32 @@ export default function SettingsPage() {
                     <td className="px-4 py-3 text-slate-800 font-medium">{u.name}</td>
                     <td className="px-4 py-3 text-slate-600">{u.email}</td>
                     <td className="px-4 py-3 text-center">
+                      {/* 134: เปลี่ยน role ได้โดยไม่ต้องลบ */}
                       {(() => {
                         const cfg = USER_ROLE_CONFIG[u.role as UserRole] || USER_ROLE_CONFIG.staff
+                        const isSelf = u.id === currentUser?.id
                         return (
-                          <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>
-                            {cfg.label}
-                          </span>
+                          <select
+                            value={u.role}
+                            disabled={isSelf}
+                            onChange={e => {
+                              const newRole = e.target.value as UserRole
+                              if (newRole === u.role) return
+                              if (confirm(`เปลี่ยนบทบาทของ "${u.name}" จาก "${USER_ROLE_CONFIG[u.role as UserRole]?.label}" เป็น "${USER_ROLE_CONFIG[newRole].label}" ใช่หรือไม่?`)) {
+                                updateUser(u.id, { role: newRole })
+                              }
+                            }}
+                            title={isSelf ? 'ไม่สามารถเปลี่ยนบทบาทตัวเองได้' : 'คลิกเพื่อเปลี่ยนบทบาท'}
+                            className={cn(
+                              'px-2 py-0.5 rounded-full text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-[#3DD8D8] focus:outline-none appearance-none text-center',
+                              cfg.bgColor, cfg.color,
+                              isSelf && 'cursor-not-allowed opacity-70',
+                            )}
+                          >
+                            {(Object.keys(USER_ROLE_CONFIG) as UserRole[]).map(r => (
+                              <option key={r} value={r}>{USER_ROLE_CONFIG[r].label}</option>
+                            ))}
+                          </select>
                         )
                       })()}
                     </td>
