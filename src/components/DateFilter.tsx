@@ -138,18 +138,23 @@ export default function DateFilter({
         )}
       </div>
 
-      {/* Current range indicator */}
-      {hasFilter && (
-        <p className="text-[11px] text-slate-400 pl-6">
-          กำลังแสดง: {mode === 'single'
-            ? `วันที่ ${formatDate(dateFrom)}`
-            : `${formatDate(dateFrom)} — ${dateTo ? formatDate(dateTo) : 'ถึงปัจจุบัน'}`
-          }
-        </p>
-      )}
-      {!hasFilter && (
-        <p className="text-[11px] text-slate-400 pl-6">กำลังแสดง: ข้อมูลทั้งหมด (ไม่กำหนดวันที่)</p>
-      )}
+      {/* 139: Current range indicator — สี theme เดียวกับปุ่มช่วงเวลา, ชัดเจนว่ากำลังกรองอะไรอยู่ */}
+      <div className="pl-6">
+        {hasFilter ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#1B3A5C] bg-[#3DD8D8]/15 border border-[#3DD8D8]/40 rounded-md px-2.5 py-1">
+            <Calendar className="w-3 h-3" />
+            กำลังแสดง: {mode === 'single'
+              ? `วันที่ ${formatDate(dateFrom)}`
+              : `${formatDate(dateFrom)} — ${dateTo ? formatDate(dateTo) : 'ถึงปัจจุบัน'}`
+            }
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-md px-2.5 py-1">
+            <Calendar className="w-3 h-3" />
+            กำลังแสดง: ข้อมูลทั้งหมด (ไม่กำหนดวันที่)
+          </span>
+        )}
+      </div>
     </div>
   )
 }
