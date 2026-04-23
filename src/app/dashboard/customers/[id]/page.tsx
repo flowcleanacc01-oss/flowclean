@@ -165,7 +165,7 @@ export default function CustomerDetailPage() {
         <StatCard icon={<CreditCard className="w-5 h-5" />} label="ค้างชำระ" value={formatCurrency(stats.unpaidAmount)}
           sub={stats.unpaidBills > 0 ? `${stats.unpaidBills} บิล` : undefined} color={stats.unpaidAmount > 0 ? 'text-red-600' : 'text-slate-600'} />
         <StatCard icon={<TrendingUp className="w-5 h-5" />} label="รายได้รวม (ทุกเดือน ก่อน VAT)" value={formatCurrency(stats.totalRevenue)} color="text-emerald-600" />
-        <StatCard icon={<Package className="w-5 h-5" />} label="ผ้าส่งทั้งหมด" value={formatNumber(stats.totalPieces) + ' ชิ้น'} color="text-blue-600" />
+        <StatCard icon={<Package className="w-5 h-5" />} label="ผ้าส่งทั้งหมด (ทุกเดือน)" value={formatNumber(stats.totalPieces) + ' ชิ้น'} color="text-blue-600" />
         <StatCard icon={<FileText className="w-5 h-5" />} label="เดือนนี้" value={`${stats.monthForms} ใบรับ / ${stats.monthDelivery} ใบส่ง`} color="text-[#1B3A5C]" />
         {/* 142: ยอดใบส่งของเดือนนี้ (ก่อน VAT) → ขวาสุด */}
         <StatCard icon={<Truck className="w-5 h-5" />} label="ยอดใบส่งของเดือนนี้ (ก่อน VAT)" value={formatCurrency(stats.monthSDAmount)} color="text-blue-600" />
@@ -304,8 +304,8 @@ export default function CustomerDetailPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">เลขที่</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">วันที่</th>
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">เลขที่</th>
                     <th className="text-center px-4 py-2 font-medium text-slate-600">สถานะ</th>
                     <th className="text-right px-4 py-2 font-medium text-slate-600">รายการ</th>
                   </tr>
@@ -316,8 +316,8 @@ export default function CustomerDetailPage() {
                     const totalPcs = f.rows.reduce((s, r) => s + r.col2_hotelCountIn, 0)
                     return (
                       <tr key={f.id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="px-4 py-2 font-mono text-xs">{f.formNumber}</td>
-                        <td className="px-4 py-2 text-slate-600">{formatDate(f.date)}</td>
+                        <td className="px-4 py-2 text-slate-700 font-medium whitespace-nowrap">{formatDate(f.date)}</td>
+                        <td className="px-4 py-2 font-mono text-[11px] text-slate-400">{f.formNumber}</td>
                         <td className="px-4 py-2 text-center">
                           <span className={cn('text-xs px-2 py-0.5 rounded-full', sc.bgColor, sc.color)}>{sc.label}</span>
                         </td>
@@ -344,8 +344,8 @@ export default function CustomerDetailPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">เลขที่</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">วันที่</th>
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">เลขที่</th>
                     <th className="text-center px-4 py-2 font-medium text-slate-600">สถานะ</th>
                     <th className="text-right px-4 py-2 font-medium text-slate-600">จำนวน</th>
                   </tr>
@@ -355,8 +355,8 @@ export default function CustomerDetailPage() {
                     const totalPcs = d.items.reduce((s, i) => s + i.quantity, 0)
                     return (
                       <tr key={d.id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="px-4 py-2 font-mono text-xs">{d.noteNumber}</td>
-                        <td className="px-4 py-2 text-slate-600">{formatDate(d.date)}</td>
+                        <td className="px-4 py-2 text-slate-700 font-medium whitespace-nowrap">{formatDate(d.date)}</td>
+                        <td className="px-4 py-2 font-mono text-[11px] text-slate-400">{d.noteNumber}</td>
                         <td className="px-4 py-2 text-center">
                           <div className="flex items-center justify-center gap-1">
                             {d.isPrinted && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">พิมพ์แล้ว</span>}
@@ -387,6 +387,7 @@ export default function CustomerDetailPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">วันที่ออก</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">เลขที่</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">เดือน</th>
                     <th className="text-center px-4 py-2 font-medium text-slate-600">สถานะ</th>
@@ -399,7 +400,8 @@ export default function CustomerDetailPage() {
                     const sc = BILLING_STATUS_CONFIG[b.status as BillingStatus] || BILLING_STATUS_CONFIG.draft
                     return (
                       <tr key={b.id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="px-4 py-2 font-mono text-xs">{b.billingNumber}</td>
+                        <td className="px-4 py-2 text-slate-700 font-medium whitespace-nowrap">{formatDate(b.issueDate)}</td>
+                        <td className="px-4 py-2 font-mono text-[11px] text-slate-400">{b.billingNumber}</td>
                         <td className="px-4 py-2 text-slate-600">{b.billingMonth}</td>
                         <td className="px-4 py-2 text-center">
                           <span className={cn('text-xs px-2 py-0.5 rounded-full', sc.bgColor, sc.color)}>{sc.label}</span>
@@ -418,19 +420,20 @@ export default function CustomerDetailPage() {
           {/* Tax Invoices */}
           {custTaxInv.length > 0 && (
             <DocSection title="ใบกำกับภาษี" icon={<Receipt className="w-4 h-4" />} count={custTaxInv.length} linkTo="/dashboard/billing">
+              {/* 144.1: วันที่ col แรก + เด่น, เลขที่ muted */}
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">เลขที่</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">วันที่</th>
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">เลขที่</th>
                     <th className="text-right px-4 py-2 font-medium text-slate-600">ยอดรวม (VAT)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {custTaxInv.slice(0, 10).map(t => (
                     <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-2 font-mono text-xs">{t.invoiceNumber}</td>
-                      <td className="px-4 py-2 text-slate-600">{formatDate(t.issueDate)}</td>
+                      <td className="px-4 py-2 text-slate-700 font-medium whitespace-nowrap">{formatDate(t.issueDate)}</td>
+                      <td className="px-4 py-2 font-mono text-[11px] text-slate-400">{t.invoiceNumber}</td>
                       <td className="px-4 py-2 text-right font-medium">{formatCurrency(t.grandTotal)}</td>
                     </tr>
                   ))}
@@ -443,11 +446,12 @@ export default function CustomerDetailPage() {
           {/* Checklists */}
           {custChecklists.length > 0 && (
             <DocSection title="ใบเช็คสินค้า" icon={<ClipboardCheck className="w-4 h-4" />} count={custChecklists.length} linkTo="/dashboard/checklist">
+              {/* 144.1: วันที่ col แรก + เด่น, เลขที่ muted */}
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">เลขที่</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">วันที่</th>
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">เลขที่</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">ประเภท</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">สถานะ</th>
                   </tr>
@@ -455,8 +459,8 @@ export default function CustomerDetailPage() {
                 <tbody>
                   {custChecklists.slice(0, 5).map(c => (
                     <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-2 font-mono text-xs">{c.checklistNumber}</td>
-                      <td className="px-4 py-2 text-slate-600">{formatDate(c.date)}</td>
+                      <td className="px-4 py-2 text-slate-700 font-medium whitespace-nowrap">{formatDate(c.date)}</td>
+                      <td className="px-4 py-2 font-mono text-[11px] text-slate-400">{c.checklistNumber}</td>
                       <td className="px-4 py-2">{c.type === 'qc' ? 'QC' : 'Loading'}</td>
                       <td className="px-4 py-2 text-xs">{c.status}</td>
                     </tr>
