@@ -9,7 +9,7 @@ import { validatePassword } from '@/lib/auth'
 import { fetchAuditLogs } from '@/lib/supabase-service'
 import type { AuditLog, BankAccount, UserRole } from '@/types'
 import { USER_ROLE_CONFIG } from '@/types'
-import { Plus, Trash2, RotateCcw, Check, KeyRound, X, Eye, EyeOff } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, Check, KeyRound, X, Eye, EyeOff, Info, ChevronDown } from 'lucide-react'
 import { genId } from '@/lib/utils'
 
 type TabKey = 'users' | 'company' | 'documents' | 'auditlog'
@@ -70,6 +70,8 @@ export default function SettingsPage() {
   // 141: toggle แสดง/ซ่อนรหัสผ่าน
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showResetPw, setShowResetPw] = useState(false)
+  // 143: collapsible role guideline
+  const [showRoleGuide, setShowRoleGuide] = useState(false)
   const [resetError, setResetError] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
 
@@ -201,6 +203,43 @@ export default function SettingsPage() {
       {/* Users Tab */}
       {tab === 'users' && (
         <div className="space-y-4">
+          {/* 143: Role guideline — เข้าใจสิทธิของแต่ละบทบาทก่อนปรับ */}
+          <div className="bg-blue-50 rounded-xl border border-blue-200 overflow-hidden">
+            <button onClick={() => setShowRoleGuide(v => !v)}
+              className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-blue-100/50 transition-colors">
+              <Info className="w-4 h-4 text-blue-600 flex-shrink-0" />
+              <span className="text-sm font-medium text-blue-800 flex-1">
+                ความแตกต่างของแต่ละบทบาท (Role Guideline)
+              </span>
+              <ChevronDown className={cn('w-4 h-4 text-blue-600 transition-transform', showRoleGuide && 'rotate-180')} />
+            </button>
+            {showRoleGuide && (
+              <div className="px-4 pb-4 border-t border-blue-200 pt-3">
+                <p className="text-xs text-blue-700 mb-3">
+                  แต่ละบทบาทเห็นเมนู+ข้อมูลต่างกัน — เลือกสิทธิให้ตรงกับหน้าที่เพื่อป้องกันข้อผิดพลาด
+                </p>
+                <div className="space-y-2">
+                  {(Object.keys(USER_ROLE_CONFIG) as UserRole[]).map(r => {
+                    const cfg = USER_ROLE_CONFIG[r]
+                    return (
+                      <div key={r} className="flex items-start gap-3 bg-white rounded-lg px-3 py-2 border border-blue-100">
+                        <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0', cfg.bgColor, cfg.color)}>
+                          {cfg.label}
+                        </span>
+                        <span className="text-xs text-slate-700 leading-relaxed pt-0.5">{cfg.description}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="mt-3 pt-3 border-t border-blue-200 text-[11px] text-blue-700 space-y-1">
+                  <p>💡 <strong>เคล็ดลับ</strong> — ลำดับสิทธิจากน้อย → มาก: Operator → Driver → Staff → Accountant → Admin</p>
+                  <p>🔒 <strong>Accountant</strong> เท่านั้นที่เห็น ราคา/ยอดเงิน/บิล (WB/IV/QT) และรายงานการเงิน</p>
+                  <p>👑 <strong>Admin</strong> = ทุกอย่าง + จัดการผู้ใช้ + ตั้งค่าบริษัท</p>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ minWidth: '600px' }}>
