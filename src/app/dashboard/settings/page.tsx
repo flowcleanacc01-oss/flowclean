@@ -9,7 +9,7 @@ import { validatePassword } from '@/lib/auth'
 import { fetchAuditLogs } from '@/lib/supabase-service'
 import type { AuditLog, BankAccount, UserRole } from '@/types'
 import { USER_ROLE_CONFIG } from '@/types'
-import { Plus, Trash2, RotateCcw, Check, KeyRound, X } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, Check, KeyRound, X, Eye, EyeOff } from 'lucide-react'
 import { genId } from '@/lib/utils'
 
 type TabKey = 'users' | 'company' | 'documents' | 'auditlog'
@@ -67,6 +67,9 @@ export default function SettingsPage() {
   // Reset password
   const [resetUserId, setResetUserId] = useState<string | null>(null)
   const [resetPw, setResetPw] = useState('')
+  // 141: toggle แสดง/ซ่อนรหัสผ่าน
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showResetPw, setShowResetPw] = useState(false)
   const [resetError, setResetError] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
 
@@ -283,9 +286,17 @@ export default function SettingsPage() {
               <div className="flex flex-wrap gap-3 items-end">
                 <div className="flex-1 min-w-48">
                   <label className="block text-xs text-amber-700 mb-1">รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)</label>
-                  <input type="password" value={resetPw} onChange={e => setResetPw(e.target.value)}
-                    placeholder="รหัสผ่านใหม่"
-                    className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm focus:ring-1 focus:ring-amber-400 focus:outline-none" />
+                  {/* 141: toggle show/hide password */}
+                  <div className="relative">
+                    <input type={showResetPw ? 'text' : 'password'} value={resetPw} onChange={e => setResetPw(e.target.value)}
+                      placeholder="รหัสผ่านใหม่"
+                      className="w-full pl-3 pr-10 py-2 border border-amber-200 rounded-lg text-sm focus:ring-1 focus:ring-amber-400 focus:outline-none" />
+                    <button type="button" onClick={() => setShowResetPw(v => !v)}
+                      title={showResetPw ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-amber-600 transition-colors">
+                      {showResetPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
                 <button onClick={handleResetPassword} disabled={resetLoading}
                   className="px-4 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors">
@@ -308,8 +319,16 @@ export default function SettingsPage() {
                 className="flex-1 min-w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="อีเมล"
                 className="flex-1 min-w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="รหัสผ่าน (6+ ตัว)"
-                className="flex-1 min-w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+              {/* 141: toggle show/hide password */}
+              <div className="relative flex-1 min-w-32">
+                <input type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="รหัสผ่าน (6+ ตัว)"
+                  className="w-full pl-3 pr-10 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                <button type="button" onClick={() => setShowNewPassword(v => !v)}
+                  title={showNewPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-[#1B3A5C] transition-colors">
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               <select value={newRole} onChange={e => setNewRole(e.target.value as UserRole)}
                 className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
                 {(Object.keys(USER_ROLE_CONFIG) as UserRole[]).map(r => (
