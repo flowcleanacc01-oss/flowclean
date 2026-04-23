@@ -1,34 +1,55 @@
 import type { Customer, DeliveryNote, LinenForm } from '@/types'
 
 /**
+ * LF ล่าสุดที่ SD ผูกอยู่ — เรียงตาม (date, formNumber) เพื่อใช้เป็น operational sort key
+ *
+ * Tiebreaker intra-day: LF.formNumber desc (LF ที่ seq สูงกว่า = operational event หลัง)
+ *
+ * Fallback → { date: dn.date, formNumber: '' } ในเคส:
+ * - SD ไม่มี LF (linenFormIds ว่าง)
+ * - LF ที่ผูกถูกลบหมด (orphaned linenFormIds)
+ */
+function latestLinkedLF(dn: DeliveryNote, linenForms: LinenForm[]): { date: string; formNumber: string } {
+  if (!dn.linenFormIds || dn.linenFormIds.length === 0) return { date: dn.date, formNumber: '' }
+  const linked = linenForms.filter(lf => dn.linenFormIds.includes(lf.id))
+  if (linked.length === 0) return { date: dn.date, formNumber: '' }
+  return linked.reduce<{ date: string; formNumber: string }>(
+    (best, lf) =>
+      lf.date > best.date || (lf.date === best.date && lf.formNumber > best.formNumber)
+        ? { date: lf.date, formNumber: lf.formNumber }
+        : best,
+    { date: '', formNumber: '' },
+  )
+}
+
+/**
  * Operational date ของ DN — อิงกับ LF.date ล่าสุดที่ DN ผูกอยู่ (Feature 120)
  *
  * เหตุผล: LF = หลักฐานงานจริง, SD = paperwork ที่สร้างใหม่ได้
  * การจัดลำดับ "ใบสุดท้ายของเดือน" ควรอิง operational (LF) ไม่ใช่ paperwork (SD.date)
  *
- * Fallback → SD.date ในเคสพิเศษ:
- * - SD ไม่มี LF (linenFormIds ว่าง)
- * - LF ที่ผูกถูกลบหมด (orphaned linenFormIds)
+ * Fallback → SD.date ถ้าไม่มี LF
  */
 export function getOperationalDate(dn: DeliveryNote, linenForms: LinenForm[]): string {
-  if (!dn.linenFormIds || dn.linenFormIds.length === 0) return dn.date
-  const linked = linenForms.filter(lf => dn.linenFormIds.includes(lf.id))
-  if (linked.length === 0) return dn.date
-  return linked.reduce((max, lf) => (lf.date > max ? lf.date : max), linked[0].date)
+  return latestLinkedLF(dn, linenForms).date
 }
 
 /**
- * Comparator factory สำหรับเรียง DN "ใบสุดท้ายของเดือน" ก่อน (Feature 120)
- * - Operational date (max LF.date) desc เป็นหลัก
- * - noteNumber desc เป็น tiebreaker
+ * Comparator factory สำหรับเรียง DN "ใบสุดท้ายของเดือน" ก่อน (Feature 120 + 130)
+ * Sort key (desc):
+ * 1. max LF.date (operational date)
+ * 2. max LF.formNumber (tiebreaker intra-day — LF ล่าสุดของวัน 130)
+ * 3. SD.noteNumber (final tiebreaker — paperwork)
  *
  * ใช้กับทุกจุดที่เลือก "ใบสุดท้ายของเดือน" สำหรับ month fee recalc
  */
 export function createDNLastOfMonthCompare(linenForms: LinenForm[]) {
   return (a: DeliveryNote, b: DeliveryNote): number => {
-    const aDate = getOperationalDate(a, linenForms)
-    const bDate = getOperationalDate(b, linenForms)
-    return bDate.localeCompare(aDate) || b.noteNumber.localeCompare(a.noteNumber)
+    const aKey = latestLinkedLF(a, linenForms)
+    const bKey = latestLinkedLF(b, linenForms)
+    return bKey.date.localeCompare(aKey.date)
+      || bKey.formNumber.localeCompare(aKey.formNumber)
+      || b.noteNumber.localeCompare(a.noteNumber)
   }
 }
 
