@@ -1633,12 +1633,13 @@ export default function BillingPage() {
               return (
                 <div>
                   <h3 className="text-sm font-medium text-slate-700 mb-2">ใบส่งของที่รวมวางบิล ({linkedDNs.length} ใบ)</h3>
+                  {/* 136: วันที่ col แรก + เด่นกว่าเลขที่ SD */}
                   <div className="border border-slate-200 rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-blue-50 border-b border-blue-100">
-                          <th className="text-left px-3 py-2 font-medium text-blue-800">เลขที่ SD</th>
                           <th className="text-left px-3 py-2 font-medium text-blue-800">วันที่</th>
+                          <th className="text-left px-3 py-2 font-medium text-blue-800">เลขที่ SD</th>
                           <th className="text-right px-3 py-2 font-medium text-blue-800">จำนวน</th>
                           {isPer && <th className="text-right px-3 py-2 font-medium text-blue-800">ยอดรวม</th>}
                         </tr>
@@ -1649,8 +1650,8 @@ export default function BillingPage() {
                           const totalAmt = isPer ? dn!.items.reduce((s, i) => s + i.quantity * (priceMap[i.code] || 0), 0) : 0
                           return (
                             <tr key={dn!.id} className="border-t border-slate-100">
-                              <td className="px-3 py-1.5 font-mono text-xs">{dn!.noteNumber}</td>
-                              <td className="px-3 py-1.5 text-slate-600">{formatDate(dn!.date)}</td>
+                              <td className="px-3 py-1.5 text-slate-700 font-medium whitespace-nowrap">{formatDate(dn!.date)}</td>
+                              <td className="px-3 py-1.5 font-mono text-[11px] text-slate-400">{dn!.noteNumber}</td>
                               <td className="px-3 py-1.5 text-right">{formatNumber(totalPcs)} ชิ้น</td>
                               {isPer && <td className="px-3 py-1.5 text-right">{formatCurrency(totalAmt)}</td>}
                             </tr>
@@ -1895,20 +1896,21 @@ export default function BillingPage() {
               return (
                 <div>
                   <h3 className="text-sm font-medium text-slate-700 mb-2">ใบวางบิลที่นำเข้าข้อมูล (1 ใบ)</h3>
+                  {/* 136: วันที่ col แรก + เด่นกว่าเลขที่ WB */}
                   <div className="border border-slate-200 rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-orange-50 border-b border-orange-100">
-                          <th className="text-left px-3 py-2 font-medium text-orange-800">เลขที่ WB</th>
                           <th className="text-left px-3 py-2 font-medium text-orange-800">วันที่ออก</th>
+                          <th className="text-left px-3 py-2 font-medium text-orange-800">เลขที่ WB</th>
                           <th className="text-left px-3 py-2 font-medium text-orange-800">เดือน</th>
                           <th className="text-right px-3 py-2 font-medium text-orange-800">ยอดสุทธิ</th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr className="border-t border-slate-100">
-                          <td className="px-3 py-1.5 font-mono text-xs">{wb.billingNumber}</td>
-                          <td className="px-3 py-1.5 text-slate-600">{formatDate(wb.issueDate)}</td>
+                          <td className="px-3 py-1.5 text-slate-700 font-medium whitespace-nowrap">{formatDate(wb.issueDate)}</td>
+                          <td className="px-3 py-1.5 font-mono text-[11px] text-slate-400">{wb.billingNumber}</td>
                           <td className="px-3 py-1.5 text-slate-600">{wb.billingMonth}</td>
                           <td className="px-3 py-1.5 text-right">{formatCurrency(wb.netPayable)}</td>
                         </tr>

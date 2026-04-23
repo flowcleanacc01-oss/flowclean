@@ -1061,12 +1061,13 @@ export default function DeliveryPage() {
               return (
                 <div>
                   <h3 className="text-sm font-medium text-slate-700 mb-2">ใบรับส่งผ้าที่นำเข้าข้อมูล ({linkedLFs.length} ใบ)</h3>
+                  {/* 136: วันที่ col แรก + เด่นกว่าเลขที่ LF */}
                   <div className="border border-slate-200 rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-teal-50 border-b border-teal-100">
-                          <th className="text-left px-3 py-2 font-medium text-teal-800">เลขที่ LF</th>
                           <th className="text-left px-3 py-2 font-medium text-teal-800">วันที่</th>
+                          <th className="text-left px-3 py-2 font-medium text-teal-800">เลขที่ LF</th>
                           <th className="text-right px-3 py-2 font-medium text-teal-800">จำนวนชิ้น (col6)</th>
                         </tr>
                       </thead>
@@ -1075,8 +1076,8 @@ export default function DeliveryPage() {
                           const totalPcs = lf!.rows.reduce((s, r) => s + (r.col6_factoryPackSend || 0), 0)
                           return (
                             <tr key={lf!.id} className="border-t border-slate-100">
-                              <td className="px-3 py-1.5 font-mono text-xs">{lf!.formNumber}</td>
-                              <td className="px-3 py-1.5 text-slate-600">{formatDate(lf!.date)}</td>
+                              <td className="px-3 py-1.5 text-slate-700 font-medium whitespace-nowrap">{formatDate(lf!.date)}</td>
+                              <td className="px-3 py-1.5 font-mono text-[11px] text-slate-400">{lf!.formNumber}</td>
                               <td className="px-3 py-1.5 text-right">{formatNumber(totalPcs)} ชิ้น</td>
                             </tr>
                           )
