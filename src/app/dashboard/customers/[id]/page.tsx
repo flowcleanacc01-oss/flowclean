@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { formatCurrency, formatNumber, cn, formatDate } from '@/lib/utils'
+import { formatCurrency, formatNumber, cn, formatDate, buildPriceMapFromQT } from '@/lib/utils'
 import { canViewPrice } from '@/lib/permissions'
 import {
   ArrowLeft, Building2, Phone, Mail, MapPin, FileText, CreditCard,
@@ -14,6 +14,7 @@ import {
   LINEN_FORM_STATUS_CONFIG, BILLING_STATUS_CONFIG,
 } from '@/types'
 import type { LinenFormStatus, BillingStatus } from '@/types'
+import RevenueTrendChart from '@/components/RevenueTrendChart'
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -52,7 +53,8 @@ export default function CustomerDetailPage() {
   const stats = useMemo(() => {
     const totalRevenue = custBilling.reduce((s, b) => s + b.subtotal, 0)
     const paidBills = custBilling.filter(b => b.status === 'paid')
-    const unpaidBills = custBilling.filter(b => b.status !== 'paid')
+    // 142.1: ค้างชำระ = ทุกใบ status=sent (ไม่จำกัดเวลา) — ตรงกับ dashboard logic
+    const unpaidBills = custBilling.filter(b => b.status === 'sent')
     const unpaidAmount = unpaidBills.reduce((s, b) => s + b.netPayable, 0)
     const totalPieces = custDelivery.reduce((s, d) => s + d.items.reduce((ss, i) => ss + i.quantity, 0), 0)
 
@@ -63,8 +65,21 @@ export default function CustomerDetailPage() {
     const monthForms = custForms.filter(f => f.date.startsWith(thisMonth)).length
     const monthDelivery = custDelivery.filter(d => d.date.startsWith(thisMonth)).length
 
-    return { totalRevenue, unpaidAmount, unpaidBills: unpaidBills.length, paidBills: paidBills.length, totalPieces, monthRevenue, monthForms, monthDelivery }
-  }, [custBilling, custDelivery, custForms])
+    // 142: ยอดใบส่งของเดือนนี้ (ก่อน VAT) — sum SD totals ของเดือนนี้
+    const monthSDs = custDelivery.filter(d => d.date.startsWith(thisMonth))
+    const monthSDAmount = customer ? monthSDs.reduce((sum, dn) => {
+      const isPer = customer.enablePerPiece ?? true
+      const priceMap = (dn.priceSnapshot && Object.keys(dn.priceSnapshot).length > 0)
+        ? dn.priceSnapshot
+        : buildPriceMapFromQT(dn.customerId, quotations)
+      const itemSubtotal = isPer
+        ? dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
+        : 0
+      return sum + itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0) + (dn.extraCharge || 0) - (dn.discount || 0)
+    }, 0) : 0
+
+    return { totalRevenue, unpaidAmount, unpaidBills: unpaidBills.length, paidBills: paidBills.length, totalPieces, monthRevenue, monthForms, monthDelivery, monthSDAmount }
+  }, [custBilling, custDelivery, custForms, customer, quotations])
 
   // Carry-over
   const carryOver = useMemo(() => {
@@ -144,13 +159,21 @@ export default function CustomerDetailPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <StatCard icon={<TrendingUp className="w-5 h-5" />} label="รายได้รวม" value={formatCurrency(stats.totalRevenue)} color="text-emerald-600" />
+      {/* Stats Cards — 142: 5 cards, ค้างชำระ ซ้ายสุด, ยอดใบส่งของเดือนนี้ ขวาสุด */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+        {/* 142.1: ค้างชำระ → ซ้ายสุด */}
         <StatCard icon={<CreditCard className="w-5 h-5" />} label="ค้างชำระ" value={formatCurrency(stats.unpaidAmount)}
           sub={stats.unpaidBills > 0 ? `${stats.unpaidBills} บิล` : undefined} color={stats.unpaidAmount > 0 ? 'text-red-600' : 'text-slate-600'} />
+        <StatCard icon={<TrendingUp className="w-5 h-5" />} label="รายได้รวม (ทุกเดือน ก่อน VAT)" value={formatCurrency(stats.totalRevenue)} color="text-emerald-600" />
         <StatCard icon={<Package className="w-5 h-5" />} label="ผ้าส่งทั้งหมด" value={formatNumber(stats.totalPieces) + ' ชิ้น'} color="text-blue-600" />
         <StatCard icon={<FileText className="w-5 h-5" />} label="เดือนนี้" value={`${stats.monthForms} ใบรับ / ${stats.monthDelivery} ใบส่ง`} color="text-[#1B3A5C]" />
+        {/* 142: ยอดใบส่งของเดือนนี้ (ก่อน VAT) → ขวาสุด */}
+        <StatCard icon={<Truck className="w-5 h-5" />} label="ยอดใบส่งของเดือนนี้ (ก่อน VAT)" value={formatCurrency(stats.monthSDAmount)} color="text-blue-600" />
+      </div>
+
+      {/* 142.4: Revenue Trend Chart — เฉพาะลูกค้านี้ 12 เดือน */}
+      <div className="mb-6">
+        <RevenueTrendChart billingStatements={custBilling} months={12} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
