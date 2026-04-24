@@ -407,9 +407,16 @@ export default function BillingPage() {
   }
 
   const handleCreateTaxInvoice = (billingId: string) => {
-    if (!billingStatements.find(b => b.id === billingId)) return
+    const billing = billingStatements.find(b => b.id === billingId)
+    if (!billing) return
     if (taxInvoices.some(ti => ti.billingStatementId === billingId)) {
       alert('ใบกำกับภาษีของบิลนี้มีอยู่แล้ว')
+      return
+    }
+    // 145: ลูกค้าที่ไม่คิด VAT → ออกใบกำกับภาษีไม่ได้ (fail-safe guard)
+    const customer = getCustomer(billing.customerId)
+    if (customer && customer.enableVat === false) {
+      alert('⚠ ลูกค้าที่ไม่คิด VAT จะออกใบกำกับภาษีไม่ได้\n\nใบกำกับภาษี (Tax Invoice) ต้องมี VAT ตามกฎหมายภาษี — ถ้าต้องการเปิดใช้งาน VAT ให้ไปแก้ที่หน้าลูกค้า')
       return
     }
     setIvIssueDate(todayISO())
@@ -1727,11 +1734,19 @@ export default function BillingPage() {
                         <span className="font-mono">{ivInfo.invoiceNumber}</span>
                         <ExternalLink className="w-3.5 h-3.5" />
                       </button>
+                    ) : detailCustomer.enableVat === false ? (
+                      // 145: ลูกค้าไม่คิด VAT → ออก IV ไม่ได้
+                      <span className="text-sm text-slate-500">
+                        <span className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                          ⚠ ลูกค้าไม่คิด VAT — ออกใบกำกับภาษีไม่ได้
+                        </span>
+                      </span>
                     ) : (
                       <span className="text-sm text-slate-400">ยังไม่ออก IV</span>
                     )}
                   </div>
-                  {!ivInfo && (
+                  {/* 145: ซ่อนปุ่มลัดถ้าลูกค้าไม่คิด VAT */}
+                  {!ivInfo && detailCustomer.enableVat !== false && (
                     <button onClick={() => handleCreateTaxInvoice(detailBilling.id)}
                       className="text-sm px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-1">
                       <FileText className="w-3.5 h-3.5" />ออกใบกำกับภาษี
@@ -2990,9 +3005,15 @@ export default function BillingPage() {
       <Modal open={showSelectWbForIv} onClose={() => setShowSelectWbForIv(false)} title="เลือกใบวางบิลที่จะออกใบกำกับภาษี" size="lg" closeLabel="cancel">
         {(() => {
           // WB ที่ยังไม่มี IV
-          const availableWbs = billingStatements
+          const allAvailableWbs = billingStatements
             .filter(b => !taxInvoices.some(ti => ti.billingStatementId === b.id))
             .sort((a, b) => b.issueDate.localeCompare(a.issueDate))
+          // 145: กรอง WB ของลูกค้าที่ไม่คิด VAT ออก (ออก IV ไม่ได้)
+          const availableWbs = allAvailableWbs.filter(b => {
+            const c = getCustomer(b.customerId)
+            return !c || c.enableVat !== false
+          })
+          const nonVatSkippedCount = allAvailableWbs.length - availableWbs.length
 
           if (availableWbs.length === 0) {
             return (
@@ -3000,6 +3021,9 @@ export default function BillingPage() {
                 <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                 ไม่มีใบวางบิลที่ยังไม่ได้ออกใบกำกับภาษี
                 <p className="text-xs text-slate-400 mt-1">ใบวางบิลทุกใบมี IV แล้ว หรือยังไม่มีใบวางบิลในระบบ</p>
+                {nonVatSkippedCount > 0 && (
+                  <p className="text-xs text-amber-600 mt-3">⚠ มี {nonVatSkippedCount} ใบของลูกค้าที่ไม่คิด VAT — ออกใบกำกับภาษีไม่ได้</p>
+                )}
               </div>
             )
           }
@@ -3007,6 +3031,11 @@ export default function BillingPage() {
           return (
             <div className="space-y-2">
               <p className="text-xs text-slate-500 mb-3">เลือกใบวางบิลที่ต้องการออกใบกำกับภาษี ({availableWbs.length} ใบที่ยังไม่ได้ออก IV)</p>
+              {nonVatSkippedCount > 0 && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
+                  ⚠ ไม่แสดง {nonVatSkippedCount} ใบของลูกค้าที่ไม่คิด VAT — ออกใบกำกับภาษีไม่ได้
+                </p>
+              )}
               <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[60vh] overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 sticky top-0">
