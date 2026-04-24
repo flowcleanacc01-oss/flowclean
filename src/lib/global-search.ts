@@ -7,11 +7,11 @@
 
 import type {
   Customer, LinenForm, DeliveryNote,
-  BillingStatement, TaxInvoice, Quotation,
+  BillingStatement, TaxInvoice, Quotation, LinenItemDef,
 } from '@/types'
 import { formatDate } from './utils'
 
-export type SearchResultKind = 'customer' | 'lf' | 'sd' | 'wb' | 'iv' | 'qt'
+export type SearchResultKind = 'customer' | 'lf' | 'sd' | 'wb' | 'iv' | 'qt' | 'item'
 
 export interface SearchResult {
   kind: SearchResultKind
@@ -32,6 +32,7 @@ export interface SearchStore {
   billingStatements: BillingStatement[]
   taxInvoices: TaxInvoice[]
   quotations: Quotation[]
+  linenCatalog: LinenItemDef[] // 147: ค้นหา item code/name
 }
 
 /**
@@ -40,6 +41,14 @@ export interface SearchStore {
  */
 export function buildSearchIndex(store: SearchStore): SearchResult[] {
   const custMap = new Map(store.customers.map(c => [c.id, c]))
+  // 147: catalog lookup สำหรับ enrich haystack + item kind result
+  const catalogByCode = new Map(store.linenCatalog.map(i => [i.code, i]))
+  const itemsHaystack = (items: { code: string }[]): string =>
+    items.map(i => {
+      const def = catalogByCode.get(i.code)
+      return def ? `${i.code} ${def.name} ${def.nameEn || ''}` : i.code
+    }).join(' ')
+
   const results: SearchResult[] = []
 
   // Customers
@@ -55,7 +64,7 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
     })
   }
 
-  // LFs
+  // LFs (147: haystack รวม item codes + names)
   for (const f of store.linenForms) {
     const c = custMap.get(f.customerId)
     const custLabel = c?.shortName || c?.name || '-'
@@ -64,21 +73,25 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
       id: f.id,
       primary: f.formNumber,
       secondary: `${custLabel} · ${formatDate(f.date)}`,
-      haystack: [f.formNumber, custLabel, c?.customerCode, f.date].filter(Boolean).join(' ').toLowerCase(),
+      haystack: [f.formNumber, custLabel, c?.customerCode, f.date, itemsHaystack(f.rows)].filter(Boolean).join(' ').toLowerCase(),
       href: `/dashboard/linen-forms?detail=${f.id}`,
     })
   }
 
-  // SDs
+  // SDs (147: haystack รวม item codes + names + displayName)
   for (const d of store.deliveryNotes) {
     const c = custMap.get(d.customerId)
     const custLabel = c?.shortName || c?.name || '-'
+    const sdItems = d.items.map(i => {
+      const def = catalogByCode.get(i.code)
+      return `${i.code} ${def?.name || ''} ${def?.nameEn || ''} ${i.displayName || ''}`
+    }).join(' ')
     results.push({
       kind: 'sd',
       id: d.id,
       primary: d.noteNumber,
       secondary: `${custLabel} · ${formatDate(d.date)}`,
-      haystack: [d.noteNumber, custLabel, c?.customerCode, d.date].filter(Boolean).join(' ').toLowerCase(),
+      haystack: [d.noteNumber, custLabel, c?.customerCode, d.date, sdItems].filter(Boolean).join(' ').toLowerCase(),
       href: `/dashboard/delivery?detail=${d.id}`,
     })
   }
@@ -111,17 +124,60 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
     })
   }
 
-  // QTs
+  // QTs (147: haystack รวม item codes + names + price-facing fields)
   for (const q of store.quotations) {
     const c = custMap.get(q.customerId)
     const custLabel = c?.shortName || c?.name || '-'
+    const qtItems = q.items.map(qi => {
+      const def = catalogByCode.get(qi.code)
+      return `${qi.code} ${def?.name || ''} ${def?.nameEn || ''}`
+    }).join(' ')
     results.push({
       kind: 'qt',
       id: q.id,
       primary: q.quotationNumber,
       secondary: `${custLabel} · ${formatDate(q.date)}`,
-      haystack: [q.quotationNumber, custLabel, c?.customerCode, q.date].filter(Boolean).join(' ').toLowerCase(),
+      haystack: [q.quotationNumber, custLabel, c?.customerCode, q.date, qtItems].filter(Boolean).join(' ').toLowerCase(),
       href: `/dashboard/billing?tab=quotation&openqt=${q.id}`,
+    })
+  }
+
+  // 147: Item kind — catalog items ค้นหาได้ด้วยรหัส/ชื่อ + แสดงสถิติการใช้งาน
+  // usage stats: unique customers + QT/SD count ที่มี item นี้
+  const itemUsage = new Map<string, { customers: Set<string>; qtCount: number; sdCount: number }>()
+  for (const item of store.linenCatalog) {
+    itemUsage.set(item.code, { customers: new Set(), qtCount: 0, sdCount: 0 })
+  }
+  for (const q of store.quotations) {
+    const seen = new Set<string>()
+    for (const qi of q.items) {
+      const u = itemUsage.get(qi.code)
+      if (!u) continue
+      if (!seen.has(qi.code)) { u.qtCount++; seen.add(qi.code) }
+      u.customers.add(q.customerId)
+    }
+  }
+  for (const d of store.deliveryNotes) {
+    const seen = new Set<string>()
+    for (const di of d.items) {
+      const u = itemUsage.get(di.code)
+      if (!u) continue
+      if (!seen.has(di.code)) { u.sdCount++; seen.add(di.code) }
+      u.customers.add(d.customerId)
+    }
+  }
+  for (const item of store.linenCatalog) {
+    const u = itemUsage.get(item.code)!
+    const summary = u.customers.size > 0 || u.qtCount > 0 || u.sdCount > 0
+      ? `ใช้ใน ${u.customers.size} ลูกค้า · ${u.qtCount} QT · ${u.sdCount} SD`
+      : 'ยังไม่มีการใช้งาน'
+    results.push({
+      kind: 'item',
+      id: item.code,
+      primary: `${item.code} · ${item.name}`,
+      secondary: item.nameEn ? `${summary} · ${item.nameEn}` : summary,
+      haystack: [item.code, item.name, item.nameEn, item.category, item.unit].filter(Boolean).join(' ').toLowerCase(),
+      href: `/dashboard/items`,
     })
   }
 
@@ -171,6 +227,7 @@ export const KIND_LABEL: Record<SearchResultKind, string> = {
   wb: 'WB',
   iv: 'IV',
   qt: 'QT',
+  item: 'รายการ',
 }
 
 export const KIND_COLOR: Record<SearchResultKind, string> = {
@@ -180,4 +237,5 @@ export const KIND_COLOR: Record<SearchResultKind, string> = {
   wb: 'bg-orange-100 text-orange-700',
   iv: 'bg-purple-100 text-purple-700',
   qt: 'bg-emerald-100 text-emerald-700',
+  item: 'bg-pink-100 text-pink-700',
 }

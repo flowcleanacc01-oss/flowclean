@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, X, Building2, ClipboardList, Truck, FileCheck, Receipt, FileText } from 'lucide-react'
+import { Search, X, Building2, ClipboardList, Truck, FileCheck, Receipt, FileText, Package } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { buildSearchIndex, searchResults, KIND_LABEL, KIND_COLOR, type SearchResultKind } from '@/lib/global-search'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,7 @@ const KIND_ICON: Record<SearchResultKind, typeof Search> = {
   wb: FileCheck,
   iv: Receipt,
   qt: FileText,
+  item: Package,
 }
 
 /**
@@ -31,7 +32,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   const router = useRouter()
   const {
     customers, linenForms, deliveryNotes,
-    billingStatements, taxInvoices, quotations,
+    billingStatements, taxInvoices, quotations, linenCatalog,
   } = useStore()
 
   const [query, setQuery] = useState('')
@@ -51,8 +52,8 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   // Build search index (memo)
   const index = useMemo(() => buildSearchIndex({
     customers, linenForms, deliveryNotes,
-    billingStatements, taxInvoices, quotations,
-  }), [customers, linenForms, deliveryNotes, billingStatements, taxInvoices, quotations])
+    billingStatements, taxInvoices, quotations, linenCatalog,
+  }), [customers, linenForms, deliveryNotes, billingStatements, taxInvoices, quotations, linenCatalog])
 
   const results = useMemo(() => searchResults(index, query, 30), [index, query])
 
@@ -108,7 +109,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
             type="text"
             value={query}
             onChange={e => { setQuery(e.target.value); setSelectedIdx(0) }}
-            placeholder="ค้นหาลูกค้า, LF, SD, WB, IV, QT — เลขที่ / ชื่อ / วันที่"
+            placeholder="ค้นหาลูกค้า, LF, SD, WB, IV, QT, รายการ — เลขที่ / ชื่อ / รหัส / วันที่"
             className="flex-1 text-base outline-none placeholder:text-slate-400"
           />
           <kbd className="hidden sm:inline-block text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-mono">ESC</kbd>
@@ -125,7 +126,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
           {query.trim() === '' ? (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
               <Search className="w-10 h-10 mx-auto mb-2 text-slate-200" />
-              <p>พิมพ์เลขที่เอกสาร หรือชื่อลูกค้าเพื่อค้นหา</p>
+              <p>พิมพ์เลขที่เอกสาร, ชื่อลูกค้า, รหัสสินค้า (เช่น H22) หรือชื่อรายการ (เช่น ปลอกหมอน)</p>
               <p className="text-xs mt-1 text-slate-400">
                 <kbd className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-mono mx-0.5">↑↓</kbd> เลือก
                 <kbd className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-mono mx-0.5">↵</kbd> เปิด
