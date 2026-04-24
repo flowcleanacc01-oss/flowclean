@@ -3013,7 +3013,8 @@ export default function BillingPage() {
             const c = getCustomer(b.customerId)
             return !c || c.enableVat !== false
           })
-          const nonVatSkippedCount = allAvailableWbs.length - availableWbs.length
+          // 146: binary flag — มีการกรองออกไหม (ไม่แสดงจำนวน เพราะ N ใหญ่ๆ ดูเหมือน bug และ user แก้ไขไม่ได้)
+          const hasNonVatSkipped = availableWbs.length < allAvailableWbs.length
 
           if (availableWbs.length === 0) {
             return (
@@ -3021,8 +3022,8 @@ export default function BillingPage() {
                 <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                 ไม่มีใบวางบิลที่ยังไม่ได้ออกใบกำกับภาษี
                 <p className="text-xs text-slate-400 mt-1">ใบวางบิลทุกใบมี IV แล้ว หรือยังไม่มีใบวางบิลในระบบ</p>
-                {nonVatSkippedCount > 0 && (
-                  <p className="text-xs text-amber-600 mt-3">⚠ มี {nonVatSkippedCount} ใบของลูกค้าที่ไม่คิด VAT — ออกใบกำกับภาษีไม่ได้</p>
+                {hasNonVatSkipped && (
+                  <p className="text-xs text-amber-600 mt-3">⚠ ไม่แสดงใบวางบิลของลูกค้าที่ไม่คิด VAT — ออกใบกำกับภาษีไม่ได้</p>
                 )}
               </div>
             )
@@ -3031,9 +3032,9 @@ export default function BillingPage() {
           return (
             <div className="space-y-2">
               <p className="text-xs text-slate-500 mb-3">เลือกใบวางบิลที่ต้องการออกใบกำกับภาษี ({availableWbs.length} ใบที่ยังไม่ได้ออก IV)</p>
-              {nonVatSkippedCount > 0 && (
+              {hasNonVatSkipped && (
                 <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
-                  ⚠ ไม่แสดง {nonVatSkippedCount} ใบของลูกค้าที่ไม่คิด VAT — ออกใบกำกับภาษีไม่ได้
+                  ⚠ ไม่แสดงใบวางบิลของลูกค้าที่ไม่คิด VAT — ออกใบกำกับภาษีไม่ได้
                 </p>
               )}
               <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[60vh] overflow-y-auto">
