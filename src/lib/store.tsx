@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import type {
   Customer, LinenForm, LinenFormStatus, DeliveryNote, DeliveryNoteStatus,
-  BillingStatement, BillingStatus, TaxInvoice, Quotation, QuotationStatus,
+  BillingStatement, BillingStatus, TaxInvoice, Receipt, Quotation, QuotationStatus,
   Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
   CustomerCategoryDef, ProductChecklist, ChecklistStatus,
   AuditAction, AuditEntityType, AuditLog,
@@ -17,7 +17,7 @@ import {
 } from './mock-data'
 import {
   genId, genLinenFormNumber, genDeliveryNoteNumber, genBillingNumber,
-  genTaxInvoiceNumber, genQuotationNumber, genChecklistNumber, todayISO,
+  genTaxInvoiceNumber, genReceiptNumber, genQuotationNumber, genChecklistNumber, todayISO,
 } from './utils'
 import { verifyPassword, hashPassword, createSession, getSession, clearSession } from './auth'
 import * as db from './supabase-service'
@@ -64,6 +64,11 @@ interface StoreContextType {
   addTaxInvoice: (t: Omit<TaxInvoice, 'id' | 'invoiceNumber'>) => TaxInvoice
   updateTaxInvoice: (id: string, updates: Partial<TaxInvoice>) => void
   deleteTaxInvoice: (id: string) => void
+  // 148: Receipts (RC) — สำหรับลูกค้าไม่คิด VAT
+  receipts: Receipt[]
+  addReceipt: (r: Omit<Receipt, 'id' | 'receiptNumber'>) => Receipt
+  updateReceipt: (id: string, updates: Partial<Receipt>) => void
+  deleteReceipt: (id: string) => void
 
   // Quotations
   quotations: Quotation[]
@@ -168,6 +173,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
   const [billingStatements, setBillingStatements] = useState<BillingStatement[]>([])
   const [taxInvoices, setTaxInvoices] = useState<TaxInvoice[]>([])
+  // 148: receipts state
+  const [receipts, setReceipts] = useState<Receipt[]>([])
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [users, setUsers] = useState<AppUser[]>([])
@@ -284,6 +291,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setDeliveryNotes(data.deliveryNotes)
       setBillingStatements(data.billingStatements)
       setTaxInvoices(data.taxInvoices)
+      setReceipts(data.receipts || [])
       setQuotations(data.quotations)
       setExpenses(data.expenses)
       // Strip passwordHash from all users in React state
@@ -553,6 +561,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return prev.filter(x => x.id !== id)
     })
     dbSave(db.deleteTaxInvoiceDB(id))
+  }, [logAudit])
+
+  // ---- Receipts (Feature 148) ----
+  const addReceipt = useCallback((r: Omit<Receipt, 'id' | 'receiptNumber'>): Receipt => {
+    const newRC: Receipt = { ...r, id: genId(), receiptNumber: genReceiptNumber(receipts.map(x => x.receiptNumber)) }
+    setReceipts(prev => [newRC, ...prev])
+    dbSave(db.insertReceipt(newRC), () => {
+      setReceipts(prev => prev.filter(x => x.id !== newRC.id))
+    })
+    logAudit('create', 'tax_invoice', newRC.id, newRC.receiptNumber) // reuse tax_invoice entity type
+    return newRC
+  }, [logAudit, receipts])
+
+  const updateReceipt = useCallback((id: string, updates: Partial<Receipt>) => {
+    setReceipts(prev => prev.map(rc => rc.id === id ? { ...rc, ...updates } : rc))
+    dbSave(db.updateReceiptDB(id, updates))
+  }, [])
+
+  const deleteReceipt = useCallback((id: string) => {
+    setReceipts(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('delete', 'tax_invoice', id, old?.receiptNumber || id)
+      return prev.filter(x => x.id !== id)
+    })
+    dbSave(db.deleteReceiptDB(id))
   }, [logAudit])
 
   // ---- Quotations ----
@@ -984,6 +1017,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deliveryNotes, addDeliveryNote, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
       billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
       taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
+      receipts, addReceipt, updateReceipt, deleteReceipt,
       quotations, addQuotation, updateQuotation, updateQuotationStatus, deleteQuotation,
       expenses, addExpense, updateExpense, deleteExpense,
       users, addUser, updateUser, resetPassword,

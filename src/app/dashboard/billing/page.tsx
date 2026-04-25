@@ -30,6 +30,7 @@ export default function BillingPage() {
     currentUser,
     billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
     taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
+    receipts, addReceipt, // 148
     quotations, addQuotation, updateQuotation, updateQuotationStatus, deleteQuotation,
     deliveryNotes, updateDeliveryNote, updateCustomer, customers, getCustomer, companyInfo, linenCatalog,
     linenCategories, getCategoryLabel,
@@ -416,11 +417,69 @@ export default function BillingPage() {
     // 145: ลูกค้าที่ไม่คิด VAT → ออกใบกำกับภาษีไม่ได้ (fail-safe guard)
     const customer = getCustomer(billing.customerId)
     if (customer && customer.enableVat === false) {
-      alert('⚠ ลูกค้าที่ไม่คิด VAT จะออกใบกำกับภาษีไม่ได้\n\nใบกำกับภาษี (Tax Invoice) ต้องมี VAT ตามกฎหมายภาษี — ถ้าต้องการเปิดใช้งาน VAT ให้ไปแก้ที่หน้าลูกค้า')
+      alert('⚠ ลูกค้าที่ไม่คิด VAT จะออกใบกำกับภาษีไม่ได้\n\nใบกำกับภาษี (Tax Invoice) ต้องมี VAT ตามกฎหมายภาษี — ถ้าต้องการเปิดใช้งาน VAT ให้ไปแก้ที่หน้าลูกค้า\n\n→ ใช้ "ออกใบเสร็จรับเงิน (RC)" แทน')
       return
     }
     setIvIssueDate(todayISO())
     setShowCreateIV(billingId)
+  }
+
+  // 148: Receipt (RC) — เฉพาะลูกค้าไม่คิด VAT
+  const handleCreateReceipt = (billingId: string) => {
+    const billing = billingStatements.find(b => b.id === billingId)
+    if (!billing) return
+    if (receipts.some(rc => rc.billingStatementId === billingId)) {
+      alert('ใบเสร็จรับเงินของบิลนี้มีอยู่แล้ว')
+      return
+    }
+    const customer = getCustomer(billing.customerId)
+    if (!customer) return
+    // Guard: เฉพาะลูกค้า enableVat=false
+    if (customer.enableVat !== false) {
+      alert('⚠ ลูกค้านี้คิด VAT — ใช้ "ออกใบกำกับภาษี (IV)" แทน')
+      return
+    }
+
+    // Confirm
+    if (!confirm(`ออกใบเสร็จรับเงิน (RC) สำหรับ ${customer.shortName || customer.name}?\n\nยอด: ${formatCurrency(billing.netPayable)}\n\n⚠ ใบเสร็จนี้ไม่ใช่ใบกำกับภาษี — ใช้เป็นหลักฐานการชำระเงินเท่านั้น`)) return
+
+    // Build line items — collapse service lines + transport + adjustments (เหมือน IV pattern)
+    let rcLineItems = billing.lineItems
+    if (billing.deliveryNoteIds.length > 0) {
+      const transportCodes = new Set(['TRANSPORT_TRIP', 'TRANSPORT_MONTH'])
+      const adjustmentCodes = new Set(['EXTRA_CHARGE', 'DISCOUNT'])
+      const serviceLines = billing.lineItems.filter(i => !transportCodes.has(i.code) && !adjustmentCodes.has(i.code))
+      const transportLines = billing.lineItems.filter(i => transportCodes.has(i.code))
+      const adjustmentLines = billing.lineItems.filter(i => adjustmentCodes.has(i.code))
+      if (serviceLines.length > 0) {
+        const serviceTotal = serviceLines.reduce((s, i) => s + i.amount, 0)
+        const dnDates = billing.deliveryNoteIds
+          .map(id => deliveryNotes.find(d => d.id === id)?.date)
+          .filter(Boolean)
+          .sort() as string[]
+        const dateLabel = dnDates.length > 0
+          ? (dnDates[0] === dnDates[dnDates.length - 1] ? `${dnDates[0]}` : `${dnDates[0]} - ${dnDates[dnDates.length - 1]}`)
+          : billing.billingMonth
+        rcLineItems = [
+          { code: 'SERVICE', name: `ค่าบริการซักวันที่ ${dateLabel}`, quantity: 1, pricePerUnit: serviceTotal, amount: serviceTotal },
+          ...transportLines,
+          ...adjustmentLines,
+        ]
+      }
+    }
+
+    const newRC = addReceipt({
+      billingStatementId: billingId,
+      customerId: billing.customerId,
+      issueDate: todayISO(),
+      lineItems: rcLineItems,
+      subtotal: billing.subtotal,
+      grandTotal: billing.subtotal, // no VAT
+      notes: '',
+    })
+    // Navigate to RC detail
+    setShowDetail(null)
+    router.push(`/dashboard/receipts?detail=${newRC.id}`)
   }
 
   const handleConfirmCreateIV = () => {
@@ -1735,12 +1794,8 @@ export default function BillingPage() {
                         <ExternalLink className="w-3.5 h-3.5" />
                       </button>
                     ) : detailCustomer.enableVat === false ? (
-                      // 145: ลูกค้าไม่คิด VAT → ออก IV ไม่ได้
-                      <span className="text-sm text-slate-500">
-                        <span className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                          ⚠ ลูกค้าไม่คิด VAT — ออกใบกำกับภาษีไม่ได้
-                        </span>
-                      </span>
+                      // 148: ลูกค้าไม่คิด VAT → แสดง "ใบเสร็จรับเงิน (RC)" แทน IV
+                      <span className="text-sm text-slate-500 italic">— (ลูกค้าไม่คิด VAT)</span>
                     ) : (
                       <span className="text-sm text-slate-400">ยังไม่ออก IV</span>
                     )}
@@ -1750,6 +1805,36 @@ export default function BillingPage() {
                     <button onClick={() => handleCreateTaxInvoice(detailBilling.id)}
                       className="text-sm px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-1">
                       <FileText className="w-3.5 h-3.5" />ออกใบกำกับภาษี
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* 148: Receipt (RC) section — ลูกค้าไม่คิด VAT เท่านั้น */}
+            {detailCustomer.enableVat === false && (() => {
+              const rcInfo = receipts.find(r => r.billingStatementId === detailBilling.id)
+              return (
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-600 font-medium">ใบเสร็จรับเงิน (RC):</span>
+                    {rcInfo ? (
+                      <button onClick={() => {
+                        setShowDetail(null)
+                        router.push(`/dashboard/receipts?detail=${rcInfo.id}`)
+                      }}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-amber-700 hover:text-amber-900">
+                        <span className="font-mono">{rcInfo.receiptNumber}</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                    ) : (
+                      <span className="text-sm text-slate-400">ยังไม่ออก RC</span>
+                    )}
+                  </div>
+                  {!rcInfo && (
+                    <button onClick={() => handleCreateReceipt(detailBilling.id)}
+                      className="text-sm px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5" />ออกใบเสร็จรับเงิน
                     </button>
                   )}
                 </div>

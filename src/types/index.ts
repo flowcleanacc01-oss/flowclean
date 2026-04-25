@@ -360,6 +360,27 @@ export interface TaxInvoice {
 }
 
 // ============================================================
+// Receipt (ใบเสร็จรับเงิน) — Feature 148
+// สำหรับลูกค้าที่ไม่คิด VAT (enableVat=false) ที่ต้องการหลักฐานการชำระเงิน
+// ❌ ไม่ใช่ใบกำกับภาษี · ❌ ไม่มีข้อมูลบริษัทเต็ม (เอาแค่ brand) · ❌ ไม่มี VAT
+// ✅ Brand only "FlowClean Laundry Service" · ✅ ชื่อย่อลูกค้า · ✅ Watermark เตือน
+// ============================================================
+export interface Receipt {
+  id: string
+  receiptNumber: string // RC-YYYYMM-NNN
+  billingStatementId: string
+  customerId: string
+  issueDate: string
+  lineItems: BillingLineItem[]
+  subtotal: number
+  grandTotal: number // = subtotal (no VAT)
+  notes: string
+  isPrinted?: boolean
+  isExported?: boolean
+  isPaid?: boolean
+}
+
+// ============================================================
 // Quotation (ใบเสนอราคา)
 // ============================================================
 export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected'

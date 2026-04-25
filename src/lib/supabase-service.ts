@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type {
-  Customer, LinenForm, DeliveryNote, BillingStatement, TaxInvoice,
+  Customer, LinenForm, DeliveryNote, BillingStatement, TaxInvoice, Receipt,
   Quotation, Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
   CustomerCategoryDef, ProductChecklist, AuditLog, CarryOverAdjustment,
 } from '@/types'
@@ -94,6 +94,7 @@ const FIELD_MAP: Record<string, string> = {
   paidBankId: 'paid_bank_id',
   isPaid: 'is_paid',
   invoiceNumber: 'invoice_number',
+  receiptNumber: 'receipt_number', // 148: ใบเสร็จรับเงิน
   billingStatementId: 'billing_statement_id',
   quotationNumber: 'quotation_number',
   customerName: 'customer_name',
@@ -469,6 +470,31 @@ export async function deleteTaxInvoiceDB(id: string): Promise<void> {
 }
 
 // ============================================================
+// Receipts (Feature 148) — ใบเสร็จรับเงิน สำหรับลูกค้าไม่คิด VAT
+// ============================================================
+
+export async function fetchReceipts(): Promise<Receipt[]> {
+  const { data, error } = await supabase
+    .from('receipts')
+    .select('*')
+    .order('issue_date', { ascending: false })
+  if (error) throw error
+  return toCamelCaseArray<Receipt>(data || [])
+}
+
+export async function insertReceipt(rc: Receipt): Promise<void> {
+  await dbWrite({ table: 'receipts', operation: 'insert', data: toSnakeCase(rc as unknown as Record<string, unknown>) })
+}
+
+export async function updateReceiptDB(id: string, updates: Partial<Receipt>): Promise<void> {
+  await dbWrite({ table: 'receipts', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
+}
+
+export async function deleteReceiptDB(id: string): Promise<void> {
+  await dbWrite({ table: 'receipts', operation: 'delete', match: { column: 'id', value: id } })
+}
+
+// ============================================================
 // Quotations
 // ============================================================
 
@@ -615,6 +641,7 @@ export async function fetchAllData() {
     fetchLinenCategories(),
     fetchCustomerCategories().catch(() => [] as CustomerCategoryDef[]),
     fetchCarryOverAdjustments().catch(() => [] as CarryOverAdjustment[]),
+    fetchReceipts().catch(() => [] as Receipt[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -624,7 +651,7 @@ export async function fetchAllData() {
     customers, linenForms, deliveryNotes, billingStatements,
     taxInvoices, quotations, expenses, users, companyInfo,
     linenItems, checklists, linenCategories, customerCategories,
-    carryOverAdjustments,
+    carryOverAdjustments, receipts,
   ] = [
     val(results[0], [] as Customer[]),
     val(results[1], [] as LinenForm[]),
@@ -640,6 +667,7 @@ export async function fetchAllData() {
     val(results[11], [] as LinenCategoryDef[]),
     val(results[12], [] as CustomerCategoryDef[]),
     val(results[13], [] as CarryOverAdjustment[]),
+    val(results[14], [] as Receipt[]),
   ]
 
   return {
@@ -657,5 +685,6 @@ export async function fetchAllData() {
     linenCategories,
     customerCategories,
     carryOverAdjustments,
+    receipts,
   }
 }

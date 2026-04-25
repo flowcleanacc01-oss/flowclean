@@ -48,6 +48,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/delivery', label: '2. ใบส่งของชั่วคราว (SD)', icon: Truck, guard: canViewSD },
   { href: '/dashboard/billing?tab=billing', label: '3. ใบวางบิล (WB)', icon: FileCheck, guard: canViewBilling },
   { href: '/dashboard/billing?tab=invoice', label: '4. ใบกำกับภาษี/ใบเสร็จ (IV)', icon: Receipt, guard: canViewBilling },
+  { href: '/dashboard/receipts', label: '5. ใบเสร็จรับเงิน (RC)', icon: Receipt, guard: canViewBilling },
   { href: '/dashboard/reports', label: 'รายงาน', icon: BarChart3, guard: canViewReports },
   { href: '/dashboard/expenses', label: 'รายจ่าย', icon: Wallet, guard: canViewExpenses },
   { href: '/dashboard/guide', label: 'คู่มือการใช้งาน', icon: BookOpen, separator: true },

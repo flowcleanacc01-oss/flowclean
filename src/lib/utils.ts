@@ -47,6 +47,12 @@ export function genTaxInvoiceNumber(existingNumbers: string[]): string {
   return prefix + nextRunning(prefix, existingNumbers)
 }
 
+// 148: ใบเสร็จรับเงิน (สำหรับลูกค้าที่ไม่คิด VAT)
+export function genReceiptNumber(existingNumbers: string[]): string {
+  const prefix = `RC-${format(new Date(), 'yyyyMM')}-`
+  return prefix + nextRunning(prefix, existingNumbers)
+}
+
 export function genQuotationNumber(existingNumbers: string[]): string {
   const prefix = `QT-${format(new Date(), 'yyyyMM')}-`
   return prefix + nextRunning(prefix, existingNumbers)
