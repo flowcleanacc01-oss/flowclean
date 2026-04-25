@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
+import { highlightText } from '@/lib/highlight'
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, aggregateDeliveryItemsByTotal, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
@@ -37,6 +38,7 @@ export default function BillingPage() {
   } = useStore()
 
   const searchParams = useSearchParams()
+  const highlightQ = searchParams.get('q') || '' // 147.2
   const [tab, setTab] = useState<TabKey>(() => {
     const t = searchParams.get('tab')
     if (t === 'invoice' || t === 'quotation') return t
@@ -1186,10 +1188,10 @@ export default function BillingPage() {
                           onChange={e => { if (e.target.checked) setSelectedWbIds(prev => [...prev, b.id]); else setSelectedWbIds(prev => prev.filter(id => id !== b.id)) }}
                           className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                       </td>
-                      {/* 135.4: date + customer = เด่น, billingNumber = muted */}
+                      {/* 135.4 + 147.2: highlight Q */}
                       <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(b.issueDate)}</td>
-                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
-                      <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('billingNumber'))}>{b.billingNumber}</td>
+                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{highlightText(customer?.shortName || customer?.name || '-', highlightQ)}</td>
+                      <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('billingNumber'))}>{highlightText(b.billingNumber, highlightQ)}</td>
                       <td className={cn("px-4 py-3 text-slate-600", sortedBg('billingMonth'))}>{b.billingMonth}</td>
                       <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('grandTotal'))}>{formatCurrency(b.grandTotal)}</td>
                       <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('netPayable'))}>{formatCurrency(b.netPayable)}</td>
@@ -1307,10 +1309,10 @@ export default function BillingPage() {
                           onChange={e => { if (e.target.checked) setSelectedIvIds(prev => [...prev, inv.id]); else setSelectedIvIds(prev => prev.filter(id => id !== inv.id)) }}
                           className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                       </td>
-                      {/* 135.4: date + customer = เด่น, invoiceNumber = muted */}
+                      {/* 135.4 + 147.2: highlight Q */}
                       <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(inv.issueDate)}</td>
-                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{customer?.shortName || customer?.name || '-'}</td>
-                      <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('invoiceNumber'))}>{inv.invoiceNumber}</td>
+                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{highlightText(customer?.shortName || customer?.name || '-', highlightQ)}</td>
+                      <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('invoiceNumber'))}>{highlightText(inv.invoiceNumber, highlightQ)}</td>
                       <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('grandTotal'))}>{formatCurrency(inv.grandTotal)}</td>
                       <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
@@ -1411,10 +1413,10 @@ export default function BillingPage() {
                       data-row-id={q.id}
                       className={cn("border-b border-slate-100 cursor-pointer", activeQtId === q.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                       onClick={() => { setActiveQtId(q.id); setShowQuDetail(q.id) }}>
-                      {/* 135.4: date + customer = เด่น, quotationNumber = muted */}
+                      {/* 135.4 + 147.2: highlight Q */}
                       <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(q.date)}</td>
-                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customerName'))}>{getCustomer(q.customerId)?.shortName || q.customerName}</td>
-                      <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('quotationNumber'))}>{q.quotationNumber}</td>
+                      <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customerName'))}>{highlightText(getCustomer(q.customerId)?.shortName || q.customerName, highlightQ)}</td>
+                      <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('quotationNumber'))}>{highlightText(q.quotationNumber, highlightQ)}</td>
                       <td className={cn("px-4 py-3 text-center text-slate-500", sortedBg('items'))}>{q.items.length}</td>
                       <td className={cn("px-4 py-3 text-slate-500 text-sm max-w-[160px] truncate", sortedBg('notes'))}>{q.notes || '-'}</td>
                       <td className={cn("px-4 py-3 text-center", sortedBg('status'))}>

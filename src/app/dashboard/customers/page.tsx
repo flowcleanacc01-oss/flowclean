@@ -3,6 +3,8 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { cn, formatCurrency, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
+import { highlightText } from '@/lib/highlight'
+import { useSearchParams } from 'next/navigation'
 import type { Customer, CustomerCategoryDef } from '@/types'
 import { Plus, Search, Edit2, Trash2, Check, FileText, Eye, X, Link2 } from 'lucide-react'
 import Link from 'next/link'
@@ -29,6 +31,8 @@ export default function CustomersPage() {
     quotations, linenForms, deliveryNotes, billingStatements, checklists, taxInvoices, companyInfo,
     customerCategories, addCustomerCategory, updateCustomerCategory, deleteCustomerCategory, getCustomerCategoryLabel,
   } = useStore()
+  const sp = useSearchParams()
+  const highlightQ = sp.get('q') || '' // 147.2
 
   const hasDocuments = (custId: string) => {
     return linenForms.some(f => f.customerId === custId)
@@ -229,11 +233,11 @@ export default function CustomersPage() {
                         !c.isActive && 'bg-red-50/30')}
                       onClick={() => setActiveCustomerId(c.id)}>
                       <td className={cn("px-4 py-3", sortedBg('shortName'))}>
-                        <Link href={`/dashboard/customers/${c.id}`} className="font-bold text-[#1B3A5C] hover:underline tracking-wide">{c.shortName || '-'}</Link>
+                        <Link href={`/dashboard/customers/${c.id}`} className="font-bold text-[#1B3A5C] hover:underline tracking-wide">{highlightText(c.shortName || '-', highlightQ)}</Link>
                       </td>
                       <td className={cn("px-4 py-3", sortedBg('name'))}>
-                        <span className="text-slate-800">{c.name}</span>
-                        {c.nameEn && <p className="text-[10px] text-slate-400">{c.nameEn}</p>}
+                        <span className="text-slate-800">{highlightText(c.name, highlightQ)}</span>
+                        {c.nameEn && <p className="text-[10px] text-slate-400">{highlightText(c.nameEn, highlightQ)}</p>}
                       </td>
                       <td className={cn("px-4 py-3 text-slate-600 text-xs", sortedBg('customerType'))}>{getCustomerCategoryLabel(c.customerType)}</td>
                       <td className={cn("px-4 py-3 text-center", sortedBg('billingModel'))}>

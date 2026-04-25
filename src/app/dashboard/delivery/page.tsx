@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
+import { highlightText } from '@/lib/highlight'
 import { type DeliveryNoteItem, LINEN_FORM_STATUS_CONFIG } from '@/types'
 import { calculateTransportFeeTrip, calculateDNSubtotal } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
@@ -37,6 +38,7 @@ export default function DeliveryPage() {
   const [showCreate, setShowCreate] = useState(false)
   const searchParams = useSearchParams()
   const router = useRouter()
+  const highlightQ = searchParams.get('q') || '' // 147.2
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [dnFilter, setDnFilter] = useState<DNFilter>('all')
@@ -683,10 +685,10 @@ export default function DeliveryPage() {
                         }}
                         className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                     </td>
-                    {/* 135.4: date + customer = ตัวเด่น, noteNumber = ตัวบาง + สีอ่อน */}
+                    {/* 135.4 + 147.2: highlight Q */}
                     <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(dn.date)}</td>
-                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}><span className="truncate block max-w-[120px]">{customer?.shortName || customer?.name || '-'}</span></td>
-                    <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('noteNumber'))}>{dn.noteNumber}</td>
+                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}><span className="truncate block max-w-[120px]">{highlightText(customer?.shortName || customer?.name || '-', highlightQ)}</span></td>
+                    <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('noteNumber'))}>{highlightText(dn.noteNumber, highlightQ)}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('items'))}>{formatNumber(totalItems)}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('amount'))}>{dnAmount > 0 ? formatCurrency(dnAmount) : '-'}</td>
                     <td className={cn("px-4 py-3 text-slate-600", sortedBg('driver'))}>{dn.driverName || '-'}</td>

@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, formatExportFilename } from '@/lib/utils'
+import { highlightText } from '@/lib/highlight'
 import { Search, FileDown, Trash2, X } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DateFilter from '@/components/DateFilter'
@@ -25,6 +26,7 @@ export default function ReceiptsPage() {
   } = useStore()
 
   const searchParams = useSearchParams()
+  const highlightQ = searchParams.get('q') || '' // 147.2
 
   // Filters
   const [search, setSearch] = useState('')
@@ -178,8 +180,8 @@ export default function ReceiptsPage() {
                     className={cn("border-b border-slate-100 cursor-pointer", activeRowId === rc.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                     onClick={() => { setActiveRowId(rc.id); setShowDetail(rc.id) }}>
                     <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(rc.issueDate)}</td>
-                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{c?.shortName || c?.name || '-'}</td>
-                    <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('receiptNumber'))}>{rc.receiptNumber}</td>
+                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{highlightText(c?.shortName || c?.name || '-', highlightQ)}</td>
+                    <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('receiptNumber'))}>{highlightText(rc.receiptNumber, highlightQ)}</td>
                     <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('grandTotal'))}>{formatCurrency(rc.grandTotal)}</td>
                     <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',

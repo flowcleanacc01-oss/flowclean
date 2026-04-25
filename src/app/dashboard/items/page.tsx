@@ -4,6 +4,8 @@ import { useState, useMemo, useCallback } from 'react'
 import { useStore } from '@/lib/store'
 import { canManageItems } from '@/lib/permissions'
 import { cn, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
+import { highlightText } from '@/lib/highlight'
+import { useSearchParams } from 'next/navigation'
 import type { LinenItemDef, LinenCategoryDef } from '@/types'
 import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
 
@@ -28,6 +30,8 @@ export default function ItemsPage() {
     linenCatalog, addLinenItem, updateLinenItem, deleteLinenItem,
     linenCategories, addCategory, updateCategory, deleteCategory, getCategoryLabel,
   } = useStore()
+  const sp = useSearchParams()
+  const highlightQ = sp.get('q') || '' // 147.2
 
   const [tab, setTab] = useState<TabKey>('items')
 
@@ -368,20 +372,20 @@ export default function ItemsPage() {
                           </button>
                         </div>
                       </td>
-                      <td className={cn("px-4 py-2 font-mono text-xs text-slate-500", sortedBg('code'))}>{item.code}</td>
+                      <td className={cn("px-4 py-2 font-mono text-xs text-slate-500", sortedBg('code'))}>{highlightText(item.code, highlightQ)}</td>
                       <td className={cn("px-4 py-2 text-slate-700", sortedBg('name'))}>
                         {editingCode === item.code ? (
                           <input value={editItem.name ?? item.name}
                             onChange={e => setEditItem({ ...editItem, name: e.target.value })}
                             className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                        ) : item.name}
+                        ) : highlightText(item.name, highlightQ)}
                       </td>
                       <td className={cn("px-4 py-2 text-slate-500 text-xs", sortedBg('nameEn'))}>
                         {editingCode === item.code ? (
                           <input value={editItem.nameEn ?? item.nameEn}
                             onChange={e => setEditItem({ ...editItem, nameEn: e.target.value })}
                             className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                        ) : item.nameEn}
+                        ) : highlightText(item.nameEn, highlightQ)}
                       </td>
                       <td className={cn("px-4 py-2 text-xs text-slate-400", sortedBg('category'))}>
                         {editingCode === item.code ? (

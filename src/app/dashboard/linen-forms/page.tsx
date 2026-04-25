@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
+import { highlightText } from '@/lib/highlight'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
@@ -28,6 +29,7 @@ export default function LinenFormsPage() {
 
   const router = useRouter()
   const searchParams = useSearchParams()
+  const highlightQ = searchParams.get('q') || '' // 147.2
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<LinenFormStatus | 'all'>(() => {
     const s = searchParams.get('status')
@@ -489,11 +491,12 @@ export default function LinenFormsPage() {
                         className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                     </td>
                     {/* 135.4: date + customer = เด่น, formNumber = muted */}
+                    {/* 147.2: highlight keyword จาก Global Search ?q= */}
                     <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(form.date)}</td>
-                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}><span className="truncate block max-w-[120px]">{customer?.shortName || customer?.name || '-'}</span></td>
+                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}><span className="truncate block max-w-[120px]">{highlightText(customer?.shortName || customer?.name || '-', highlightQ)}</span></td>
                     <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('formNumber'))}>
                       <span className="inline-flex items-center gap-1">
-                        {form.formNumber}
+                        {highlightText(form.formNumber, highlightQ)}
                         {/* 70+73+74+75: Synced badge — เคยมี discrepancy + sync แล้ว */}
                         {lfHasSyncedRows(form) && (
                           <span title="LF นี้ มีรายการที่เคยปรับ จำนวนผ้าลูกค้านับกลับไม่ตรง แล้ว">📝</span>

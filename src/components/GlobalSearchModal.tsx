@@ -92,7 +92,12 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
     const r = results[idx]
     if (!r) return
     onClose()
-    router.push(r.href)
+    // 147.2: append ?q=<query> เพื่อให้ destination page highlight ได้
+    const sep = r.href.includes('?') ? '&' : '?'
+    const hrefWithQuery = query.trim()
+      ? `${r.href}${sep}q=${encodeURIComponent(query.trim())}`
+      : r.href
+    router.push(hrefWithQuery)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
