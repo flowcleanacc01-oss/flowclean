@@ -57,6 +57,25 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
 
   const results = useMemo(() => searchResults(index, query, 30), [index, query])
 
+  // 147.1: highlight tokens — case-insensitive substring → split text + wrap matches
+  const tokens = useMemo(() => {
+    return query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  }, [query])
+
+  const highlight = (text: string): React.ReactNode => {
+    if (tokens.length === 0 || !text) return text
+    const sorted = [...tokens].sort((a, b) => b.length - a.length)
+    const pattern = sorted.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+    if (!pattern) return text
+    const splitRe = new RegExp(`(${pattern})`, 'gi')
+    const tokenSet = new Set(sorted)
+    return text.split(splitRe).map((p, i) =>
+      tokenSet.has(p.toLowerCase())
+        ? <mark key={i} className="bg-yellow-200 text-slate-900 rounded px-0.5">{p}</mark>
+        : <span key={i}>{p}</span>
+    )
+  }
+
   // Clamp selected when results change
   useEffect(() => {
     if (selectedIdx >= results.length) setSelectedIdx(Math.max(0, results.length - 1))
@@ -158,8 +177,8 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
                       {KIND_LABEL[r.kind]}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-800 truncate">{r.primary}</div>
-                      <div className="text-xs text-slate-500 truncate">{r.secondary}</div>
+                      <div className="text-sm font-medium text-slate-800 truncate">{highlight(r.primary)}</div>
+                      <div className="text-xs text-slate-500 truncate">{highlight(r.secondary)}</div>
                     </div>
                     {isSel && (
                       <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">↵</span>
