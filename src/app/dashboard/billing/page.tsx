@@ -464,7 +464,7 @@ export default function BillingPage() {
           .filter(Boolean)
           .sort() as string[]
         const dateLabel = dnDates.length > 0
-          ? (dnDates[0] === dnDates[dnDates.length - 1] ? `${dnDates[0]}` : `${dnDates[0]} - ${dnDates[dnDates.length - 1]}`)
+          ? (dnDates[0] === dnDates[dnDates.length - 1] ? formatDate(dnDates[0]) : `${formatDate(dnDates[0])} - ${formatDate(dnDates[dnDates.length - 1])}`)
           : billing.billingMonth
         rcLineItems = [
           { code: 'SERVICE', name: `ค่าบริการซักวันที่ ${dateLabel}`, quantity: 1, pricePerUnit: serviceTotal, amount: serviceTotal },
@@ -512,8 +512,8 @@ export default function BillingPage() {
           .sort() as string[]
         const dateLabel = dnDates.length > 0
           ? (dnDates[0] === dnDates[dnDates.length - 1]
-            ? `${dnDates[0]}`
-            : `${dnDates[0]} - ${dnDates[dnDates.length - 1]}`)
+            ? formatDate(dnDates[0])
+            : `${formatDate(dnDates[0])} - ${formatDate(dnDates[dnDates.length - 1])}`)
           : billing.billingMonth
         ivLineItems = [
           { code: 'SERVICE', name: `ค่าบริการซักวันที่ ${dateLabel}`, quantity: 1, pricePerUnit: serviceTotal, amount: serviceTotal },
