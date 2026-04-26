@@ -571,7 +571,7 @@ export default function ItemsPage() {
       )}
 
       {/* 154.1: Items Print List Modal */}
-      <Modal open={showItemPrintList} onClose={() => setShowItemPrintList(false)} title="รายการผ้า" size="xl" closeLabel="close">
+      <Modal open={showItemPrintList} onClose={() => setShowItemPrintList(false)} title="รายการผ้า" size="xl" closeLabel="close" className="print-target">
         {(() => {
           const handleCSV = () => {
             const headers = ['ลำดับ', 'รหัส', 'ชื่อรายการ', 'ชื่ออังกฤษ', 'หมวดหมู่', 'หน่วย', 'ราคา default']

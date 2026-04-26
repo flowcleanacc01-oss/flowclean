@@ -3117,7 +3117,7 @@ export default function BillingPage() {
       })()}
 
       {/* 154.3: QT Print List Modal */}
-      <Modal open={showQtPrintList} onClose={() => setShowQtPrintList(false)} title="รายการใบเสนอราคา" size="xl" closeLabel="close">
+      <Modal open={showQtPrintList} onClose={() => setShowQtPrintList(false)} title="รายการใบเสนอราคา" size="xl" closeLabel="close" className="print-target">
         {(() => {
           const printItems = selectedQtIds.length > 0 ? filteredQuotations.filter(q => selectedQtIds.includes(q.id)) : filteredQuotations
           const handleCSV = () => {
@@ -3173,7 +3173,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* 154.3: QT Bulk Print Modal */}
-      <Modal open={showQtBulkPrint} onClose={() => setShowQtBulkPrint(false)} title={`พิมพ์ใบเสนอราคา (${selectedQtIds.length} ใบ)`} size="xl" closeLabel="close">
+      <Modal open={showQtBulkPrint} onClose={() => setShowQtBulkPrint(false)} title={`พิมพ์ใบเสนอราคา (${selectedQtIds.length} ใบ)`} size="xl" closeLabel="close" className="print-target">
         <div id="print-bulk-qt" className="space-y-4">
           {selectedQtIds.map(id => {
             const qt = quotations.find(q => q.id === id)

@@ -323,7 +323,7 @@ export default function ReceiptsPage() {
       </Modal>
 
       {/* Print Modal */}
-      <Modal open={showPrint && !!detailRC} onClose={() => setShowPrint(false)} title="พิมพ์ใบเสร็จรับเงิน" size="xl" closeLabel="close">
+      <Modal open={showPrint && !!detailRC} onClose={() => setShowPrint(false)} title="พิมพ์ใบเสร็จรับเงิน" size="xl" closeLabel="close" className="print-target">
         {detailRC && detailCustomer && (
           <div className="space-y-3">
             <ExportButtons
@@ -338,7 +338,7 @@ export default function ReceiptsPage() {
       </Modal>
 
       {/* 154: Print List Modal */}
-      <Modal open={showRcPrintList} onClose={() => setShowRcPrintList(false)} title="รายการใบเสร็จรับเงิน" size="xl" closeLabel="close">
+      <Modal open={showRcPrintList} onClose={() => setShowRcPrintList(false)} title="รายการใบเสร็จรับเงิน" size="xl" closeLabel="close" className="print-target">
         {(() => {
           const printItems = selectedRcIds.length > 0 ? filtered.filter(r => selectedRcIds.includes(r.id)) : filtered
           const total = printItems.reduce((s, r) => s + r.grandTotal, 0)
@@ -405,7 +405,7 @@ export default function ReceiptsPage() {
       </Modal>
 
       {/* 154: Bulk Print Modal */}
-      <Modal open={showRcBulkPrint} onClose={() => setShowRcBulkPrint(false)} title={`พิมพ์ใบเสร็จรับเงิน (${selectedRcIds.length} ใบ)`} size="xl" closeLabel="close">
+      <Modal open={showRcBulkPrint} onClose={() => setShowRcBulkPrint(false)} title={`พิมพ์ใบเสร็จรับเงิน (${selectedRcIds.length} ใบ)`} size="xl" closeLabel="close" className="print-target">
         <div className="space-y-4">
           {selectedRcIds.map(id => {
             const rc = receipts.find(r => r.id === id)

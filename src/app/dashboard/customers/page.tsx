@@ -6,7 +6,7 @@ import { cn, formatCurrency, sanitizeNumber, scrollToActiveRow } from '@/lib/uti
 import { highlightText } from '@/lib/highlight'
 import { useSearchParams } from 'next/navigation'
 import type { Customer, CustomerCategoryDef } from '@/types'
-import { Plus, Search, Edit2, Trash2, Check, FileText, Eye, X, Link2, Printer } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Check, FileText, Eye, X, Link2, Printer, FileDown } from 'lucide-react'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
 import Link from 'next/link'
@@ -36,6 +36,8 @@ export default function CustomersPage() {
   const sp = useSearchParams()
   const highlightQ = sp.get('q') || '' // 147.2
   const [showCustPrintList, setShowCustPrintList] = useState(false) // 154.2
+  const [selectedCustIds, setSelectedCustIds] = useState<string[]>([]) // 154.2.1
+  const [showCustBulkPrint, setShowCustBulkPrint] = useState(false)
 
   const hasDocuments = (custId: string) => {
     return linenForms.some(f => f.customerId === custId)
@@ -180,6 +182,12 @@ export default function CustomersPage() {
           ))}
           {pageTab === 'customers' && (
             <>
+              {selectedCustIds.length > 0 && (
+                <button onClick={() => setShowCustBulkPrint(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+                  <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสารที่เลือก ({selectedCustIds.length})
+                </button>
+              )}
               <button onClick={() => setShowCustPrintList(true)} disabled={filtered.length === 0}
                 className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
                 <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
@@ -219,6 +227,12 @@ export default function CustomersPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-2 py-3 w-10">
+                      <input type="checkbox"
+                        checked={filtered.length > 0 && selectedCustIds.length === filtered.length}
+                        onChange={e => setSelectedCustIds(e.target.checked ? filtered.map(c => c.id) : [])}
+                        className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                    </th>
                     <SortableHeader label="ชื่อย่อลูกค้า" sortKey="shortName" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                     <SortableHeader label="ชื่อบริษัท" sortKey="name" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                     <SortableHeader label="หมวด" sortKey="customerType" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
@@ -233,7 +247,7 @@ export default function CustomersPage() {
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <tr><td colSpan={10} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                    <tr><td colSpan={11} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                   ) : filtered.map(c => (
                     <tr key={c.id}
                       data-row-id={c.id}
@@ -241,6 +255,11 @@ export default function CustomersPage() {
                         activeCustomerId === c.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50',
                         !c.isActive && 'bg-red-50/30')}
                       onClick={() => setActiveCustomerId(c.id)}>
+                      <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={selectedCustIds.includes(c.id)}
+                          onChange={e => setSelectedCustIds(prev => e.target.checked ? [...prev, c.id] : prev.filter(id => id !== c.id))}
+                          className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                      </td>
                       <td className={cn("px-4 py-3", sortedBg('shortName'))}>
                         <Link href={`/dashboard/customers/${c.id}`} className="font-bold text-[#1B3A5C] hover:underline tracking-wide">{highlightText(c.shortName || '-', highlightQ)}</Link>
                       </td>
@@ -625,7 +644,7 @@ export default function CustomersPage() {
       </Modal>
 
       {/* 154.2: Customer Print List Modal */}
-      <Modal open={showCustPrintList} onClose={() => setShowCustPrintList(false)} title="รายการลูกค้า" size="xl" closeLabel="close">
+      <Modal open={showCustPrintList} onClose={() => setShowCustPrintList(false)} title="รายการลูกค้า" size="xl" closeLabel="close" className="print-target">
         {(() => {
           const handleCSV = () => {
             const headers = ['ลำดับ', 'รหัส', 'ชื่อย่อ', 'ชื่อบริษัท', 'หมวด', 'เครดิต', 'VAT', 'หัก ณ ที่จ่าย', 'สถานะ']
@@ -681,6 +700,71 @@ export default function CustomersPage() {
               </div>
               <div className="flex justify-end mt-4">
                 <ExportButtons targetId="print-cust-list" filename="รายการลูกค้า" onExportCSV={handleCSV} />
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* 154.2.1: Customer Bulk Print Modal — รายการลูกค้าที่เลือกพร้อมรายละเอียด */}
+      <Modal open={showCustBulkPrint} onClose={() => setShowCustBulkPrint(false)} title={`พิมพ์ลูกค้าที่เลือก (${selectedCustIds.length} ราย)`} size="xl" closeLabel="close" className="print-target">
+        {(() => {
+          const selectedCusts = customers.filter(c => selectedCustIds.includes(c.id))
+          return (
+            <div>
+              <div id="print-cust-bulk" className="space-y-4">
+                <h2 className="hidden print:block text-lg font-bold text-center mb-4">รายการลูกค้าที่เลือก ({selectedCusts.length} ราย)</h2>
+                {selectedCusts.map((c, idx) => (
+                  <div key={c.id} className="border border-slate-200 rounded-lg p-4 break-after-page">
+                    <div className="flex items-start justify-between mb-3 pb-2 border-b border-slate-200">
+                      <div>
+                        <h3 className="text-lg font-bold text-[#1B3A5C]">{c.shortName || c.name}</h3>
+                        {c.shortName && <p className="text-sm text-slate-600">{c.name}</p>}
+                        {c.nameEn && <p className="text-xs text-slate-400">{c.nameEn}</p>}
+                      </div>
+                      <div className="text-right text-xs text-slate-500">
+                        <div>#{idx + 1}</div>
+                        <div className="font-mono">{c.customerCode || '-'}</div>
+                        <div className="mt-1">{getCustomerCategoryLabel(c.customerType)}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div><span className="text-slate-500">ที่อยู่:</span> {c.address || '-'}</div>
+                      <div><span className="text-slate-500">เลขผู้เสียภาษี:</span> {c.taxId || '-'} {c.branch && `(${c.branch})`}</div>
+                      <div><span className="text-slate-500">ผู้ติดต่อ:</span> {c.contactName || '-'}</div>
+                      <div><span className="text-slate-500">เบอร์โทร:</span> {c.contactPhone || '-'}</div>
+                      <div><span className="text-slate-500">อีเมล:</span> {c.contactEmail || '-'}</div>
+                      <div><span className="text-slate-500">เครดิต:</span> {c.creditDays} วัน</div>
+                      <div>
+                        <span className="text-slate-500">รูปแบบบิล:</span>
+                        {(c.enablePerPiece ?? true) && <span className="ml-1 text-blue-700">ตามหน่วย</span>}
+                        {c.enableMinPerTrip && <span className="ml-1 text-amber-700">ขั้นต่ำ/ครั้ง {formatCurrency(c.minPerTrip)}</span>}
+                        {c.enableMinPerMonth && <span className="ml-1 text-purple-700">ขั้นต่ำ/ด. {formatCurrency(c.monthlyFlatRate)}</span>}
+                      </div>
+                      <div>
+                        <span className="text-slate-500">ภาษี:</span>
+                        <span className={c.enableVat !== false ? 'text-emerald-700 ml-1' : 'text-slate-400 ml-1 line-through'}>VAT</span>
+                        <span className={c.enableWithholding !== false ? 'text-orange-700 ml-1' : 'text-slate-400 ml-1 line-through'}>หัก ณ ที่จ่าย</span>
+                      </div>
+                    </div>
+                    {c.priceList && c.priceList.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-slate-200">
+                        <p className="text-xs font-medium text-slate-600 mb-1">ราคา ({c.priceList.length} รายการ):</p>
+                        <div className="grid grid-cols-3 gap-x-3 gap-y-0.5 text-[11px]">
+                          {c.priceList.map(p => (
+                            <div key={p.code} className="flex justify-between">
+                              <span className="font-mono text-slate-500">{p.code}</span>
+                              <span className="text-slate-700">{formatCurrency(p.price)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end mt-4 no-print">
+                <ExportButtons targetId="print-cust-bulk" filename={`Customers-bulk-${selectedCusts.length}`} />
               </div>
             </div>
           )
