@@ -781,7 +781,7 @@ export default function BillingPage() {
     const rows = detailQuotation.items.map(item => [
       item.code, item.name, String(item.pricePerUnit),
     ])
-    exportCSV(headers, rows, formatExportFilename(detailQuotation.quotationNumber, detailQuotation.customerName, detailQuotation.date))
+    exportCSV(headers, rows, formatExportFilename(detailQuotation.quotationNumber, getCustomer(detailQuotation.customerId)?.shortName || detailQuotation.customerName, detailQuotation.date))
   }
 
   // List CSV handlers for bulk export
@@ -2659,10 +2659,10 @@ export default function BillingPage() {
       <Modal open={!!showQuDetail} onClose={() => { setShowQuDetail(null); setShowQuPrint(false) }} title={`ใบเสนอราคา ${detailQuotation?.quotationNumber || ''}`} size="lg">
         {detailQuotation && (
           <div className="space-y-4">
-            {/* 102+103: Navy bar sticky header — ลูกค้า + วันที่ */}
+            {/* 102+103+157: Navy bar — ลูกค้าใช้ shortName (resolve via customer_id), fallback legacy customerName */}
             <div className="bg-[#1B3A5C] rounded-lg px-4 py-2.5 sticky top-0 z-10">
               <span className="text-sm font-semibold text-white tracking-wide">
-                ลูกค้า: {detailQuotation.customerName} | วันที่: {formatDate(detailQuotation.date)}
+                ลูกค้า: {getCustomer(detailQuotation.customerId)?.shortName || detailQuotation.customerName} | วันที่: {formatDate(detailQuotation.date)}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -2752,7 +2752,7 @@ export default function BillingPage() {
           <div>
             <QuotationPrint quotation={detailQuotation} company={companyInfo} />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-quotation" filename={formatExportFilename(detailQuotation.quotationNumber, detailQuotation.customerName, detailQuotation.date)} onExportCSV={handleQuotationCSV} />
+              <ExportButtons targetId="print-quotation" filename={formatExportFilename(detailQuotation.quotationNumber, getCustomer(detailQuotation.customerId)?.shortName || detailQuotation.customerName, detailQuotation.date)} onExportCSV={handleQuotationCSV} />
             </div>
           </div>
         )}
