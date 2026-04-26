@@ -595,12 +595,29 @@ export default function CustomersPage() {
             </div>
           </div>
 
+          {/* 155: hint แสดงเหตุผลที่ปุ่มบันทึกกดไม่ได้ — ลูกค้า import จาก legacy บางรายไม่มี shortName */}
+          {(() => {
+            const dupShort = !!form.shortName && customers.some(c => c.shortName.toUpperCase() === form.shortName.toUpperCase() && c.id !== editId)
+            const issues: string[] = []
+            if (!form.shortName) issues.push('ชื่อย่อลูกค้า (ว่าง — ใส่ตัวย่อ เช่น SWD, MS, RPPT)')
+            if (!form.name) issues.push('ชื่อบริษัท (ว่าง)')
+            if (dupShort) issues.push(`ชื่อย่อ "${form.shortName}" ซ้ำกับลูกค้ารายอื่น`)
+            if (issues.length === 0) return null
+            return (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+                <strong>⚠ ยังบันทึกไม่ได้ — กรุณาแก้:</strong>
+                <ul className="mt-1 ml-4 list-disc">{issues.map(i => <li key={i}>{i}</li>)}</ul>
+              </div>
+            )
+          })()}
+
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setShowForm(false)}
               className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
             <button onClick={handleSave}
               disabled={!form.shortName || !form.name || customers.some(c => c.shortName.toUpperCase() === form.shortName.toUpperCase() && c.id !== editId)}
-              className="px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors font-medium flex items-center gap-1">
+              title={!form.shortName ? 'กรุณาใส่ชื่อย่อก่อน' : !form.name ? 'กรุณาใส่ชื่อบริษัทก่อน' : 'บันทึก'}
+              className="px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-1">
               <Check className="w-4 h-4" />บันทึก
             </button>
           </div>
