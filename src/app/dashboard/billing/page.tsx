@@ -113,6 +113,10 @@ export default function BillingPage() {
   // Bulk select state (WB, IV)
   const [selectedWbIds, setSelectedWbIds] = useState<string[]>([])
   const [selectedIvIds, setSelectedIvIds] = useState<string[]>([])
+  // 154.3: QT selection + print
+  const [selectedQtIds, setSelectedQtIds] = useState<string[]>([])
+  const [showQtPrintList, setShowQtPrintList] = useState(false)
+  const [showQtBulkPrint, setShowQtBulkPrint] = useState(false)
 
   // Focus mode (50): from ?focus=ID1,ID2 — apply to active tab (billing/invoice/quotation)
   const [focusIds, setFocusIds] = useState<string[]>(() => {
@@ -987,31 +991,43 @@ export default function BillingPage() {
           </div>
         )}
         {tab === 'quotation' && (
-          <button onClick={() => {
-            setEditQuId(null)
-            setQuCustomerId('')
-            setQuCustomerName('')
-            setQuCustomerContact('')
-            setQuDate(todayISO())
-            setQuValidDays(30)
-            setQuConditions('1. ราคายังไม่รวมภาษีมูลค่าเพิ่ม 7%\n2. ระยะเวลาเครดิต 30 วัน\n3. บริการรับ-ส่งผ้าทุกวัน')
-            setQuNotes('')
-            setQuItems([...linenCatalog].sort((a, b) => a.sortOrder - b.sortOrder).map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice > 0 ? i.defaultPrice : null })))
-            setQuSearch('')
-            setQuFilterCat('all')
-            setQuEnablePerPiece(true)
-            setQuEnableMinPerTrip(false)
-            setQuMinPerTrip(0)
-            setQuEnableWaive(false)
-            setQuMinPerTripThreshold(0)
-            setQuEnableMinPerMonth(false)
-            setQuMonthlyFlatRate(0)
-            setQuNeedCustomerWarn(false)
-            setShowCreateQU(true)
-          }}
-            className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
-            <Plus className="w-4 h-4" />สร้างใบเสนอราคา
-          </button>
+          <div className="flex items-center gap-2">
+            {selectedQtIds.length > 0 && (
+              <button onClick={() => setShowQtBulkPrint(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสารที่เลือก ({selectedQtIds.length})
+              </button>
+            )}
+            <button onClick={() => setShowQtPrintList(true)} disabled={filteredQuotations.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
+              <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
+            </button>
+            <button onClick={() => {
+              setEditQuId(null)
+              setQuCustomerId('')
+              setQuCustomerName('')
+              setQuCustomerContact('')
+              setQuDate(todayISO())
+              setQuValidDays(30)
+              setQuConditions('1. ราคายังไม่รวมภาษีมูลค่าเพิ่ม 7%\n2. ระยะเวลาเครดิต 30 วัน\n3. บริการรับ-ส่งผ้าทุกวัน')
+              setQuNotes('')
+              setQuItems([...linenCatalog].sort((a, b) => a.sortOrder - b.sortOrder).map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice > 0 ? i.defaultPrice : null })))
+              setQuSearch('')
+              setQuFilterCat('all')
+              setQuEnablePerPiece(true)
+              setQuEnableMinPerTrip(false)
+              setQuMinPerTrip(0)
+              setQuEnableWaive(false)
+              setQuMinPerTripThreshold(0)
+              setQuEnableMinPerMonth(false)
+              setQuMonthlyFlatRate(0)
+              setQuNeedCustomerWarn(false)
+              setShowCreateQU(true)
+            }}
+              className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+              <Plus className="w-4 h-4" />สร้างใบเสนอราคา
+            </button>
+          </div>
         )}
       </div>
 
@@ -1393,6 +1409,12 @@ export default function BillingPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-2 py-3 w-10">
+                    <input type="checkbox"
+                      checked={filteredQuotations.length > 0 && selectedQtIds.length === filteredQuotations.length}
+                      onChange={e => setSelectedQtIds(e.target.checked ? filteredQuotations.map(q => q.id) : [])}
+                      className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                  </th>
                   <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ชื่อย่อลูกค้า" sortKey="customerName" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="เลขที่" sortKey="quotationNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
@@ -1404,7 +1426,7 @@ export default function BillingPage() {
               </thead>
               <tbody>
                 {filteredQuotations.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
+                  <tr><td colSpan={8} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
                 ) : filteredQuotations.map(q => {
                   const cfg = QUOTATION_STATUS_CONFIG[q.status]
                   const nextStatus: QuotationStatus | null = q.status === 'draft' ? 'sent' : q.status === 'sent' ? 'accepted' : null
@@ -1413,6 +1435,11 @@ export default function BillingPage() {
                       data-row-id={q.id}
                       className={cn("border-b border-slate-100 cursor-pointer", activeQtId === q.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                       onClick={() => { setActiveQtId(q.id); setShowQuDetail(q.id) }}>
+                      <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={selectedQtIds.includes(q.id)}
+                          onChange={e => setSelectedQtIds(prev => e.target.checked ? [...prev, q.id] : prev.filter(id => id !== q.id))}
+                          className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                      </td>
                       {/* 135.4 + 147.2: highlight Q */}
                       <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(q.date)}</td>
                       <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customerName'))}>{highlightText(getCustomer(q.customerId)?.shortName || q.customerName, highlightQ)}</td>
@@ -2662,8 +2689,9 @@ export default function BillingPage() {
                 <tbody>
                   {detailQuotation.items.map(item => (
                     <tr key={item.code} className="border-t border-slate-100">
-                      <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
-                      <td className="px-3 py-1.5 text-slate-700">{item.name}</td>
+                      {/* 147.2: highlight item code/name from Global Search ?q= */}
+                      <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{highlightText(item.code, highlightQ)}</td>
+                      <td className="px-3 py-1.5 text-slate-700">{highlightText(item.name, highlightQ)}</td>
                       <td className="px-3 py-1.5 text-right">{formatCurrency(item.pricePerUnit)}</td>
                     </tr>
                   ))}
@@ -3087,6 +3115,80 @@ export default function BillingPage() {
           />
         )
       })()}
+
+      {/* 154.3: QT Print List Modal */}
+      <Modal open={showQtPrintList} onClose={() => setShowQtPrintList(false)} title="รายการใบเสนอราคา" size="xl" closeLabel="close">
+        {(() => {
+          const printItems = selectedQtIds.length > 0 ? filteredQuotations.filter(q => selectedQtIds.includes(q.id)) : filteredQuotations
+          const handleCSV = () => {
+            const headers = ['ลำดับ', 'วันที่', 'ลูกค้า', 'เลขที่ QT', 'รายการ', 'สถานะ']
+            const rows = printItems.map((q, i) => [
+              String(i+1), formatDate(q.date), getCustomer(q.customerId)?.shortName || q.customerName, q.quotationNumber, String(q.items.length), QUOTATION_STATUS_CONFIG[q.status].label,
+            ])
+            exportCSV(headers, rows, 'รายการใบเสนอราคา')
+          }
+          return (
+            <div>
+              <div className="mb-2 text-sm text-slate-500">
+                {selectedQtIds.length > 0 ? `เลือก ${printItems.length} รายการ` : `ทั้งหมด ${printItems.length} รายการ`}
+              </div>
+              <div id="print-qt-list" className="border border-slate-200 rounded-lg overflow-hidden">
+                <h2 className="hidden print:block text-lg font-bold text-center mb-2">{companyInfo.name} — รายการใบเสนอราคา</h2>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">วันที่</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">เลขที่ QT</th>
+                      <th className="text-center px-3 py-2 font-medium text-slate-600">รายการ</th>
+                      <th className="text-center px-3 py-2 font-medium text-slate-600">สถานะ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printItems.map((q, idx) => {
+                      const cfg = QUOTATION_STATUS_CONFIG[q.status]
+                      return (
+                        <tr key={q.id} className="border-t border-slate-100">
+                          <td className="text-center px-3 py-1.5 text-slate-500">{idx + 1}</td>
+                          <td className="px-3 py-1.5 text-slate-700">{formatDate(q.date)}</td>
+                          <td className="px-3 py-1.5 text-slate-800">{getCustomer(q.customerId)?.shortName || q.customerName}</td>
+                          <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{q.quotationNumber}</td>
+                          <td className="px-3 py-1.5 text-center text-slate-500">{q.items.length}</td>
+                          <td className="px-3 py-1.5 text-center">
+                            <span className={cn('text-xs px-2 py-0.5 rounded-full', cfg.bgColor, cfg.color)}>{cfg.label}</span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-end mt-4">
+                <ExportButtons targetId="print-qt-list" filename="รายการใบเสนอราคา" onExportCSV={handleCSV} />
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* 154.3: QT Bulk Print Modal */}
+      <Modal open={showQtBulkPrint} onClose={() => setShowQtBulkPrint(false)} title={`พิมพ์ใบเสนอราคา (${selectedQtIds.length} ใบ)`} size="xl" closeLabel="close">
+        <div id="print-bulk-qt" className="space-y-4">
+          {selectedQtIds.map(id => {
+            const qt = quotations.find(q => q.id === id)
+            if (!qt) return null
+            return (
+              <div key={id} className="border border-slate-200 rounded-lg overflow-hidden break-after-page">
+                <QuotationPrint quotation={qt} company={companyInfo} />
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex justify-end mt-4 no-print">
+          <ExportButtons targetId="print-bulk-qt" filename={`QT-bulk-${selectedQtIds.length}`} />
+        </div>
+      </Modal>
 
       {/* 72: Select WB to create IV (จาก IV tab) */}
       <Modal open={showSelectWbForIv} onClose={() => setShowSelectWbForIv(false)} title="เลือกใบวางบิลที่จะออกใบกำกับภาษี" size="lg" closeLabel="cancel">

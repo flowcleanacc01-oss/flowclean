@@ -6,7 +6,9 @@ import { cn, formatCurrency, sanitizeNumber, scrollToActiveRow } from '@/lib/uti
 import { highlightText } from '@/lib/highlight'
 import { useSearchParams } from 'next/navigation'
 import type { Customer, CustomerCategoryDef } from '@/types'
-import { Plus, Search, Edit2, Trash2, Check, FileText, Eye, X, Link2 } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Check, FileText, Eye, X, Link2, Printer } from 'lucide-react'
+import ExportButtons from '@/components/ExportButtons'
+import { exportCSV } from '@/lib/export'
 import Link from 'next/link'
 import Modal from '@/components/Modal'
 import SortableHeader from '@/components/SortableHeader'
@@ -33,6 +35,7 @@ export default function CustomersPage() {
   } = useStore()
   const sp = useSearchParams()
   const highlightQ = sp.get('q') || '' // 147.2
+  const [showCustPrintList, setShowCustPrintList] = useState(false) // 154.2
 
   const hasDocuments = (custId: string) => {
     return linenForms.some(f => f.customerId === custId)
@@ -176,10 +179,16 @@ export default function CustomersPage() {
             </button>
           ))}
           {pageTab === 'customers' && (
-            <button onClick={handleNew}
-              className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
-              <Plus className="w-4 h-4" />เพิ่มลูกค้า
-            </button>
+            <>
+              <button onClick={() => setShowCustPrintList(true)} disabled={filtered.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
+                <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
+              </button>
+              <button onClick={handleNew}
+                className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+                <Plus className="w-4 h-4" />เพิ่มลูกค้า
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -596,6 +605,69 @@ export default function CustomersPage() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* 154.2: Customer Print List Modal */}
+      <Modal open={showCustPrintList} onClose={() => setShowCustPrintList(false)} title="รายการลูกค้า" size="xl" closeLabel="close">
+        {(() => {
+          const handleCSV = () => {
+            const headers = ['ลำดับ', 'รหัส', 'ชื่อย่อ', 'ชื่อบริษัท', 'หมวด', 'เครดิต', 'VAT', 'หัก ณ ที่จ่าย', 'สถานะ']
+            const rows = filtered.map((c, i) => [
+              String(i+1), c.customerCode || '-', c.shortName || '-', c.name,
+              getCustomerCategoryLabel(c.customerType),
+              `${c.creditDays} วัน`,
+              c.enableVat !== false ? '✓' : '-',
+              c.enableWithholding !== false ? '✓' : '-',
+              c.isActive ? 'ใช้งาน' : 'ปิดใช้งาน',
+            ])
+            exportCSV(headers, rows, 'รายการลูกค้า')
+          }
+          return (
+            <div>
+              <div className="mb-2 text-sm text-slate-500">ทั้งหมด {filtered.length} ราย</div>
+              <div id="print-cust-list" className="border border-slate-200 rounded-lg overflow-hidden">
+                <h2 className="hidden print:block text-lg font-bold text-center mb-2">รายการลูกค้า</h2>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">รหัส</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ชื่อย่อ</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ชื่อบริษัท</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">หมวด</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600">เครดิต</th>
+                      <th className="text-center px-3 py-2 font-medium text-slate-600">VAT</th>
+                      <th className="text-center px-3 py-2 font-medium text-slate-600">หัก</th>
+                      <th className="text-center px-3 py-2 font-medium text-slate-600">สถานะ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((c, idx) => (
+                      <tr key={c.id} className="border-t border-slate-100">
+                        <td className="text-center px-3 py-1.5 text-slate-500">{idx + 1}</td>
+                        <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{c.customerCode || '-'}</td>
+                        <td className="px-3 py-1.5 font-bold text-[#1B3A5C]">{c.shortName || '-'}</td>
+                        <td className="px-3 py-1.5 text-slate-700">{c.name}</td>
+                        <td className="px-3 py-1.5 text-slate-500 text-xs">{getCustomerCategoryLabel(c.customerType)}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-600">{c.creditDays} วัน</td>
+                        <td className="px-3 py-1.5 text-center">{c.enableVat !== false ? '✓' : '-'}</td>
+                        <td className="px-3 py-1.5 text-center">{c.enableWithholding !== false ? '✓' : '-'}</td>
+                        <td className="px-3 py-1.5 text-center">
+                          <span className={cn('text-xs px-2 py-0.5 rounded-full', c.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>
+                            {c.isActive ? 'ใช้งาน' : 'ปิด'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-end mt-4">
+                <ExportButtons targetId="print-cust-list" filename="รายการลูกค้า" onExportCSV={handleCSV} />
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
     </div>
   )

@@ -7,7 +7,10 @@ import { cn, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import { highlightText } from '@/lib/highlight'
 import { useSearchParams } from 'next/navigation'
 import type { LinenItemDef, LinenCategoryDef } from '@/types'
-import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
+import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown, Printer } from 'lucide-react'
+import Modal from '@/components/Modal'
+import ExportButtons from '@/components/ExportButtons'
+import { exportCSV } from '@/lib/export'
 
 type TabKey = 'items' | 'categories'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
@@ -32,6 +35,7 @@ export default function ItemsPage() {
   } = useStore()
   const sp = useSearchParams()
   const highlightQ = sp.get('q') || '' // 147.2
+  const [showItemPrintList, setShowItemPrintList] = useState(false) // 154.1
 
   const [tab, setTab] = useState<TabKey>('items')
 
@@ -214,9 +218,17 @@ export default function ItemsPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">รายการผ้า</h1>
-        <p className="text-sm text-slate-500 mt-0.5">จัดการรายการผ้าและหมวดหมู่</p>
+      <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">รายการผ้า</h1>
+          <p className="text-sm text-slate-500 mt-0.5">จัดการรายการผ้าและหมวดหมู่</p>
+        </div>
+        {tab === 'items' && (
+          <button onClick={() => setShowItemPrintList(true)} disabled={filteredItems.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
+            <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -557,6 +569,56 @@ export default function ItemsPage() {
           </div>
         </div>
       )}
+
+      {/* 154.1: Items Print List Modal */}
+      <Modal open={showItemPrintList} onClose={() => setShowItemPrintList(false)} title="รายการผ้า" size="xl" closeLabel="close">
+        {(() => {
+          const handleCSV = () => {
+            const headers = ['ลำดับ', 'รหัส', 'ชื่อรายการ', 'ชื่ออังกฤษ', 'หมวดหมู่', 'หน่วย', 'ราคา default']
+            const rows = filteredItems.map((it, i) => [
+              String(i+1), it.code, it.name, it.nameEn || '', getCategoryLabel(it.category) || it.category, it.unit, String(it.defaultPrice ?? 0)
+            ])
+            exportCSV(headers, rows, 'รายการผ้า')
+          }
+          return (
+            <div>
+              <div className="mb-2 text-sm text-slate-500">ทั้งหมด {filteredItems.length} รายการ</div>
+              <div id="print-item-list" className="border border-slate-200 rounded-lg overflow-hidden">
+                <h2 className="hidden print:block text-lg font-bold text-center mb-2">รายการผ้า</h2>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-center px-3 py-2 font-medium text-slate-600 w-12">ลำดับ</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">รหัส</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ชื่อรายการ</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">ชื่ออังกฤษ</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">หมวด</th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">หน่วย</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600">ราคา default</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredItems.map((it, idx) => (
+                      <tr key={it.code} className="border-t border-slate-100">
+                        <td className="text-center px-3 py-1.5 text-slate-500">{idx + 1}</td>
+                        <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{it.code}</td>
+                        <td className="px-3 py-1.5 text-slate-800">{it.name}</td>
+                        <td className="px-3 py-1.5 text-slate-500 text-xs">{it.nameEn || '-'}</td>
+                        <td className="px-3 py-1.5 text-slate-500 text-xs">{getCategoryLabel(it.category) || it.category}</td>
+                        <td className="px-3 py-1.5 text-slate-500 text-xs">{it.unit}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-700">{(it.defaultPrice ?? 0).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-end mt-4">
+                <ExportButtons targetId="print-item-list" filename="รายการผ้า" onExportCSV={handleCSV} />
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
     </div>
   )
 }
