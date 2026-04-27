@@ -16,7 +16,6 @@ import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import ExportButtons from '@/components/ExportButtons'
 import PaymentRecordModal from '@/components/PaymentRecordModal'
 import { canViewBilling } from '@/lib/permissions'
-import { trackRecentCustomer, sortCustomersWithRecent, getRecentCustomerIds } from '@/lib/recent-customers'
 import { exportCSV } from '@/lib/export'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
@@ -851,15 +850,9 @@ export default function BillingPage() {
     }
   }
 
-  // Unique customer names from quotations (for QT customer filter)
-  const qtCustomerNames = useMemo(() => {
-    const names = new Set(quotations.map(q => q.customerName).filter(Boolean))
-    return Array.from(names).sort()
-  }, [quotations])
-
   const filteredQuotations = useMemo(() => {
     return quotations.filter(q => {
-      if (qtCustomerFilter !== 'all' && q.customerName !== qtCustomerFilter) return false
+      if (qtCustomerFilter !== 'all' && q.customerId !== qtCustomerFilter) return false
       if (search) {
         const s = search.toLowerCase()
         const customer = getCustomer(q.customerId)
@@ -1073,20 +1066,13 @@ export default function BillingPage() {
             placeholder="ค้นหาเลขที่เอกสาร, ชื่อลูกค้า, จำนวนเงิน..."
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
-        {/* 138: customer filter toggle — teal เมื่อ active (ตรงกับปุ่มสร้าง) */}
+        {/* 162.2.1: searchable CustomerPicker (filter by customerId) */}
         {tab === 'quotation' && (
-          <select value={qtCustomerFilter} onChange={e => setQtCustomerFilter(e.target.value)}
-            className={cn(
-              'px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none font-medium transition-colors',
-              qtCustomerFilter === 'all'
-                ? 'border-slate-200 text-slate-600'
-                : 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]',
-            )}>
-            <option value="all">ทุกลูกค้า</option>
-            {qtCustomerNames.map(name => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
+          <CustomerPicker
+            value={qtCustomerFilter === 'all' ? '' : qtCustomerFilter}
+            onChange={id => setQtCustomerFilter(id || 'all')}
+            allowAll
+          />
         )}
         {/* 162.2: replace native <select> with searchable CustomerPicker */}
         {tab === 'billing' && (
@@ -1516,30 +1502,14 @@ export default function BillingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">ลูกค้า</label>
-              <select value={selCustomerId} onChange={e => { setSelCustomerId(e.target.value); if (e.target.value) trackRecentCustomer(e.target.value) }}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
-                <option value="">เลือกลูกค้า</option>
-                {(() => {
-                  // A2: Recent customers ด้านบน
-                  const sorted = sortCustomersWithRecent(customers)
-                  const recentIds = new Set(getRecentCustomerIds())
-                  const hasRecent = sorted.some(c => recentIds.has(c.id))
-                  const recents = sorted.filter(c => recentIds.has(c.id))
-                  const rest = sorted.filter(c => !recentIds.has(c.id))
-                  return (
-                    <>
-                      {hasRecent && (
-                        <optgroup label="⭐ ใช้ล่าสุด">
-                          {recents.map(c => <option key={c.id} value={c.id}>{c.shortName || c.name}</option>)}
-                        </optgroup>
-                      )}
-                      <optgroup label={hasRecent ? 'ทั้งหมด' : ''}>
-                        {rest.map(c => <option key={c.id} value={c.id}>{c.shortName || c.name}</option>)}
-                      </optgroup>
-                    </>
-                  )
-                })()}
-              </select>
+              {/* 162.2.1: searchable CustomerPicker */}
+              <CustomerPicker
+                value={selCustomerId}
+                onChange={id => setSelCustomerId(id)}
+                allowAll={false}
+                themed={false}
+                fullWidth
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">เดือน</label>
@@ -2305,47 +2275,34 @@ export default function BillingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">ชื่อย่อลูกค้า</label>
-              <select value={quCustomerId} onChange={e => {
-                const cust = customers.find(c => c.id === e.target.value)
-                setQuCustomerId(e.target.value)
-                if (e.target.value) trackRecentCustomer(e.target.value)
-                setQuCustomerName(cust?.name || '')
-                setQuCustomerContact(cust?.contactName ? `${cust.contactName}${cust.contactPhone ? ` (${cust.contactPhone})` : ''}` : '')
-                setQuNeedCustomerWarn(false)
-                if (cust) {
-                  setQuEnablePerPiece(cust.enablePerPiece ?? true)
-                  setQuEnableMinPerTrip(cust.enableMinPerTrip ?? false)
-                  setQuMinPerTrip(cust.minPerTrip ?? 0)
-                  setQuEnableWaive(cust.enableWaive ?? false)
-                  setQuMinPerTripThreshold(cust.minPerTripThreshold ?? 0)
-                  setQuEnableMinPerMonth(cust.enableMinPerMonth ?? false)
-                  setQuMonthlyFlatRate(cust.monthlyFlatRate ?? 0)
-                  const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerId === cust.id)
-                  if (linkedQT) setQuItems([...linkedQT.items])
-                }
-              }}
-                className={cn("w-full px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none",
-                  !quCustomerId ? "border-[#3DD8D8] ring-2 ring-[#3DD8D8]/40 bg-[#3DD8D8]/5" : "border-slate-200")}>
-                <option value="">— เลือกจากลูกค้าในระบบ —</option>
-                {(() => {
-                  const sorted = sortCustomersWithRecent(customers)
-                  const recentIds = new Set(getRecentCustomerIds())
-                  const recents = sorted.filter(c => recentIds.has(c.id))
-                  const rest = sorted.filter(c => !recentIds.has(c.id))
-                  return (
-                    <>
-                      {recents.length > 0 && (
-                        <optgroup label="⭐ ใช้ล่าสุด">
-                          {recents.map(c => <option key={c.id} value={c.id}>{c.shortName || c.name}</option>)}
-                        </optgroup>
-                      )}
-                      <optgroup label={recents.length > 0 ? 'ทั้งหมด' : ''}>
-                        {rest.map(c => <option key={c.id} value={c.id}>{c.shortName || c.name}</option>)}
-                      </optgroup>
-                    </>
-                  )
-                })()}
-              </select>
+              {/* 162.2.1: searchable CustomerPicker */}
+              <div className={cn(!quCustomerId && 'ring-2 ring-[#3DD8D8]/40 rounded-lg')}>
+                <CustomerPicker
+                  value={quCustomerId}
+                  onChange={id => {
+                    const cust = customers.find(c => c.id === id)
+                    setQuCustomerId(id)
+                    setQuCustomerName(cust?.name || '')
+                    setQuCustomerContact(cust?.contactName ? `${cust.contactName}${cust.contactPhone ? ` (${cust.contactPhone})` : ''}` : '')
+                    setQuNeedCustomerWarn(false)
+                    if (cust) {
+                      setQuEnablePerPiece(cust.enablePerPiece ?? true)
+                      setQuEnableMinPerTrip(cust.enableMinPerTrip ?? false)
+                      setQuMinPerTrip(cust.minPerTrip ?? 0)
+                      setQuEnableWaive(cust.enableWaive ?? false)
+                      setQuMinPerTripThreshold(cust.minPerTripThreshold ?? 0)
+                      setQuEnableMinPerMonth(cust.enableMinPerMonth ?? false)
+                      setQuMonthlyFlatRate(cust.monthlyFlatRate ?? 0)
+                      const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerId === cust.id)
+                      if (linkedQT) setQuItems([...linkedQT.items])
+                    }
+                  }}
+                  allowAll={false}
+                  themed={false}
+                  placeholder="— เลือกจากลูกค้าในระบบ —"
+                  fullWidth
+                />
+              </div>
               {!quCustomerId && <p className="text-xs text-[#1B3A5C] mt-1 font-medium animate-pulse">↑ เริ่มต้นเลือกลูกค้าที่นี่ก่อน</p>}
             </div>
             <div>

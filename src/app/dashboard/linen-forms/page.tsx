@@ -9,7 +9,7 @@ import { highlightText } from '@/lib/highlight'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
-import { trackRecentCustomer, sortCustomersWithRecent, getRecentCustomerIds } from '@/lib/recent-customers'
+import { trackRecentCustomer } from '@/lib/recent-customers'
 import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
@@ -586,28 +586,14 @@ export default function LinenFormsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">ลูกค้า</label>
-              <select value={newCustomerId} onChange={e => handleCustomerSelect(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
-                <option value="">เลือกลูกค้า</option>
-                {(() => {
-                  const sorted = sortCustomersWithRecent(customers)
-                  const recentIds = new Set(getRecentCustomerIds())
-                  const recents = sorted.filter(c => recentIds.has(c.id))
-                  const rest = sorted.filter(c => !recentIds.has(c.id))
-                  return (
-                    <>
-                      {recents.length > 0 && (
-                        <optgroup label="⭐ ใช้ล่าสุด">
-                          {recents.map(c => <option key={c.id} value={c.id}>{c.shortName || c.name}</option>)}
-                        </optgroup>
-                      )}
-                      <optgroup label={recents.length > 0 ? 'ทั้งหมด' : ''}>
-                        {rest.map(c => <option key={c.id} value={c.id}>{c.shortName || c.name}</option>)}
-                      </optgroup>
-                    </>
-                  )
-                })()}
-              </select>
+              {/* 162.2.1: searchable CustomerPicker */}
+              <CustomerPicker
+                value={newCustomerId}
+                onChange={id => handleCustomerSelect(id)}
+                allowAll={false}
+                themed={false}
+                fullWidth
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">วันที่</label>

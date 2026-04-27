@@ -42,11 +42,13 @@ interface Props {
   themed?: boolean
   /** Filter function — only show customers passing this */
   filter?: (c: Customer) => boolean
+  /** Full-width trigger (for inside form rows / grid cells) */
+  fullWidth?: boolean
 }
 
 export default function CustomerPicker({
   value, onChange, allowAll = true, placeholder = 'เลือกลูกค้า',
-  className, themed = true, filter,
+  className, themed = true, filter, fullWidth = false,
 }: Props) {
   const { customers, getCustomer } = useStore()
   const [open, setOpen] = useState(false)
@@ -163,14 +165,15 @@ export default function CustomerPicker({
     : (allowAll ? 'ทุกลูกค้า' : placeholder)
 
   return (
-    <div className={cn('relative inline-block', className)}>
+    <div className={cn('relative', fullWidth ? 'block w-full' : 'inline-block', className)}>
       {/* Trigger */}
       <button
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(o => !o)}
         className={cn(
-          'flex items-center gap-2 px-3 py-2 border rounded-lg text-sm font-medium transition-colors min-w-[180px] max-w-[260px]',
+          'flex items-center gap-2 px-3 py-2 border rounded-lg text-sm font-medium transition-colors',
+          fullWidth ? 'w-full' : 'min-w-[180px] max-w-[260px]',
           'focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
           themed && isActive
             ? 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]'
