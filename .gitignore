@@ -48,3 +48,4 @@ AGENTS.md
 .ai-memory/
 .ai-secretary/
 .claude/
+.tmp-*/

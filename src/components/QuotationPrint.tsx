@@ -7,9 +7,11 @@ import type { Quotation, CompanyInfo } from '@/types'
 interface QuotationPrintProps {
   quotation: Quotation
   company: CompanyInfo
+  customerShortName?: string
 }
 
-export default function QuotationPrint({ quotation, company }: QuotationPrintProps) {
+export default function QuotationPrint({ quotation, company, customerShortName }: QuotationPrintProps) {
+  const displayName = customerShortName || quotation.customerName
   return (
     <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-quotation">
       {/* Header */}
@@ -36,7 +38,7 @@ export default function QuotationPrint({ quotation, company }: QuotationPrintPro
       {/* Customer Info */}
       <div className="mb-6 text-xs">
         <p className="text-slate-500">เรียน:</p>
-        <p className="text-base font-bold text-slate-900">{quotation.customerName}</p>
+        <p className="text-base font-bold text-slate-900">{displayName}</p>
         {quotation.customerContact && (
           <p className="text-slate-500">ติดต่อ: {quotation.customerContact}</p>
         )}
@@ -98,7 +100,7 @@ export default function QuotationPrint({ quotation, company }: QuotationPrintPro
         <div>
           <div className="border-b border-slate-300 pb-8 mb-2"></div>
           <p className="text-slate-500">ผู้อนุมัติ</p>
-          <p className="text-slate-400">{quotation.customerName}</p>
+          <p className="text-slate-400">{displayName}</p>
         </div>
       </div>
 
