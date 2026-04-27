@@ -38,7 +38,9 @@ export default function DeliveryPage() {
   const [showCreate, setShowCreate] = useState(false)
   const searchParams = useSearchParams()
   const router = useRouter()
-  const highlightQ = searchParams.get('q') || '' // 147.2
+  const urlHighlightQ = searchParams.get('q') || '' // 147.2
+  // 162.1: combine local search + URL ?q so live typing also highlights
+  const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [dnFilter, setDnFilter] = useState<DNFilter>('all')

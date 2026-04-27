@@ -29,7 +29,7 @@ export default function ReceiptsPage() {
 
   const router = useRouter()
   const searchParams = useSearchParams()
-  const highlightQ = searchParams.get('q') || '' // 147.2
+  const urlHighlightQ = searchParams.get('q') || '' // 147.2
 
   // 154: bulk select + print modals
   const [selectedRcIds, setSelectedRcIds] = useState<string[]>([])
@@ -39,6 +39,8 @@ export default function ReceiptsPage() {
 
   // Filters
   const [search, setSearch] = useState('')
+  // 162.1: combine local search + URL ?q so live typing also highlights
+  const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
   const [customerFilter, setCustomerFilter] = useState<string>('all')
   const [rcFilter, setRcFilter] = useState<RCFilter>('all')
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')

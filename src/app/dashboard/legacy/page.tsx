@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatDate, formatCurrency, cn, startOfMonthISO, endOfMonthISO } from '@/lib/utils'
+import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
 import { Search, Archive, FileCheck, Receipt as ReceiptIcon, Truck, FileText, Info } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DateFilter from '@/components/DateFilter'
@@ -56,10 +57,13 @@ export default function LegacyPage() {
       if (search) {
         const q = search.toLowerCase()
         const c = doc.customerId ? getCustomer(doc.customerId) : null
-        if (!doc.docNumber.toLowerCase().includes(q)
-          && !doc.customerName.toLowerCase().includes(q)
-          && !doc.customerCode.toLowerCase().includes(q)
-          && !(c?.shortName || '').toLowerCase().includes(q)) return false
+        const textMatch = doc.docNumber.toLowerCase().includes(q)
+          || doc.customerName.toLowerCase().includes(q)
+          || doc.customerCode.toLowerCase().includes(q)
+          || (c?.shortName || '').toLowerCase().includes(q)
+        // 162: also match by amount
+        const amountMatch = matchesAmountQuery(search, [doc.amount, doc.netPayable, doc.outstanding])
+        if (!textMatch && !amountMatch) return false
       }
       return true
     }).sort((a, b) => {
@@ -146,7 +150,7 @@ export default function LegacyPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="ค้นหาเลขที่เอกสาร, ชื่อลูกค้า, รหัส X-prefix..."
+                placeholder="ค้นหาเลขที่เอกสาร, ชื่อลูกค้า, รหัส X-prefix, จำนวนเงิน..."
                 className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <select value={customerFilter} onChange={e => setCustomerFilter(e.target.value)}
@@ -192,7 +196,7 @@ export default function LegacyPage() {
                         onClick={() => setDetailId(d.id)}>
                         <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(d.docDate)}</td>
                         <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>
-                          {c?.shortName || d.customerName || '-'}
+                          {highlightText(c?.shortName || d.customerName || '-', search)}
                           {!c && <span className="ml-1 text-[10px] text-slate-400">[unmatched]</span>}
                         </td>
                         <td className={cn("px-4 py-3 text-center", sortedBg('kind'))}>
@@ -200,8 +204,8 @@ export default function LegacyPage() {
                             {d.kind}
                           </span>
                         </td>
-                        <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('docNumber'))}>{d.docNumber}</td>
-                        <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('amount'))}>{formatCurrency(d.amount)}</td>
+                        <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('docNumber'))}>{highlightText(d.docNumber, search)}</td>
+                        <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('amount'))}>{highlightAmount(formatCurrency(d.amount), search)}</td>
                         <td className="px-4 py-3 text-center text-xs text-slate-500">{d.status || '-'}</td>
                       </tr>
                     )

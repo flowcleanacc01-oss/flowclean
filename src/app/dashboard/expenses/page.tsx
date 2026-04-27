@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { canViewExpenses } from '@/lib/permissions'
 import { formatCurrency, formatDate, todayISO, sanitizeNumber, cn, scrollToActiveRow } from '@/lib/utils'
+import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type Expense } from '@/types'
 import Modal from '@/components/Modal'
 import {
@@ -30,7 +31,10 @@ export default function ExpensesPage() {
         if (!e.date.startsWith(month)) return false
         if (search) {
           const q = search.toLowerCase()
-          return e.description.toLowerCase().includes(q) || e.reference.toLowerCase().includes(q)
+          const textMatch = e.description.toLowerCase().includes(q) || e.reference.toLowerCase().includes(q)
+          // 162: also match by amount
+          const amountMatch = matchesAmountQuery(search, [e.amount])
+          return textMatch || amountMatch
         }
         return true
       })
@@ -155,9 +159,9 @@ export default function ExpensesPage() {
                         {config?.icon} {config?.label}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-slate-700">{exp.description}</td>
-                    <td className="px-3 py-3 text-slate-400 text-xs">{exp.reference || '—'}</td>
-                    <td className="px-3 py-3 text-right font-medium text-slate-700">฿{formatCurrency(exp.amount)}</td>
+                    <td className="px-3 py-3 text-slate-700">{highlightText(exp.description, search)}</td>
+                    <td className="px-3 py-3 text-slate-400 text-xs">{exp.reference ? highlightText(exp.reference, search) : '—'}</td>
+                    <td className="px-3 py-3 text-right font-medium text-slate-700">฿{highlightAmount(formatCurrency(exp.amount), search)}</td>
                     <td className="px-3 py-3 text-center">
                       <div className="inline-flex gap-1">
                         <button

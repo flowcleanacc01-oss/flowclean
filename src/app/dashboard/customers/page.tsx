@@ -34,7 +34,7 @@ export default function CustomersPage() {
     customerCategories, addCustomerCategory, updateCustomerCategory, deleteCustomerCategory, getCustomerCategoryLabel,
   } = useStore()
   const sp = useSearchParams()
-  const highlightQ = sp.get('q') || '' // 147.2
+  const urlHighlightQ = sp.get('q') || '' // 147.2
   const [showCustPrintList, setShowCustPrintList] = useState(false) // 154.2
   const [selectedCustIds, setSelectedCustIds] = useState<string[]>([]) // 154.2.1
   const [showCustBulkPrint, setShowCustBulkPrint] = useState(false)
@@ -49,6 +49,8 @@ export default function CustomersPage() {
 
   const [pageTab, setPageTab] = useState<PageTab>('customers')
   const [search, setSearch] = useState('')
+  // 162.1: combine local search + URL ?q so live typing also highlights
+  const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
   const [filterCat, setFilterCat] = useState<string>('all')
   const [sortKey, setSortKey] = useState<string>('shortName')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')

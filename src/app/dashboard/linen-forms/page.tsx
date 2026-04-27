@@ -29,8 +29,10 @@ export default function LinenFormsPage() {
 
   const router = useRouter()
   const searchParams = useSearchParams()
-  const highlightQ = searchParams.get('q') || '' // 147.2
+  const urlHighlightQ = searchParams.get('q') || '' // 147.2
   const [search, setSearch] = useState('')
+  // 162.1: combine local search + URL ?q so live typing also highlights
+  const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
   const [statusFilter, setStatusFilter] = useState<LinenFormStatus | 'all'>(() => {
     const s = searchParams.get('status')
     return s && ALL_LINEN_STATUSES.includes(s as LinenFormStatus) ? s as LinenFormStatus : 'all'

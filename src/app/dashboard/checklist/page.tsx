@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
+import { highlightText } from '@/lib/highlight'
 import {
   CHECKLIST_TYPE_CONFIG, CHECKLIST_STATUS_CONFIG,
   type ChecklistType, type ChecklistStatus, type ChecklistItem,
@@ -226,15 +227,15 @@ export default function ChecklistPage() {
                 return (
                   <tr key={cl.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                     onClick={() => setShowDetail(cl.id)}>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{cl.checklistNumber}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{highlightText(cl.checklistNumber, search)}</td>
                     <td className="px-4 py-3">
                       <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
                         cl.type === 'qc' ? 'bg-pink-50 text-pink-700' : 'bg-sky-50 text-sky-700')}>
                         {cl.type === 'qc' ? 'QC' : 'Loading'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-800 font-medium">{customer?.shortName || customer?.name || '-'}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{cl.linkedDocumentNumber}</td>
+                    <td className="px-4 py-3 text-slate-800 font-medium">{highlightText(customer?.shortName || customer?.name || '-', search)}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{highlightText(cl.linkedDocumentNumber, search)}</td>
                     <td className="px-4 py-3 text-slate-600">{formatDate(cl.date)}</td>
                     <td className="px-4 py-3 text-center">
                       <span className={cn('text-xs font-medium', passedCount === cl.items.length ? 'text-emerald-600' : 'text-amber-600')}>

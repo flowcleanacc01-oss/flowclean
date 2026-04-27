@@ -34,13 +34,15 @@ export default function ItemsPage() {
     linenCategories, addCategory, updateCategory, deleteCategory, getCategoryLabel,
   } = useStore()
   const sp = useSearchParams()
-  const highlightQ = sp.get('q') || '' // 147.2
+  const urlHighlightQ = sp.get('q') || '' // 147.2
   const [showItemPrintList, setShowItemPrintList] = useState(false) // 154.1
 
   const [tab, setTab] = useState<TabKey>('items')
 
   // ---- Items state ----
   const [search, setSearch] = useState('')
+  // 162.1: combine local search + URL ?q so live typing also highlights
+  const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
   const [filterCat, setFilterCat] = useState<string>('all')
   const [sortCol, setSortCol] = useState<SortColumn>('sortOrder')
   const [sortDir, setSortDir] = useState<SortDir>('asc')

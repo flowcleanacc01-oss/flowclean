@@ -38,13 +38,15 @@ export default function BillingPage() {
   } = useStore()
 
   const searchParams = useSearchParams()
-  const highlightQ = searchParams.get('q') || '' // 147.2
+  const urlHighlightQ = searchParams.get('q') || '' // 147.2
   const [tab, setTab] = useState<TabKey>(() => {
     const t = searchParams.get('tab')
     if (t === 'invoice' || t === 'quotation') return t
     return 'billing'
   })
   const [search, setSearch] = useState('')
+  // 162.1: combine local search + URL ?q so live typing also highlights
+  const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')
   const [dateFrom, setDateFrom] = useState(() => startOfMonthISO())
   const [dateTo, setDateTo] = useState(() => endOfMonthISO())
