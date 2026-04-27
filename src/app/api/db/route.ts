@@ -7,6 +7,7 @@ const ALLOWED_TABLES = new Set([
   'tax_invoices', 'quotations', 'product_checklists',
   'expenses', 'audit_logs', 'customer_categories',
   'carry_over_adjustments',
+  'receipts', // 152 fix: ใบเสร็จรับเงิน (Feature 148)
 ])
 
 interface DbRequest {
