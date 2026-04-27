@@ -862,7 +862,12 @@ export default function BillingPage() {
       if (qtCustomerFilter !== 'all' && q.customerName !== qtCustomerFilter) return false
       if (search) {
         const s = search.toLowerCase()
-        if (!q.quotationNumber.toLowerCase().includes(s) && !q.customerName.toLowerCase().includes(s)) return false
+        const customer = getCustomer(q.customerId)
+        const textMatch = q.quotationNumber.toLowerCase().includes(s)
+          || (customer?.shortName || '').toLowerCase().includes(s)
+          || (customer?.name || '').toLowerCase().includes(s)
+          || q.customerName.toLowerCase().includes(s)
+        if (!textMatch) return false
       }
       if (!matchesQtDateFilter(q.date)) return false
       return true
@@ -870,7 +875,11 @@ export default function BillingPage() {
       let va: string | number, vb: string | number
       switch (sortKey) {
         case 'quotationNumber': va = a.quotationNumber; vb = b.quotationNumber; break
-        case 'customerName': va = a.customerName; vb = b.customerName; break
+        case 'customerName': {
+          const ca = getCustomer(a.customerId); va = ca?.shortName || ca?.name || a.customerName
+          const cb = getCustomer(b.customerId); vb = cb?.shortName || cb?.name || b.customerName
+          break
+        }
         case 'items': va = a.items.length; vb = b.items.length; break
         case 'notes': va = a.notes || ''; vb = b.notes || ''; break
         case 'status': { const order = ['draft', 'sent', 'accepted', 'rejected']; va = order.indexOf(a.status); vb = order.indexOf(b.status); break }
@@ -879,7 +888,7 @@ export default function BillingPage() {
       const cmp = String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [quotations, qtCustomerFilter, search, qtDateFrom, qtDateTo, qtDateFilterMode, sortKey, sortDir])
+  }, [quotations, qtCustomerFilter, search, qtDateFrom, qtDateTo, qtDateFilterMode, sortKey, sortDir, getCustomer])
 
   // Invoice list (filtered + sorted)
   const filteredInvoices = useMemo(() => {
