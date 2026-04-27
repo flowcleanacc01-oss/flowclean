@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
-import { highlightText } from '@/lib/highlight'
+import { highlightText, matchesAmountQuery } from '@/lib/highlight'
 import { type DeliveryNoteItem, LINEN_FORM_STATUS_CONFIG } from '@/types'
 import { calculateTransportFeeTrip, calculateDNSubtotal } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
@@ -178,7 +178,12 @@ export default function DeliveryPage() {
       if (search) {
         const customer = getCustomer(dn.customerId)
         const q = search.toLowerCase()
-        if (!dn.noteNumber.toLowerCase().includes(q) && !(customer?.shortName || '').toLowerCase().includes(q) && !(customer?.name || '').toLowerCase().includes(q)) return false
+        const textMatch = dn.noteNumber.toLowerCase().includes(q)
+          || (customer?.shortName || '').toLowerCase().includes(q)
+          || (customer?.name || '').toLowerCase().includes(q)
+        // 166.3.1: match by ยอดรวม
+        const amountMatch = matchesAmountQuery(search, [getDNTotalAmount(dn)])
+        if (!textMatch && !amountMatch) return false
       }
       if (dateFrom) {
         if (dateFilterMode === 'single') {
@@ -588,7 +593,7 @@ export default function DeliveryPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="ค้นหาเลขที่ใบส่งของ, ชื่อลูกค้า..."
+            placeholder="ค้นหาเลขที่ใบส่งของ, ชื่อลูกค้า, จำนวนเงิน"
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
         {/* 162.2: searchable CustomerPicker */}

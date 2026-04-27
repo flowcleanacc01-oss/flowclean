@@ -1063,7 +1063,11 @@ export default function BillingPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="ค้นหาเลขที่เอกสาร, ชื่อลูกค้า, จำนวนเงิน..."
+            placeholder={
+              tab === 'quotation' ? 'ค้นหาเลขที่ใบเสนอราคา, ชื่อลูกค้า'
+              : tab === 'billing' ? 'ค้นหาเลขที่ใบวางบิล, ชื่อลูกค้า, จำนวนเงิน'
+              : 'ค้นหาเลขที่ใบกำกับภาษี, ชื่อลูกค้า, จำนวนเงิน'
+            }
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
         {/* 162.2.1: searchable CustomerPicker (filter by customerId) */}

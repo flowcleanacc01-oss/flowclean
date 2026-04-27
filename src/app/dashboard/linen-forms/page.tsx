@@ -371,7 +371,7 @@ export default function LinenFormsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="ค้นหาเลขที่ฟอร์ม, ชื่อลูกค้า..."
+            placeholder="ค้นหาเลขที่ใบส่งรับผ้า, ชื่อลูกค้า"
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
           />
         </div>

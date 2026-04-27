@@ -5,8 +5,9 @@ import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, formatExportFilename } from '@/lib/utils'
 import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
-import { Search, FileDown, Trash2, X, Printer, FileText, Plus, ExternalLink, Check } from 'lucide-react'
+import { Search, FileDown, Trash2, Printer, FileText, Plus, ExternalLink, Check } from 'lucide-react'
 import Modal from '@/components/Modal'
+import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
 import ReceiptPrint from '@/components/ReceiptPrint'
@@ -552,28 +553,35 @@ export default function ReceiptsPage() {
         })()}
       </Modal>
 
-      {/* Delete Confirm */}
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="ยืนยันการลบใบเสร็จรับเงิน" size="md" closeLabel="cancel">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-700">ต้องการลบใบเสร็จ <span className="font-mono font-semibold">{detailRC?.receiptNumber}</span> ใช่หรือไม่?</p>
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-            ⚠ การลบจะทำให้ user สามารถออกใบเสร็จใหม่จากใบวางบิลใบนี้ได้อีกครั้ง
-          </p>
-          <div className="flex justify-end gap-3">
-            <button onClick={() => setConfirmDeleteId(null)}
-              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">ยกเลิก</button>
-            <button onClick={() => {
-              if (confirmDeleteId) {
-                deleteReceipt(confirmDeleteId)
-                setConfirmDeleteId(null)
-                setShowDetail(null)
-              }
-            }} className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-1">
-              <X className="w-4 h-4" />ลบ
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* Delete Confirm — 167: pattern เดียวกับ IV (DeleteWithRedirectModal) */}
+      {(() => {
+        const pendingRC = confirmDeleteId ? receipts.find(r => r.id === confirmDeleteId) : null
+        const linkedWB = pendingRC ? billingStatements.find(b => b.id === pendingRC.billingStatementId) : null
+        return (
+          <DeleteWithRedirectModal
+            open={!!confirmDeleteId}
+            onClose={() => setConfirmDeleteId(null)}
+            docNumber={pendingRC?.receiptNumber || ''}
+            message="ต้องการลบใบเสร็จรับเงินนี้หรือไม่? หลังลบ ระบบจะปลดล็อคใบวางบิล (WB) ที่เกี่ยวข้องให้ออกใบเสร็จใหม่ได้"
+            warning={linkedWB ? `ใบวางบิลที่เกี่ยวข้อง: ${linkedWB.billingNumber}` : undefined}
+            redirectLabel={linkedWB ? 'ไปแก้ WB' : undefined}
+            onDeleteAndStay={() => {
+              if (!confirmDeleteId) return
+              deleteReceipt(confirmDeleteId)
+              setConfirmDeleteId(null)
+              setShowDetail(null)
+            }}
+            onDeleteAndRedirect={linkedWB ? () => {
+              if (!confirmDeleteId) return
+              const wbId = linkedWB.id
+              deleteReceipt(confirmDeleteId)
+              setConfirmDeleteId(null)
+              setShowDetail(null)
+              router.push(`/dashboard/billing?tab=billing&detail=${wbId}`)
+            } : undefined}
+          />
+        )
+      })()}
     </div>
   )
 }
