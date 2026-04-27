@@ -20,6 +20,7 @@ import { trackRecentCustomer, sortCustomersWithRecent, getRecentCustomerIds } fr
 import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
+import CustomerPicker from '@/components/CustomerPicker'
 import { exportCSV } from '@/lib/export'
 
 type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed'
@@ -590,19 +591,12 @@ export default function DeliveryPage() {
             placeholder="ค้นหาเลขที่ใบส่งของ, ชื่อลูกค้า..."
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
-        {/* 138: customer filter — teal เมื่อ active (ตรงกับปุ่มสร้าง) */}
-        <select value={customerFilter} onChange={e => setCustomerFilter(e.target.value)}
-          className={cn(
-            'px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none font-medium transition-colors',
-            customerFilter === 'all'
-              ? 'border-slate-200 text-slate-600'
-              : 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]',
-          )}>
-          <option value="all">ทุกลูกค้า</option>
-          {customers.filter(c => c.isActive).map(c => (
-            <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
-          ))}
-        </select>
+        {/* 162.2: searchable CustomerPicker */}
+        <CustomerPicker
+          value={customerFilter === 'all' ? '' : customerFilter}
+          onChange={id => setCustomerFilter(id || 'all')}
+          allowAll
+        />
       </div>
 
       {/* Filter tabs */}

@@ -10,6 +10,7 @@ import MonthlySummaryGrid from '@/components/MonthlySummaryGrid'
 import MonthlyDeliveryReportPrint from '@/components/MonthlyDeliveryReportPrint'
 import MonthlyStockReportPrint from '@/components/MonthlyStockReportPrint'
 import MonthlyConsolidationPrint from '@/components/MonthlyConsolidationPrint'
+import CustomerPicker from '@/components/CustomerPicker'
 import CarryOverReportPrint from '@/components/CarryOverReportPrint'
 import Modal from '@/components/Modal'
 import CarryOverAdjustModal from '@/components/CarryOverAdjustModal'
@@ -417,13 +418,7 @@ export default function ReportsPage() {
       <div className="flex flex-wrap gap-3 mb-4">
         {(tab === 'monthly' || tab === 'delivery' || tab === 'stock' || tab === 'consolidation' || tab === 'revenue' || tab === 'carryover' || tab === 'discrepancy') && (
           <div className="flex items-center gap-2">
-            <select value={selCustomerId} onChange={e => setSelCustomerId(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
-              <option value="">ทุกลูกค้า</option>
-              {customers.filter(c => c.isActive).map(c => (
-                <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
-              ))}
-            </select>
+            <CustomerPicker value={selCustomerId} onChange={setSelCustomerId} allowAll />
             {selCustomerId && (
               <Link href={`/dashboard/customers/${selCustomerId}`}
                 className="text-xs text-[#3DD8D8] hover:underline flex items-center gap-0.5 shrink-0">

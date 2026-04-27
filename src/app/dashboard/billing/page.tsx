@@ -23,6 +23,7 @@ import SortableHeader from '@/components/SortableHeader'
 import BillingPrint from '@/components/BillingPrint'
 import TaxInvoicePrint from '@/components/TaxInvoicePrint'
 import QuotationPrint from '@/components/QuotationPrint'
+import CustomerPicker from '@/components/CustomerPicker'
 
 type TabKey = 'billing' | 'invoice' | 'quotation'
 
@@ -1078,33 +1079,20 @@ export default function BillingPage() {
             ))}
           </select>
         )}
+        {/* 162.2: replace native <select> with searchable CustomerPicker */}
         {tab === 'billing' && (
-          <select value={wbCustomerFilter} onChange={e => setWbCustomerFilter(e.target.value)}
-            className={cn(
-              'px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none font-medium transition-colors',
-              wbCustomerFilter === 'all'
-                ? 'border-slate-200 text-slate-600'
-                : 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]',
-            )}>
-            <option value="all">ทุกลูกค้า</option>
-            {customers.filter(c => c.isActive).map(c => (
-              <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
-            ))}
-          </select>
+          <CustomerPicker
+            value={wbCustomerFilter === 'all' ? '' : wbCustomerFilter}
+            onChange={id => setWbCustomerFilter(id || 'all')}
+            allowAll
+          />
         )}
         {tab === 'invoice' && (
-          <select value={ivCustomerFilter} onChange={e => setIvCustomerFilter(e.target.value)}
-            className={cn(
-              'px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none font-medium transition-colors',
-              ivCustomerFilter === 'all'
-                ? 'border-slate-200 text-slate-600'
-                : 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]',
-            )}>
-            <option value="all">ทุกลูกค้า</option>
-            {customers.filter(c => c.isActive).map(c => (
-              <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
-            ))}
-          </select>
+          <CustomerPicker
+            value={ivCustomerFilter === 'all' ? '' : ivCustomerFilter}
+            onChange={id => setIvCustomerFilter(id || 'all')}
+            allowAll
+          />
         )}
       </div>
 

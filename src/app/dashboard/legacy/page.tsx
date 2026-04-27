@@ -8,6 +8,7 @@ import { Search, Archive, FileCheck, Receipt as ReceiptIcon, Truck, FileText, In
 import Modal from '@/components/Modal'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
+import CustomerPicker from '@/components/CustomerPicker'
 import { canViewBilling } from '@/lib/permissions'
 import type { LegacyDocKind } from '@/types'
 
@@ -153,16 +154,12 @@ export default function LegacyPage() {
                 placeholder="ค้นหาเลขที่เอกสาร, ชื่อลูกค้า, รหัส X-prefix, จำนวนเงิน..."
                 className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
-            <select value={customerFilter} onChange={e => setCustomerFilter(e.target.value)}
-              className={cn(
-                'px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none font-medium transition-colors',
-                customerFilter === 'all' ? 'border-slate-200 text-slate-600' : 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]',
-              )}>
-              <option value="all">ทุกลูกค้า</option>
-              {customers.filter(c => c.isActive).map(c => (
-                <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
-              ))}
-            </select>
+            {/* 162.2: searchable CustomerPicker */}
+            <CustomerPicker
+              value={customerFilter === 'all' ? '' : customerFilter}
+              onChange={id => setCustomerFilter(id || 'all')}
+              allowAll
+            />
           </div>
 
           <div className="mb-4">
