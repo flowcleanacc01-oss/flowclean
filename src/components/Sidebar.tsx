@@ -19,6 +19,7 @@ import {
   Menu,
   Package,
   BookOpen,
+  Archive,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useState } from 'react'
@@ -50,6 +51,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/billing?tab=invoice', label: '4. ใบกำกับภาษี/ใบเสร็จ (IV)', icon: Receipt, guard: canViewBilling },
   { href: '/dashboard/receipts', label: '5. ใบเสร็จรับเงิน (RC)', icon: Receipt, guard: canViewBilling },
   { href: '/dashboard/reports', label: 'รายงาน', icon: BarChart3, guard: canViewReports },
+  { href: '/dashboard/legacy', label: 'ประวัติเอกสารเก่า', icon: Archive, guard: canViewBilling },
   { href: '/dashboard/expenses', label: 'รายจ่าย', icon: Wallet, guard: canViewExpenses },
   { href: '/dashboard/guide', label: 'คู่มือการใช้งาน', icon: BookOpen, separator: true },
   { href: '/dashboard/settings', label: 'ตั้งค่า', icon: Settings, guard: canManageSettings },

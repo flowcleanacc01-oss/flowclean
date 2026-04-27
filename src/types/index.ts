@@ -360,6 +360,31 @@ export interface TaxInvoice {
 }
 
 // ============================================================
+// Legacy Document (Feature 161) — ประวัติเอกสารจากระบบเก่า (NeoSME)
+// Read-only archive — ไม่กระทบ workflow ปัจจุบัน
+// ============================================================
+export type LegacyDocKind = 'WB' | 'IV' | 'SD' | 'QT'
+
+export interface LegacyDocument {
+  id: string
+  kind: LegacyDocKind
+  docNumber: string             // WB650900001, IV651200005, ...
+  docDate: string               // ISO YYYY-MM-DD
+  customerId: string            // FK to customers (may be empty if unmatched)
+  customerName: string          // snapshot from source
+  customerCode: string          // legacy X-prefix
+  amount: number
+  netPayable: number            // WB only
+  paidAmount: number            // WB only
+  outstanding: number           // WB only
+  status: string                // legacy status code (P/LP/B/...)
+  dueDate: string
+  notes: string
+  importedAt: string
+  sourceFile: string
+}
+
+// ============================================================
 // Receipt (ใบเสร็จรับเงิน) — Feature 148
 // สำหรับลูกค้าที่ไม่คิด VAT (enableVat=false) ที่ต้องการหลักฐานการชำระเงิน
 // ❌ ไม่ใช่ใบกำกับภาษี · ❌ ไม่มีข้อมูลบริษัทเต็ม (เอาแค่ brand) · ❌ ไม่มี VAT

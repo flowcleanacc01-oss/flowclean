@@ -8,6 +8,7 @@ const ALLOWED_TABLES = new Set([
   'expenses', 'audit_logs', 'customer_categories',
   'carry_over_adjustments',
   'receipts', // 152 fix: ใบเสร็จรับเงิน (Feature 148)
+  'legacy_documents', // Feature 161: archive of old NeoSME documents
 ])
 
 interface DbRequest {

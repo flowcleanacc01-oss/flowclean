@@ -3,6 +3,7 @@ import type {
   Customer, LinenForm, DeliveryNote, BillingStatement, TaxInvoice, Receipt,
   Quotation, Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
   CustomerCategoryDef, ProductChecklist, AuditLog, CarryOverAdjustment,
+  LegacyDocument,
 } from '@/types'
 
 // ============================================================
@@ -96,6 +97,11 @@ const FIELD_MAP: Record<string, string> = {
   invoiceNumber: 'invoice_number',
   receiptNumber: 'receipt_number', // 148: ใบเสร็จรับเงิน
   billingStatementId: 'billing_statement_id',
+  // 161: legacy_documents (netPayable/paidAmount already defined above)
+  docNumber: 'doc_number',
+  docDate: 'doc_date',
+  importedAt: 'imported_at',
+  sourceFile: 'source_file',
   quotationNumber: 'quotation_number',
   customerName: 'customer_name',
   customerContact: 'customer_contact',
@@ -495,6 +501,20 @@ export async function deleteReceiptDB(id: string): Promise<void> {
 }
 
 // ============================================================
+// Legacy Documents (Feature 161) — read-only archive
+// ============================================================
+
+export async function fetchLegacyDocuments(): Promise<LegacyDocument[]> {
+  const { data, error } = await supabase
+    .from('legacy_documents')
+    .select('*')
+    .order('doc_date', { ascending: false })
+    .limit(10000)
+  if (error) throw error
+  return toCamelCaseArray<LegacyDocument>(data || [])
+}
+
+// ============================================================
 // Quotations
 // ============================================================
 
@@ -642,6 +662,7 @@ export async function fetchAllData() {
     fetchCustomerCategories().catch(() => [] as CustomerCategoryDef[]),
     fetchCarryOverAdjustments().catch(() => [] as CarryOverAdjustment[]),
     fetchReceipts().catch(() => [] as Receipt[]),
+    fetchLegacyDocuments().catch(() => [] as LegacyDocument[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -651,7 +672,7 @@ export async function fetchAllData() {
     customers, linenForms, deliveryNotes, billingStatements,
     taxInvoices, quotations, expenses, users, companyInfo,
     linenItems, checklists, linenCategories, customerCategories,
-    carryOverAdjustments, receipts,
+    carryOverAdjustments, receipts, legacyDocuments,
   ] = [
     val(results[0], [] as Customer[]),
     val(results[1], [] as LinenForm[]),
@@ -668,6 +689,7 @@ export async function fetchAllData() {
     val(results[12], [] as CustomerCategoryDef[]),
     val(results[13], [] as CarryOverAdjustment[]),
     val(results[14], [] as Receipt[]),
+    val(results[15], [] as LegacyDocument[]),
   ]
 
   return {
@@ -686,5 +708,6 @@ export async function fetchAllData() {
     customerCategories,
     carryOverAdjustments,
     receipts,
+    legacyDocuments,
   }
 }

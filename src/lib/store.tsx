@@ -8,6 +8,7 @@ import type {
   CustomerCategoryDef, ProductChecklist, ChecklistStatus,
   AuditAction, AuditEntityType, AuditLog,
   CarryOverAdjustment, CarryOverMode, CarryOverAdjustmentHistory,
+  LegacyDocument,
 } from '@/types'
 import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES, DEFAULT_CUSTOMER_CATEGORIES } from '@/types'
 import {
@@ -69,6 +70,8 @@ interface StoreContextType {
   addReceipt: (r: Omit<Receipt, 'id' | 'receiptNumber'>) => Receipt
   updateReceipt: (id: string, updates: Partial<Receipt>) => void
   deleteReceipt: (id: string) => void
+  // 161: Legacy Documents (read-only archive)
+  legacyDocuments: LegacyDocument[]
 
   // Quotations
   quotations: Quotation[]
@@ -175,6 +178,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [taxInvoices, setTaxInvoices] = useState<TaxInvoice[]>([])
   // 148: receipts state
   const [receipts, setReceipts] = useState<Receipt[]>([])
+  // 161: legacy documents (read-only)
+  const [legacyDocuments, setLegacyDocuments] = useState<LegacyDocument[]>([])
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [users, setUsers] = useState<AppUser[]>([])
@@ -292,6 +297,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setBillingStatements(data.billingStatements)
       setTaxInvoices(data.taxInvoices)
       setReceipts(data.receipts || [])
+      setLegacyDocuments(data.legacyDocuments || [])
       setQuotations(data.quotations)
       setExpenses(data.expenses)
       // Strip passwordHash from all users in React state
@@ -1018,6 +1024,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
       taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
       receipts, addReceipt, updateReceipt, deleteReceipt,
+      legacyDocuments,
       quotations, addQuotation, updateQuotation, updateQuotationStatus, deleteQuotation,
       expenses, addExpense, updateExpense, deleteExpense,
       users, addUser, updateUser, resetPassword,
