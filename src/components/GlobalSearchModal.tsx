@@ -18,6 +18,7 @@ const KIND_ICON: Record<SearchResultKind, typeof Search> = {
   sd: Truck,
   wb: FileCheck,
   iv: Receipt,
+  rc: Receipt, // 162/164
   qt: FileText,
   item: Package,
 }
@@ -32,7 +33,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   const router = useRouter()
   const {
     customers, linenForms, deliveryNotes,
-    billingStatements, taxInvoices, quotations, linenCatalog,
+    billingStatements, taxInvoices, receipts, quotations, linenCatalog,
   } = useStore()
 
   const [query, setQuery] = useState('')
@@ -52,8 +53,8 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   // Build search index (memo)
   const index = useMemo(() => buildSearchIndex({
     customers, linenForms, deliveryNotes,
-    billingStatements, taxInvoices, quotations, linenCatalog,
-  }), [customers, linenForms, deliveryNotes, billingStatements, taxInvoices, quotations, linenCatalog])
+    billingStatements, taxInvoices, receipts, quotations, linenCatalog,
+  }), [customers, linenForms, deliveryNotes, billingStatements, taxInvoices, receipts, quotations, linenCatalog])
 
   const results = useMemo(() => searchResults(index, query, 30), [index, query])
 
@@ -133,7 +134,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
             type="text"
             value={query}
             onChange={e => { setQuery(e.target.value); setSelectedIdx(0) }}
-            placeholder="ค้นหาลูกค้า, LF, SD, WB, IV, QT, รายการ — เลขที่ / ชื่อ / รหัส / วันที่"
+            placeholder="ค้นหาลูกค้า, LF, SD, WB, IV, RC, QT, รายการ — เลขที่ / ชื่อ / รหัส / วันที่ / จำนวนเงิน"
             className="flex-1 text-base outline-none placeholder:text-slate-400"
           />
           <kbd className="hidden sm:inline-block text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-mono">ESC</kbd>

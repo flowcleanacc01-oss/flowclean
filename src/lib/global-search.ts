@@ -7,11 +7,19 @@
 
 import type {
   Customer, LinenForm, DeliveryNote,
-  BillingStatement, TaxInvoice, Quotation, LinenItemDef,
+  BillingStatement, TaxInvoice, Quotation, LinenItemDef, Receipt,
 } from '@/types'
 import { formatDate } from './utils'
 
-export type SearchResultKind = 'customer' | 'lf' | 'sd' | 'wb' | 'iv' | 'qt' | 'item'
+export type SearchResultKind = 'customer' | 'lf' | 'sd' | 'wb' | 'iv' | 'rc' | 'qt' | 'item'
+
+/** 162: Build amount tokens for haystack — supports digit-only queries */
+function amountTokens(...values: number[]): string {
+  return values.flatMap(v => {
+    if (!Number.isFinite(v) || v === 0) return []
+    return [String(Math.round(v)), v.toFixed(2), v.toFixed(2).replace(/\./g, '')]
+  }).join(' ')
+}
 
 export interface SearchResult {
   kind: SearchResultKind
@@ -31,6 +39,7 @@ export interface SearchStore {
   deliveryNotes: DeliveryNote[]
   billingStatements: BillingStatement[]
   taxInvoices: TaxInvoice[]
+  receipts: Receipt[] // 162/164: ค้นหา RC
   quotations: Quotation[]
   linenCatalog: LinenItemDef[] // 147: ค้นหา item code/name
 }
@@ -96,7 +105,7 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
     })
   }
 
-  // WBs
+  // WBs (162: amount search)
   for (const b of store.billingStatements) {
     const c = custMap.get(b.customerId)
     const custLabel = c?.shortName || c?.name || '-'
@@ -104,13 +113,13 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
       kind: 'wb',
       id: b.id,
       primary: b.billingNumber,
-      secondary: `${custLabel} · ${b.billingMonth}`,
-      haystack: [b.billingNumber, custLabel, c?.customerCode, b.billingMonth].filter(Boolean).join(' ').toLowerCase(),
+      secondary: `${custLabel} · ${b.billingMonth} · ${formatDate(b.issueDate)}`,
+      haystack: [b.billingNumber, custLabel, c?.customerCode, b.billingMonth, amountTokens(b.grandTotal, b.netPayable)].filter(Boolean).join(' ').toLowerCase(),
       href: `/dashboard/billing?tab=billing&detail=${b.id}`,
     })
   }
 
-  // IVs
+  // IVs (162: amount search)
   for (const iv of store.taxInvoices) {
     const c = custMap.get(iv.customerId)
     const custLabel = c?.shortName || c?.name || '-'
@@ -119,8 +128,22 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
       id: iv.id,
       primary: iv.invoiceNumber,
       secondary: `${custLabel} · ${formatDate(iv.issueDate)}`,
-      haystack: [iv.invoiceNumber, custLabel, c?.customerCode, iv.issueDate].filter(Boolean).join(' ').toLowerCase(),
+      haystack: [iv.invoiceNumber, custLabel, c?.customerCode, iv.issueDate, amountTokens(iv.grandTotal)].filter(Boolean).join(' ').toLowerCase(),
       href: `/dashboard/billing?tab=invoice&detail=${iv.id}`,
+    })
+  }
+
+  // RCs (162/164: amount search + new entity in Cmd+K)
+  for (const rc of store.receipts || []) {
+    const c = custMap.get(rc.customerId)
+    const custLabel = c?.shortName || c?.name || '-'
+    results.push({
+      kind: 'rc',
+      id: rc.id,
+      primary: rc.receiptNumber,
+      secondary: `${custLabel} · ${formatDate(rc.issueDate)}`,
+      haystack: [rc.receiptNumber, custLabel, c?.customerCode, rc.issueDate, amountTokens(rc.grandTotal)].filter(Boolean).join(' ').toLowerCase(),
+      href: `/dashboard/receipts?detail=${rc.id}`,
     })
   }
 
@@ -226,6 +249,7 @@ export const KIND_LABEL: Record<SearchResultKind, string> = {
   sd: 'SD',
   wb: 'WB',
   iv: 'IV',
+  rc: 'RC',
   qt: 'QT',
   item: 'รายการ',
 }
@@ -236,6 +260,7 @@ export const KIND_COLOR: Record<SearchResultKind, string> = {
   sd: 'bg-blue-100 text-blue-700',
   wb: 'bg-orange-100 text-orange-700',
   iv: 'bg-purple-100 text-purple-700',
+  rc: 'bg-amber-100 text-amber-700',
   qt: 'bg-emerald-100 text-emerald-700',
   item: 'bg-pink-100 text-pink-700',
 }

@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
-import { highlightText } from '@/lib/highlight'
+import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, aggregateDeliveryItemsByTotal, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
@@ -281,7 +281,12 @@ export default function BillingPage() {
       if (search) {
         const customer = getCustomer(b.customerId)
         const q = search.toLowerCase()
-        if (!b.billingNumber.toLowerCase().includes(q) && !(customer?.shortName || '').toLowerCase().includes(q) && !(customer?.name || '').toLowerCase().includes(q)) return false
+        const textMatch = b.billingNumber.toLowerCase().includes(q)
+          || (customer?.shortName || '').toLowerCase().includes(q)
+          || (customer?.name || '').toLowerCase().includes(q)
+        // 162: also match by amount (ยอดรวม + จ่ายสุทธิ)
+        const amountMatch = matchesAmountQuery(search, [b.grandTotal, b.netPayable])
+        if (!textMatch && !amountMatch) return false
       }
       if (!matchesDateFilter(b.issueDate)) return false
       // WB filter
@@ -882,7 +887,12 @@ export default function BillingPage() {
       if (search) {
         const customer = getCustomer(inv.customerId)
         const q = search.toLowerCase()
-        if (!inv.invoiceNumber.toLowerCase().includes(q) && !(customer?.shortName || '').toLowerCase().includes(q) && !(customer?.name || '').toLowerCase().includes(q)) return false
+        const textMatch = inv.invoiceNumber.toLowerCase().includes(q)
+          || (customer?.shortName || '').toLowerCase().includes(q)
+          || (customer?.name || '').toLowerCase().includes(q)
+        // 162: also match by amount (ยอดรวม VAT)
+        const amountMatch = matchesAmountQuery(search, [inv.grandTotal])
+        if (!textMatch && !amountMatch) return false
       }
       if (!matchesDateFilter(inv.issueDate)) return false
       // IV filter
@@ -1048,7 +1058,7 @@ export default function BillingPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="ค้นหาเลขที่เอกสาร, ชื่อลูกค้า..."
+            placeholder="ค้นหาเลขที่เอกสาร, ชื่อลูกค้า, จำนวนเงิน..."
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
         {/* 138: customer filter toggle — teal เมื่อ active (ตรงกับปุ่มสร้าง) */}
@@ -1183,7 +1193,8 @@ export default function BillingPage() {
                   <SortableHeader label="ยอดรวม" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <SortableHeader label="จ่ายสุทธิ" sortKey="netPayable" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
-                  <SortableHeader label="IV" sortKey="iv" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                  {/* 163.1: rename "IV" → "IV / RC" */}
+                  <SortableHeader label="IV / RC" sortKey="iv" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                   <SortableHeader label="ชำระ" sortKey="paid" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                   <th className="text-right px-4 py-3 font-medium text-slate-600 w-20"></th>
                 </tr>
@@ -1209,8 +1220,9 @@ export default function BillingPage() {
                       <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{highlightText(customer?.shortName || customer?.name || '-', highlightQ)}</td>
                       <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('billingNumber'))}>{highlightText(b.billingNumber, highlightQ)}</td>
                       <td className={cn("px-4 py-3 text-slate-600", sortedBg('billingMonth'))}>{b.billingMonth}</td>
-                      <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('grandTotal'))}>{formatCurrency(b.grandTotal)}</td>
-                      <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('netPayable'))}>{formatCurrency(b.netPayable)}</td>
+                      {/* 162: highlight amount when search matches (digits-only) */}
+                      <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('grandTotal'))}>{highlightAmount(formatCurrency(b.grandTotal), search)}</td>
+                      <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('netPayable'))}>{highlightAmount(formatCurrency(b.netPayable), search)}</td>
                       <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                           b.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
@@ -1220,21 +1232,37 @@ export default function BillingPage() {
                       <td className={cn("px-4 py-3 text-center", sortedBg('iv'))} onClick={e => e.stopPropagation()}>
                         {(() => {
                           const ivInfo = wbInvoiceMap.get(b.id)
-                          return ivInfo ? (
-                            <button onClick={() => {
-                              // 81: switch ไป IV tab + open detail
-                              setTab('invoice')
-                              setActiveIvId(ivInfo.invoiceId)
-                              setShowInvoiceDetail(ivInfo.invoiceId)
-                              scrollToActiveRow(ivInfo.invoiceId)
-                            }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
-                              <span className="font-mono">{ivInfo.invoiceNumber}</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </button>
-                          ) : (
-                            <span className="text-xs text-slate-400">ยังไม่ออก</span>
-                          )
+                          if (ivInfo) {
+                            return (
+                              <button onClick={() => {
+                                // 81: switch ไป IV tab + open detail
+                                setTab('invoice')
+                                setActiveIvId(ivInfo.invoiceId)
+                                setShowInvoiceDetail(ivInfo.invoiceId)
+                                scrollToActiveRow(ivInfo.invoiceId)
+                              }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
+                                <span className="font-mono">{ivInfo.invoiceNumber}</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </button>
+                            )
+                          }
+                          // 163: no IV → check RC (for non-VAT customers)
+                          const customer = getCustomer(b.customerId)
+                          if (customer?.enableVat === false) {
+                            const rcInfo = receipts.find(r => r.billingStatementId === b.id)
+                            if (rcInfo) {
+                              return (
+                                <button onClick={() => router.push(`/dashboard/receipts?detail=${rcInfo.id}`)}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200">
+                                  <span className="font-mono">{rcInfo.receiptNumber}</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </button>
+                              )
+                            }
+                            return <span className="text-xs text-slate-400">ยังไม่ออก RC</span>
+                          }
+                          return <span className="text-xs text-slate-400">ยังไม่ออก</span>
                         })()}
                       </td>
                       <td className={cn("px-3 py-3 text-center", sortedBg('paid'))} onClick={e => e.stopPropagation()}>
@@ -1329,7 +1357,7 @@ export default function BillingPage() {
                       <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(inv.issueDate)}</td>
                       <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{highlightText(customer?.shortName || customer?.name || '-', highlightQ)}</td>
                       <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('invoiceNumber'))}>{highlightText(inv.invoiceNumber, highlightQ)}</td>
-                      <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('grandTotal'))}>{formatCurrency(inv.grandTotal)}</td>
+                      <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('grandTotal'))}>{highlightAmount(formatCurrency(inv.grandTotal), search)}</td>
                       <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                           inv.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>

@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, formatExportFilename } from '@/lib/utils'
-import { highlightText } from '@/lib/highlight'
+import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
 import { Search, FileDown, Trash2, X, Printer, FileText, Plus, ExternalLink, Check } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DateFilter from '@/components/DateFilter'
@@ -72,7 +72,12 @@ export default function ReceiptsPage() {
       if (search) {
         const c = getCustomer(rc.customerId)
         const q = search.toLowerCase()
-        if (!rc.receiptNumber.toLowerCase().includes(q) && !(c?.shortName || '').toLowerCase().includes(q) && !(c?.name || '').toLowerCase().includes(q)) return false
+        const textMatch = rc.receiptNumber.toLowerCase().includes(q)
+          || (c?.shortName || '').toLowerCase().includes(q)
+          || (c?.name || '').toLowerCase().includes(q)
+        // 162: also match by amount
+        const amountMatch = matchesAmountQuery(search, [rc.grandTotal])
+        if (!textMatch && !amountMatch) return false
       }
       if (!matchesDateFilter(rc.issueDate)) return false
       if (rcFilter === 'not-printed' && rc.isPrinted) return false
@@ -88,6 +93,7 @@ export default function ReceiptsPage() {
         case 'grandTotal': va = a.grandTotal; vb = b.grandTotal; break
         case 'isPrinted': va = a.isPrinted ? 1 : 0; vb = b.isPrinted ? 1 : 0; break
         case 'isPaid': va = a.isPaid ? 1 : 0; vb = b.isPaid ? 1 : 0; break
+        case 'wb': { va = billingStatements.find(b2 => b2.id === a.billingStatementId)?.billingNumber || ''; vb = billingStatements.find(b2 => b2.id === b.billingStatementId)?.billingNumber || ''; break }
         default: va = a.issueDate; vb = b.issueDate
       }
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
@@ -143,7 +149,7 @@ export default function ReceiptsPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="ค้นหาเลขที่ใบเสร็จ, ชื่อลูกค้า..."
+            placeholder="ค้นหาเลขที่ใบเสร็จ, ชื่อลูกค้า, จำนวนเงิน..."
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
         <select value={customerFilter} onChange={e => setCustomerFilter(e.target.value)}
@@ -198,14 +204,17 @@ export default function ReceiptsPage() {
                 <SortableHeader label="เลขที่" sortKey="receiptNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                 <SortableHeader label="ยอดรวม" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                 <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                {/* 164: WB link col (mirror IV pattern) */}
+                <SortableHeader label="WB" sortKey="wb" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                 <SortableHeader label="ชำระ" sortKey="isPaid" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-slate-400">ยังไม่มีใบเสร็จรับเงิน — ออกจากใบวางบิลของลูกค้าที่ไม่คิด VAT</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-slate-400">ยังไม่มีใบเสร็จรับเงิน — ออกจากใบวางบิลของลูกค้าที่ไม่คิด VAT</td></tr>
               ) : filtered.map(rc => {
                 const c = getCustomer(rc.customerId)
+                const linkedWb = billingStatements.find(b => b.id === rc.billingStatementId)
                 return (
                   <tr key={rc.id} data-row-id={rc.id}
                     className={cn("border-b border-slate-100 cursor-pointer", activeRowId === rc.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
@@ -218,12 +227,25 @@ export default function ReceiptsPage() {
                     <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(rc.issueDate)}</td>
                     <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>{highlightText(c?.shortName || c?.name || '-', highlightQ)}</td>
                     <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('receiptNumber'))}>{highlightText(rc.receiptNumber, highlightQ)}</td>
-                    <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('grandTotal'))}>{formatCurrency(rc.grandTotal)}</td>
+                    {/* 162: highlight amount when search matches */}
+                    <td className={cn("px-4 py-3 text-right text-slate-700 font-medium", sortedBg('grandTotal'))}>{highlightAmount(formatCurrency(rc.grandTotal), search)}</td>
                     <td className={cn("px-3 py-3 text-center", sortedBg('isPrinted'))}>
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium',
                         rc.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
                         {rc.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
                       </span>
+                    </td>
+                    {/* 164: WB link (mirror IV) */}
+                    <td className={cn("px-4 py-3 text-center", sortedBg('wb'))} onClick={e => e.stopPropagation()}>
+                      {linkedWb ? (
+                        <button onClick={() => router.push(`/dashboard/billing?tab=billing&detail=${linkedWb.id}`)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 hover:bg-orange-200">
+                          <span className="font-mono">{linkedWb.billingNumber}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
                     </td>
                     <td className={cn("px-3 py-3 text-center", sortedBg('isPaid'))} onClick={e => e.stopPropagation()}>
                       <button onClick={() => updateReceipt(rc.id, { isPaid: !rc.isPaid })}
@@ -244,7 +266,7 @@ export default function ReceiptsPage() {
                   <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
                     <td colSpan={4} className="px-4 py-3 text-slate-700">รวม {filtered.length} รายการ</td>
                     <td className="px-4 py-3 text-right text-[#1B3A5C]">{formatCurrency(totalGrand)}</td>
-                    <td colSpan={2}></td>
+                    <td colSpan={3}></td>
                   </tr>
                 </tfoot>
               )
@@ -269,11 +291,16 @@ export default function ReceiptsPage() {
               ⚠ ใบเสร็จรับเงิน — สำหรับลูกค้าที่ไม่คิด VAT · ไม่ใช่ใบกำกับภาษี · ใช้เป็นหลักฐานการชำระเงินเท่านั้น
             </div>
 
-            {/* WB reference */}
+            {/* WB reference — 164: clickable link (mirror IV-detail pattern) */}
             {linkedWB && (
               <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-orange-50 border border-orange-100">
                 <span className="text-sm text-slate-600 font-medium">ใบวางบิล (WB):</span>
-                <span className="font-mono text-sm text-orange-700">{linkedWB.billingNumber} · {formatDate(linkedWB.issueDate)} · {formatCurrency(linkedWB.netPayable)}</span>
+                <button onClick={() => { setShowDetail(null); router.push(`/dashboard/billing?tab=billing&detail=${linkedWB.id}`) }}
+                  className="inline-flex items-center gap-1 text-sm font-medium text-orange-700 hover:text-orange-900">
+                  <span className="font-mono">{linkedWB.billingNumber}</span>
+                  <span className="text-xs text-orange-500">· {formatDate(linkedWB.issueDate)} · {formatCurrency(linkedWB.netPayable)}</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </button>
               </div>
             )}
 
