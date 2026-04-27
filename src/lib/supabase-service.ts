@@ -505,13 +505,22 @@ export async function deleteReceiptDB(id: string): Promise<void> {
 // ============================================================
 
 export async function fetchLegacyDocuments(): Promise<LegacyDocument[]> {
-  const { data, error } = await supabase
-    .from('legacy_documents')
-    .select('*')
-    .order('doc_date', { ascending: false })
-    .limit(10000)
-  if (error) throw error
-  return toCamelCaseArray<LegacyDocument>(data || [])
+  // Supabase API caps at 1000 rows per request (max-rows server config)
+  // We have 5,093+ legacy docs → paginate via range() in chunks of 1000
+  const PAGE = 1000
+  const all: unknown[] = []
+  for (let from = 0; from < 100000; from += PAGE) {
+    const { data, error } = await supabase
+      .from('legacy_documents')
+      .select('*')
+      .order('doc_date', { ascending: false })
+      .range(from, from + PAGE - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...data)
+    if (data.length < PAGE) break
+  }
+  return toCamelCaseArray<LegacyDocument>(all as Record<string, unknown>[])
 }
 
 // ============================================================

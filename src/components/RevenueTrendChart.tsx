@@ -12,6 +12,14 @@ interface Props {
   extraEntries?: { month: string; amount: number }[]
 }
 
+type RangeOpt = { value: number; label: string }
+const RANGE_OPTIONS: RangeOpt[] = [
+  { value: 12, label: '12 เดือน' },
+  { value: 24, label: '24 เดือน' },
+  { value: 36, label: '36 เดือน' },
+  { value: 0, label: 'ทั้งหมด' },
+]
+
 /**
  * Revenue Trend Chart (Feature B2)
  *
@@ -22,12 +30,32 @@ interface Props {
  */
 export default function RevenueTrendChart({ billingStatements, months = 12, extraEntries }: Props) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  // 170.2: range toggle — 0 = "ทั้งหมด" (auto-fit จากข้อมูลเก่าสุด)
+  const [selectedRange, setSelectedRange] = useState<number>(months)
 
   const data = useMemo(() => {
-    // Generate last N month keys (YYYY-MM) including current
+    // Resolve range: if "ทั้งหมด" → auto-fit from oldest entry to current
     const now = new Date()
+    let actualMonths = selectedRange
+    if (actualMonths === 0) {
+      // Find oldest YYYY-MM across both sources
+      let oldest = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      for (const b of billingStatements) {
+        if (b.billingMonth && b.billingMonth < oldest) oldest = b.billingMonth
+      }
+      if (extraEntries) {
+        for (const e of extraEntries) {
+          if (e.month && e.month < oldest) oldest = e.month
+        }
+      }
+      const [oy, om] = oldest.split('-').map(Number)
+      const diff = (now.getFullYear() - oy) * 12 + (now.getMonth() + 1 - om) + 1
+      actualMonths = Math.max(1, Math.min(diff, 120)) // hard cap 10 years
+    }
+
+    // Generate last N month keys (YYYY-MM) including current
     const keys: string[] = []
-    for (let i = months - 1; i >= 0; i--) {
+    for (let i = actualMonths - 1; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
     }
@@ -58,7 +86,7 @@ export default function RevenueTrendChart({ billingStatements, months = 12, extr
       })(),
       value: revByMonth.get(key) || 0,
     }))
-  }, [billingStatements, months, extraEntries])
+  }, [billingStatements, selectedRange, extraEntries])
 
   const maxValue = Math.max(...data.map(d => d.value), 1)
   const total = data.reduce((s, d) => s + d.value, 0)
@@ -82,28 +110,50 @@ export default function RevenueTrendChart({ billingStatements, months = 12, extr
   const chartH = 180
   const barGap = 4
 
+  const rangeLabel = RANGE_OPTIONS.find(o => o.value === selectedRange)?.label || `${selectedRange} เดือน`
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
         <div>
           <h3 className="text-sm font-semibold text-slate-700">
             ยอดที่วางบิลแต่ละเดือน (ก่อน VAT)
-            <span className="text-slate-400 font-normal"> — แนวโน้มรายได้ ({months} เดือน)</span>
+            <span className="text-slate-400 font-normal"> — แนวโน้มรายได้ ({rangeLabel})</span>
           </h3>
           <p className="text-[11px] text-slate-500 mt-0.5">รวม {formatCurrency(total)} · เฉลี่ย/เดือน {formatCurrency(avg)}</p>
         </div>
-        {prev > 0 && (
-          <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
-            deltaPct > 0 ? 'bg-emerald-50 text-emerald-600' :
-            deltaPct < 0 ? 'bg-red-50 text-red-600' :
-            'bg-slate-50 text-slate-500'
-          }`}>
-            {deltaPct > 0 ? <TrendingUp className="w-3 h-3" /> :
-             deltaPct < 0 ? <TrendingDown className="w-3 h-3" /> :
-             <Minus className="w-3 h-3" />}
-            {deltaPct > 0 ? '+' : ''}{deltaPct.toFixed(1)}% MoM
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {prev > 0 && (
+            <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
+              deltaPct > 0 ? 'bg-emerald-50 text-emerald-600' :
+              deltaPct < 0 ? 'bg-red-50 text-red-600' :
+              'bg-slate-50 text-slate-500'
+            }`}>
+              {deltaPct > 0 ? <TrendingUp className="w-3 h-3" /> :
+               deltaPct < 0 ? <TrendingDown className="w-3 h-3" /> :
+               <Minus className="w-3 h-3" />}
+              {deltaPct > 0 ? '+' : ''}{deltaPct.toFixed(1)}% MoM
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 170.2: Range toggle */}
+      <div className="flex items-center gap-1 mb-3">
+        {RANGE_OPTIONS.map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => setSelectedRange(opt.value)}
+            className={cn(
+              'px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors',
+              selectedRange === opt.value
+                ? 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]'
+                : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300',
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       {/* Hover info bar */}
@@ -143,15 +193,31 @@ export default function RevenueTrendChart({ billingStatements, months = 12, extr
           />
         ))}
 
-        {/* Avg line */}
-        {avg > 0 && (
-          <line
-            x1="0" x2={data.length * 40}
-            y1={chartH - (avg / maxValue) * chartH}
-            y2={chartH - (avg / maxValue) * chartH}
-            stroke="#94a3b8" strokeWidth="0.8" strokeDasharray="4 3"
-          />
-        )}
+        {/* Avg line + label (170.1) */}
+        {avg > 0 && (() => {
+          const avgY = chartH - (avg / maxValue) * chartH
+          const labelY = avgY < 16 ? avgY + 12 : avgY - 4 // flip below if too close to top
+          return (
+            <>
+              <line
+                x1="0" x2={data.length * 40}
+                y1={avgY} y2={avgY}
+                stroke="#94a3b8" strokeWidth="0.8" strokeDasharray="4 3"
+              />
+              <text
+                x={data.length * 40 - 4}
+                y={labelY}
+                fontSize="9"
+                textAnchor="end"
+                fill="#475569"
+                fontFamily="system-ui, sans-serif"
+                style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: 3, strokeLinejoin: 'round' }}
+              >
+                avg {formatCurrency(avg)}
+              </text>
+            </>
+          )
+        })()}
 
         {/* Bars */}
         {data.map((d, i) => {

@@ -185,7 +185,7 @@ export default function LegacyPage() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr><td colSpan={6} className="text-center py-12 text-slate-400">ไม่พบเอกสาร</td></tr>
-                  ) : filtered.slice(0, 1000).map(d => {
+                  ) : filtered.slice(0, 6000).map(d => {
                     const c = d.customerId ? getCustomer(d.customerId) : null
                     const cfg = KIND_CONFIG[d.kind]
                     return (
