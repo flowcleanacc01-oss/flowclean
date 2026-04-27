@@ -4,9 +4,9 @@ import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { cn, formatCurrency, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import { highlightText } from '@/lib/highlight'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import type { Customer, CustomerCategoryDef } from '@/types'
-import { Plus, Search, Edit2, Trash2, Check, FileText, Eye, X, Link2, Printer, FileDown } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Check, FileText, X, Link2, Printer, FileDown } from 'lucide-react'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
 import Link from 'next/link'
@@ -34,6 +34,7 @@ export default function CustomersPage() {
     customerCategories, addCustomerCategory, updateCustomerCategory, deleteCustomerCategory, getCustomerCategoryLabel,
   } = useStore()
   const sp = useSearchParams()
+  const router = useRouter()
   const urlHighlightQ = sp.get('q') || '' // 147.2
   const [showCustPrintList, setShowCustPrintList] = useState(false) // 154.2
   const [selectedCustIds, setSelectedCustIds] = useState<string[]>([]) // 154.2.1
@@ -256,7 +257,7 @@ export default function CustomersPage() {
                       className={cn('border-b border-slate-100 cursor-pointer',
                         activeCustomerId === c.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50',
                         !c.isActive && 'bg-red-50/30')}
-                      onClick={() => setActiveCustomerId(c.id)}>
+                      onClick={() => { setActiveCustomerId(c.id); router.push(`/dashboard/customers/${c.id}`) }}>
                       <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
                         <input type="checkbox" checked={selectedCustIds.includes(c.id)}
                           onChange={e => setSelectedCustIds(prev => e.target.checked ? [...prev, c.id] : prev.filter(id => id !== c.id))}
@@ -299,7 +300,7 @@ export default function CustomersPage() {
                           </span>
                         </div>
                       </td>
-                      <td className={cn("px-4 py-3 text-center", sortedBg('qt'))}>
+                      <td className={cn("px-4 py-3 text-center", sortedBg('qt'))} onClick={e => e.stopPropagation()}>
                         {(() => {
                           const qt = linkedQTMap.get(c.id)
                           return qt ? (
@@ -321,14 +322,12 @@ export default function CustomersPage() {
                           {c.isActive ? 'ใช้งาน' : 'ปิด'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          <Link href={`/dashboard/customers/${c.id}`}
-                            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-[#1B3A5C]">
-                            <Eye className="w-3.5 h-3.5" />
-                          </Link>
+                          {/* 168: ลบปุ่ม Eye — คลิกที่แถวเปิดหน้ารายละเอียดได้เลย */}
                           <button onClick={() => handleEdit(c)}
-                            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-[#1B3A5C]">
+                            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-[#1B3A5C]"
+                            title="แก้ไข">
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <Link href={`/dashboard/billing?tab=quotation&newqt=${c.id}`}
@@ -343,7 +342,8 @@ export default function CustomersPage() {
                             }
                             if (confirm('ลบลูกค้านี้?')) deleteCustomer(c.id)
                           }}
-                            className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-500">
+                            className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-500"
+                            title="ลบ">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>

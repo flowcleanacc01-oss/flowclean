@@ -8,6 +8,8 @@ import type { BillingStatement } from '@/types'
 interface Props {
   billingStatements: BillingStatement[]
   months?: number  // default 12
+  /** Extra revenue entries to merge in (e.g., legacy WB) — month=YYYY-MM */
+  extraEntries?: { month: string; amount: number }[]
 }
 
 /**
@@ -18,7 +20,7 @@ interface Props {
  * - Custom SVG (ไม่ต้องใช้ recharts เพื่อเก็บ bundle เล็ก)
  * - Hover ดูค่าเต็ม + %เปลี่ยนจากเดือนก่อน
  */
-export default function RevenueTrendChart({ billingStatements, months = 12 }: Props) {
+export default function RevenueTrendChart({ billingStatements, months = 12, extraEntries }: Props) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
 
   const data = useMemo(() => {
@@ -38,6 +40,14 @@ export default function RevenueTrendChart({ billingStatements, months = 12 }: Pr
         revByMonth.set(month, (revByMonth.get(month) || 0) + b.subtotal)
       }
     }
+    // Merge legacy/extra entries
+    if (extraEntries) {
+      for (const e of extraEntries) {
+        if (keys.includes(e.month)) {
+          revByMonth.set(e.month, (revByMonth.get(e.month) || 0) + e.amount)
+        }
+      }
+    }
 
     return keys.map(key => ({
       key,
@@ -48,7 +58,7 @@ export default function RevenueTrendChart({ billingStatements, months = 12 }: Pr
       })(),
       value: revByMonth.get(key) || 0,
     }))
-  }, [billingStatements, months])
+  }, [billingStatements, months, extraEntries])
 
   const maxValue = Math.max(...data.map(d => d.value), 1)
   const total = data.reduce((s, d) => s + d.value, 0)

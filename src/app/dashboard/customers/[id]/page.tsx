@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store'
 import { formatCurrency, formatNumber, cn, formatDate, buildPriceMapFromQT } from '@/lib/utils'
 import { canViewPrice } from '@/lib/permissions'
 import {
-  ArrowLeft, Building2, Phone, Mail, MapPin, FileText, CreditCard,
+  X, Building2, Phone, Mail, MapPin, FileText, CreditCard,
   Truck, Receipt, ClipboardCheck, TrendingUp, Package, AlertTriangle, Link2, ExternalLink,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -23,6 +23,7 @@ export default function CustomerDetailPage() {
     currentUser,
     getCustomer, linenForms, deliveryNotes, billingStatements,
     taxInvoices, checklists, getCarryOver, linenCatalog, quotations, getCustomerCategoryLabel,
+    legacyDocuments,
   } = useStore()
 
   const customer = getCustomer(id)
@@ -49,9 +50,32 @@ export default function CustomerDetailPage() {
     checklists.filter(c => c.customerId === id).sort((a, b) => b.date.localeCompare(a.date)),
     [checklists, id])
 
+  // 168.1: Legacy WB for this customer (kind=WB) — pre-VAT amount used as subtotal
+  const custLegacyWB = useMemo(() =>
+    legacyDocuments.filter(d => d.kind === 'WB' && d.customerId === id),
+    [legacyDocuments, id])
+
+  // Pre-aggregate legacy entries by YYYY-MM for chart
+  const legacyMonthEntries = useMemo(() => {
+    const out: { month: string; amount: number }[] = []
+    for (const d of custLegacyWB) {
+      const m = (d.docDate || '').slice(0, 7) // YYYY-MM
+      if (!m) continue
+      const existing = out.find(e => e.month === m)
+      if (existing) existing.amount += d.amount || 0
+      else out.push({ month: m, amount: d.amount || 0 })
+    }
+    return out
+  }, [custLegacyWB])
+
+  const legacyTotalRevenue = useMemo(() =>
+    custLegacyWB.reduce((s, d) => s + (d.amount || 0), 0),
+    [custLegacyWB])
+
   // Stats
   const stats = useMemo(() => {
-    const totalRevenue = custBilling.reduce((s, b) => s + b.subtotal, 0)
+    const currentTotal = custBilling.reduce((s, b) => s + b.subtotal, 0)
+    const totalRevenue = currentTotal + legacyTotalRevenue
     const paidBills = custBilling.filter(b => b.status === 'paid')
     // 142.1: ค้างชำระ = ทุกใบ status=sent (ไม่จำกัดเวลา) — ตรงกับ dashboard logic
     const unpaidBills = custBilling.filter(b => b.status === 'sent')
@@ -79,7 +103,7 @@ export default function CustomerDetailPage() {
     }, 0) : 0
 
     return { totalRevenue, unpaidAmount, unpaidBills: unpaidBills.length, paidBills: paidBills.length, totalPieces, monthRevenue, monthForms, monthDelivery, monthSDAmount }
-  }, [custBilling, custDelivery, custForms, customer, quotations])
+  }, [custBilling, custDelivery, custForms, customer, quotations, legacyTotalRevenue])
 
   // Carry-over
   const carryOver = useMemo(() => {
@@ -108,12 +132,8 @@ export default function CustomerDetailPage() {
 
   return (
     <div>
-      {/* Header */}
+      {/* Header — 168: ปุ่มปิด มุมบนขวา (theme เดียวกับ Modal) */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.push('/dashboard/customers')}
-          className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-          <ArrowLeft className="w-5 h-5 text-slate-600" />
-        </button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-[#e8eef5] flex items-center justify-center">
@@ -156,6 +176,12 @@ export default function CustomerDetailPage() {
               <Link2 className="w-3 h-3" />ยังไม่มี QT
             </Link>
           )}
+          {/* 168: ปุ่มปิด มุมบนขวา (theme เดียวกับ Modal) */}
+          <button onClick={() => router.push('/dashboard/customers')}
+            className="ml-2 w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+            title="ปิด">
+            <X className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
@@ -171,9 +197,14 @@ export default function CustomerDetailPage() {
         <StatCard icon={<Truck className="w-5 h-5" />} label="ยอดใบส่งของเดือนนี้ (ก่อน VAT)" value={formatCurrency(stats.monthSDAmount)} color="text-blue-600" />
       </div>
 
-      {/* 142.4: Revenue Trend Chart — เฉพาะลูกค้านี้ 12 เดือน */}
+      {/* 142.4 + 168.1: Revenue Trend Chart — รวม legacy WB + ปัจจุบัน */}
       <div className="mb-6">
-        <RevenueTrendChart billingStatements={custBilling} months={12} />
+        <RevenueTrendChart billingStatements={custBilling} months={12} extraEntries={legacyMonthEntries} />
+        {legacyTotalRevenue > 0 && (
+          <p className="text-[11px] text-slate-400 mt-1.5 px-1">
+            รวมรายได้ legacy (NeoSME): <span className="font-mono font-medium text-slate-600">{formatCurrency(legacyTotalRevenue)}</span> · {custLegacyWB.length} ใบวางบิล
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
