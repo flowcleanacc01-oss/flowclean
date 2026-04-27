@@ -22,6 +22,7 @@ import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
 import CustomerPicker from '@/components/CustomerPicker'
 import { exportCSV } from '@/lib/export'
+import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 
 type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed'
 
@@ -44,6 +45,8 @@ export default function DeliveryPage() {
   const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  // 171.1: scroll to <mark> on arrival from global search
+  useScrollToMark([showDetail])
   const [dnFilter, setDnFilter] = useState<DNFilter>('all')
 
   // Focus mode (50): from ?focus=ID1,ID2 — override all filters + auto-open detail

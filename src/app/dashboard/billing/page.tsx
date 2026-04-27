@@ -23,6 +23,7 @@ import BillingPrint from '@/components/BillingPrint'
 import TaxInvoicePrint from '@/components/TaxInvoicePrint'
 import QuotationPrint from '@/components/QuotationPrint'
 import CustomerPicker from '@/components/CustomerPicker'
+import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 
 type TabKey = 'billing' | 'invoice' | 'quotation'
 
@@ -169,6 +170,9 @@ export default function BillingPage() {
   const [quLoadQTSearch, setQuLoadQTSearch] = useState('')
   const [showQuDetail, setShowQuDetail] = useState<string | null>(null)
   const [showQuPrint, setShowQuPrint] = useState(false)
+
+  // 171.1: scroll to first <mark> when arriving from global search with ?q=
+  useScrollToMark([showQuDetail, showDetail, showInvoiceDetail])
 
   // QT Accept confirmation modal
   const [pendingAcceptQTId, setPendingAcceptQTId] = useState<string | null>(null)
@@ -860,7 +864,12 @@ export default function BillingPage() {
           || (customer?.shortName || '').toLowerCase().includes(s)
           || (customer?.name || '').toLowerCase().includes(s)
           || q.customerName.toLowerCase().includes(s)
-        if (!textMatch) return false
+        // 171.3: match item code/name ใน q.items[]
+        const itemMatch = !textMatch && q.items.some(it =>
+          (it.code || '').toLowerCase().includes(s)
+          || (it.name || '').toLowerCase().includes(s)
+        )
+        if (!textMatch && !itemMatch) return false
       }
       if (!matchesQtDateFilter(q.date)) return false
       return true

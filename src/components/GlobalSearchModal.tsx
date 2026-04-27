@@ -56,7 +56,43 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
     billingStatements, taxInvoices, receipts, quotations, linenCatalog,
   }), [customers, linenForms, deliveryNotes, billingStatements, taxInvoices, receipts, quotations, linenCatalog])
 
-  const results = useMemo(() => searchResults(index, query, 30), [index, query])
+  // 171.2: รับ unlimited results เพื่อ group ดู เห็นจำนวนจริงต่อ kind
+  const results = useMemo(() => searchResults(index, query, 500), [index, query])
+
+  // Group by kind (preserve relevance order within each group)
+  const grouped = useMemo(() => {
+    const order: SearchResultKind[] = ['item', 'customer', 'qt', 'sd', 'wb', 'iv', 'rc', 'lf']
+    const groups = new Map<SearchResultKind, typeof results>()
+    for (const k of order) groups.set(k, [])
+    for (const r of results) {
+      groups.get(r.kind)?.push(r)
+    }
+    return order
+      .map(k => ({ kind: k, items: groups.get(k) || [] }))
+      .filter(g => g.items.length > 0)
+  }, [results])
+
+  // Per-kind expanded state (default: collapsed = top 5)
+  const [expandedKinds, setExpandedKinds] = useState<Set<SearchResultKind>>(new Set())
+  useEffect(() => { setExpandedKinds(new Set()) }, [query])
+  const toggleExpand = (k: SearchResultKind) => {
+    setExpandedKinds(prev => {
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k); else next.add(k)
+      return next
+    })
+  }
+  const TOP_PER_KIND = 5
+
+  // Flat list (visible only) — for keyboard nav
+  const flatVisible = useMemo(() => {
+    const out: typeof results = []
+    for (const g of grouped) {
+      const cap = expandedKinds.has(g.kind) ? g.items.length : TOP_PER_KIND
+      out.push(...g.items.slice(0, cap))
+    }
+    return out
+  }, [grouped, expandedKinds])
 
   // 147.1: highlight tokens — case-insensitive substring → split text + wrap matches
   const tokens = useMemo(() => {
@@ -77,10 +113,10 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
     )
   }
 
-  // Clamp selected when results change
+  // Clamp selected when visible list changes
   useEffect(() => {
-    if (selectedIdx >= results.length) setSelectedIdx(Math.max(0, results.length - 1))
-  }, [results, selectedIdx])
+    if (selectedIdx >= flatVisible.length) setSelectedIdx(Math.max(0, flatVisible.length - 1))
+  }, [flatVisible, selectedIdx])
 
   // Auto-scroll selected into view
   useEffect(() => {
@@ -90,7 +126,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   }, [selectedIdx])
 
   const openResult = (idx: number) => {
-    const r = results[idx]
+    const r = flatVisible[idx]
     if (!r) return
     onClose()
     // 147.2: append ?q=<query> เพื่อให้ destination page highlight ได้
@@ -104,7 +140,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setSelectedIdx(i => Math.min(results.length - 1, i + 1))
+      setSelectedIdx(i => Math.min(flatVisible.length - 1, i + 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setSelectedIdx(i => Math.max(0, i - 1))
@@ -164,41 +200,74 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
             </div>
           ) : (
             <div className="py-1">
-              {results.map((r, i) => {
-                const Icon = KIND_ICON[r.kind]
-                const isSel = i === selectedIdx
-                return (
-                  <div
-                    key={`${r.kind}-${r.id}`}
-                    data-idx={i}
-                    onClick={() => openResult(i)}
-                    onMouseEnter={() => setSelectedIdx(i)}
-                    className={cn(
-                      'flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors',
-                      isSel ? 'bg-slate-100' : 'hover:bg-slate-50',
-                    )}
-                  >
-                    <Icon className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                    <span className={cn('text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0', KIND_COLOR[r.kind])}>
-                      {KIND_LABEL[r.kind]}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-800 truncate">{highlight(r.primary)}</div>
-                      <div className="text-xs text-slate-500 truncate">{highlight(r.secondary)}</div>
+              {(() => {
+                let runningIdx = 0
+                return grouped.map(g => {
+                  const expanded = expandedKinds.has(g.kind)
+                  const cap = expanded ? g.items.length : TOP_PER_KIND
+                  const visible = g.items.slice(0, cap)
+                  const hidden = Math.max(0, g.items.length - cap)
+                  return (
+                    <div key={g.kind} className="mb-1">
+                      {/* Group header */}
+                      <div className="flex items-center justify-between px-4 py-1.5 bg-slate-50 border-y border-slate-100 text-[11px]">
+                        <div className="flex items-center gap-2">
+                          <span className={cn('font-mono px-1.5 py-0.5 rounded text-[10px]', KIND_COLOR[g.kind])}>
+                            {KIND_LABEL[g.kind]}
+                          </span>
+                          <span className="text-slate-500">{g.items.length} รายการ</span>
+                        </div>
+                        {g.items.length > TOP_PER_KIND && (
+                          <button
+                            onClick={() => toggleExpand(g.kind)}
+                            className="text-[10px] text-[#1B3A5C] hover:underline font-medium"
+                          >
+                            {expanded ? `ซ่อน (เหลือ ${TOP_PER_KIND})` : `ดูทั้งหมด (+${hidden})`}
+                          </button>
+                        )}
+                      </div>
+                      {/* Group items */}
+                      {visible.map(r => {
+                        const Icon = KIND_ICON[r.kind]
+                        const myIdx = runningIdx++
+                        const isSel = myIdx === selectedIdx
+                        return (
+                          <div
+                            key={`${r.kind}-${r.id}`}
+                            data-idx={myIdx}
+                            onClick={() => openResult(myIdx)}
+                            onMouseEnter={() => setSelectedIdx(myIdx)}
+                            className={cn(
+                              'flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors',
+                              isSel ? 'bg-slate-100' : 'hover:bg-slate-50',
+                            )}
+                          >
+                            <Icon className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-slate-800 truncate">{highlight(r.primary)}</div>
+                              <div className="text-xs text-slate-500 truncate">{highlight(r.secondary)}</div>
+                            </div>
+                            {isSel && (
+                              <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">↵</span>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
-                    {isSel && (
-                      <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">↵</span>
-                    )}
-                  </div>
-                )
-              })}
+                  )
+                })
+              })()}
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="px-4 py-2 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-500 flex items-center justify-between">
-          <span>{query.trim() === '' ? `${index.length} รายการพร้อมค้นหา` : `${results.length} ผลลัพธ์`}</span>
+          <span>
+            {query.trim() === ''
+              ? `${index.length} รายการพร้อมค้นหา`
+              : `${results.length} ผลลัพธ์ · ${flatVisible.length} แสดงอยู่`}
+          </span>
           <span className="hidden sm:inline">
             <kbd className="bg-white border border-slate-200 px-1 py-0.5 rounded font-mono">⌘K</kbd> หรือ <kbd className="bg-white border border-slate-200 px-1 py-0.5 rounded font-mono">Ctrl+K</kbd>
           </span>

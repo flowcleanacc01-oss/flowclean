@@ -20,6 +20,7 @@ import ExportButtons from '@/components/ExportButtons'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
 import { exportCSV } from '@/lib/export'
+import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 
 export default function LinenFormsPage() {
   const {
@@ -42,6 +43,8 @@ export default function LinenFormsPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  // 171.1: scroll to <mark> on arrival from global search
+  useScrollToMark([showDetail])
 
   // Date filter & sort state
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')

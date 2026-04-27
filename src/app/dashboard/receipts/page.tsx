@@ -16,6 +16,7 @@ import CustomerPicker from '@/components/CustomerPicker'
 import { canViewBilling } from '@/lib/permissions'
 import { exportCSV } from '@/lib/export'
 import { useRouter } from 'next/navigation'
+import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 
 type RCFilter = 'all' | 'not-printed' | 'printed' | 'not-paid' | 'paid'
 
@@ -54,6 +55,8 @@ export default function ReceiptsPage() {
   // Detail
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [activeRowId, setActiveRowId] = useState<string | null>(() => searchParams.get('detail'))
+  // 171.1: scroll to <mark> on arrival from global search
+  useScrollToMark([showDetail])
   const [showPrint, setShowPrint] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
