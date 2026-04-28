@@ -1520,8 +1520,9 @@ export default function BillingPage() {
       </>})()}
 
       {/* Create Billing Modal */}
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); setBillingDiscount(0); setBillingDiscountNote(''); setBillingExtraCharge(0); setBillingExtraChargeNote('') }} title="สร้างใบวางบิล" size="lg" closeLabel="cancel">
-        <div className="space-y-4">
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setBillingDiscount(0); setBillingDiscountNote(''); setBillingExtraCharge(0); setBillingExtraChargeNote('') }} title="สร้างใบวางบิล" size="xl" closeLabel="cancel">
+        {/* 181.1.1: min-h ให้ panel ของ CustomerPicker (~400px) ไม่ดูใหญ่กว่า modal */}
+        <div className="space-y-4 min-h-[480px]">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">ลูกค้า</label>
@@ -1545,6 +1546,13 @@ export default function BillingPage() {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
           </div>
+
+          {/* 181.1.1: empty state เมื่อยังไม่เลือกลูกค้า */}
+          {!selCustomerId && (
+            <div className="bg-slate-50 border border-dashed border-slate-300 rounded-lg px-4 py-12 text-center text-sm text-slate-500">
+              เลือกลูกค้าเพื่อดูใบส่งของที่นำมาวางบิลได้
+            </div>
+          )}
 
           {/* DN preview list with checkboxes */}
           {selCustomer && availableDNs.length > 0 && (

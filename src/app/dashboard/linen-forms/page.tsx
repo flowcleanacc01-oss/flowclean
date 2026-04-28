@@ -239,16 +239,10 @@ export default function LinenFormsPage() {
   }))
 
   const handleCreateOpen = () => {
-    const firstCustomer = customers.filter(c => c.isActive)[0]
-    setNewCustomerId(firstCustomer?.id || '')
+    // 181: เริ่มแบบ blank — ผู้ใช้เลือกลูกค้าเอง (กัน default หลุดเป็นรายอื่น)
+    setNewCustomerId('')
+    setNewRows([])
     setNewDate(todayISO())
-    if (firstCustomer) {
-      const linkedQT = getLinkedQT(firstCustomer.name, firstCustomer.id)
-      const codes = linkedQT ? linkedQT.items.map(i => i.code) : firstCustomer.enabledItems
-      setNewRows(buildRows(codes))
-    } else {
-      setNewRows([])
-    }
     setNewNotes('')
     setNewBagsSent(0)
     setShowCreate(true)
@@ -579,7 +573,8 @@ export default function LinenFormsPage() {
 
       {/* Create Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งรับผ้าใหม่ (Create New LF)" size="wide" closeLabel="cancel">
-        <div className="space-y-4">
+        {/* 181.1: min-h ให้ panel ของ CustomerPicker (~400px) ไม่ดูใหญ่กว่า modal */}
+        <div className="space-y-4 min-h-[480px]">
           <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2.5 text-sm text-teal-700">
             <span className="font-medium">สิ่งที่ทำ: {LINEN_FORM_STATUS_CONFIG.draft.todoLabel}</span>
             <span className="mx-2">|</span>
@@ -604,6 +599,13 @@ export default function LinenFormsPage() {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
           </div>
+
+          {/* 181.1: empty state เมื่อยังไม่เลือกลูกค้า — กัน modal "ว่าง" ดูแปลก */}
+          {!newCustomerId && (
+            <div className="bg-slate-50 border border-dashed border-slate-300 rounded-lg px-4 py-12 text-center text-sm text-slate-500">
+              เลือกลูกค้าเพื่อเริ่มสร้างใบส่งรับผ้า
+            </div>
+          )}
 
           {newCustomerId && getCustomer(newCustomerId) && !getLinkedQT(getCustomer(newCustomerId)!.name, newCustomerId) && (
             <div className="bg-red-50 border border-red-300 rounded-lg px-4 py-3 text-sm text-red-700">
