@@ -60,6 +60,8 @@ export function calculateDNSubtotal(dn: DeliveryNote, customer: Customer, priceM
   const pm = priceMap ?? Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
   return dn.items.reduce((sum, item) => {
     if (item.isClaim) return sum
+    // Layer 3: Ad-hoc รายการพิเศษ ใช้ราคาที่กรอกเอง ไม่อ้างอิง priceMap
+    if (item.isAdhoc) return sum + item.quantity * (item.adhocPrice || 0)
     return sum + item.quantity * (pm[item.code] || 0)
   }, 0)
 }

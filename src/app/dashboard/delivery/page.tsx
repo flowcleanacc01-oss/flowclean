@@ -1132,27 +1132,49 @@ export default function DeliveryPage() {
                     <thead>
                       <tr className="bg-slate-50">
                         <th className="text-left px-3 py-2 font-medium text-slate-600">รหัส</th>
-                        <th className="text-left px-3 py-2 font-medium text-slate-600">รายการ</th>
+                        <th className="text-left px-3 py-2 font-medium text-slate-600" title="ชื่อในเอกสารใบนี้ (แก้ได้เฉพาะใบนี้ ไม่กระทบ catalog)">ชื่อในเอกสาร</th>
                         <th className="text-right px-3 py-2 font-medium text-slate-600">จำนวน</th>
                         {isPer && <th className="text-right px-3 py-2 font-medium text-slate-600">ราคา</th>}
                         {isPer && <th className="text-right px-3 py-2 font-medium text-slate-600">มูลค่า</th>}
+                        <th className="w-8"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {detailNote.items.map((item, idx) => {
-                        const price = priceMap[item.code] || 0
+                        const isAdhoc = !!item.isAdhoc
+                        const price = isAdhoc ? (item.adhocPrice ?? 0) : (priceMap[item.code] || 0)
+                        const isBilled = !!detailNote.isBilled
                         return (
-                          <tr key={`${item.code}-${idx}`} className="border-t border-slate-100">
-                            <td className="px-3 py-1.5 font-mono text-xs">{item.code}</td>
+                          <tr key={`${item.code}-${idx}`} className={cn(
+                            'border-t border-slate-100',
+                            isAdhoc && 'bg-orange-50/40',
+                          )}>
+                            <td className="px-3 py-1.5 font-mono text-xs">
+                              {isAdhoc ? <span className="text-orange-700 font-semibold">★ พิเศษ</span> : item.code}
+                            </td>
                             <td className="px-2 py-1">
-                              <input
-                                value={item.displayName ?? ('ค่าบริการซัก ' + (itemNameMap[item.code] || item.code))}
-                                onChange={e => {
-                                  const updated = detailNote.items.map((di, i) => i === idx ? { ...di, displayName: e.target.value } : di)
-                                  updateDeliveryNote(detailNote.id, { items: updated })
-                                }}
-                                className="w-full px-2 py-0.5 border border-transparent hover:border-slate-200 focus:border-[#3DD8D8] rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-transparent"
-                              />
+                              {isAdhoc ? (
+                                <input
+                                  value={item.adhocName || ''}
+                                  placeholder="ชื่อรายการพิเศษ"
+                                  disabled={isBilled}
+                                  onChange={e => {
+                                    const updated = detailNote.items.map((di, i) => i === idx ? { ...di, adhocName: e.target.value } : di)
+                                    updateDeliveryNote(detailNote.id, { items: updated })
+                                  }}
+                                  className="w-full px-2 py-0.5 border border-orange-200 focus:border-orange-400 rounded text-sm focus:ring-1 focus:ring-orange-300 focus:outline-none bg-white disabled:bg-slate-50 disabled:text-slate-400"
+                                />
+                              ) : (
+                                <input
+                                  value={item.displayName ?? ('ค่าบริการซัก ' + (itemNameMap[item.code] || item.code))}
+                                  title="ชื่อในเอกสารใบนี้ (รหัส+ราคาถูก lock จาก QT)"
+                                  onChange={e => {
+                                    const updated = detailNote.items.map((di, i) => i === idx ? { ...di, displayName: e.target.value } : di)
+                                    updateDeliveryNote(detailNote.id, { items: updated })
+                                  }}
+                                  className="w-full px-2 py-0.5 border border-transparent hover:border-slate-200 focus:border-[#3DD8D8] rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-transparent"
+                                />
+                              )}
                               {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
                             </td>
                             <td className="px-3 py-1.5 text-right">
@@ -1197,8 +1219,38 @@ export default function DeliveryPage() {
                                 )
                               })()}
                             </td>
-                            {isPer && <td className="px-3 py-1.5 text-right">{formatCurrency(price)}</td>}
+                            {isPer && (
+                              <td className="px-3 py-1.5 text-right">
+                                {isAdhoc ? (
+                                  <input type="number" min={0} step="0.01"
+                                    value={item.adhocPrice ?? 0}
+                                    disabled={isBilled}
+                                    onFocus={e => e.currentTarget.select()}
+                                    onChange={e => {
+                                      const newPrice = parseFloat(e.target.value) || 0
+                                      const updated = detailNote.items.map((di, i) => i === idx ? { ...di, adhocPrice: newPrice } : di)
+                                      updateDeliveryNote(detailNote.id, { items: updated })
+                                    }}
+                                    className="w-20 px-2 py-0.5 border border-orange-200 rounded text-right text-sm focus:ring-1 focus:ring-orange-300 focus:outline-none bg-white disabled:bg-slate-50 disabled:text-slate-400" />
+                                ) : (
+                                  formatCurrency(price)
+                                )}
+                              </td>
+                            )}
                             {isPer && <td className="px-3 py-1.5 text-right">{formatCurrency(item.quantity * price)}</td>}
+                            <td className="px-2 py-1.5 text-center">
+                              {isAdhoc && !isBilled && (
+                                <button
+                                  title="ลบรายการพิเศษ"
+                                  onClick={() => {
+                                    const updated = detailNote.items.filter((_, i) => i !== idx)
+                                    updateDeliveryNote(detailNote.id, { items: updated })
+                                  }}
+                                  className="p-1 text-orange-400 hover:text-red-500 hover:bg-red-50 rounded">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </td>
                           </tr>
                         )
                       })}
@@ -1208,7 +1260,32 @@ export default function DeliveryPage() {
                         <td className="px-3 py-2 text-right">{formatNumber(detailNote.items.reduce((s, i) => s + i.quantity, 0))}</td>
                         {isPer && <td className="px-3 py-2"></td>}
                         {isPer && <td className="px-3 py-2 text-right">{formatCurrency(itemSubtotal)}</td>}
+                        <td></td>
                       </tr>
+                      {/* Layer 3: ปุ่มเพิ่มรายการพิเศษ */}
+                      {!detailNote.isBilled && (
+                        <tr className="border-t border-orange-100">
+                          <td colSpan={isPer ? 6 : 4} className="px-3 py-2">
+                            <button
+                              onClick={() => {
+                                const updated = [...detailNote.items, {
+                                  code: '',
+                                  quantity: 1,
+                                  isClaim: false,
+                                  isAdhoc: true,
+                                  adhocName: '',
+                                  adhocPrice: 0,
+                                }]
+                                updateDeliveryNote(detailNote.id, { items: updated })
+                              }}
+                              className="text-xs px-2.5 py-1 border border-orange-300 text-orange-700 hover:bg-orange-50 rounded-lg font-medium inline-flex items-center gap-1"
+                              title="เพิ่มรายการที่ไม่มีใน catalog/QT — ไม่ปนสถิติ stock">
+                              <Plus className="w-3.5 h-3.5" /> รายการพิเศษ
+                            </button>
+                            <span className="text-[11px] text-slate-400 ml-2">รายการที่ไม่อยู่ใน QT (ราคาเฉพาะ ไม่นับ stock)</span>
+                          </td>
+                        </tr>
+                      )}
                       {/* ค่ารถ (ครั้ง) */}
                       {isPer && tripFee > 0 && (
                         <tr className="border-t border-amber-200 bg-amber-50/50">
@@ -1221,6 +1298,7 @@ export default function DeliveryPage() {
                               onChange={e => updateDeliveryNote(detailNote.id, { transportFeeTrip: sanitizeNumber(e.target.value) })}
                               className="w-24 px-2 py-1 border border-amber-300 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-white" />
                           </td>
+                          <td></td>
                         </tr>
                       )}
                       {/* ค่ารถ (เดือน) */}
@@ -1235,6 +1313,7 @@ export default function DeliveryPage() {
                               onChange={e => updateDeliveryNote(detailNote.id, { transportFeeMonth: sanitizeNumber(e.target.value) })}
                               className="w-24 px-2 py-1 border border-purple-300 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-white" />
                           </td>
+                          <td></td>
                         </tr>
                       )}
                       {/* ค่าใช้จ่ายเพิ่มเติม — read-only display in table */}
@@ -1246,6 +1325,7 @@ export default function DeliveryPage() {
                           </td>
                           <td className="px-3 py-1.5" colSpan={2}></td>
                           <td className="px-3 py-1.5 text-right text-blue-700">{formatCurrency(dnExtraCharge)}</td>
+                          <td></td>
                         </tr>
                       )}
                       {/* ส่วนลด — read-only display in table */}
@@ -1257,6 +1337,7 @@ export default function DeliveryPage() {
                           </td>
                           <td className="px-3 py-1.5" colSpan={2}></td>
                           <td className="px-3 py-1.5 text-right text-orange-700">-{formatCurrency(dnDiscount)}</td>
+                          <td></td>
                         </tr>
                       )}
                       {/* ยอดรวมทั้งหมด */}
@@ -1264,6 +1345,7 @@ export default function DeliveryPage() {
                         <tr className="bg-slate-100 font-bold">
                           <td className="px-3 py-2" colSpan={4}>ยอดรวมทั้งหมด</td>
                           <td className="px-3 py-2 text-right text-[#1B3A5C]">{formatCurrency(grandTotal)}</td>
+                          <td></td>
                         </tr>
                       )}
                     </tbody>

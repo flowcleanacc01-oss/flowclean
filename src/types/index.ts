@@ -268,6 +268,11 @@ export interface DeliveryNoteItem {
   quantity: number
   isClaim: boolean // เคลม = true → ราคา 0 ไม่คิดเงิน
   displayName?: string // user-editable display name (default: "ค่าบริการซัก " + catalogName)
+  // Layer 3 (2026-04-28): Ad-hoc รายการพิเศษ — ไม่อยู่ใน catalog/QT
+  // ใช้กรณี one-off rare items, ไม่ปนสถิติ stock/carry-over
+  isAdhoc?: boolean
+  adhocName?: string  // free-text ชื่อรายการพิเศษ (used when isAdhoc=true)
+  adhocPrice?: number // ราคา/หน่วย ที่กรอกเอง
 }
 
 export interface DeliveryNote {

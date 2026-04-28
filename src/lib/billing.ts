@@ -38,14 +38,25 @@ export function aggregateDeliveryItems(
     : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
 
   // Aggregate by (code, price) — handles price changes mid-month
-  const tierMap: Record<string, { code: string; qty: number; price: number }> = {}
+  // Layer 3: Ad-hoc items aggregate by (adhoc-{name}, price) แยกจาก code ปกติ
+  const tierMap: Record<string, { code: string; qty: number; price: number; displayName?: string }> = {}
   for (const note of notes) {
     const pm = getDNPriceMap(note, fallbackPriceMap)
     for (const item of note.items) {
       if (item.isClaim) continue
-      const price = pm[item.code] ?? 0
-      const key = `${item.code}@${price}`
-      if (!tierMap[key]) tierMap[key] = { code: item.code, qty: 0, price }
+      let key: string, code: string, price: number, displayName: string | undefined
+      if (item.isAdhoc) {
+        const adhocName = item.adhocName || '(รายการพิเศษ)'
+        price = item.adhocPrice ?? 0
+        code = `ADHOC:${adhocName}`
+        key = `${code}@${price}`
+        displayName = adhocName
+      } else {
+        price = pm[item.code] ?? 0
+        code = item.code
+        key = `${code}@${price}`
+      }
+      if (!tierMap[key]) tierMap[key] = { code, qty: 0, price, displayName }
       tierMap[key].qty += item.quantity
     }
   }
@@ -59,6 +70,16 @@ export function aggregateDeliveryItems(
   const result: BillingLineItem[] = Object.values(tierMap)
     .filter(t => t.qty > 0)
     .map(t => {
+      // Layer 3: Ad-hoc items ใช้ adhocName ตรงๆ ไม่อ้าง itemNameMap
+      if (t.code.startsWith('ADHOC:')) {
+        return {
+          code: t.code,
+          name: t.displayName || '(รายการพิเศษ)',
+          quantity: t.qty,
+          pricePerUnit: t.price,
+          amount: t.qty * t.price,
+        }
+      }
       const hasTiers = codePriceCount[t.code] > 1
       const name = 'ค่าบริการซัก ' + (itemNameMap[t.code] || t.code)
         + (hasTiers ? ` (@${t.price.toLocaleString()})` : '')
