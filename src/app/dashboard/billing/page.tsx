@@ -1566,18 +1566,19 @@ export default function BillingPage() {
                     className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors">ล้าง</button>
                 </div>
               </div>
+              {/* 182: วันที่ col แรก + เด่น, เลขที่ muted (theme เดียวกับ customer detail history) */}
               <div className="border border-slate-200 rounded-lg overflow-hidden mb-4">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th className="w-8 px-3 py-2"></th>
                       <th className="text-left px-3 py-2 font-medium text-slate-600 cursor-pointer select-none"
-                        onClick={() => { if (dnSortKey === 'noteNumber') setDnSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setDnSortKey('noteNumber'); setDnSortDir('asc') } }}>
-                        เลขที่ {dnSortKey === 'noteNumber' && (dnSortDir === 'asc' ? '▲' : '▼')}
-                      </th>
-                      <th className="text-left px-3 py-2 font-medium text-slate-600 cursor-pointer select-none"
                         onClick={() => { if (dnSortKey === 'date') setDnSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setDnSortKey('date'); setDnSortDir('asc') } }}>
                         วันที่ {dnSortKey === 'date' && (dnSortDir === 'asc' ? '▲' : '▼')}
+                      </th>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600 cursor-pointer select-none"
+                        onClick={() => { if (dnSortKey === 'noteNumber') setDnSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setDnSortKey('noteNumber'); setDnSortDir('asc') } }}>
+                        เลขที่ {dnSortKey === 'noteNumber' && (dnSortDir === 'asc' ? '▲' : '▼')}
                       </th>
                       <th className="text-right px-3 py-2 font-medium text-slate-600 cursor-pointer select-none"
                         onClick={() => { if (dnSortKey === 'items') setDnSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setDnSortKey('items'); setDnSortDir('asc') } }}>
@@ -1595,8 +1596,8 @@ export default function BillingPage() {
                           <td className="px-3 py-1.5 text-center">
                             <input type="checkbox" checked={checked} readOnly className="rounded border-slate-300 pointer-events-none" />
                           </td>
-                          <td className="px-3 py-1.5 font-mono text-xs">{dn.noteNumber}</td>
-                          <td className="px-3 py-1.5 text-slate-600">{formatDate(dn.date)}</td>
+                          <td className="px-3 py-1.5 text-slate-700 font-medium whitespace-nowrap">{formatDate(dn.date)}</td>
+                          <td className="px-3 py-1.5 font-mono text-[11px] text-slate-400">{dn.noteNumber}</td>
                           <td className="px-3 py-1.5 text-right">{formatNumber(totalPcs)} ชิ้น</td>
                         </tr>
                       )
