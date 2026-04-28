@@ -49,3 +49,7 @@ AGENTS.md
 .ai-secretary/
 .claude/
 .tmp-*/
+
+# Local data exports from diagnostic scripts (may contain customer names)
+scripts/*.json
+scripts/*.csv
