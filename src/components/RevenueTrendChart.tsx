@@ -119,6 +119,11 @@ export default function RevenueTrendChart({ billingStatements, months = 12, extr
           <h3 className="text-sm font-semibold text-slate-700">
             ยอดที่วางบิลแต่ละเดือน (ก่อน VAT)
             <span className="text-slate-400 font-normal"> — แนวโน้มรายได้ ({rangeLabel})</span>
+            {extraEntries && extraEntries.length > 0 && (
+              <span className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                + legacy
+              </span>
+            )}
           </h3>
           <p className="text-[11px] text-slate-500 mt-0.5">รวม {formatCurrency(total)} · เฉลี่ย/เดือน {formatCurrency(avg)}</p>
         </div>

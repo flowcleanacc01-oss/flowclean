@@ -28,7 +28,22 @@ export default function DashboardPage() {
     currentUser,
     linenForms, billingStatements, deliveryNotes, quotations,
     customers, getCustomer, getCarryOver,
+    legacyDocuments,
   } = useStore()
+
+  // 183: legacy WB → extra chart entries (group by month, amount = ก่อน VAT จาก source)
+  const legacyChartEntries = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const d of legacyDocuments) {
+      if (d.kind !== 'WB') continue
+      const month = (d.docDate || '').slice(0, 7)  // YYYY-MM
+      if (!month) continue
+      const amt = Number(d.amount) || 0
+      if (amt <= 0) continue
+      map.set(month, (map.get(month) || 0) + amt)
+    }
+    return Array.from(map.entries()).map(([month, amount]) => ({ month, amount }))
+  }, [legacyDocuments])
 
   const today = todayISO()
   const showFinancial = canViewFinancialDashboard(currentUser)
@@ -228,10 +243,14 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* B2: Revenue Trend Chart (accountant + admin only) */}
+      {/* B2: Revenue Trend Chart (accountant + admin only) — 183: รวม legacy WB ด้วย */}
       {showFinancial && (
         <div className="mb-6">
-          <RevenueTrendChart billingStatements={billingStatements} months={12} />
+          <RevenueTrendChart
+            billingStatements={billingStatements}
+            months={12}
+            extraEntries={legacyChartEntries}
+          />
         </div>
       )}
 

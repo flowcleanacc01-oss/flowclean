@@ -24,7 +24,8 @@
  *     allowAll
  *   />
  */
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, Search, X, Check, History } from 'lucide-react'
 import type { Customer } from '@/types'
 import { useStore } from '@/lib/store'
@@ -58,6 +59,38 @@ export default function CustomerPicker({
   const panelRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+
+  // 181.1: Portal panel positioning — escape modal overflow clipping
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; placement: 'down' | 'up' }>({
+    top: 0, left: 0, width: 320, placement: 'down',
+  })
+  const PANEL_HEIGHT_EST = 440 // search 60 + list max-h 360 + padding
+  const PANEL_MIN_W = 320
+  const updatePos = () => {
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const width = Math.max(PANEL_MIN_W, Math.min(rect.width, 420))
+    const spaceBelow = vh - rect.bottom
+    const placement: 'down' | 'up' = spaceBelow >= PANEL_HEIGHT_EST + 16 || spaceBelow >= vh / 2 ? 'down' : 'up'
+    let left = rect.left
+    if (left + width > vw - 8) left = Math.max(8, vw - width - 8)
+    const top = placement === 'down' ? rect.bottom + 4 : rect.top - 4
+    setPos({ top, left, width, placement })
+  }
+  useLayoutEffect(() => {
+    if (!open) return
+    updatePos()
+    const onScroll = () => updatePos()
+    const onResize = () => updatePos()
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [open])
 
   const selCustomer = value ? getCustomer(value) : null
 
@@ -202,11 +235,22 @@ export default function CustomerPicker({
         <ChevronDown className={cn('w-4 h-4 transition-transform', open && 'rotate-180')} aria-hidden="true" />
       </button>
 
-      {/* Panel */}
-      {open && (
+      {/* Panel — 181.1: rendered via Portal so it escapes modal overflow clipping */}
+      {open && typeof document !== 'undefined' && createPortal(
         <div
           ref={panelRef}
-          className="absolute z-50 mt-1 left-0 w-[340px] max-w-[90vw] bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden"
+          data-find-skip
+          style={{
+            position: 'fixed',
+            top: pos.placement === 'down' ? pos.top : undefined,
+            bottom: pos.placement === 'up' ? Math.max(8, window.innerHeight - pos.top) : undefined,
+            left: pos.left,
+            width: pos.width,
+            maxHeight: pos.placement === 'down'
+              ? Math.min(PANEL_HEIGHT_EST, window.innerHeight - pos.top - 16)
+              : Math.min(PANEL_HEIGHT_EST, pos.top - 16),
+          }}
+          className="z-[70] bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden flex flex-col"
         >
           {/* Search */}
           <div className="border-b border-slate-100 p-2">
@@ -228,8 +272,8 @@ export default function CustomerPicker({
             </div>
           </div>
 
-          {/* List */}
-          <div ref={listRef} className="max-h-[360px] overflow-y-auto">
+          {/* List — flex-1 inside portal panel (overall maxHeight controlled by inline style) */}
+          <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto">
             {options.map((opt, idx) => {
               const isFocused = idx === activeIdx
               const isSelected = opt.id === value
@@ -292,7 +336,8 @@ export default function CustomerPicker({
               )
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
