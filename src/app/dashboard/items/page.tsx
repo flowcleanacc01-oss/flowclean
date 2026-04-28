@@ -14,6 +14,7 @@ import { exportCSV } from '@/lib/export'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import MergeCodesTool from '@/components/MergeCodesTool'
 import { canManageSettings } from '@/lib/permissions'
+import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 
 type TabKey = 'items' | 'categories' | 'merge'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
@@ -72,6 +73,9 @@ export default function ItemsPage() {
   const [catReorderMode, setCatReorderMode] = useState(false)
   const [dragCatKey, setDragCatKey] = useState<string | null>(null)
   const [dragOverCatKey, setDragOverCatKey] = useState<string | null>(null)
+
+  // 186: auto-scroll page เมื่อลาก row ใกล้ขอบบน/ล่าง — ใช้ทั้ง items + categories
+  useAutoScrollOnDrag(dragCode !== null || dragCatKey !== null)
 
   // ---- Filtered & sorted items ----
   const filteredItems = useMemo(() => {
