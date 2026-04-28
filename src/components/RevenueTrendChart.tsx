@@ -178,6 +178,7 @@ export default function RevenueTrendChart({ billingStatements, months = 12, extr
       </div>
 
       {/* Chart — SVG bars (stretch) + HTML labels (no stretch) — 129.5 font fix */}
+      <div className="relative">
       <svg
         viewBox={`0 0 ${data.length * 40} ${chartH}`}
         className="w-full h-[180px]"
@@ -193,31 +194,15 @@ export default function RevenueTrendChart({ billingStatements, months = 12, extr
           />
         ))}
 
-        {/* Avg line + label (170.1) */}
-        {avg > 0 && (() => {
-          const avgY = chartH - (avg / maxValue) * chartH
-          const labelY = avgY < 16 ? avgY + 12 : avgY - 4 // flip below if too close to top
-          return (
-            <>
-              <line
-                x1="0" x2={data.length * 40}
-                y1={avgY} y2={avgY}
-                stroke="#94a3b8" strokeWidth="0.8" strokeDasharray="4 3"
-              />
-              <text
-                x={data.length * 40 - 4}
-                y={labelY}
-                fontSize="9"
-                textAnchor="end"
-                fill="#475569"
-                fontFamily="system-ui, sans-serif"
-                style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: 3, strokeLinejoin: 'round' }}
-              >
-                avg {formatCurrency(avg)}
-              </text>
-            </>
-          )
-        })()}
+        {/* Avg line (170.1) — label rendered as HTML overlay below to avoid stretch */}
+        {avg > 0 && (
+          <line
+            x1="0" x2={data.length * 40}
+            y1={chartH - (avg / maxValue) * chartH}
+            y2={chartH - (avg / maxValue) * chartH}
+            stroke="#94a3b8" strokeWidth="0.8" strokeDasharray="4 3"
+          />
+        )}
 
         {/* Bars */}
         {data.map((d, i) => {
@@ -251,6 +236,25 @@ export default function RevenueTrendChart({ billingStatements, months = 12, extr
           )
         })}
       </svg>
+      {/* 179: avg label overlay — HTML (no stretch, always on top) */}
+      {avg > 0 && (() => {
+        const avgPct = (avg / maxValue) * 100
+        const isHigh = avgPct > 88 // flip below the line if too close to top
+        return (
+          <div
+            className="absolute right-1 pointer-events-none"
+            style={{
+              top: `${100 - avgPct}%`,
+              transform: isHigh ? 'translateY(2px)' : 'translateY(-100%)',
+            }}
+          >
+            <span className="text-[10px] font-medium text-slate-600 bg-white/90 px-1.5 py-0.5 rounded border border-slate-200 shadow-sm">
+              avg {formatCurrency(avg)}
+            </span>
+          </div>
+        )
+      })()}
+      </div>
 
       {/* X-axis labels — HTML (ไม่ stretch, font สัดส่วนปกติ) — 129.5 */}
       <div className="flex mt-1.5 pb-1">
