@@ -12,8 +12,10 @@ import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
+import MergeCodesTool from '@/components/MergeCodesTool'
+import { canManageSettings } from '@/lib/permissions'
 
-type TabKey = 'items' | 'categories'
+type TabKey = 'items' | 'categories' | 'merge'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
 type SortDir = 'asc' | 'desc'
 
@@ -258,6 +260,7 @@ export default function ItemsPage() {
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'items', label: 'รายการผ้า' },
     { key: 'categories', label: 'หมวด' },
+    ...(canManageSettings(currentUser) ? [{ key: 'merge' as TabKey, label: 'รวมรหัส' }] : []),
   ]
 
   return (
@@ -712,6 +715,11 @@ export default function ItemsPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* 174 ขั้น 2: Merge Codes Tool tab */}
+      {tab === 'merge' && (
+        <MergeCodesTool />
       )}
 
       {/* 154.1: Items Print List Modal */}
