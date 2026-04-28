@@ -165,41 +165,75 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
     })
   }
 
-  // 147: Item kind — catalog items ค้นหาได้ด้วยรหัส/ชื่อ + แสดงสถิติการใช้งาน
-  // usage stats: unique customers + QT/SD count ที่มี item นี้
-  const itemUsage = new Map<string, { customers: Set<string>; qtCount: number; sdCount: number }>()
-  for (const item of store.linenCatalog) {
-    itemUsage.set(item.code, { customers: new Set(), qtCount: 0, sdCount: 0 })
+  // 147: Item kind — catalog items + 175: virtual items จาก QT/SD snapshots
+  // (เพื่อให้เจอ legacy codes ที่อยู่ใน QT แต่ไม่มีใน catalog หลัก เช่น
+  // S037, A92 ที่ import มาจาก NeoSME แต่ไม่ได้ register ใน catalog)
+  type ItemAggregate = {
+    code: string
+    names: Set<string>          // collect all variants of name seen
+    inCatalog: boolean
+    customers: Set<string>
+    qtCount: number
+    sdCount: number
   }
+  const itemAgg = new Map<string, ItemAggregate>()
+  const upsert = (code: string, name: string, inCat: boolean): ItemAggregate => {
+    let a = itemAgg.get(code)
+    if (!a) {
+      a = { code, names: new Set(), inCatalog: inCat, customers: new Set(), qtCount: 0, sdCount: 0 }
+      itemAgg.set(code, a)
+    } else if (inCat) a.inCatalog = true
+    if (name) a.names.add(name.trim())
+    return a
+  }
+  // Seed from catalog
+  for (const item of store.linenCatalog) {
+    upsert(item.code, item.name, true)
+    if (item.nameEn) upsert(item.code, item.nameEn, true)
+  }
+  // QT items — also collect non-catalog codes + name variants
   for (const q of store.quotations) {
     const seen = new Set<string>()
     for (const qi of q.items) {
-      const u = itemUsage.get(qi.code)
-      if (!u) continue
-      if (!seen.has(qi.code)) { u.qtCount++; seen.add(qi.code) }
-      u.customers.add(q.customerId)
+      if (!qi.code) continue
+      const a = upsert(qi.code, qi.name || '', catalogByCode.has(qi.code))
+      if (!seen.has(qi.code)) { a.qtCount++; seen.add(qi.code) }
+      a.customers.add(q.customerId)
     }
   }
+  // SD items — same treatment (DN uses displayName, name comes from catalog)
   for (const d of store.deliveryNotes) {
     const seen = new Set<string>()
     for (const di of d.items) {
-      const u = itemUsage.get(di.code)
-      if (!u) continue
-      if (!seen.has(di.code)) { u.sdCount++; seen.add(di.code) }
-      u.customers.add(d.customerId)
+      if (!di.code) continue
+      const a = upsert(di.code, di.displayName || '', catalogByCode.has(di.code))
+      if (!seen.has(di.code)) { a.sdCount++; seen.add(di.code) }
+      a.customers.add(d.customerId)
     }
   }
-  for (const item of store.linenCatalog) {
-    const u = itemUsage.get(item.code)!
-    const summary = u.customers.size > 0 || u.qtCount > 0 || u.sdCount > 0
-      ? `ใช้ใน ${u.customers.size} ลูกค้า · ${u.qtCount} QT · ${u.sdCount} SD`
+  for (const a of itemAgg.values()) {
+    const cat = catalogByCode.get(a.code)
+    const primaryName = cat?.name || [...a.names][0] || a.code
+    const variantNames = [...a.names].filter(n => n !== primaryName)
+    const summary = a.customers.size > 0 || a.qtCount > 0 || a.sdCount > 0
+      ? `ใช้ใน ${a.customers.size} ลูกค้า · ${a.qtCount} QT · ${a.sdCount} SD`
       : 'ยังไม่มีการใช้งาน'
+    const tag = a.inCatalog ? '' : ' · ⚠ ไม่มีใน catalog'
     results.push({
       kind: 'item',
-      id: item.code,
-      primary: `${item.code} · ${item.name}`,
-      secondary: item.nameEn ? `${summary} · ${item.nameEn}` : summary,
-      haystack: [item.code, item.name, item.nameEn, item.category, item.unit].filter(Boolean).join(' ').toLowerCase(),
+      id: a.code,
+      primary: `${a.code} · ${primaryName}${tag}`,
+      secondary: variantNames.length > 0
+        ? `${summary} · ชื่ออื่น: ${variantNames.join(' / ')}`
+        : (cat?.nameEn ? `${summary} · ${cat.nameEn}` : summary),
+      // 175: haystack รวมทุก name variant + nameEn + category + unit
+      haystack: [
+        a.code,
+        ...a.names,
+        cat?.nameEn,
+        cat?.category,
+        cat?.unit,
+      ].filter(Boolean).join(' ').toLowerCase(),
       href: `/dashboard/items`,
     })
   }
