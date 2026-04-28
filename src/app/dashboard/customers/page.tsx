@@ -53,6 +53,8 @@ export default function CustomersPage() {
   // 162.1: combine local search + URL ?q so live typing also highlights
   const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
   const [filterCat, setFilterCat] = useState<string>('all')
+  // 177.1: active/inactive filter
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('active')
   const [sortKey, setSortKey] = useState<string>('shortName')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [activeCustomerId, setActiveCustomerId] = useState<string | null>(null)
@@ -87,6 +89,9 @@ export default function CustomersPage() {
   const filtered = useMemo(() => {
     let list = [...customers]
     if (filterCat !== 'all') list = list.filter(c => c.customerType === filterCat)
+    // 177.1: active/inactive filter
+    if (filterStatus === 'active') list = list.filter(c => c.isActive)
+    else if (filterStatus === 'inactive') list = list.filter(c => !c.isActive)
     if (search) {
       const q = search.toLowerCase()
       list = list.filter(c =>
@@ -116,7 +121,7 @@ export default function CustomersPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [customers, filterCat, search, sortKey, sortDir, getCustomerCategoryLabel, linkedQTMap])
+  }, [customers, filterCat, filterStatus, search, sortKey, sortDir, getCustomerCategoryLabel, linkedQTMap])
 
   const handleEdit = (c: Customer) => {
     setEditId(c.id)
@@ -222,6 +227,22 @@ export default function CustomersPage() {
                 <option key={cat.key} value={cat.key}>{cat.label}</option>
               ))}
             </select>
+            {/* 177.1: active/inactive filter */}
+            <div className="flex items-center gap-1">
+              {([
+                { v: 'active' as const, label: 'ใช้งาน', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+                { v: 'inactive' as const, label: 'ปิด', cls: 'bg-red-100 text-red-700 border-red-200' },
+                { v: 'all' as const, label: 'ทั้งหมด', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+              ]).map(opt => (
+                <button key={opt.v} onClick={() => setFilterStatus(opt.v)}
+                  className={cn(
+                    'px-3 py-2 border rounded-lg text-sm font-medium transition-colors',
+                    filterStatus === opt.v ? opt.cls : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300',
+                  )}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Table */}
@@ -351,6 +372,16 @@ export default function CustomersPage() {
                     </tr>
                   ))}
                 </tbody>
+                {filtered.length > 0 && (
+                  <tfoot>
+                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                      <td className="px-2 py-3"></td>
+                      <td colSpan={10} className="px-4 py-3 text-slate-700">
+                        รวม {filtered.length} ราย
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>

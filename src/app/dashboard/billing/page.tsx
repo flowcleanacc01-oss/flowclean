@@ -1073,7 +1073,7 @@ export default function BillingPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder={
-              tab === 'quotation' ? 'ค้นหาเลขที่ใบเสนอราคา, ชื่อลูกค้า'
+              tab === 'quotation' ? 'ค้นหาเลขที่ใบเสนอราคา, ชื่อลูกค้า, รหัสสินค้า, รายการสินค้า'
               : tab === 'billing' ? 'ค้นหาเลขที่ใบวางบิล, ชื่อลูกค้า, จำนวนเงิน'
               : 'ค้นหาเลขที่ใบกำกับภาษี, ชื่อลูกค้า, จำนวนเงิน'
             }
@@ -1504,6 +1504,16 @@ export default function BillingPage() {
                   )
                 })}
               </tbody>
+              {filteredQuotations.length > 0 && (
+                <tfoot>
+                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                    <td className="px-2 py-3"></td>
+                    <td colSpan={7} className="px-4 py-3 text-slate-700">
+                      รวม {filteredQuotations.length} รายการ
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>
