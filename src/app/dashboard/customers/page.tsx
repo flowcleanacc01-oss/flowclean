@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store'
 import { cn, formatCurrency, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import { highlightText } from '@/lib/highlight'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import type { Customer, CustomerCategoryDef } from '@/types'
 import { Plus, Search, Edit2, Trash2, Check, FileText, X, Link2, Printer, FileDown } from 'lucide-react'
 import ExportButtons from '@/components/ExportButtons'
@@ -36,6 +37,8 @@ export default function CustomersPage() {
   const sp = useSearchParams()
   const router = useRouter()
   const urlHighlightQ = sp.get('q') || '' // 147.2
+  // 180: scroll to first <mark> on arrival from global search
+  useScrollToMark()
   const [showCustPrintList, setShowCustPrintList] = useState(false) // 154.2
   const [selectedCustIds, setSelectedCustIds] = useState<string[]>([]) // 154.2.1
   const [showCustBulkPrint, setShowCustBulkPrint] = useState(false)

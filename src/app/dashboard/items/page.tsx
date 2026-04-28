@@ -11,6 +11,7 @@ import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpD
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
+import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 
 type TabKey = 'items' | 'categories'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
@@ -38,6 +39,8 @@ export default function ItemsPage() {
   const [showItemPrintList, setShowItemPrintList] = useState(false) // 154.1
 
   const [tab, setTab] = useState<TabKey>('items')
+  // 180: scroll to first <mark> when arriving from global search with ?q=
+  useScrollToMark([tab])
 
   // ---- Items state ----
   const [search, setSearch] = useState('')
