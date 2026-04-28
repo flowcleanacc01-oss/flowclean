@@ -10,6 +10,7 @@ import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
+import FloatingTotalBar from '@/components/FloatingTotalBar'
 import ReceiptPrint from '@/components/ReceiptPrint'
 import ExportButtons from '@/components/ExportButtons'
 import CustomerPicker from '@/components/CustomerPicker'
@@ -262,18 +263,7 @@ export default function ReceiptsPage() {
               })}
             </tbody>
             {/* Totals footer */}
-            {filtered.length > 0 && (() => {
-              const totalGrand = filtered.reduce((s, rc) => s + rc.grandTotal, 0)
-              return (
-                <tfoot className="sticky bottom-0 z-20">
-                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
-                    <td colSpan={4} className="px-4 py-3 text-slate-700">รวม {filtered.length} รายการ</td>
-                    <td className="px-4 py-3 text-right text-[#1B3A5C]">{formatCurrency(totalGrand)}</td>
-                    <td colSpan={3}></td>
-                  </tr>
-                </tfoot>
-              )
-            })()}
+            {/* totals shown via FloatingTotalBar below */}
           </table>
         </div>
       </div>
@@ -583,6 +573,17 @@ export default function ReceiptsPage() {
               router.push(`/dashboard/billing?tab=billing&detail=${wbId}`)
             } : undefined}
           />
+        )
+      })()}
+
+      {/* 185.8 (revised): floating total bar */}
+      {filtered.length > 0 && (() => {
+        const totalGrand = filtered.reduce((s, rc) => s + rc.grandTotal, 0)
+        return (
+          <FloatingTotalBar>
+            <span>รวม {filtered.length} รายการ</span>
+            <span className="ml-auto">ยอดรวม <span className="text-[#1B3A5C]">{formatCurrency(totalGrand)}</span></span>
+          </FloatingTotalBar>
         )
       })()}
     </div>

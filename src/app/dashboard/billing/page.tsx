@@ -24,6 +24,7 @@ import TaxInvoicePrint from '@/components/TaxInvoicePrint'
 import QuotationPrint from '@/components/QuotationPrint'
 import CustomerPicker from '@/components/CustomerPicker'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
+import FloatingTotalBar from '@/components/FloatingTotalBar'
 
 type TabKey = 'billing' | 'invoice' | 'quotation'
 
@@ -1291,21 +1292,7 @@ export default function BillingPage() {
               </tbody>
               {/* 127: Totals footer — sum of displayed WBs */}
               {filteredBilling.length > 0 && (() => {
-                const totalGrand = filteredBilling.reduce((s, b) => s + b.grandTotal, 0)
-                const totalNet = filteredBilling.reduce((s, b) => s + b.netPayable, 0)
-                return (
-                  <tfoot className="sticky bottom-0 z-20">
-                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
-                      <td className="px-2 py-3"></td>
-                      <td colSpan={4} className="px-4 py-3 text-slate-700">
-                        รวม {filteredBilling.length} รายการ
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-800">{formatCurrency(totalGrand)}</td>
-                      <td className="px-4 py-3 text-right text-[#1B3A5C]">{formatCurrency(totalNet)}</td>
-                      <td colSpan={4}></td>
-                    </tr>
-                  </tfoot>
-                )
+                return null
               })()}
             </table>
           </div>
@@ -1390,21 +1377,7 @@ export default function BillingPage() {
                 })}
               </tbody>
               {/* 127: Totals footer — sum of displayed IVs */}
-              {filteredInvoices.length > 0 && (() => {
-                const totalGrand = filteredInvoices.reduce((s, inv) => s + inv.grandTotal, 0)
-                return (
-                  <tfoot className="sticky bottom-0 z-20">
-                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
-                      <td className="px-2 py-3"></td>
-                      <td colSpan={3} className="px-4 py-3 text-slate-700">
-                        รวม {filteredInvoices.length} รายการ
-                      </td>
-                      <td className="px-4 py-3 text-right text-[#1B3A5C]">{formatCurrency(totalGrand)}</td>
-                      <td colSpan={3}></td>
-                    </tr>
-                  </tfoot>
-                )
-              })()}
+              {/* totals shown in FloatingTotalBar at end of return tree */}
             </table>
           </div>
         </div>
@@ -1504,20 +1477,40 @@ export default function BillingPage() {
                   )
                 })}
               </tbody>
-              {filteredQuotations.length > 0 && (
-                <tfoot className="sticky bottom-0 z-20">
-                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
-                    <td className="px-2 py-3"></td>
-                    <td colSpan={7} className="px-4 py-3 text-slate-700">
-                      รวม {filteredQuotations.length} รายการ
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
+              {/* totals shown in FloatingTotalBar at end of return tree */}
             </table>
           </div>
         </div>
       </>})()}
+
+      {/* 185.3 / 185.6 / 185.7 (revised): floating total bar — แสดงตาม tab */}
+      {tab === 'billing' && filteredBilling.length > 0 && (() => {
+        const totalGrand = filteredBilling.reduce((s, b) => s + b.grandTotal, 0)
+        const totalNet = filteredBilling.reduce((s, b) => s + b.netPayable, 0)
+        return (
+          <FloatingTotalBar>
+            <span>รวม {filteredBilling.length} รายการ</span>
+            <span className="ml-auto flex items-center gap-6">
+              <span>ยอดรวม <span className="text-slate-900">{formatCurrency(totalGrand)}</span></span>
+              <span>สุทธิ <span className="text-[#1B3A5C]">{formatCurrency(totalNet)}</span></span>
+            </span>
+          </FloatingTotalBar>
+        )
+      })()}
+      {tab === 'invoice' && filteredInvoices.length > 0 && (() => {
+        const totalGrand = filteredInvoices.reduce((s, inv) => s + inv.grandTotal, 0)
+        return (
+          <FloatingTotalBar>
+            <span>รวม {filteredInvoices.length} รายการ</span>
+            <span className="ml-auto">ยอดรวม <span className="text-[#1B3A5C]">{formatCurrency(totalGrand)}</span></span>
+          </FloatingTotalBar>
+        )
+      })()}
+      {tab === 'quotation' && filteredQuotations.length > 0 && (
+        <FloatingTotalBar>
+          <span>รวม {filteredQuotations.length} รายการ</span>
+        </FloatingTotalBar>
+      )}
 
       {/* Create Billing Modal */}
       <Modal open={showCreate} onClose={() => { setShowCreate(false); setBillingDiscount(0); setBillingDiscountNote(''); setBillingExtraCharge(0); setBillingExtraChargeNote('') }} title="สร้างใบวางบิล" size="xl" closeLabel="cancel">

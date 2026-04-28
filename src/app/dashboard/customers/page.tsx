@@ -14,6 +14,7 @@ import Link from 'next/link'
 import Modal from '@/components/Modal'
 import SortableHeader from '@/components/SortableHeader'
 import CustomerSearchInline from '@/components/CustomerSearchInline'
+import FloatingTotalBar from '@/components/FloatingTotalBar'
 
 type PageTab = 'customers' | 'categories'
 type SortKey = 'shortName' | 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'tax' | 'qt' | 'contact' | 'isActive'
@@ -385,19 +386,13 @@ export default function CustomersPage() {
                     </tr>
                   ))}
                 </tbody>
-                {filtered.length > 0 && (
-                  <tfoot className="sticky bottom-0 z-20">
-                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
-                      <td className="px-2 py-3"></td>
-                      <td colSpan={10} className="px-4 py-3 text-slate-700">
-                        รวม {filtered.length} ราย
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
               </table>
             </div>
           </div>
+          {/* 185.2 (revised): floating total bar */}
+          <FloatingTotalBar show={filtered.length > 0}>
+            <span>รวม {filtered.length} ราย</span>
+          </FloatingTotalBar>
         </>
       )}
 

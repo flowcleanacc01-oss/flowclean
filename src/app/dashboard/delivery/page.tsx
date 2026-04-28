@@ -23,6 +23,7 @@ import SortableHeader from '@/components/SortableHeader'
 import CustomerPicker from '@/components/CustomerPicker'
 import { exportCSV } from '@/lib/export'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
+import FloatingTotalBar from '@/components/FloatingTotalBar'
 
 type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed'
 
@@ -720,27 +721,24 @@ export default function DeliveryPage() {
                 )
               })}
             </tbody>
-            {/* 127: Totals footer — sum of displayed SDs */}
-            {filtered.length > 0 && (() => {
-              const totalItems = filtered.reduce((s, dn) => s + dn.items.reduce((ss, i) => ss + i.quantity, 0), 0)
-              const totalAmount = filtered.reduce((s, dn) => s + getDNTotalAmount(dn), 0)
-              return (
-                <tfoot className="sticky bottom-0 z-20">
-                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
-                    <td className="px-2 py-3"></td>
-                    <td colSpan={3} className="px-4 py-3 text-slate-700">
-                      รวม {formatNumber(filtered.length)} รายการ
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-800">{formatNumber(totalItems)}</td>
-                    <td className="px-4 py-3 text-right text-[#1B3A5C]">{formatCurrency(totalAmount)}</td>
-                    <td colSpan={3}></td>
-                  </tr>
-                </tfoot>
-              )
-            })()}
           </table>
         </div>
       </div>
+
+      {/* 185.5 (revised): floating total bar */}
+      {filtered.length > 0 && (() => {
+        const totalItems = filtered.reduce((s, dn) => s + dn.items.reduce((ss, i) => ss + i.quantity, 0), 0)
+        const totalAmount = filtered.reduce((s, dn) => s + getDNTotalAmount(dn), 0)
+        return (
+          <FloatingTotalBar>
+            <span>รวม {formatNumber(filtered.length)} รายการ</span>
+            <span className="ml-auto flex items-center gap-6">
+              <span>จำนวน <span className="text-slate-900">{formatNumber(totalItems)}</span></span>
+              <span>ยอดรวม <span className="text-[#1B3A5C]">{formatCurrency(totalAmount)}</span></span>
+            </span>
+          </FloatingTotalBar>
+        )
+      })()}
 
       {/* Create Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งของชั่วคราว" size="lg" closeLabel="cancel">
