@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import Sidebar from '@/components/Sidebar'
 import HeaderActions from '@/components/HeaderActions'
+import FindBar from '@/components/FindBar'
 import { useSidebarCollapsed } from '@/lib/sidebar-state'
 import { cn } from '@/lib/utils'
 
@@ -38,6 +39,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </div>
       </main>
+      {/* 175.1 — In-page Find bar (slash key / Cmd+K same-page) */}
+      <FindBar />
     </div>
   )
 }

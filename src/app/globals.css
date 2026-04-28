@@ -124,3 +124,12 @@ input[type="number"] {
 
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 .animate-blink { animation: blink 1.2s ease-in-out infinite; }
+
+/* 175.1 In-page Find — active match (current cursor in FindBar) */
+mark[data-find-active="true"] {
+  background-color: #fb923c; /* orange-400 */
+  color: #ffffff;
+  outline: 2px solid #ea580c; /* orange-600 */
+  outline-offset: 1px;
+  border-radius: 3px;
+}

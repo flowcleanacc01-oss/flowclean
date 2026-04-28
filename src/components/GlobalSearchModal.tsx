@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { Search, X, Building2, ClipboardList, Truck, FileCheck, Receipt, FileText, Package } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { buildSearchIndex, searchResults, KIND_LABEL, KIND_COLOR, type SearchResultKind } from '@/lib/global-search'
@@ -31,6 +31,7 @@ const KIND_ICON: Record<SearchResultKind, typeof Search> = {
  */
 export default function GlobalSearchModal({ open, onClose }: Props) {
   const router = useRouter()
+  const pathname = usePathname()
   const {
     customers, linenForms, deliveryNotes,
     billingStatements, taxInvoices, receipts, quotations, linenCatalog,
@@ -131,10 +132,18 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
     onClose()
     // 147.2: append ?q=<query> เพื่อให้ destination page highlight ได้
     const sep = r.href.includes('?') ? '&' : '?'
-    const hrefWithQuery = query.trim()
-      ? `${r.href}${sep}q=${encodeURIComponent(query.trim())}`
+    const trimmed = query.trim()
+    const hrefWithQuery = trimmed
+      ? `${r.href}${sep}q=${encodeURIComponent(trimmed)}`
       : r.href
-    router.push(hrefWithQuery)
+    // 175.1 — ถ้าผลลัพธ์อยู่หน้าเดียวกัน ใช้ replace เพื่อให้ FindBar เปิดอัตโนมัติ
+    // โดยไม่ navigate ใหม่ (กัน loading flicker + รักษา scroll position)
+    const targetPath = r.href.split('?')[0]
+    if (targetPath === pathname) {
+      router.replace(hrefWithQuery, { scroll: false })
+    } else {
+      router.push(hrefWithQuery)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -156,7 +165,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[10vh] px-4 animate-fadeIn">
+    <div data-find-skip className="fixed inset-0 z-[60] flex items-start justify-center pt-[10vh] px-4 animate-fadeIn">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
       <div
         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-slideIn"
