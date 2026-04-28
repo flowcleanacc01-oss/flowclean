@@ -560,6 +560,15 @@ export default function ItemsPage() {
                     <tr><td colSpan={8} className="text-center py-8 text-slate-400">ไม่พบรายการ</td></tr>
                   )}
                 </tbody>
+                {filteredItems.length > 0 && (
+                  <tfoot className="sticky bottom-0 z-20">
+                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
+                      <td colSpan={8} className="px-4 py-3 text-slate-700">
+                        รวม {filteredItems.length} รายการ
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>

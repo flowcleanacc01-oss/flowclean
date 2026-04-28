@@ -265,8 +265,8 @@ export default function ReceiptsPage() {
             {filtered.length > 0 && (() => {
               const totalGrand = filtered.reduce((s, rc) => s + rc.grandTotal, 0)
               return (
-                <tfoot>
-                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                <tfoot className="sticky bottom-0 z-20">
+                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
                     <td colSpan={4} className="px-4 py-3 text-slate-700">รวม {filtered.length} รายการ</td>
                     <td className="px-4 py-3 text-right text-[#1B3A5C]">{formatCurrency(totalGrand)}</td>
                     <td colSpan={3}></td>

@@ -13,6 +13,7 @@ import { exportCSV } from '@/lib/export'
 import Link from 'next/link'
 import Modal from '@/components/Modal'
 import SortableHeader from '@/components/SortableHeader'
+import CustomerSearchInline from '@/components/CustomerSearchInline'
 
 type PageTab = 'customers' | 'categories'
 type SortKey = 'shortName' | 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'tax' | 'qt' | 'contact' | 'isActive'
@@ -215,12 +216,21 @@ export default function CustomersPage() {
       {/* ===== Customers Tab ===== */}
       {pageTab === 'customers' && (
         <>
-          {/* Search & Category Filter */}
+          {/* 185.2.1: Quick navigate — เลือกลูกค้าแล้วกระโดดไป detail (เร็วกว่า scroll หา) */}
+          <div className="mb-3">
+            <CustomerSearchInline
+              mode="detail"
+              placeholder="กระโดดไปหน้าลูกค้า — พิมพ์ชื่อ/รหัส/เลขประจำตัวผู้เสียภาษี"
+              className="max-w-xl"
+            />
+          </div>
+
+          {/* Search & Category Filter (filter ตารางในหน้านี้) */}
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="ค้นหาชื่อลูกค้า, รหัส..."
+                placeholder="กรองตาราง — ชื่อลูกค้า / รหัส"
                 className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
@@ -376,8 +386,8 @@ export default function CustomersPage() {
                   ))}
                 </tbody>
                 {filtered.length > 0 && (
-                  <tfoot>
-                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                  <tfoot className="sticky bottom-0 z-20">
+                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
                       <td className="px-2 py-3"></td>
                       <td colSpan={10} className="px-4 py-3 text-slate-700">
                         รวม {filtered.length} ราย

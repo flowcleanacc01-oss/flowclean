@@ -15,6 +15,7 @@ import {
 } from '@/types'
 import type { LinenFormStatus, BillingStatus } from '@/types'
 import RevenueTrendChart from '@/components/RevenueTrendChart'
+import CustomerSearchInline from '@/components/CustomerSearchInline'
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -132,57 +133,69 @@ export default function CustomerDetailPage() {
 
   return (
     <div>
-      {/* Header — 168: ปุ่มปิด มุมบนขวา (theme เดียวกับ Modal) */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-[#e8eef5] flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-[#1B3A5C]" />
+      {/* 185.2.3: Sticky header — ชื่อลูกค้า + search ค้นหาเปลี่ยนลูกค้าได้เลย
+          top-14 = ใต้ dashboard top bar (h-14) */}
+      <div className="sticky top-14 z-30 -mx-4 lg:-mx-8 px-4 lg:px-8 py-3 mb-4 bg-slate-50/95 border-b border-slate-200 backdrop-blur-sm">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-[#e8eef5] flex items-center justify-center flex-shrink-0">
+              <Building2 className="w-5 h-5 text-[#1B3A5C]" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800">{customer.shortName || customer.name}</h1>
-              <p className="text-sm text-slate-400">{customer.shortName ? customer.name : customer.nameEn} {customer.customerCode && `• ${customer.customerCode}`}</p>
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold text-slate-800 truncate">{customer.shortName || customer.name}</h1>
+              <p className="text-xs text-slate-400 truncate">
+                {customer.shortName ? customer.name : customer.nameEn}
+                {customer.customerCode && ` • ${customer.customerCode}`}
+              </p>
             </div>
           </div>
-        </div>
-        <div className="flex flex-wrap items-start sm:items-center justify-end gap-2">
-          <span className={cn('text-xs font-medium px-2.5 py-1 rounded-full',
-            customer.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
-            {customer.isActive ? 'ใช้งาน' : 'ปิดใช้งาน'}
-          </span>
-          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
-            {getCustomerCategoryLabel(customer.customerType)}
-          </span>
-          {(customer.enablePerPiece ?? true) && (
-            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">ตามหน่วย</span>
-          )}
-          {customer.enableMinPerTrip && (
-            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
-              ขั้นต่ำ/ครั้ง {formatCurrency(customer.minPerTrip)}
-              {customer.enableWaive && ` (เวฟ≥${formatCurrency(customer.minPerTripThreshold)})`}
-            </span>
-          )}
-          {customer.enableMinPerMonth && (
-            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">ขั้นต่ำ/ด. {formatCurrency(customer.monthlyFlatRate)}</span>
-          )}
-          {linkedQT ? (
-            <Link href={`/dashboard/billing?tab=quotation&openqt=${linkedQT.id}`}
-              className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
-              <Link2 className="w-3 h-3" />{linkedQT.quotationNumber}
-            </Link>
-          ) : (
-            <Link href={`/dashboard/billing?tab=quotation&newqt=${id}`}
-              className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">
-              <Link2 className="w-3 h-3" />ยังไม่มี QT
-            </Link>
-          )}
-          {/* 168: ปุ่มปิด มุมบนขวา (theme เดียวกับ Modal) */}
+          {/* 185.2.2: search ค้นหาเปลี่ยนลูกค้าโดยไม่ต้องปิดหน้า */}
+          <CustomerSearchInline
+            mode="detail"
+            currentCustomerId={id}
+            placeholder="เปลี่ยนไปลูกค้ารายอื่น — พิมพ์ชื่อ/รหัส"
+            className="flex-shrink-0 sm:w-80"
+          />
           <button onClick={() => router.push('/dashboard/customers')}
-            className="ml-2 w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors flex-shrink-0"
             title="ปิด">
             <X className="w-5 h-5" />
           </button>
         </div>
+      </div>
+
+      {/* Badges + meta (ไม่ sticky — ปุ่มปิดและชื่อย้ายขึ้น sticky header แล้ว) */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        <span className={cn('text-xs font-medium px-2.5 py-1 rounded-full',
+          customer.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
+          {customer.isActive ? 'ใช้งาน' : 'ปิดใช้งาน'}
+        </span>
+        <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+          {getCustomerCategoryLabel(customer.customerType)}
+        </span>
+        {(customer.enablePerPiece ?? true) && (
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">ตามหน่วย</span>
+        )}
+        {customer.enableMinPerTrip && (
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+            ขั้นต่ำ/ครั้ง {formatCurrency(customer.minPerTrip)}
+            {customer.enableWaive && ` (เวฟ≥${formatCurrency(customer.minPerTripThreshold)})`}
+          </span>
+        )}
+        {customer.enableMinPerMonth && (
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">ขั้นต่ำ/ด. {formatCurrency(customer.monthlyFlatRate)}</span>
+        )}
+        {linkedQT ? (
+          <Link href={`/dashboard/billing?tab=quotation&openqt=${linkedQT.id}`}
+            className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
+            <Link2 className="w-3 h-3" />{linkedQT.quotationNumber}
+          </Link>
+        ) : (
+          <Link href={`/dashboard/billing?tab=quotation&newqt=${id}`}
+            className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">
+            <Link2 className="w-3 h-3" />ยังไม่มี QT
+          </Link>
+        )}
       </div>
 
       {/* Stats Cards — 142: 5 cards, ค้างชำระ ซ้ายสุด, ยอดใบส่งของเดือนนี้ ขวาสุด */}

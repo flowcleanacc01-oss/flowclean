@@ -567,6 +567,15 @@ export default function LinenFormsPage() {
                 )
               })}
             </tbody>
+            {filtered.length > 0 && (
+              <tfoot className="sticky bottom-0 z-20">
+                <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
+                  <td colSpan={12} className="px-4 py-3 text-slate-700">
+                    รวม {filtered.length} รายการ
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>

@@ -1294,8 +1294,8 @@ export default function BillingPage() {
                 const totalGrand = filteredBilling.reduce((s, b) => s + b.grandTotal, 0)
                 const totalNet = filteredBilling.reduce((s, b) => s + b.netPayable, 0)
                 return (
-                  <tfoot>
-                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                  <tfoot className="sticky bottom-0 z-20">
+                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
                       <td className="px-2 py-3"></td>
                       <td colSpan={4} className="px-4 py-3 text-slate-700">
                         รวม {filteredBilling.length} รายการ
@@ -1393,8 +1393,8 @@ export default function BillingPage() {
               {filteredInvoices.length > 0 && (() => {
                 const totalGrand = filteredInvoices.reduce((s, inv) => s + inv.grandTotal, 0)
                 return (
-                  <tfoot>
-                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                  <tfoot className="sticky bottom-0 z-20">
+                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
                       <td className="px-2 py-3"></td>
                       <td colSpan={3} className="px-4 py-3 text-slate-700">
                         รวม {filteredInvoices.length} รายการ
@@ -1505,8 +1505,8 @@ export default function BillingPage() {
                 })}
               </tbody>
               {filteredQuotations.length > 0 && (
-                <tfoot>
-                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                <tfoot className="sticky bottom-0 z-20">
+                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
                     <td className="px-2 py-3"></td>
                     <td colSpan={7} className="px-4 py-3 text-slate-700">
                       รวม {filteredQuotations.length} รายการ

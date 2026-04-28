@@ -725,8 +725,8 @@ export default function DeliveryPage() {
               const totalItems = filtered.reduce((s, dn) => s + dn.items.reduce((ss, i) => ss + i.quantity, 0), 0)
               const totalAmount = filtered.reduce((s, dn) => s + getDNTotalAmount(dn), 0)
               return (
-                <tfoot>
-                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
+                <tfoot className="sticky bottom-0 z-20">
+                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold shadow-[0_-2px_4px_rgba(0,0,0,0.04)]">
                     <td className="px-2 py-3"></td>
                     <td colSpan={3} className="px-4 py-3 text-slate-700">
                       รวม {formatNumber(filtered.length)} รายการ
