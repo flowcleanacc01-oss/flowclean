@@ -7,7 +7,7 @@ import { cn, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import { highlightText } from '@/lib/highlight'
 import { useSearchParams } from 'next/navigation'
 import type { LinenItemDef, LinenCategoryDef } from '@/types'
-import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown, Printer } from 'lucide-react'
+import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown, Printer, GripVertical } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
@@ -55,6 +55,10 @@ export default function ItemsPage() {
   const [editItem, setEditItem] = useState<Partial<LinenItemDef>>({})
   const [selectedCodes, setSelectedCodes] = useState<string[]>([])
   const [activeCode, setActiveCode] = useState<string | null>(null)
+  // 173.1: reorder mode + drag tracking
+  const [reorderMode, setReorderMode] = useState(false)
+  const [dragCode, setDragCode] = useState<string | null>(null)
+  const [dragOverCode, setDragOverCode] = useState<string | null>(null)
 
   // ---- Categories state ----
   const [showAddCat, setShowAddCat] = useState(false)
@@ -62,6 +66,10 @@ export default function ItemsPage() {
   const [newCatLabel, setNewCatLabel] = useState('')
   const [editingCatKey, setEditingCatKey] = useState<string | null>(null)
   const [editCatLabel, setEditCatLabel] = useState('')
+  // 173.1: reorder mode for categories
+  const [catReorderMode, setCatReorderMode] = useState(false)
+  const [dragCatKey, setDragCatKey] = useState<string | null>(null)
+  const [dragOverCatKey, setDragOverCatKey] = useState<string | null>(null)
 
   // ---- Filtered & sorted items ----
   const filteredItems = useMemo(() => {
@@ -167,6 +175,22 @@ export default function ItemsPage() {
     updateLinenItem(otherItem.code, { sortOrder: thisItem.sortOrder })
   }, [linenCatalog, updateLinenItem])
 
+  // 173.1: drop = move source to target position + reassign sequential sortOrder
+  const handleReorderDropItem = useCallback((sourceCode: string, targetCode: string) => {
+    if (sourceCode === targetCode) return
+    const sorted = [...linenCatalog].sort((a, b) => a.sortOrder - b.sortOrder)
+    const srcIdx = sorted.findIndex(i => i.code === sourceCode)
+    const tgtIdx = sorted.findIndex(i => i.code === targetCode)
+    if (srcIdx < 0 || tgtIdx < 0) return
+    const [moved] = sorted.splice(srcIdx, 1)
+    sorted.splice(tgtIdx, 0, moved)
+    // Reassign sequential sortOrder (1..N) — only update items whose order changed
+    sorted.forEach((it, i) => {
+      const newOrder = i + 1
+      if (it.sortOrder !== newOrder) updateLinenItem(it.code, { sortOrder: newOrder })
+    })
+  }, [linenCatalog, updateLinenItem])
+
   // ---- Category handlers ----
   const handleAddCategory = () => {
     if (!newCatKey || !newCatLabel) return
@@ -191,6 +215,21 @@ export default function ItemsPage() {
     const otherCat = sorted[swapIdx]
     updateCategory(thisCat.key, { sortOrder: otherCat.sortOrder })
     updateCategory(otherCat.key, { sortOrder: thisCat.sortOrder })
+  }, [linenCategories, updateCategory])
+
+  // 173.1: drop reorder for categories
+  const handleReorderDropCat = useCallback((sourceKey: string, targetKey: string) => {
+    if (sourceKey === targetKey) return
+    const sorted = [...linenCategories].sort((a, b) => a.sortOrder - b.sortOrder)
+    const srcIdx = sorted.findIndex(c => c.key === sourceKey)
+    const tgtIdx = sorted.findIndex(c => c.key === targetKey)
+    if (srcIdx < 0 || tgtIdx < 0) return
+    const [moved] = sorted.splice(srcIdx, 1)
+    sorted.splice(tgtIdx, 0, moved)
+    sorted.forEach((c, i) => {
+      const newOrder = i + 1
+      if (c.sortOrder !== newOrder) updateCategory(c.key, { sortOrder: newOrder })
+    })
   }, [linenCategories, updateCategory])
 
   const handleDeleteCat = (cat: LinenCategoryDef) => {
@@ -278,11 +317,38 @@ export default function ItemsPage() {
                   <Trash2 className="w-3.5 h-3.5" />ลบที่เลือก ({selectedCodes.length})
                 </button>
               )}
+              {/* 173.1: reorder mode toggle — force sortCol=sortOrder so drag matches visual order */}
+              <button onClick={() => {
+                setReorderMode(m => {
+                  const next = !m
+                  if (next) { setSortCol('sortOrder'); setSortDir('asc') }
+                  return next
+                })
+              }}
+                className={cn(
+                  'flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors border',
+                  reorderMode
+                    ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                )}>
+                {reorderMode
+                  ? <><Check className="w-3.5 h-3.5" />เสร็จสิ้น</>
+                  : <><ArrowUpDown className="w-3.5 h-3.5" />จัดลำดับใหม่</>}
+              </button>
               <button onClick={() => { setShowAddItem(true); setNewItem(EMPTY_NEW_ITEM) }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-xs rounded-lg hover:bg-[#2bb8b8] transition-colors">
+                disabled={reorderMode}
+                className="flex items-center gap-1 px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-xs rounded-lg hover:bg-[#2bb8b8] transition-colors disabled:opacity-40">
                 <Plus className="w-3.5 h-3.5" />เพิ่มรายการ
               </button>
             </div>
+            {/* 173.1: reorder hint banner */}
+            {reorderMode && (
+              <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-800 flex items-center gap-2">
+                <span className="font-semibold">โหมดจัดลำดับ:</span>
+                จับ <span className="font-mono px-1.5 py-0.5 bg-white border border-amber-300 rounded">⋮⋮</span> ลากลงไปยังตำแหน่งที่ต้องการ — กด &quot;เสร็จสิ้น&quot; เมื่อจัดเสร็จ
+                <span className="ml-auto text-amber-600">การเรียงในตารางจะ override sort เป็น sortOrder</span>
+              </div>
+            )}
 
             {/* Add Item Inline Form */}
             {showAddItem && (
@@ -358,36 +424,63 @@ export default function ItemsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredItems.map((item, idx) => (
+                  {filteredItems.map((item, idx) => {
+                    const isDragging = dragCode === item.code
+                    const isDragOver = dragOverCode === item.code && dragCode !== item.code
+                    return (
                     <tr key={item.code}
                       data-row-id={item.code}
                       onClick={() => setActiveCode(item.code)}
+                      // 173.1: drag-drop only when in reorderMode
+                      draggable={reorderMode}
+                      onDragStart={reorderMode ? (e) => {
+                        setDragCode(item.code)
+                        e.dataTransfer.effectAllowed = 'move'
+                      } : undefined}
+                      onDragEnter={reorderMode ? () => setDragOverCode(item.code) : undefined}
+                      onDragOver={reorderMode ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } : undefined}
+                      onDragEnd={reorderMode ? () => { setDragCode(null); setDragOverCode(null) } : undefined}
+                      onDrop={reorderMode ? (e) => {
+                        e.preventDefault()
+                        if (dragCode) handleReorderDropItem(dragCode, item.code)
+                        setDragCode(null); setDragOverCode(null)
+                      } : undefined}
                       className={cn(
                         'border-t border-slate-100 transition-colors cursor-pointer',
-                        activeCode === item.code
+                        activeCode === item.code && !reorderMode
                           ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]'
-                          : 'hover:bg-slate-50'
+                          : 'hover:bg-slate-50',
+                        reorderMode && 'select-none',
+                        isDragging && 'opacity-40',
+                        isDragOver && 'border-t-2 border-t-amber-500 bg-amber-50',
                       )}>
                       <td className="px-2 py-2" onClick={e => e.stopPropagation()}>
                         <input type="checkbox"
                           checked={selectedCodes.includes(item.code)}
+                          disabled={reorderMode}
                           onChange={e => setSelectedCodes(prev =>
                             e.target.checked ? [...prev, item.code] : prev.filter(c => c !== item.code)
                           )}
-                          className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                          className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8] disabled:opacity-30" />
                       </td>
-                      {/* Sort arrows */}
-                      <td className="px-1 py-2 text-center" onClick={() => setActiveCode(item.code)}>
-                        <div className="flex flex-col items-center gap-0.5">
-                          <button onClick={() => handleMoveItem(item.code, 'up')} disabled={idx === 0 && sortCol === 'sortOrder'}
-                            className="text-slate-300 hover:text-slate-600 disabled:opacity-30 p-0.5">
-                            <ChevronUp className="w-3 h-3" />
-                          </button>
-                          <button onClick={() => handleMoveItem(item.code, 'down')} disabled={idx === filteredItems.length - 1 && sortCol === 'sortOrder'}
-                            className="text-slate-300 hover:text-slate-600 disabled:opacity-30 p-0.5">
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                        </div>
+                      {/* Sort arrows OR drag handle (173.1) */}
+                      <td className="px-1 py-2 text-center">
+                        {reorderMode ? (
+                          <div className="flex items-center justify-center cursor-grab active:cursor-grabbing text-amber-500 hover:text-amber-600">
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <button onClick={() => handleMoveItem(item.code, 'up')} disabled={idx === 0 && sortCol === 'sortOrder'}
+                              className="text-slate-300 hover:text-slate-600 disabled:opacity-30 p-0.5">
+                              <ChevronUp className="w-3 h-3" />
+                            </button>
+                            <button onClick={() => handleMoveItem(item.code, 'down')} disabled={idx === filteredItems.length - 1 && sortCol === 'sortOrder'}
+                              className="text-slate-300 hover:text-slate-600 disabled:opacity-30 p-0.5">
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                       <td className={cn("px-4 py-2 font-mono text-xs text-slate-500", sortedBg('code'))}>{highlightText(item.code, highlightQ)}</td>
                       <td className={cn("px-4 py-2 text-slate-700", sortedBg('name'))}>
@@ -454,7 +547,8 @@ export default function ItemsPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                   {filteredItems.length === 0 && (
                     <tr><td colSpan={8} className="text-center py-8 text-slate-400">ไม่พบรายการ</td></tr>
                   )}
@@ -474,11 +568,32 @@ export default function ItemsPage() {
                 <h3 className="font-medium text-slate-700">หมวดหมู่ผ้า ({linenCategories.length} หมวด)</h3>
                 <p className="text-xs text-slate-400 mt-0.5">เพิ่ม/แก้ไข/ลบหมวดหมู่ผ้า</p>
               </div>
-              <button onClick={() => { setShowAddCat(true); setNewCatKey(''); setNewCatLabel('') }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-xs rounded-lg hover:bg-[#2bb8b8] transition-colors">
-                <Plus className="w-3.5 h-3.5" />เพิ่มหมวด
-              </button>
+              <div className="flex items-center gap-2">
+                {/* 173.1: reorder mode toggle for categories */}
+                <button onClick={() => setCatReorderMode(m => !m)}
+                  className={cn(
+                    'flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors border',
+                    catReorderMode
+                      ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                  )}>
+                  {catReorderMode
+                    ? <><Check className="w-3.5 h-3.5" />เสร็จสิ้น</>
+                    : <><ArrowUpDown className="w-3.5 h-3.5" />จัดลำดับใหม่</>}
+                </button>
+                <button onClick={() => { setShowAddCat(true); setNewCatKey(''); setNewCatLabel('') }}
+                  disabled={catReorderMode}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-xs rounded-lg hover:bg-[#2bb8b8] transition-colors disabled:opacity-40">
+                  <Plus className="w-3.5 h-3.5" />เพิ่มหมวด
+                </button>
+              </div>
             </div>
+            {catReorderMode && (
+              <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-800 flex items-center gap-2">
+                <span className="font-semibold">โหมดจัดลำดับ:</span>
+                จับ <span className="font-mono px-1.5 py-0.5 bg-white border border-amber-300 rounded">⋮⋮</span> ลากลงไปยังตำแหน่งที่ต้องการ — กด &quot;เสร็จสิ้น&quot; เมื่อจัดเสร็จ
+              </div>
+            )}
 
             {/* Add Category Form */}
             {showAddCat && (
@@ -516,19 +631,43 @@ export default function ItemsPage() {
               <tbody>
                 {sortedCategories.map((cat, idx) => {
                   const itemCount = linenCatalog.filter(i => i.category === cat.key).length
+                  const isDragging = dragCatKey === cat.key
+                  const isDragOver = dragOverCatKey === cat.key && dragCatKey !== cat.key
                   return (
-                    <tr key={cat.key} className="border-t border-slate-100 hover:bg-slate-50">
+                    <tr key={cat.key}
+                      draggable={catReorderMode}
+                      onDragStart={catReorderMode ? (e) => { setDragCatKey(cat.key); e.dataTransfer.effectAllowed = 'move' } : undefined}
+                      onDragEnter={catReorderMode ? () => setDragOverCatKey(cat.key) : undefined}
+                      onDragOver={catReorderMode ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } : undefined}
+                      onDragEnd={catReorderMode ? () => { setDragCatKey(null); setDragOverCatKey(null) } : undefined}
+                      onDrop={catReorderMode ? (e) => {
+                        e.preventDefault()
+                        if (dragCatKey) handleReorderDropCat(dragCatKey, cat.key)
+                        setDragCatKey(null); setDragOverCatKey(null)
+                      } : undefined}
+                      className={cn(
+                        'border-t border-slate-100 hover:bg-slate-50',
+                        catReorderMode && 'select-none',
+                        isDragging && 'opacity-40',
+                        isDragOver && 'border-t-2 border-t-amber-500 bg-amber-50',
+                      )}>
                       <td className="px-1 py-2 text-center">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <button onClick={() => handleMoveCat(cat.key, 'up')} disabled={idx === 0}
-                            className="text-slate-300 hover:text-slate-600 disabled:opacity-30 p-0.5">
-                            <ChevronUp className="w-3 h-3" />
-                          </button>
-                          <button onClick={() => handleMoveCat(cat.key, 'down')} disabled={idx === sortedCategories.length - 1}
-                            className="text-slate-300 hover:text-slate-600 disabled:opacity-30 p-0.5">
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                        </div>
+                        {catReorderMode ? (
+                          <div className="flex items-center justify-center cursor-grab active:cursor-grabbing text-amber-500 hover:text-amber-600">
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <button onClick={() => handleMoveCat(cat.key, 'up')} disabled={idx === 0}
+                              className="text-slate-300 hover:text-slate-600 disabled:opacity-30 p-0.5">
+                              <ChevronUp className="w-3 h-3" />
+                            </button>
+                            <button onClick={() => handleMoveCat(cat.key, 'down')} disabled={idx === sortedCategories.length - 1}
+                              className="text-slate-300 hover:text-slate-600 disabled:opacity-30 p-0.5">
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-2 font-mono text-xs text-slate-500">{cat.key}</td>
                       <td className="px-4 py-2 text-slate-700">
