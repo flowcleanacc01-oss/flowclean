@@ -34,11 +34,15 @@ export default function HeaderActions() {
       <div className="flex items-center gap-2">
         {/* Search trigger */}
         <button
+          type="button"
           onClick={() => setSearchOpen(true)}
-          className="flex items-center gap-2 h-9 px-3 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-[#3DD8D8] hover:shadow-md transition-all text-slate-500 hover:text-[#1B3A5C]"
+          aria-label="ค้นหา (Cmd+K / Ctrl+K)"
+          aria-haspopup="dialog"
+          aria-expanded={searchOpen}
           title="ค้นหา (Cmd+K / Ctrl+K)"
+          className="flex items-center gap-2 h-9 px-3 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-[#3DD8D8] hover:shadow-md transition-all text-slate-500 hover:text-[#1B3A5C]"
         >
-          <Search className="w-4 h-4" />
+          <Search className="w-4 h-4" aria-hidden="true" />
           <span className="hidden sm:inline text-xs">ค้นหา</span>
           <kbd className="hidden sm:inline-block text-[9px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded font-mono ml-1">⌘K</kbd>
         </button>

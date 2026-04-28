@@ -182,12 +182,24 @@ export default function CustomerPicker({
       >
         <span className="truncate flex-1 text-left">{triggerLabel}</span>
         {isActive && (
-          <X
-            className="w-3.5 h-3.5 hover:bg-black/10 rounded"
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label="ล้างลูกค้าที่เลือก"
             onClick={e => { e.stopPropagation(); pick('') }}
-          />
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                e.stopPropagation()
+                pick('')
+              }
+            }}
+            className="inline-flex items-center justify-center w-4 h-4 hover:bg-black/10 rounded focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]"
+          >
+            <X className="w-3.5 h-3.5" aria-hidden="true" />
+          </span>
         )}
-        <ChevronDown className={cn('w-4 h-4 transition-transform', open && 'rotate-180')} />
+        <ChevronDown className={cn('w-4 h-4 transition-transform', open && 'rotate-180')} aria-hidden="true" />
       </button>
 
       {/* Panel */}

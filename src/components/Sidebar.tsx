@@ -20,9 +20,11 @@ import {
   Package,
   BookOpen,
   Archive,
+  X,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useSidebarCollapsed } from '@/lib/sidebar-state'
 import Image from 'next/image'
 import { USER_ROLE_CONFIG, type UserRole } from '@/types'
 import {
@@ -61,8 +63,27 @@ export default function Sidebar() {
   const pathname = usePathname()
   const currentSearchParams = useSearchParams()
   const { currentUser, logout } = useStore()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useSidebarCollapsed()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const mobileHamburgerRef = useRef<HTMLButtonElement>(null)
+  const mobileCloseRef = useRef<HTMLButtonElement>(null)
+
+  // F2: Esc closes mobile drawer; focus management for keyboard users
+  const wasOpenRef = useRef(false)
+  useEffect(() => {
+    if (mobileOpen) {
+      wasOpenRef.current = true
+      const handler = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') setMobileOpen(false)
+      }
+      document.addEventListener('keydown', handler)
+      setTimeout(() => mobileCloseRef.current?.focus(), 50)
+      return () => document.removeEventListener('keydown', handler)
+    } else if (wasOpenRef.current) {
+      wasOpenRef.current = false
+      mobileHamburgerRef.current?.focus()
+    }
+  }, [mobileOpen])
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
@@ -79,7 +100,7 @@ export default function Sidebar() {
     return true
   }
 
-  const sidebarContent = (
+  const sidebarContent = (isMobile: boolean) => (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="px-5 py-5 flex items-center gap-3">
@@ -87,10 +108,21 @@ export default function Sidebar() {
           <Image src="/flowclean-logo.png" alt="FlowClean" width={36} height={36} />
         </div>
         {!collapsed && (
-          <div className="overflow-hidden">
+          <div className="overflow-hidden flex-1">
             <h1 className="text-white font-bold text-lg leading-tight">FlowClean</h1>
             <p className="text-slate-400 text-[11px]">ระบบบริหารโรงซักรีด</p>
           </div>
+        )}
+        {isMobile && (
+          <button
+            ref={mobileCloseRef}
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            aria-label="ปิดเมนู"
+            className="ml-auto w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
         )}
       </div>
 
@@ -151,22 +183,30 @@ export default function Sidebar() {
             )
           })()}
           <button
+            type="button"
             onClick={logout}
+            aria-label="ออกจากระบบ"
+            title={collapsed ? 'ออกจากระบบ' : undefined}
             className="flex items-center gap-2 text-slate-400 hover:text-red-400 text-sm w-full px-1 py-1.5 rounded transition-colors"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-4 h-4" aria-hidden="true" />
             {!collapsed && <span>ออกจากระบบ</span>}
           </button>
         </div>
       </div>
 
       {/* Collapse toggle (desktop) */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="hidden lg:flex items-center justify-center py-3 border-t border-slate-700 text-slate-500 hover:text-slate-300 transition-colors"
-      >
-        <ChevronLeft className={cn('w-4 h-4 transition-transform', collapsed && 'rotate-180')} />
-      </button>
+      {!isMobile && (
+        <button
+          type="button"
+          onClick={() => setCollapsed(!collapsed)}
+          aria-label={collapsed ? 'ขยายเมนู' : 'ย่อเมนู'}
+          aria-expanded={!collapsed}
+          className="hidden lg:flex items-center justify-center py-3 border-t border-slate-700 text-slate-500 hover:text-slate-300 transition-colors"
+        >
+          <ChevronLeft className={cn('w-4 h-4 transition-transform', collapsed && 'rotate-180')} aria-hidden="true" />
+        </button>
+      )}
     </div>
   )
 
@@ -174,10 +214,15 @@ export default function Sidebar() {
     <>
       {/* Mobile hamburger */}
       <button
+        ref={mobileHamburgerRef}
+        type="button"
         onClick={() => setMobileOpen(true)}
+        aria-label="เปิดเมนู"
+        aria-expanded={mobileOpen}
+        aria-controls="mobile-sidebar"
         className="lg:hidden fixed top-4 left-4 z-50 w-10 h-10 bg-slate-900 text-white rounded-lg flex items-center justify-center shadow-lg"
       >
-        <Menu className="w-5 h-5" />
+        <Menu className="w-5 h-5" aria-hidden="true" />
       </button>
 
       {/* Mobile overlay */}
@@ -185,15 +230,23 @@ export default function Sidebar() {
         <div
           className="lg:hidden fixed inset-0 bg-black/40 z-40"
           onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
         />
       )}
 
       {/* Mobile sidebar */}
-      <aside className={cn(
-        'lg:hidden fixed top-0 left-0 h-full bg-slate-900 z-50 w-64 transition-transform duration-300',
-        mobileOpen ? 'translate-x-0' : '-translate-x-full'
-      )}>
-        {sidebarContent}
+      <aside
+        id="mobile-sidebar"
+        role="dialog"
+        aria-modal={mobileOpen ? 'true' : undefined}
+        aria-label="เมนูหลัก"
+        aria-hidden={!mobileOpen}
+        className={cn(
+          'lg:hidden fixed top-0 left-0 h-full bg-slate-900 z-50 w-64 transition-transform duration-300',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
+        {sidebarContent(true)}
       </aside>
 
       {/* Desktop sidebar */}
@@ -201,7 +254,7 @@ export default function Sidebar() {
         'hidden lg:block fixed top-0 left-0 h-full bg-slate-900 z-30 transition-all duration-300',
         collapsed ? 'w-16' : 'w-60'
       )}>
-        {sidebarContent}
+        {sidebarContent(false)}
       </aside>
     </>
   )

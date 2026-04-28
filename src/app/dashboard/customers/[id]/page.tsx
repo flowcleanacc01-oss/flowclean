@@ -145,7 +145,7 @@ export default function CustomerDetailPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-start sm:items-center justify-end gap-2">
           <span className={cn('text-xs font-medium px-2.5 py-1 rounded-full',
             customer.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
             {customer.isActive ? 'ใช้งาน' : 'ปิดใช้งาน'}
@@ -531,7 +531,10 @@ function DocSection({ title, icon, count, linkTo, children }: {
         </div>
         <a href={linkTo} className="text-xs text-[#3DD8D8] hover:underline">ดูทั้งหมด</a>
       </div>
-      {children}
+      {/* F6: scroll narrow tables horizontally inside the card instead of pushing the page */}
+      <div className="overflow-x-auto">
+        {children}
+      </div>
     </div>
   )
 }

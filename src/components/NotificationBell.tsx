@@ -317,16 +317,20 @@ export default function NotificationBell() {
   return (
     <div className="relative" ref={panelRef}>
       <button
+        type="button"
         onClick={() => setOpen(o => !o)}
+        aria-label={totalCount > 0 ? `การแจ้งเตือน ${totalCount} รายการ` : 'ไม่มีการแจ้งเตือน'}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         className={cn(
           'relative w-9 h-9 flex items-center justify-center bg-white border border-slate-200 rounded-lg shadow-sm hover:border-[#3DD8D8] hover:shadow-md transition-all',
           totalCount > 0 ? 'text-amber-500' : 'text-slate-500',
         )}
         title={totalCount > 0 ? `${totalCount} การแจ้งเตือน` : 'ไม่มีการแจ้งเตือน'}
       >
-        <Bell className="w-4 h-4" />
+        <Bell className="w-4 h-4" aria-hidden="true" />
         {newCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none" aria-hidden="true">
             {newCount > 99 ? '99+' : newCount}
           </span>
         )}

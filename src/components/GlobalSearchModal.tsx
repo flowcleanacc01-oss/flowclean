@@ -175,15 +175,22 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
           />
           <kbd className="hidden sm:inline-block text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-mono">ESC</kbd>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="ปิดค้นหา"
             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
         {/* Results */}
-        <div ref={listRef} className="flex-1 overflow-y-auto">
+        <div
+          ref={listRef}
+          role="listbox"
+          aria-label="ผลลัพธ์การค้นหา"
+          className="flex-1 overflow-y-auto"
+        >
           {query.trim() === '' ? (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
               <Search className="w-10 h-10 mx-auto mb-2 text-slate-200" />
@@ -232,25 +239,29 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
                         const myIdx = runningIdx++
                         const isSel = myIdx === selectedIdx
                         return (
-                          <div
+                          <button
+                            type="button"
                             key={`${r.kind}-${r.id}`}
                             data-idx={myIdx}
+                            role="option"
+                            aria-selected={isSel}
+                            tabIndex={-1}
                             onClick={() => openResult(myIdx)}
                             onMouseEnter={() => setSelectedIdx(myIdx)}
                             className={cn(
-                              'flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors',
+                              'w-full text-left flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors',
                               isSel ? 'bg-slate-100' : 'hover:bg-slate-50',
                             )}
                           >
-                            <Icon className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                            <Icon className="w-4 h-4 text-slate-400 flex-shrink-0" aria-hidden="true" />
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium text-slate-800 truncate">{highlight(r.primary)}</div>
                               <div className="text-xs text-slate-500 truncate">{highlight(r.secondary)}</div>
                             </div>
                             {isSel && (
-                              <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">↵</span>
+                              <span className="text-[10px] text-slate-400 font-mono flex-shrink-0" aria-hidden="true">↵</span>
                             )}
-                          </div>
+                          </button>
                         )
                       })}
                     </div>
