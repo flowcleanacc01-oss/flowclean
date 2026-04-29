@@ -178,7 +178,7 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
           >
             <div className="flex items-center gap-2 text-[#1B3A5C] mb-1">
               <BookOpen className="w-4 h-4" />
-              <span className="font-semibold text-sm">คู่มือ 8 เคส × 4 tools</span>
+              <span className="font-semibold text-sm">คู่มือ 9 เคส × 4 tools</span>
             </div>
             <p className="text-xs text-slate-500">
               ตารางอ้างอิงเคส + tool — ดูแยกได้ทุกเคส
@@ -275,7 +275,7 @@ function DashCard({
 // Decision Wizard (196)
 // ────────────────────────────────────────────────────────────────
 type WizardAnswer = {
-  q1?: 'name_drift' | 'orphan_code' | 'code_clash' | 'special_variant' | 'one_off'
+  q1?: 'name_drift' | 'orphan_code' | 'code_clash' | 'special_variant' | 'one_off' | 'split_multi_names'
 }
 
 function DecisionWizard({ onClose, onOpenTab }: { onClose: () => void; onOpenTab: (t: 'sync' | 'merge' | 'items') => void }) {
@@ -309,6 +309,12 @@ function DecisionWizard({ onClose, onOpenTab }: { onClose: () => void; onOpenTab
         how: 'หน้า SD → เพิ่ม row → ติ๊ก isAdhoc + กรอก adhocName + adhocPrice',
         example: 'พรมโลโก้โรงแรม 2 ผืน ครั้งเดียว → ad-hoc ใน SD ไม่ปนกับ catalog/stock',
       },
+      // 200: split case — 1 รหัส มีหลายชื่อใน QT (ทั้ง drift และ orphan)
+      split_multi_names: {
+        tool: 'Promote per-name (Split)', tab: 'sync',
+        how: 'tab "ซิงก์ชื่อ" → row นั้น (drift หรือ orphan) → คลิก ⚡ ที่ chip "แต่ละชื่อ" แยกกัน',
+        example: 'S007 มี 4 ชื่อใน QT (กางเกงนวด รีด/พิมพ์/ขาว/ดำ) → ⚡ ทีละชื่อ → ได้ S007 + S008 + S009 + S010 แยกกัน · QT ทุกใบ valid',
+      },
     }
     return map[a.q1]
   }, [a.q1])
@@ -332,6 +338,7 @@ function DecisionWizard({ onClose, onOpenTab }: { onClose: () => void; onOpenTab
               {[
                 { v: 'name_drift', label: 'ชื่อ catalog ไม่ตรงกับชื่อใน QT (typo / ปรับคำ)', icon: <RefreshCcw className="w-4 h-4 text-amber-500" /> },
                 { v: 'orphan_code', label: 'มี code ใน QT ที่ไม่อยู่ใน catalog', icon: <AlertTriangle className="w-4 h-4 text-red-500" /> },
+                { v: 'split_multi_names', label: '1 รหัสเดียว มีหลายชื่อใน QT (ต้องการแยกเป็นหลาย code)', icon: <Layers className="w-4 h-4 text-purple-500" /> },
                 { v: 'code_clash', label: 'มี code ซ้ำ 2 ตัว ที่จริงเป็นสินค้าเดียวกัน', icon: <Layers className="w-4 h-4 text-orange-500" /> },
                 { v: 'special_variant', label: 'user แก้ชื่อใน QT เป็นรายการพิเศษ + ราคาต่าง', icon: <Zap className="w-4 h-4 text-amber-500" /> },
                 { v: 'one_off', label: 'รายการพิเศษครั้งเดียว ไม่อยากใส่ catalog ถาวร', icon: <Sparkles className="w-4 h-4 text-blue-500" /> },
@@ -392,10 +399,11 @@ function ManualModal({ onClose }: { onClose: () => void }) {
     { n: 2, name: 'ปรับราคา catalog', tool: '(ไม่ต้องใช้ tool)', note: 'แก้ catalog → QT ใหม่ใช้ราคาใหม่ · QT เก่า frozen' },
     { n: 3, name: 'เปลี่ยนชื่อ catalog (typo)', tool: 'Sync Names', note: 'ซิงก์ชื่อ catalog → QT ทุกใบที่ใช้ code นั้น' },
     { n: 4, name: 'User พิมพ์ชื่อพิเศษใน QT', tool: 'Promote', note: 'สร้าง code ใหม่จากชื่อพิเศษ + ย้าย QT.items.code' },
-    { n: 5, name: 'รหัสซ้ำ ชื่อต่าง (legacy)', tool: 'Promote หลายรอบ', note: 'แต่ละชื่อ promote เป็น code แยก · เหลือ master ใน code เดิม' },
+    { n: 5, name: 'Split: 1 รหัส มีหลายชื่อใน QT (drift หรือ orphan)', tool: 'Promote ⚡ per-name (199)', note: 'คลิก ⚡ บน chip ของแต่ละชื่อ — split ทีละอัน · ครั้งแรกใช้ source code, ครั้งต่อไป suggest code ใหม่อัตโนมัติ' },
     { n: 6, name: 'Code rename (เปลี่ยน naming)', tool: 'Merge Codes', note: 'Source → Target + ติ๊ก "ลบ source"' },
     { n: 7, name: 'Consolidate duplicates', tool: 'Merge Codes', note: 'รวม 2 codes เป็นตัวเดียว — ⚠ option WB/IV' },
     { n: 8, name: 'Ad-hoc one-off', tool: 'SD ad-hoc', note: 'ใส่ใน SD ติ๊ก isAdhoc — ไม่ปน catalog/stock' },
+    { n: 9, name: 'Orphan code (ไม่มีใน catalog)', tool: 'Promote / Reassign / Ignore', note: 'tab "ซิงก์ชื่อ" → section Orphan — ตัดสินใจต่อ code: เพิ่มเข้า catalog / ย้ายไป code อื่น / ซ่อน' },
   ]
 
   return (
@@ -405,7 +413,7 @@ function ManualModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-start gap-3 mb-4">
           <BookOpen className="w-6 h-6 text-[#1B3A5C] flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-slate-800">คู่มือ 8 เคส × 4 tools</h3>
+            <h3 className="text-lg font-semibold text-slate-800">คู่มือ 9 เคส × 4 tools</h3>
             <p className="text-xs text-slate-500 mt-1">ตารางอ้างอิงทุกเคสที่อาจเจอ + เครื่องมือที่ใช้แก้</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
