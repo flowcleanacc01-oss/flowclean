@@ -2,18 +2,35 @@
 
 /**
  * 188 ขั้น A — Sync Names Tool (admin only)
- * 190 Phase 1 — เพิ่ม Promote Name to Catalog (reverse direction)
- *
- * 2 actions ต่อ drift name:
- *   1. Sync (เดิม) — push catalog name → ทับชื่อใน QT
- *   2. Promote (ใหม่) — สร้าง code ใหม่จาก drift name + ย้าย QT.items[].code ไป code ใหม่
- *      (ไม่แตะ SD/WB/IV — name คงตามจริง, price จาก average ของ matching items)
+ * 190 Phase 1 — Promote Name to Catalog (reverse direction)
+ * 193 — Orphan Codes section (Promote / Reassign / Ignore)
+ * 197 — push undo snapshot ก่อน execute ทุก batch op
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { useNameDrift, type DriftEntry } from '@/lib/use-name-drift'
-import { CheckCircle2, Loader2, RefreshCcw, AlertTriangle, ArrowRight, Zap } from 'lucide-react'
+import { useOrphanCodes, type OrphanEntry } from '@/lib/use-orphan-codes'
+import { pushUndoAction, type SnapshotChange } from '@/lib/undo-stack'
+import { CheckCircle2, Loader2, RefreshCcw, AlertTriangle, ArrowRight, Zap, EyeOff, Eye, MoveRight } from 'lucide-react'
 import type { QuotationStatus, LinenItemDef } from '@/types'
+
+const IGNORE_KEY = 'flowclean_orphan_ignore'
+
+function loadIgnoreList(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const raw = window.localStorage.getItem(IGNORE_KEY)
+    if (!raw) return new Set()
+    return new Set(JSON.parse(raw) as string[])
+  } catch { return new Set() }
+}
+
+function saveIgnoreList(list: Set<string>) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(IGNORE_KEY, JSON.stringify(Array.from(list)))
+  } catch { /* ignore */ }
+}
 
 interface Props {
   /** รหัสที่อยากให้เลือกไว้ก่อนเปิด (จาก inline badge) */
@@ -25,12 +42,35 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
   const { driftMap, totalCodes, totalQts } = useNameDrift()
   const drifts = useMemo(() => Array.from(driftMap.values()).sort((a, b) => b.qts.length - a.qts.length), [driftMap])
 
-  // 190 Phase 1: Promote state
+  // 193: Orphan codes
+  const { orphans } = useOrphanCodes()
+  const [ignoreList, setIgnoreList] = useState<Set<string>>(() => loadIgnoreList())
+  const [showIgnored, setShowIgnored] = useState(false)
+  const visibleOrphans = useMemo(
+    () => orphans.filter(o => showIgnored ? true : !ignoreList.has(o.code)),
+    [orphans, ignoreList, showIgnored],
+  )
+  const ignoredCount = useMemo(() => orphans.filter(o => ignoreList.has(o.code)).length, [orphans, ignoreList])
+
+  const toggleIgnore = (code: string) => {
+    const next = new Set(ignoreList)
+    if (next.has(code)) next.delete(code); else next.add(code)
+    setIgnoreList(next); saveIgnoreList(next)
+  }
+
+  // 190 Phase 1: Promote state — รองรับทั้ง drift และ orphan
   const [promoteCtx, setPromoteCtx] = useState<{
+    mode: 'drift' | 'orphan'
     sourceCode: string
-    driftName: string
-    sourceItem: LinenItemDef | undefined
+    driftName: string  // ชื่อที่จะกลายเป็น catalog name
+    sourceItem: LinenItemDef | undefined  // null ถ้า orphan
     matchingQts: { id: string; number: string; status: QuotationStatus; pricePerUnit: number }[]
+  } | null>(null)
+
+  // 193: Reassign state — สำหรับ orphan
+  const [reassignCtx, setReassignCtx] = useState<{
+    sourceCode: string
+    matchingQts: { id: string; number: string; status: QuotationStatus; nameInQT: string }[]
   } | null>(null)
 
   const [includeAccepted, setIncludeAccepted] = useState(true)
@@ -65,7 +105,27 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
       if (!matchedItem) continue
       matchingQts.push({ id: qt.id, number: qt.quotationNumber, status: q.status, pricePerUnit: matchedItem.pricePerUnit })
     }
-    setPromoteCtx({ sourceCode: entry.code, driftName, sourceItem, matchingQts })
+    setPromoteCtx({ mode: 'drift', sourceCode: entry.code, driftName, sourceItem, matchingQts })
+  }
+
+  // 193: Promote orphan — สร้าง catalog item ใหม่จาก orphan code (keep code เดิม)
+  const openOrphanPromote = (entry: OrphanEntry) => {
+    const matchingQts = entry.qts.map(q => ({ id: q.id, number: q.number, status: q.status, pricePerUnit: q.pricePerUnit }))
+    setPromoteCtx({
+      mode: 'orphan',
+      sourceCode: entry.code,
+      driftName: entry.names[0] || entry.code, // ใช้ชื่อที่พบบ่อยที่สุดเป็น default
+      sourceItem: undefined,
+      matchingQts,
+    })
+  }
+
+  // 193: Reassign — ย้าย QT.items.code จาก orphan → catalog code อื่น
+  const openReassign = (entry: OrphanEntry) => {
+    setReassignCtx({
+      sourceCode: entry.code,
+      matchingQts: entry.qts.map(q => ({ id: q.id, number: q.number, status: q.status, nameInQT: q.nameInQT })),
+    })
   }
 
   const allowedStatuses = useMemo<Set<QuotationStatus>>(() => {
@@ -105,6 +165,7 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
     try {
       let qtTouched = 0
       const codesActuallyChanged = new Set<string>()
+      const undoChanges: SnapshotChange[] = [] // 197
 
       // Build map: qtId → updates
       const qtUpdates = new Map<string, Map<string, string>>() // qtId → (code → newName)
@@ -124,11 +185,23 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
       for (const [qtId, codeToName] of qtUpdates.entries()) {
         const qt = quotations.find(q => q.id === qtId)
         if (!qt) continue
+        // 197: snapshot oldData ก่อน update
+        undoChanges.push({ table: 'quotations', id: qtId, op: 'update', oldData: { items: qt.items } })
         const newItems = qt.items.map(it =>
           codeToName.has(it.code) ? { ...it, name: codeToName.get(it.code)! } : it
         )
         updateQuotation(qtId, { items: newItems })
         qtTouched++
+      }
+
+      // 197: push undo
+      if (undoChanges.length > 0) {
+        pushUndoAction({
+          type: 'sync_names',
+          description: `Sync ${codesActuallyChanged.size} รหัส → ${qtTouched} QT`,
+          meta: { codes: Array.from(codesActuallyChanged) },
+          changes: undoChanges,
+        })
       }
 
       setDone({ codes: codesActuallyChanged.size, qts: qtTouched, ts: new Date().toLocaleString('th-TH') })
@@ -140,6 +213,33 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
     } finally {
       setRunning(false)
     }
+  }
+
+  // 193 + 197: Reassign orphan → catalog code
+  const executeReassign = (targetCode: string, qtIds: Set<string>) => {
+    if (!reassignCtx) return
+    const undoChanges: SnapshotChange[] = []
+    let updated = 0
+    for (const qtId of qtIds) {
+      const qt = quotations.find(q => q.id === qtId)
+      if (!qt) continue
+      undoChanges.push({ table: 'quotations', id: qtId, op: 'update', oldData: { items: qt.items } })
+      const newItems = qt.items.map(it =>
+        it.code === reassignCtx.sourceCode ? { ...it, code: targetCode } : it
+      )
+      updateQuotation(qtId, { items: newItems })
+      updated++
+    }
+    if (undoChanges.length > 0) {
+      pushUndoAction({
+        type: 'reassign_orphan',
+        description: `Reassign ${reassignCtx.sourceCode} → ${targetCode} (${updated} QT)`,
+        meta: { from: reassignCtx.sourceCode, to: targetCode, qtCount: updated },
+        changes: undoChanges,
+      })
+    }
+    setDone({ codes: 1, qts: updated, ts: new Date().toLocaleString('th-TH') })
+    setReassignCtx(null)
   }
 
   return (
@@ -324,6 +424,81 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
         </div>
       )}
 
+      {/* 193: Orphan codes section */}
+      {orphans.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-red-50">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-600" />
+              <h3 className="font-semibold text-sm text-red-800">
+                🔴 Orphan Codes — {visibleOrphans.length} รหัส
+              </h3>
+              {ignoredCount > 0 && (
+                <span className="text-xs text-slate-500">({ignoredCount} ซ่อน)</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {ignoredCount > 0 && (
+                <button onClick={() => setShowIgnored(s => !s)}
+                  className="text-xs text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
+                  {showIgnored ? <><EyeOff className="w-3 h-3" />ซ่อน ignored</> : <><Eye className="w-3 h-3" />ดู ignored</>}
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="px-4 py-2 bg-red-50/40 text-[11px] text-red-800 border-b border-red-100">
+            รหัสที่อยู่ใน QT แต่ <strong>ไม่มีใน catalog</strong> — เลือก action ต่อแถว: Promote (เพิ่มเข้า catalog) · Reassign (ย้ายไป code อื่น) · Ignore (ซ่อน)
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium text-slate-600">รหัส</th>
+                <th className="text-left px-3 py-2 font-medium text-slate-600">ชื่อใน QT</th>
+                <th className="text-right px-3 py-2 font-medium text-slate-600 w-24">QT rows</th>
+                <th className="text-right px-3 py-2 font-medium text-slate-600 w-24">avg ราคา</th>
+                <th className="text-right px-3 py-2 font-medium text-slate-600 w-72">action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleOrphans.map(o => {
+                const isIgnored = ignoreList.has(o.code)
+                return (
+                  <tr key={o.code} className={`border-t border-slate-100 ${isIgnored ? 'opacity-50' : 'hover:bg-slate-50'}`}>
+                    <td className="px-3 py-2 font-mono text-xs">{o.code}</td>
+                    <td className="px-3 py-2 text-slate-700">
+                      {o.names.length === 0 ? <span className="text-slate-400">(no name)</span> : o.names.map((n, i) => (
+                        <span key={i} className="inline-block bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded mr-1 mb-0.5 text-xs">{n}</span>
+                      ))}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-slate-600">{o.totalRows}</td>
+                    <td className="px-3 py-2 text-right text-slate-600">฿{o.avgPrice.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right">
+                      <div className="inline-flex gap-1">
+                        <button onClick={() => openOrphanPromote(o)}
+                          className="px-2 py-1 text-[10px] bg-amber-500 text-white rounded hover:bg-amber-600 inline-flex items-center gap-0.5"
+                          title="สร้าง catalog item ใหม่จากรหัสนี้">
+                          <Zap className="w-3 h-3" />Promote
+                        </button>
+                        <button onClick={() => openReassign(o)}
+                          className="px-2 py-1 text-[10px] bg-blue-500 text-white rounded hover:bg-blue-600 inline-flex items-center gap-0.5"
+                          title="ย้ายไป catalog code อื่น">
+                          <MoveRight className="w-3 h-3" />Reassign
+                        </button>
+                        <button onClick={() => toggleIgnore(o.code)}
+                          className={`px-2 py-1 text-[10px] rounded inline-flex items-center gap-0.5 ${isIgnored ? 'bg-slate-200 text-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                          title={isIgnored ? 'ยกเลิก ignore' : 'ซ่อน — ไม่จัดการ'}>
+                          <EyeOff className="w-3 h-3" />{isIgnored ? 'Unignore' : 'Ignore'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Done */}
       {done && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-start gap-2">
@@ -335,29 +510,53 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
         </div>
       )}
 
-      {/* 190 Phase 1: Promote modal */}
+      {/* 190 Phase 1 + 193 + 197: Promote modal */}
       {promoteCtx && (
         <PromoteModal
           ctx={promoteCtx}
           existingCodes={new Set(linenCatalog.map(c => c.code))}
           onClose={() => setPromoteCtx(null)}
           onCommit={(newItem, qtUpdates) => {
+            const undoChanges: SnapshotChange[] = []
             // 1. Add new catalog item
             addLinenItem(newItem)
-            // 2. Update each QT — change matching items[].code → newItem.code (keep name)
-            for (const qtId of qtUpdates) {
-              const qt = quotations.find(q => q.id === qtId)
-              if (!qt) continue
-              const newItems = qt.items.map(it =>
-                it.code === promoteCtx.sourceCode && (it.name || '').trim() === promoteCtx.driftName
-                  ? { ...it, code: newItem.code }
-                  : it
-              )
-              updateQuotation(qtId, { items: newItems })
+            undoChanges.push({ table: 'linen_items', id: newItem.code, op: 'insert', newData: newItem as unknown as Record<string, unknown> })
+            // 2. Update QT items.code (เฉพาะ drift mode — orphan mode ไม่ต้องย้าย code)
+            if (promoteCtx.mode === 'drift') {
+              for (const qtId of qtUpdates) {
+                const qt = quotations.find(q => q.id === qtId)
+                if (!qt) continue
+                undoChanges.push({ table: 'quotations', id: qtId, op: 'update', oldData: { items: qt.items } })
+                const newItems = qt.items.map(it =>
+                  it.code === promoteCtx.sourceCode && (it.name || '').trim() === promoteCtx.driftName
+                    ? { ...it, code: newItem.code }
+                    : it
+                )
+                updateQuotation(qtId, { items: newItems })
+              }
             }
+            // 197: push undo
+            pushUndoAction({
+              type: 'promote_name',
+              description: promoteCtx.mode === 'orphan'
+                ? `Promote orphan ${promoteCtx.sourceCode} เข้า catalog`
+                : `Promote "${promoteCtx.driftName}" → ${newItem.code} (${qtUpdates.length} QT)`,
+              meta: { mode: promoteCtx.mode, source: promoteCtx.sourceCode, target: newItem.code },
+              changes: undoChanges,
+            })
             setPromoteCtx(null)
             setDone({ codes: 1, qts: qtUpdates.length, ts: new Date().toLocaleString('th-TH') })
           }}
+        />
+      )}
+
+      {/* 193: Reassign modal */}
+      {reassignCtx && (
+        <ReassignModal
+          ctx={reassignCtx}
+          catalogCodes={linenCatalog}
+          onClose={() => setReassignCtx(null)}
+          onCommit={executeReassign}
         />
       )}
     </div>
@@ -368,6 +567,7 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
 // 190 Phase 1 — Promote Name to Catalog modal
 // ────────────────────────────────────────────────────────────────
 interface PromoteCtx {
+  mode: 'drift' | 'orphan'
   sourceCode: string
   driftName: string
   sourceItem: LinenItemDef | undefined
@@ -382,8 +582,9 @@ function PromoteModal({
   onClose: () => void
   onCommit: (newItem: LinenItemDef, qtIds: string[]) => void
 }) {
-  // Auto-suggest code: prefix + เลขถัดไปที่ว่าง
+  // Auto-suggest code: ถ้า orphan → ใช้ source code เดิม, ถ้า drift → หาเลขถัดไป
   const suggestedCode = useMemo(() => {
+    if (ctx.mode === 'orphan') return ctx.sourceCode
     const prefixMatch = ctx.sourceCode.match(/^([A-Z]+)(\d+)/i)
     if (!prefixMatch) return `${ctx.sourceCode}_NEW`
     const [, prefix, numStr] = prefixMatch
@@ -391,7 +592,7 @@ function PromoteModal({
     let n = parseInt(numStr, 10) + 1
     while (existingCodes.has(`${prefix}${String(n).padStart(padLen, '0')}`)) n++
     return `${prefix}${String(n).padStart(padLen, '0')}`
-  }, [ctx.sourceCode, existingCodes])
+  }, [ctx.sourceCode, ctx.mode, existingCodes])
 
   // Default price: avg ของ pricePerUnit จาก matching QTs (skip 0)
   const suggestedPrice = useMemo(() => {
@@ -408,16 +609,18 @@ function PromoteModal({
   const [running, setRunning] = useState(false)
 
   const codeUpper = newCode.trim().toUpperCase()
+  // Orphan mode: ใช้ source code เดิมได้ (เพราะมันยังไม่อยู่ใน catalog)
   const codeError = !codeUpper
     ? 'ระบุรหัสใหม่'
     : existingCodes.has(codeUpper)
       ? `รหัส "${codeUpper}" มีอยู่แล้วใน catalog`
-      : codeUpper === ctx.sourceCode
+      : (ctx.mode === 'drift' && codeUpper === ctx.sourceCode)
         ? 'รหัสใหม่ต้องไม่ตรงกับรหัสเดิม'
         : null
 
   const nameError = !newName.trim() ? 'ระบุชื่อ' : null
-  const canSubmit = !codeError && !nameError && selectedQtIds.size > 0
+  // Orphan mode: ไม่ต้อง require selectedQtIds (แค่สร้าง catalog item)
+  const canSubmit = !codeError && !nameError && (ctx.mode === 'orphan' || selectedQtIds.size > 0)
 
   const toggleQt = (id: string) => {
     setSelectedQtIds(prev => {
@@ -453,9 +656,14 @@ function PromoteModal({
         <div className="flex items-start gap-3 mb-4">
           <Zap className="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" />
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">Promote ชื่อเป็น code ใหม่</h3>
+            <h3 className="text-lg font-semibold text-slate-800">
+              {ctx.mode === 'orphan' ? 'นำเข้า catalog' : 'Promote ชื่อเป็น code ใหม่'}
+            </h3>
             <p className="text-xs text-slate-500 mt-1">
-              สร้าง catalog code ใหม่จากชื่อใน QT แล้วย้าย QT.items[].code ไป code ใหม่
+              {ctx.mode === 'orphan'
+                ? <>สร้าง catalog item ใหม่จาก orphan code <code className="bg-white/70 px-1 rounded">{ctx.sourceCode}</code> — ใช้รหัสเดิมได้ ไม่ต้องย้าย QT</>
+                : <>สร้าง catalog code ใหม่จากชื่อใน QT แล้วย้าย QT.items[].code ไป code ใหม่</>
+              }
               <br />
               <span className="text-amber-700">⚠ ไม่แตะ SD/WB/IV — name ใน QT คงอยู่ตามที่เป็น</span>
             </p>
@@ -467,10 +675,12 @@ function PromoteModal({
           <div>
             <span className="text-slate-500">รหัสต้นทาง:</span>{' '}
             <code className="font-mono font-semibold text-slate-700">{ctx.sourceCode}</code>
-            <span className="text-slate-500"> ({ctx.sourceItem?.name || '?'})</span>
+            {ctx.mode === 'orphan'
+              ? <span className="text-red-600 ml-1">(orphan — ยังไม่มีใน catalog)</span>
+              : <span className="text-slate-500"> ({ctx.sourceItem?.name || '?'})</span>}
           </div>
           <div>
-            <span className="text-slate-500">ชื่อใน QT (จะ promote):</span>{' '}
+            <span className="text-slate-500">{ctx.mode === 'orphan' ? 'ชื่อที่พบใน QT:' : 'ชื่อใน QT (จะ promote):'}</span>{' '}
             <span className="font-semibold text-amber-700">{ctx.driftName}</span>
           </div>
           <div>
@@ -515,7 +725,8 @@ function PromoteModal({
           </div>
         </div>
 
-        {/* QT selector */}
+        {/* QT selector — orphan mode ไม่ต้องย้าย QT, ซ่อน */}
+        {ctx.mode === 'drift' && (
         <div className="mb-4">
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-xs font-medium text-slate-600">QT ที่จะย้าย ({selectedQtIds.size}/{ctx.matchingQts.length})</label>
@@ -539,15 +750,20 @@ function PromoteModal({
             })}
           </div>
         </div>
+        )}
 
         {/* Confirm */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900 mb-4 flex gap-2">
           <ArrowRight className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div>
-            สร้าง <code className="bg-white/70 px-1 rounded">{codeUpper}</code> ใน catalog
-            + ย้าย <strong>{selectedQtIds.size}</strong> QT.items[] จาก{' '}
-            <code className="bg-white/70 px-1 rounded">{ctx.sourceCode}</code> →{' '}
-            <code className="bg-white/70 px-1 rounded">{codeUpper}</code>
+            {ctx.mode === 'orphan' ? (
+              <>สร้าง <code className="bg-white/70 px-1 rounded">{codeUpper}</code> ใน catalog · QT ที่ใช้ {ctx.sourceCode} อยู่แล้วจะ valid ทันที</>
+            ) : (
+              <>สร้าง <code className="bg-white/70 px-1 rounded">{codeUpper}</code> ใน catalog
+              + ย้าย <strong>{selectedQtIds.size}</strong> QT.items[] จาก{' '}
+              <code className="bg-white/70 px-1 rounded">{ctx.sourceCode}</code> →{' '}
+              <code className="bg-white/70 px-1 rounded">{codeUpper}</code></>
+            )}
           </div>
         </div>
 
@@ -569,4 +785,131 @@ function PromoteModal({
 function cnRow(checked: boolean) {
   const base = 'border-t border-slate-100 cursor-pointer transition-colors'
   return checked ? `${base} bg-blue-50/60 hover:bg-blue-50` : `${base} hover:bg-slate-50`
+}
+
+// ────────────────────────────────────────────────────────────────
+// 193 — ReassignModal: ย้าย QT.items.code จาก orphan → catalog code อื่น
+// ────────────────────────────────────────────────────────────────
+function ReassignModal({
+  ctx, catalogCodes, onClose, onCommit,
+}: {
+  ctx: { sourceCode: string; matchingQts: { id: string; number: string; status: QuotationStatus; nameInQT: string }[] }
+  catalogCodes: LinenItemDef[]
+  onClose: () => void
+  onCommit: (targetCode: string, qtIds: Set<string>) => void
+}) {
+  const [targetCode, setTargetCode] = useState('')
+  const [search, setSearch] = useState('')
+  const [selectedQtIds, setSelectedQtIds] = useState<Set<string>>(new Set(ctx.matchingQts.map(q => q.id)))
+  const [confirm, setConfirm] = useState(false)
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return catalogCodes.slice(0, 50)
+    return catalogCodes.filter(c =>
+      c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+    ).slice(0, 100)
+  }, [catalogCodes, search])
+
+  const target = catalogCodes.find(c => c.code === targetCode)
+  const canCommit = !!target && selectedQtIds.size > 0
+  const toggleQt = (id: string) => {
+    setSelectedQtIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[6vh] px-4 animate-fadeIn">
+      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[88vh] overflow-auto">
+        <div className="flex items-start gap-3 mb-4">
+          <MoveRight className="w-6 h-6 text-blue-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800">Reassign orphan</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              ย้าย QT.items[].code จาก <code className="bg-slate-100 px-1 rounded">{ctx.sourceCode}</code> → catalog code อื่นที่มีอยู่
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 rounded-lg p-3 mb-4 text-xs space-y-1 border border-slate-200">
+          <div>orphan code: <code className="font-mono font-semibold text-red-600">{ctx.sourceCode}</code></div>
+          <div>QT.items ที่อ้าง: <strong>{ctx.matchingQts.length} rows</strong></div>
+        </div>
+
+        {/* Target search */}
+        <div className="mb-3">
+          <label className="block text-xs font-medium text-slate-600 mb-1">เลือก catalog code ปลายทาง</label>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="พิมพ์ค้นหา code หรือชื่อ"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none mb-2"
+          />
+          <div className="border border-slate-200 rounded-lg max-h-48 overflow-auto">
+            {filtered.map(c => (
+              <button key={c.code} type="button" onClick={() => setTargetCode(c.code)}
+                className={`w-full text-left px-3 py-1.5 border-b border-slate-100 last:border-0 text-sm flex items-center gap-2 ${targetCode === c.code ? 'bg-blue-50 text-[#1B3A5C] font-medium' : 'hover:bg-slate-50'}`}>
+                <code className="font-mono text-xs text-slate-500">{c.code}</code>
+                <span className="truncate">{c.name}</span>
+              </button>
+            ))}
+            {filtered.length === 0 && <p className="px-3 py-3 text-xs text-slate-400 text-center">ไม่พบ</p>}
+          </div>
+        </div>
+
+        {/* QT selector */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-medium text-slate-600">QT ที่จะ Reassign ({selectedQtIds.size}/{ctx.matchingQts.length})</label>
+            <div className="flex gap-1.5 text-[11px]">
+              <button onClick={() => setSelectedQtIds(new Set(ctx.matchingQts.map(q => q.id)))} className="text-[#1B3A5C] hover:underline">เลือกทั้งหมด</button>
+              <span className="text-slate-300">|</span>
+              <button onClick={() => setSelectedQtIds(new Set())} className="text-slate-500 hover:underline">ล้าง</button>
+            </div>
+          </div>
+          <div className="border border-slate-200 rounded-lg max-h-32 overflow-auto">
+            {ctx.matchingQts.map(q => (
+              <label key={q.id} className={`flex items-center gap-2 px-3 py-1 border-b border-slate-100 last:border-0 cursor-pointer text-xs ${selectedQtIds.has(q.id) ? 'bg-blue-50/40' : 'hover:bg-slate-50'}`}>
+                <input type="checkbox" checked={selectedQtIds.has(q.id)} onChange={() => toggleQt(q.id)} className="rounded border-slate-300" />
+                <span className="font-mono text-slate-600">{q.number}</span>
+                <span className="text-slate-500">{q.status}</span>
+                <span className="ml-auto text-slate-400 truncate">{q.nameInQT}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {target && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900 mb-4">
+            <ArrowRight className="w-3 h-3 inline mr-1" />
+            ย้าย <strong>{selectedQtIds.size}</strong> QT.items[] จาก{' '}
+            <code className="bg-white/70 px-1 rounded">{ctx.sourceCode}</code> →{' '}
+            <code className="bg-white/70 px-1 rounded">{target.code}</code> ({target.name})
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose}
+            className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200">
+            ยกเลิก
+          </button>
+          {!confirm ? (
+            <button onClick={() => setConfirm(true)} disabled={!canCommit}
+              className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1.5">
+              ดำเนินการ Reassign
+            </button>
+          ) : (
+            <button onClick={() => onCommit(targetCode, selectedQtIds)}
+              className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4" />ยืนยัน Reassign
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }

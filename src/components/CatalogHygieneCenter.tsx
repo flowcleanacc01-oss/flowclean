@@ -16,8 +16,9 @@ import { useNameDrift } from '@/lib/use-name-drift'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
 import {
   Activity, AlertTriangle, ArrowRight, BookOpen, CheckCircle2,
-  HelpCircle, Layers, RefreshCcw, Settings, Shield, Sparkles, Zap,
+  HelpCircle, History, Layers, RefreshCcw, Settings, Shield, Sparkles, Zap,
 } from 'lucide-react'
+import UndoPanel from '@/components/UndoPanel'
 
 interface Props {
   onOpenTab: (tab: 'sync' | 'merge' | 'items') => void
@@ -184,6 +185,15 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
             </p>
           </button>
         </div>
+      </section>
+
+      {/* ── Undo Panel (197) ─────────────────────────────────── */}
+      <section>
+        <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+          <History className="w-4 h-4" />
+          ↶ Undo — ย้อนการกระทำที่เพิ่งทำ
+        </h3>
+        <UndoPanel />
       </section>
 
       {/* ── Validation Settings ─────────────────────────────── */}

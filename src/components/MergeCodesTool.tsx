@@ -16,6 +16,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowRight, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 import { useStore } from '@/lib/store'
+import { pushUndoAction, type SnapshotChange } from '@/lib/undo-stack'
 
 type Stat = { label: string; count: number; affectedIds: string[] }
 
@@ -84,11 +85,13 @@ export default function MergeCodesTool() {
     const tgt = targetCode
     const tgtItem = linenCatalog.find(i => i.code === tgt)
     const tgtName = tgtItem?.name || tgt
+    const undoChanges: SnapshotChange[] = []
 
     try {
       // 1. Quotations
       const qtList = quotations.filter(q => (q.items || []).some(it => it.code === src))
       for (const q of qtList) {
+        undoChanges.push({ table: 'quotations', id: q.id, op: 'update', oldData: { items: q.items } })
         const newItems = q.items.map(it =>
           it.code === src ? { ...it, code: tgt, name: tgtName } : it
         )
@@ -119,7 +122,17 @@ export default function MergeCodesTool() {
             p.code === src ? { ...p, code: tgt } : p
           )
         }
-        if (Object.keys(updates).length > 0) updateCustomer(c.id, updates)
+        if (Object.keys(updates).length > 0) {
+          undoChanges.push({
+            table: 'customers', id: c.id, op: 'update',
+            oldData: {
+              enabledItems: c.enabledItems,
+              priceList: c.priceList,
+              priceHistory: c.priceHistory,
+            },
+          })
+          updateCustomer(c.id, updates)
+        }
       }
 
       // 3. Delivery Notes
@@ -138,13 +151,20 @@ export default function MergeCodesTool() {
           delete snap[src]
           updates.priceSnapshot = snap
         }
-        if (Object.keys(updates).length > 0) updateDeliveryNote(d.id, updates)
+        if (Object.keys(updates).length > 0) {
+          undoChanges.push({
+            table: 'delivery_notes', id: d.id, op: 'update',
+            oldData: { items: d.items, priceSnapshot: d.priceSnapshot },
+          })
+          updateDeliveryNote(d.id, updates)
+        }
       }
 
       // 4. Billing Statements (optional)
       if (includeWB) {
         const wbList = billingStatements.filter(b => (b.lineItems || []).some(li => li.code === src))
         for (const b of wbList) {
+          undoChanges.push({ table: 'billing_statements', id: b.id, op: 'update', oldData: { lineItems: b.lineItems } })
           const newLineItems = b.lineItems.map(li =>
             li.code === src ? { ...li, code: tgt, name: tgtName } : li
           )
@@ -156,6 +176,7 @@ export default function MergeCodesTool() {
       if (includeIV) {
         const ivList = taxInvoices.filter(t => (t.lineItems || []).some(li => li.code === src))
         for (const t of ivList) {
+          undoChanges.push({ table: 'tax_invoices', id: t.id, op: 'update', oldData: { lineItems: t.lineItems } })
           const newLineItems = t.lineItems.map(li =>
             li.code === src ? { ...li, code: tgt, name: tgtName } : li
           )
@@ -165,7 +186,21 @@ export default function MergeCodesTool() {
 
       // 6. Delete source code from catalog (optional)
       if (deleteSource) {
+        const deletedItem = linenCatalog.find(i => i.code === src)
+        if (deletedItem) {
+          undoChanges.push({ table: 'linen_items', id: src, op: 'delete', oldData: deletedItem as unknown as Record<string, unknown> })
+        }
         deleteLinenItem(src)
+      }
+
+      // 197: push undo
+      if (undoChanges.length > 0) {
+        pushUndoAction({
+          type: 'merge_codes',
+          description: `Merge ${src} → ${tgt}${deleteSource ? ' (ลบ source)' : ''}`,
+          meta: { from: src, to: tgt, includeWB, includeIV, deleteSource, recordCount: undoChanges.length },
+          changes: undoChanges,
+        })
       }
 
       setDone({ stats, ts: new Date().toLocaleString('th-TH') })
