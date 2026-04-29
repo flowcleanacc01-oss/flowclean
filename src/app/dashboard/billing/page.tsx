@@ -235,6 +235,15 @@ export default function BillingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, customers, linenCatalog])
 
+  // 189: refresh QT items' name from current catalog (กัน stale name จาก QT เก่า)
+  // ใช้กับ "สร้าง QT ใหม่" ที่ pre-fill จาก linkedQT/template — ไม่ใช้ใน edit existing QT
+  const refreshItemNames = useCallback((items: { code: string; name: string; pricePerUnit: number | null }[]) => {
+    return items.map(it => {
+      const cat = linenCatalog.find(c => c.code === it.code)
+      return cat ? { ...it, name: cat.name } : it
+    })
+  }, [linenCatalog])
+
   const sortedCategories = useMemo(() =>
     [...linenCategories].sort((a, b) => a.sortOrder - b.sortOrder)
   , [linenCategories])
@@ -2329,7 +2338,8 @@ export default function BillingPage() {
                       setQuEnableMinPerMonth(cust.enableMinPerMonth ?? false)
                       setQuMonthlyFlatRate(cust.monthlyFlatRate ?? 0)
                       const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerId === cust.id)
-                      if (linkedQT) setQuItems([...linkedQT.items])
+                      // 189: pre-fill items + ราคา จาก QT เก่า แต่ refresh name จาก catalog ปัจจุบัน
+                      if (linkedQT) setQuItems(refreshItemNames(linkedQT.items.map(it => ({ ...it, pricePerUnit: it.pricePerUnit }))))
                     }
                   }}
                   allowAll={false}
@@ -2394,7 +2404,7 @@ export default function BillingPage() {
                           const cust = customers.find(c => c.id === q.customerId)
                           const displayName = cust?.shortName || q.customerName
                           return (
-                            <button key={q.id} type="button" onClick={() => { setQuItems([...q.items]); setShowLoadFromQT(false) }}
+                            <button key={q.id} type="button" onClick={() => { setQuItems(refreshItemNames(q.items.map(it => ({ ...it, pricePerUnit: it.pricePerUnit })))); setShowLoadFromQT(false) }}
                               className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0 flex items-center gap-2">
                               <span className="font-mono font-medium text-slate-700">{q.quotationNumber}</span>
                               <span className="text-slate-500 truncate">{displayName}</span>
