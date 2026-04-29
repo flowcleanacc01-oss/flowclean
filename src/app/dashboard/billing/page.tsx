@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
@@ -40,12 +40,24 @@ export default function BillingPage() {
   } = useStore()
 
   const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const router = useRouter()
   const urlHighlightQ = searchParams.get('q') || '' // 147.2
-  const [tab, setTab] = useState<TabKey>(() => {
+  const [tabState, setTabState] = useState<TabKey>(() => {
     const t = searchParams.get('tab')
     if (t === 'invoice' || t === 'quotation') return t
     return 'billing'
   })
+  const tab = tabState
+  // 187: setTab → sync URL ?tab= ทุกครั้ง เพื่อให้ Sidebar highlight ตรงกับ tab จริง
+  const setTab = useCallback((t: TabKey) => {
+    setTabState(t)
+    const sp = new URLSearchParams(Array.from(searchParams.entries()))
+    if (sp.get('tab') !== t) {
+      sp.set('tab', t)
+      router.replace(`${pathname}?${sp.toString()}`, { scroll: false })
+    }
+  }, [searchParams, pathname, router])
   const [search, setSearch] = useState('')
   // 162.1: combine local search + URL ?q so live typing also highlights
   const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
@@ -106,8 +118,6 @@ export default function BillingPage() {
   // 138: customer filter สำหรับ WB + IV (pattern เดียวกับ QT/LF/SD)
   const [wbCustomerFilter, setWbCustomerFilter] = useState<string>('all')
   const [ivCustomerFilter, setIvCustomerFilter] = useState<string>('all')
-
-  const router = useRouter()
 
   // Row highlight
   const [activeWbId, setActiveWbId] = useState<string | null>(null)
