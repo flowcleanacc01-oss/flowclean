@@ -14,13 +14,14 @@ import { exportCSV } from '@/lib/export'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import MergeCodesTool from '@/components/MergeCodesTool'
 import SyncNamesTool from '@/components/SyncNamesTool'
+import CatalogHygieneCenter from '@/components/CatalogHygieneCenter'
 import { canManageSettings } from '@/lib/permissions'
 import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 import { useNameDrift } from '@/lib/use-name-drift'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
-import { RefreshCcw } from 'lucide-react'
+import { RefreshCcw, Shield } from 'lucide-react'
 
-type TabKey = 'items' | 'categories' | 'merge' | 'sync'
+type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
 type SortDir = 'asc' | 'desc'
 
@@ -45,6 +46,7 @@ export default function ItemsPage() {
   const urlHighlightQ = sp.get('q') || '' // 147.2
   const [showItemPrintList, setShowItemPrintList] = useState(false) // 154.1
 
+  // 196: default tab = items (Hygiene Center เป็น optional, admin เปิดเอง)
   const [tab, setTab] = useState<TabKey>('items')
   // 180: scroll to first <mark> when arriving from global search with ?q=
   useScrollToMark([tab])
@@ -273,7 +275,8 @@ export default function ItemsPage() {
     )
   }
 
-  const tabs: { key: TabKey; label: string; badge?: number }[] = [
+  const tabs: { key: TabKey; label: string; badge?: number; icon?: React.ReactNode }[] = [
+    ...(canManageSettings(currentUser) ? [{ key: 'hygiene' as TabKey, label: 'Hygiene Center', icon: <Shield className="w-3.5 h-3.5" /> }] : []),
     { key: 'items', label: 'รายการผ้า' },
     { key: 'categories', label: 'หมวด' },
     ...(canManageSettings(currentUser) ? [
@@ -303,6 +306,7 @@ export default function ItemsPage() {
           <button key={t.key} onClick={() => setTab(t.key)}
             className={cn('px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap inline-flex items-center gap-1.5',
               tab === t.key ? 'border-[#1B3A5C] text-[#1B3A5C]' : 'border-transparent text-slate-500 hover:text-slate-700')}>
+            {t.icon}
             {t.label}
             {t.badge && t.badge > 0 ? (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
@@ -771,6 +775,11 @@ export default function ItemsPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* 194/196: Catalog Hygiene Center tab — รวม dashboard + wizard + manual */}
+      {tab === 'hygiene' && (
+        <CatalogHygieneCenter onOpenTab={(t) => setTab(t)} />
       )}
 
       {/* 174 ขั้น 2: Merge Codes Tool tab */}

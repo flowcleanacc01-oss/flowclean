@@ -25,6 +25,7 @@ import QuotationPrint from '@/components/QuotationPrint'
 import CustomerPicker from '@/components/CustomerPicker'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
+import { getCatalogValidationPrefs } from '@/components/CatalogHygieneCenter'
 
 type TabKey = 'billing' | 'invoice' | 'quotation'
 
@@ -573,8 +574,40 @@ export default function BillingPage() {
     scrollToActiveRow(newIV.id)
   }
 
+  // 195: Validation gate — ตรวจ orphan/drift ก่อน save (อ่าน prefs จาก localStorage)
+  const validateBeforeSaveQT = (): { proceed: boolean; warnings: string[] } => {
+    const prefs = getCatalogValidationPrefs()
+    if (!prefs.warnDrift && !prefs.warnOrphan) return { proceed: true, warnings: [] }
+    const catalogByCode = new Map(linenCatalog.map(c => [c.code, c.name]))
+    const orphans: string[] = []
+    const drifts: string[] = []
+    for (const it of quItems) {
+      if (it.pricePerUnit === null) continue
+      const catName = catalogByCode.get(it.code)
+      if (catName === undefined) {
+        if (prefs.warnOrphan) orphans.push(it.code)
+      } else if ((it.name || '').trim() && (it.name || '').trim() !== catName) {
+        if (prefs.warnDrift) drifts.push(`${it.code}: "${it.name}" ≠ "${catName}"`)
+      }
+    }
+    if (orphans.length === 0 && drifts.length === 0) return { proceed: true, warnings: [] }
+    const lines: string[] = []
+    if (orphans.length > 0) {
+      lines.push(`🔴 พบ ${orphans.length} code ที่ไม่อยู่ใน catalog: ${orphans.slice(0, 5).join(', ')}${orphans.length > 5 ? '...' : ''}`)
+    }
+    if (drifts.length > 0) {
+      lines.push(`🟡 พบ ${drifts.length} ชื่อต่างจาก catalog:\n${drifts.slice(0, 3).join('\n')}${drifts.length > 3 ? '\n...' : ''}`)
+    }
+    lines.push('\nบันทึกแบบนี้? (จัดการได้ทีหลังที่ tab "Hygiene Center" หรือ "ซิงก์ชื่อ")')
+    const proceed = window.confirm(lines.join('\n'))
+    return { proceed, warnings: [...orphans, ...drifts] }
+  }
+
   const handleCreateQuotation = () => {
     if (!quCustomerId) return
+    // 195: validation gate
+    const v = validateBeforeSaveQT()
+    if (!v.proceed) return
     const validDate = new Date(quDate)
     validDate.setDate(validDate.getDate() + quValidDays)
     const qtData = {
