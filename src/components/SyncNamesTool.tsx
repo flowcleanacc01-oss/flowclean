@@ -67,9 +67,10 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
     matchingQts: { id: string; number: string; status: QuotationStatus; pricePerUnit: number }[]
   } | null>(null)
 
-  // 193: Reassign state — สำหรับ orphan
+  // 193 + 201: Reassign state — รองรับทั้ง full code และ name-specific scope
   const [reassignCtx, setReassignCtx] = useState<{
     sourceCode: string
+    nameFilter?: string  // ถ้ามี → ย้ายเฉพาะ QT.items ที่ name == nameFilter
     matchingQts: { id: string; number: string; status: QuotationStatus; nameInQT: string }[]
   } | null>(null)
 
@@ -131,6 +132,19 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
     setReassignCtx({
       sourceCode: entry.code,
       matchingQts: entry.qts.map(q => ({ id: q.id, number: q.number, status: q.status, nameInQT: q.nameInQT })),
+    })
+  }
+
+  // 201: Reassign per-name — ใช้กับ drift หรือ orphan ที่มีหลายชื่อ
+  const openReassignByName = (
+    sourceCode: string,
+    nameFilter: string,
+    qts: { id: string; number: string; status: QuotationStatus; nameInQT: string }[],
+  ) => {
+    setReassignCtx({
+      sourceCode,
+      nameFilter,
+      matchingQts: qts.filter(q => q.nameInQT === nameFilter),
     })
   }
 
@@ -221,26 +235,33 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
     }
   }
 
-  // 193 + 197: Reassign orphan → catalog code
+  // 193 + 197 + 201: Reassign — ย้าย QT.items.code → target catalog code
+  // ถ้า reassignCtx.nameFilter มีค่า → ย้ายเฉพาะ items ที่ name == nameFilter
   const executeReassign = (targetCode: string, qtIds: Set<string>) => {
     if (!reassignCtx) return
     const undoChanges: SnapshotChange[] = []
+    const nameFilter = reassignCtx.nameFilter
     let updated = 0
     for (const qtId of qtIds) {
       const qt = quotations.find(q => q.id === qtId)
       if (!qt) continue
       undoChanges.push({ table: 'quotations', id: qtId, op: 'update', oldData: { items: qt.items } })
-      const newItems = qt.items.map(it =>
-        it.code === reassignCtx.sourceCode ? { ...it, code: targetCode } : it
-      )
+      const newItems = qt.items.map(it => {
+        if (it.code !== reassignCtx.sourceCode) return it
+        if (nameFilter && (it.name || '').trim() !== nameFilter) return it
+        return { ...it, code: targetCode }
+      })
       updateQuotation(qtId, { items: newItems })
       updated++
     }
     if (undoChanges.length > 0) {
+      const desc = nameFilter
+        ? `Reassign ${reassignCtx.sourceCode} ("${nameFilter}") → ${targetCode} (${updated} QT)`
+        : `Reassign ${reassignCtx.sourceCode} → ${targetCode} (${updated} QT)`
       pushUndoAction({
         type: 'reassign_orphan',
-        description: `Reassign ${reassignCtx.sourceCode} → ${targetCode} (${updated} QT)`,
-        meta: { from: reassignCtx.sourceCode, to: targetCode, qtCount: updated },
+        description: desc,
+        meta: { from: reassignCtx.sourceCode, to: targetCode, qtCount: updated, nameFilter },
         changes: undoChanges,
       })
     }
@@ -363,10 +384,22 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                                 e.stopPropagation()
                                 openPromote(d, n)
                               }}
-                              title={`สร้าง code ใหม่จากชื่อนี้ + ย้าย ${matchCount} QT.items`}
+                              title={`Promote: สร้าง code ใหม่จากชื่อนี้ + ย้าย ${matchCount} QT.items`}
                               className="ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded hover:bg-amber-200 text-amber-600 hover:text-amber-900"
                             >
                               <Zap className="w-3 h-3" />
+                            </button>
+                            {/* 201: Reassign per-name */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openReassignByName(d.code, n, d.qts.map(q => ({ id: q.id, number: q.number, status: q.status, nameInQT: q.nameInQT })))
+                              }}
+                              title={`Reassign: ย้าย ${matchCount} QT.items ที่มีชื่อนี้ → catalog code อื่น`}
+                              className="inline-flex items-center justify-center w-4 h-4 rounded hover:bg-blue-200 text-blue-600 hover:text-blue-900"
+                            >
+                              <MoveRight className="w-3 h-3" />
                             </button>
                           </span>
                         )
@@ -489,6 +522,15 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                               className="ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded hover:bg-amber-200 text-amber-600 hover:text-amber-900"
                             >
                               <Zap className="w-3 h-3" />
+                            </button>
+                            {/* 201: 🔄 Reassign per-name */}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); openReassignByName(o.code, n, o.qts.map(q => ({ id: q.id, number: q.number, status: q.status, nameInQT: q.nameInQT }))) }}
+                              title={`Reassign: ย้าย ${matchCount} QT.items ที่มีชื่อนี้ → catalog code อื่น`}
+                              className="inline-flex items-center justify-center w-4 h-4 rounded hover:bg-blue-200 text-blue-600 hover:text-blue-900"
+                            >
+                              <MoveRight className="w-3 h-3" />
                             </button>
                           </span>
                         )
@@ -835,7 +877,7 @@ function cnRow(checked: boolean) {
 function ReassignModal({
   ctx, catalogCodes, onClose, onCommit,
 }: {
-  ctx: { sourceCode: string; matchingQts: { id: string; number: string; status: QuotationStatus; nameInQT: string }[] }
+  ctx: { sourceCode: string; nameFilter?: string; matchingQts: { id: string; number: string; status: QuotationStatus; nameInQT: string }[] }
   catalogCodes: LinenItemDef[]
   onClose: () => void
   onCommit: (targetCode: string, qtIds: Set<string>) => void
@@ -870,16 +912,23 @@ function ReassignModal({
         <div className="flex items-start gap-3 mb-4">
           <MoveRight className="w-6 h-6 text-blue-500 flex-shrink-0 mt-0.5" />
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">Reassign orphan</h3>
+            <h3 className="text-lg font-semibold text-slate-800">
+              {ctx.nameFilter ? 'Reassign per-name' : 'Reassign'}
+            </h3>
             <p className="text-xs text-slate-500 mt-1">
-              ย้าย QT.items[].code จาก <code className="bg-slate-100 px-1 rounded">{ctx.sourceCode}</code> → catalog code อื่นที่มีอยู่
+              ย้าย QT.items[].code จาก <code className="bg-slate-100 px-1 rounded">{ctx.sourceCode}</code>
+              {ctx.nameFilter && <> (เฉพาะที่ name = <span className="font-semibold text-amber-700">&quot;{ctx.nameFilter}&quot;</span>)</>}
+              {' '}→ catalog code อื่นที่มีอยู่
             </p>
           </div>
         </div>
 
         <div className="bg-slate-50 rounded-lg p-3 mb-4 text-xs space-y-1 border border-slate-200">
-          <div>orphan code: <code className="font-mono font-semibold text-red-600">{ctx.sourceCode}</code></div>
-          <div>QT.items ที่อ้าง: <strong>{ctx.matchingQts.length} rows</strong></div>
+          <div>source code: <code className="font-mono font-semibold text-red-600">{ctx.sourceCode}</code></div>
+          {ctx.nameFilter && (
+            <div>scope filter: <span className="font-semibold text-amber-700">name = &quot;{ctx.nameFilter}&quot;</span></div>
+          )}
+          <div>QT.items ที่ตรง scope: <strong>{ctx.matchingQts.length} rows</strong></div>
         </div>
 
         {/* Target search */}
