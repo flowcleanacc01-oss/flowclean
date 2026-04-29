@@ -309,11 +309,11 @@ function DecisionWizard({ onClose, onOpenTab }: { onClose: () => void; onOpenTab
         how: 'หน้า SD → เพิ่ม row → ติ๊ก isAdhoc + กรอก adhocName + adhocPrice',
         example: 'พรมโลโก้โรงแรม 2 ผืน ครั้งเดียว → ad-hoc ใน SD ไม่ปนกับ catalog/stock',
       },
-      // 200: split case — 1 รหัส มีหลายชื่อใน QT (ทั้ง drift และ orphan)
+      // 200 + 202: split + reassign case — 1 รหัส มีหลายชื่อใน QT (drift หรือ orphan)
       split_multi_names: {
-        tool: 'Promote per-name (Split)', tab: 'sync',
-        how: 'tab "ซิงก์ชื่อ" → row นั้น (drift หรือ orphan) → คลิก ⚡ ที่ chip "แต่ละชื่อ" แยกกัน',
-        example: 'S007 มี 4 ชื่อใน QT (กางเกงนวด รีด/พิมพ์/ขาว/ดำ) → ⚡ ทีละชื่อ → ได้ S007 + S008 + S009 + S010 แยกกัน · QT ทุกใบ valid',
+        tool: 'Promote ⚡ + Reassign 🔄 per-name', tab: 'sync',
+        how: 'tab "ซิงก์ชื่อ" → row นั้น → ที่ chip ของ "แต่ละชื่อ" เลือก action ต่อชื่อ:\n  ⚡ Promote = สร้าง code ใหม่จากชื่อนี้\n  🔄 Reassign = ย้ายชื่อนี้ไป catalog code ที่มีอยู่',
+        example: 'S007 มี 4 ชื่อ → ⚡ "กางเกงนวด รีด" → S007 master · ⚡ "กางเกงนวด พิมพ์" → S008 ใหม่ · 🔄 "เสื้อนวด" → A12 (มีใน catalog) · 🔄 "ขนหนู" → H01 (typo เก่า) → จัดการครบใน 1 cycle',
       },
     }
     return map[a.q1]
@@ -338,7 +338,7 @@ function DecisionWizard({ onClose, onOpenTab }: { onClose: () => void; onOpenTab
               {[
                 { v: 'name_drift', label: 'ชื่อ catalog ไม่ตรงกับชื่อใน QT (typo / ปรับคำ)', icon: <RefreshCcw className="w-4 h-4 text-amber-500" /> },
                 { v: 'orphan_code', label: 'มี code ใน QT ที่ไม่อยู่ใน catalog', icon: <AlertTriangle className="w-4 h-4 text-red-500" /> },
-                { v: 'split_multi_names', label: '1 รหัสเดียว มีหลายชื่อใน QT (ต้องการแยกเป็นหลาย code)', icon: <Layers className="w-4 h-4 text-purple-500" /> },
+                { v: 'split_multi_names', label: '1 รหัสเดียว มีหลายชื่อใน QT (split / reassign per ชื่อ)', icon: <Layers className="w-4 h-4 text-purple-500" /> },
                 { v: 'code_clash', label: 'มี code ซ้ำ 2 ตัว ที่จริงเป็นสินค้าเดียวกัน', icon: <Layers className="w-4 h-4 text-orange-500" /> },
                 { v: 'special_variant', label: 'user แก้ชื่อใน QT เป็นรายการพิเศษ + ราคาต่าง', icon: <Zap className="w-4 h-4 text-amber-500" /> },
                 { v: 'one_off', label: 'รายการพิเศษครั้งเดียว ไม่อยากใส่ catalog ถาวร', icon: <Sparkles className="w-4 h-4 text-blue-500" /> },
@@ -399,7 +399,7 @@ function ManualModal({ onClose }: { onClose: () => void }) {
     { n: 2, name: 'ปรับราคา catalog', tool: '(ไม่ต้องใช้ tool)', note: 'แก้ catalog → QT ใหม่ใช้ราคาใหม่ · QT เก่า frozen' },
     { n: 3, name: 'เปลี่ยนชื่อ catalog (typo)', tool: 'Sync Names', note: 'ซิงก์ชื่อ catalog → QT ทุกใบที่ใช้ code นั้น' },
     { n: 4, name: 'User พิมพ์ชื่อพิเศษใน QT', tool: 'Promote', note: 'สร้าง code ใหม่จากชื่อพิเศษ + ย้าย QT.items.code' },
-    { n: 5, name: 'Split: 1 รหัส มีหลายชื่อใน QT (drift หรือ orphan)', tool: 'Promote ⚡ per-name (199)', note: 'คลิก ⚡ บน chip ของแต่ละชื่อ — split ทีละอัน · ครั้งแรกใช้ source code, ครั้งต่อไป suggest code ใหม่อัตโนมัติ' },
+    { n: 5, name: 'Split / Reassign per-name: 1 รหัส มีหลายชื่อใน QT (drift หรือ orphan)', tool: 'Promote ⚡ + Reassign 🔄 per-name (199 + 201)', note: 'แต่ละ chip ของชื่อมี 2 ปุ่ม: ⚡ Promote สร้าง code ใหม่ · 🔄 Reassign ย้ายไป catalog code ที่มีแล้ว — เลือกตามชื่อได้ ลดงาน merge รอบ 2' },
     { n: 6, name: 'Code rename (เปลี่ยน naming)', tool: 'Merge Codes', note: 'Source → Target + ติ๊ก "ลบ source"' },
     { n: 7, name: 'Consolidate duplicates', tool: 'Merge Codes', note: 'รวม 2 codes เป็นตัวเดียว — ⚠ option WB/IV' },
     { n: 8, name: 'Ad-hoc one-off', tool: 'SD ad-hoc', note: 'ใส่ใน SD ติ๊ก isAdhoc — ไม่ปน catalog/stock' },
