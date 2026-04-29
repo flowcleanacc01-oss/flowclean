@@ -2,17 +2,18 @@
 
 /**
  * 188 ขั้น A — Sync Names Tool (admin only)
+ * 190 Phase 1 — เพิ่ม Promote Name to Catalog (reverse direction)
  *
- * แสดงรหัสที่ catalog name ≠ QT name → ให้ admin sync name ใหม่ไปที่ QT
- *
- * Default scope: QT status=draft + sent (ปลอดภัย)
- * Optional toggle: รวม QT status=accepted (มี SD ผ่านแล้ว — แต่แค่ name ไม่ใช่ price)
+ * 2 actions ต่อ drift name:
+ *   1. Sync (เดิม) — push catalog name → ทับชื่อใน QT
+ *   2. Promote (ใหม่) — สร้าง code ใหม่จาก drift name + ย้าย QT.items[].code ไป code ใหม่
+ *      (ไม่แตะ SD/WB/IV — name คงตามจริง, price จาก average ของ matching items)
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { useNameDrift, type DriftEntry } from '@/lib/use-name-drift'
-import { CheckCircle2, Loader2, RefreshCcw, AlertTriangle, ArrowRight } from 'lucide-react'
-import type { QuotationStatus } from '@/types'
+import { CheckCircle2, Loader2, RefreshCcw, AlertTriangle, ArrowRight, Zap } from 'lucide-react'
+import type { QuotationStatus, LinenItemDef } from '@/types'
 
 interface Props {
   /** รหัสที่อยากให้เลือกไว้ก่อนเปิด (จาก inline badge) */
@@ -20,9 +21,17 @@ interface Props {
 }
 
 export default function SyncNamesTool({ initialFocusCode }: Props) {
-  const { quotations, updateQuotation } = useStore()
+  const { quotations, updateQuotation, linenCatalog, addLinenItem } = useStore()
   const { driftMap, totalCodes, totalQts } = useNameDrift()
   const drifts = useMemo(() => Array.from(driftMap.values()).sort((a, b) => b.qts.length - a.qts.length), [driftMap])
+
+  // 190 Phase 1: Promote state
+  const [promoteCtx, setPromoteCtx] = useState<{
+    sourceCode: string
+    driftName: string
+    sourceItem: LinenItemDef | undefined
+    matchingQts: { id: string; number: string; status: QuotationStatus; pricePerUnit: number }[]
+  } | null>(null)
 
   const [includeAccepted, setIncludeAccepted] = useState(true)
   const [includeRejected, setIncludeRejected] = useState(false) // 191
@@ -42,6 +51,22 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
       }, 50)
     }
   }, [initialFocusCode, driftMap])
+
+  // 190: เปิด Promote modal สำหรับ drift name หนึ่ง
+  const openPromote = (entry: DriftEntry, driftName: string) => {
+    const sourceItem = linenCatalog.find(c => c.code === entry.code)
+    // หา QT items ที่ match drift name + ดึง pricePerUnit ปัจจุบัน
+    const matchingQts: { id: string; number: string; status: QuotationStatus; pricePerUnit: number }[] = []
+    for (const q of entry.qts) {
+      if (q.nameInQT !== driftName) continue
+      const qt = quotations.find(qx => qx.id === q.id)
+      if (!qt) continue
+      const matchedItem = qt.items.find(it => it.code === entry.code && (it.name || '').trim() === driftName)
+      if (!matchedItem) continue
+      matchingQts.push({ id: qt.id, number: qt.quotationNumber, status: q.status, pricePerUnit: matchedItem.pricePerUnit })
+    }
+    setPromoteCtx({ sourceCode: entry.code, driftName, sourceItem, matchingQts })
+  }
 
   const allowedStatuses = useMemo<Set<QuotationStatus>>(() => {
     const set = new Set<QuotationStatus>(['draft', 'sent'])
@@ -220,11 +245,26 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                       </span>
                     </td>
                     <td className="px-3 py-2 text-slate-500">
-                      {d.driftNames.map((n, i) => (
-                        <span key={i} className="inline-block bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded mr-1 mb-0.5 text-xs">
-                          {n}
-                        </span>
-                      ))}
+                      {d.driftNames.map((n, i) => {
+                        const matchCount = d.qts.filter(q => q.nameInQT === n).length
+                        return (
+                          <span key={i} className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded mr-1 mb-0.5 text-xs">
+                            {n}
+                            <span className="text-amber-500">({matchCount})</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openPromote(d, n)
+                              }}
+                              title={`สร้าง code ใหม่จากชื่อนี้ + ย้าย ${matchCount} QT.items`}
+                              className="ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded hover:bg-amber-200 text-amber-600 hover:text-amber-900"
+                            >
+                              <Zap className="w-3 h-3" />
+                            </button>
+                          </span>
+                        )
+                      })}
                     </td>
                     <td className="px-3 py-2 text-right">
                       {(() => {
@@ -294,6 +334,234 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
           </div>
         </div>
       )}
+
+      {/* 190 Phase 1: Promote modal */}
+      {promoteCtx && (
+        <PromoteModal
+          ctx={promoteCtx}
+          existingCodes={new Set(linenCatalog.map(c => c.code))}
+          onClose={() => setPromoteCtx(null)}
+          onCommit={(newItem, qtUpdates) => {
+            // 1. Add new catalog item
+            addLinenItem(newItem)
+            // 2. Update each QT — change matching items[].code → newItem.code (keep name)
+            for (const qtId of qtUpdates) {
+              const qt = quotations.find(q => q.id === qtId)
+              if (!qt) continue
+              const newItems = qt.items.map(it =>
+                it.code === promoteCtx.sourceCode && (it.name || '').trim() === promoteCtx.driftName
+                  ? { ...it, code: newItem.code }
+                  : it
+              )
+              updateQuotation(qtId, { items: newItems })
+            }
+            setPromoteCtx(null)
+            setDone({ codes: 1, qts: qtUpdates.length, ts: new Date().toLocaleString('th-TH') })
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────
+// 190 Phase 1 — Promote Name to Catalog modal
+// ────────────────────────────────────────────────────────────────
+interface PromoteCtx {
+  sourceCode: string
+  driftName: string
+  sourceItem: LinenItemDef | undefined
+  matchingQts: { id: string; number: string; status: QuotationStatus; pricePerUnit: number }[]
+}
+
+function PromoteModal({
+  ctx, existingCodes, onClose, onCommit,
+}: {
+  ctx: PromoteCtx
+  existingCodes: Set<string>
+  onClose: () => void
+  onCommit: (newItem: LinenItemDef, qtIds: string[]) => void
+}) {
+  // Auto-suggest code: prefix + เลขถัดไปที่ว่าง
+  const suggestedCode = useMemo(() => {
+    const prefixMatch = ctx.sourceCode.match(/^([A-Z]+)(\d+)/i)
+    if (!prefixMatch) return `${ctx.sourceCode}_NEW`
+    const [, prefix, numStr] = prefixMatch
+    const padLen = numStr.length
+    let n = parseInt(numStr, 10) + 1
+    while (existingCodes.has(`${prefix}${String(n).padStart(padLen, '0')}`)) n++
+    return `${prefix}${String(n).padStart(padLen, '0')}`
+  }, [ctx.sourceCode, existingCodes])
+
+  // Default price: avg ของ pricePerUnit จาก matching QTs (skip 0)
+  const suggestedPrice = useMemo(() => {
+    const prices = ctx.matchingQts.map(m => m.pricePerUnit).filter(p => p > 0)
+    if (prices.length === 0) return ctx.sourceItem?.defaultPrice || 0
+    const avg = prices.reduce((s, p) => s + p, 0) / prices.length
+    return Math.round(avg * 100) / 100
+  }, [ctx.matchingQts, ctx.sourceItem])
+
+  const [newCode, setNewCode] = useState(suggestedCode)
+  const [newName, setNewName] = useState(ctx.driftName)
+  const [newPrice, setNewPrice] = useState(suggestedPrice)
+  const [selectedQtIds, setSelectedQtIds] = useState<Set<string>>(new Set(ctx.matchingQts.map(q => q.id)))
+  const [running, setRunning] = useState(false)
+
+  const codeUpper = newCode.trim().toUpperCase()
+  const codeError = !codeUpper
+    ? 'ระบุรหัสใหม่'
+    : existingCodes.has(codeUpper)
+      ? `รหัส "${codeUpper}" มีอยู่แล้วใน catalog`
+      : codeUpper === ctx.sourceCode
+        ? 'รหัสใหม่ต้องไม่ตรงกับรหัสเดิม'
+        : null
+
+  const nameError = !newName.trim() ? 'ระบุชื่อ' : null
+  const canSubmit = !codeError && !nameError && selectedQtIds.size > 0
+
+  const toggleQt = (id: string) => {
+    setSelectedQtIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const submit = () => {
+    if (!canSubmit) return
+    setRunning(true)
+    try {
+      const newItem: LinenItemDef = {
+        code: codeUpper,
+        name: newName.trim(),
+        nameEn: ctx.sourceItem?.nameEn || '',
+        category: ctx.sourceItem?.category || 'other',
+        unit: ctx.sourceItem?.unit || 'ชิ้น',
+        defaultPrice: Number(newPrice) || 0,
+        sortOrder: (ctx.sourceItem?.sortOrder || 0) + 1,
+      }
+      onCommit(newItem, Array.from(selectedQtIds))
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[6vh] px-4 animate-fadeIn">
+      <div className="fixed inset-0 bg-black/40" onClick={() => !running && onClose()} />
+      <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[88vh] overflow-auto">
+        <div className="flex items-start gap-3 mb-4">
+          <Zap className="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800">Promote ชื่อเป็น code ใหม่</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              สร้าง catalog code ใหม่จากชื่อใน QT แล้วย้าย QT.items[].code ไป code ใหม่
+              <br />
+              <span className="text-amber-700">⚠ ไม่แตะ SD/WB/IV — name ใน QT คงอยู่ตามที่เป็น</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Source info */}
+        <div className="bg-slate-50 rounded-lg p-3 mb-4 text-xs space-y-1 border border-slate-200">
+          <div>
+            <span className="text-slate-500">รหัสต้นทาง:</span>{' '}
+            <code className="font-mono font-semibold text-slate-700">{ctx.sourceCode}</code>
+            <span className="text-slate-500"> ({ctx.sourceItem?.name || '?'})</span>
+          </div>
+          <div>
+            <span className="text-slate-500">ชื่อใน QT (จะ promote):</span>{' '}
+            <span className="font-semibold text-amber-700">{ctx.driftName}</span>
+          </div>
+          <div>
+            <span className="text-slate-500">พบใน:</span>{' '}
+            <span className="font-semibold text-slate-700">{ctx.matchingQts.length} QT.items</span>
+          </div>
+        </div>
+
+        {/* Form */}
+        <div className="space-y-3 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              รหัสใหม่ <span className="text-slate-400">(suggest auto จาก prefix เดิม)</span>
+            </label>
+            <input
+              value={newCode}
+              onChange={e => setNewCode(e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none ${codeError ? 'border-red-300' : 'border-slate-200'}`}
+            />
+            {codeError && <p className="text-xs text-red-600 mt-1">{codeError}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">ชื่อรายการ</label>
+            <input
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none ${nameError ? 'border-red-300' : 'border-slate-200'}`}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              ราคา default <span className="text-slate-400">(avg จาก {ctx.matchingQts.length} QT items)</span>
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={newPrice}
+              onChange={e => setNewPrice(Number(e.target.value))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* QT selector */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-medium text-slate-600">QT ที่จะย้าย ({selectedQtIds.size}/{ctx.matchingQts.length})</label>
+            <div className="flex gap-1.5 text-[11px]">
+              <button onClick={() => setSelectedQtIds(new Set(ctx.matchingQts.map(q => q.id)))} className="text-[#1B3A5C] hover:underline">เลือกทั้งหมด</button>
+              <span className="text-slate-300">|</span>
+              <button onClick={() => setSelectedQtIds(new Set())} className="text-slate-500 hover:underline">ล้าง</button>
+            </div>
+          </div>
+          <div className="border border-slate-200 rounded-lg max-h-48 overflow-auto">
+            {ctx.matchingQts.map(q => {
+              const checked = selectedQtIds.has(q.id)
+              return (
+                <label key={q.id} className={`flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 last:border-0 cursor-pointer text-xs ${checked ? 'bg-amber-50/40' : 'hover:bg-slate-50'}`}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleQt(q.id)} className="rounded border-slate-300" />
+                  <span className="font-mono text-slate-600">{q.number}</span>
+                  <span className="text-slate-500">{q.status}</span>
+                  <span className="ml-auto text-slate-600">฿{q.pricePerUnit.toLocaleString()}</span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Confirm */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900 mb-4 flex gap-2">
+          <ArrowRight className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <div>
+            สร้าง <code className="bg-white/70 px-1 rounded">{codeUpper}</code> ใน catalog
+            + ย้าย <strong>{selectedQtIds.size}</strong> QT.items[] จาก{' '}
+            <code className="bg-white/70 px-1 rounded">{ctx.sourceCode}</code> →{' '}
+            <code className="bg-white/70 px-1 rounded">{codeUpper}</code>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} disabled={running}
+            className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50">
+            ยกเลิก
+          </button>
+          <button onClick={submit} disabled={!canSubmit || running}
+            className="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 flex items-center gap-1.5">
+            {running ? <><Loader2 className="w-4 h-4 animate-spin" />กำลัง Promote...</> : <><Zap className="w-4 h-4" />Promote</>}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
