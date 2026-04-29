@@ -25,6 +25,7 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
   const drifts = useMemo(() => Array.from(driftMap.values()).sort((a, b) => b.qts.length - a.qts.length), [driftMap])
 
   const [includeAccepted, setIncludeAccepted] = useState(true)
+  const [includeRejected, setIncludeRejected] = useState(false) // 191
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set())
   const [running, setRunning] = useState(false)
   const [done, setDone] = useState<{ codes: number; qts: number; ts: string } | null>(null)
@@ -45,8 +46,9 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
   const allowedStatuses = useMemo<Set<QuotationStatus>>(() => {
     const set = new Set<QuotationStatus>(['draft', 'sent'])
     if (includeAccepted) set.add('accepted')
+    if (includeRejected) set.add('rejected')
     return set
-  }, [includeAccepted])
+  }, [includeAccepted, includeRejected])
 
   const countQtsForCode = (entry: DriftEntry) => entry.qts.filter(q => allowedStatuses.has(q.status)).length
 
@@ -130,7 +132,8 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
           <span className="text-xs text-blue-700">
             • ✅ ปลอดภัย: ใช้กับ QT status draft + sent (default)<br />
             • ⚠ ระวัง: ติ๊ก &quot;รวม accepted&quot; จะอัพเดต QT ที่มี SD ผ่านแล้ว — แต่ name ไม่กระทบ stock/billing<br />
-            • ❌ ไม่แตะ: WB / IV (compliance) · QT status rejected (historical)
+            • ⚠ Historical: ติ๊ก &quot;รวม rejected&quot; จะแก้ QT ที่ถูกปฏิเสธแล้ว (ปกติไม่จำเป็น)<br />
+            • ❌ ไม่แตะ: WB / IV (compliance documents)
           </span>
         </div>
       </div>
@@ -142,14 +145,21 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
           <p className="text-2xl font-bold text-[#1B3A5C]">{totalCodes}</p>
         </div>
         <div>
-          <p className="text-xs text-slate-500">QT ที่กระทบ</p>
+          <p className="text-xs text-slate-500">QT ที่กระทบ (รวมทุก status)</p>
           <p className="text-2xl font-bold text-[#1B3A5C]">{totalQts}</p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-slate-700 ml-auto">
-          <input type="checkbox" checked={includeAccepted} onChange={e => setIncludeAccepted(e.target.checked)}
-            className="rounded border-slate-300" />
-          รวม QT ที่ accepted แล้วด้วย
-        </label>
+        <div className="flex flex-col gap-1.5 ml-auto">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={includeAccepted} onChange={e => setIncludeAccepted(e.target.checked)}
+              className="rounded border-slate-300" />
+            รวม QT ที่ <strong>accepted</strong> แล้ว
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={includeRejected} onChange={e => setIncludeRejected(e.target.checked)}
+              className="rounded border-slate-300" />
+            รวม QT ที่ <strong className="text-red-600">rejected</strong> (historical)
+          </label>
+        </div>
       </div>
 
       {totalCodes === 0 ? (
@@ -216,8 +226,23 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                         </span>
                       ))}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-600">
-                      {qtCount} {qtCount !== d.qts.length && <span className="text-[10px] text-slate-400">/ {d.qts.length}</span>}
+                    <td className="px-3 py-2 text-right">
+                      {(() => {
+                        const cnt = { draft: 0, sent: 0, accepted: 0, rejected: 0 }
+                        for (const q of d.qts) cnt[q.status]++
+                        return (
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            <span className="font-mono font-semibold text-slate-700">{qtCount}</span>
+                            <span className="text-[9px] text-slate-400">/ {d.qts.length}</span>
+                            <span className="ml-1 flex items-center gap-0.5 text-[9px]">
+                              {cnt.draft > 0 && <span className="px-1 rounded bg-slate-100 text-slate-600" title="draft">D{cnt.draft}</span>}
+                              {cnt.sent > 0 && <span className="px-1 rounded bg-blue-50 text-blue-700" title="sent">S{cnt.sent}</span>}
+                              {cnt.accepted > 0 && <span className="px-1 rounded bg-emerald-50 text-emerald-700" title="accepted">A{cnt.accepted}</span>}
+                              {cnt.rejected > 0 && <span className="px-1 rounded bg-red-50 text-red-700" title="rejected">R{cnt.rejected}</span>}
+                            </span>
+                          </div>
+                        )
+                      })()}
                     </td>
                   </tr>
                 )

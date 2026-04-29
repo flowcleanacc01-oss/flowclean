@@ -1,13 +1,11 @@
 'use client'
 
 /**
- * 188 — Name drift detection
+ * 188/191 — Name drift detection
  *
- * Scan QT.items[].name vs current catalog name → return drift map per code:
- *   { catalogName, driftNames: Set<string>, qts: [{id, number, status, name}] }
- *
- * Drift = name in QT differs from catalog name.
- * (Customer.priceList ไม่มี name; DN/SD live-lookup; WB/IV เป็น compliance doc — ไม่นับ)
+ * Scan QT.items[].name vs current catalog name → return drift map per code.
+ * เก็บทุก status รวม rejected (191 fix) เพื่อให้ตัวเลขตรงกับ search ของ QT page
+ * ส่วนเลือกว่าจะ sync ตัวไหน = component เลือกเอง (status filter ภายหลัง)
  */
 import { useMemo } from 'react'
 import { useStore } from '@/lib/store'
@@ -28,8 +26,6 @@ export function useNameDrift() {
     const map = new Map<string, DriftEntry>()
 
     for (const qt of quotations) {
-      // ข้าม rejected — เก็บไว้เป็น historical record
-      if (qt.status === 'rejected') continue
       for (const it of qt.items || []) {
         const code = it.code
         const catalogName = catalogByCode.get(code)
@@ -59,4 +55,9 @@ export function useNameDrift() {
       totalQts: Array.from(map.values()).reduce((s, e) => s + e.qts.length, 0),
     }
   }, [linenCatalog, quotations])
+}
+
+/** Helper: count drift QT ใน scope ที่กำหนด */
+export function countDriftInScope(entry: DriftEntry, allowed: Set<QuotationStatus>) {
+  return entry.qts.filter(q => allowed.has(q.status)).length
 }

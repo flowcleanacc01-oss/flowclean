@@ -518,15 +518,23 @@ export default function ItemsPage() {
                         ) : (
                           <span className="inline-flex items-center gap-1.5 flex-wrap">
                             {highlightText(item.name, highlightQ)}
-                            {/* 188 ขั้น B: drift indicator */}
+                            {/* 188 ขั้น B + 191: drift indicator พร้อม breakdown */}
                             {(() => {
                               const drift = driftMap.get(item.code)
                               if (!drift) return null
+                              const cnt = { draft: 0, sent: 0, accepted: 0, rejected: 0 }
+                              for (const q of drift.qts) cnt[q.status]++
+                              const breakdown = [
+                                cnt.draft && `${cnt.draft} draft`,
+                                cnt.sent && `${cnt.sent} sent`,
+                                cnt.accepted && `${cnt.accepted} accepted`,
+                                cnt.rejected && `${cnt.rejected} rejected`,
+                              ].filter(Boolean).join(' · ')
                               return (
                                 <button
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); goToSyncTab(item.code) }}
-                                  title={`มี ${drift.qts.length} QT ใช้ชื่อเก่า — คลิกเพื่อซิงก์`}
+                                  title={`${drift.qts.length} QT ใช้ชื่อเก่า (${breakdown}) — คลิกเพื่อซิงก์`}
                                   className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors"
                                 >
                                   <RefreshCcw className="w-2.5 h-2.5" />
