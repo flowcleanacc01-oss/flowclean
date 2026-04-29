@@ -570,7 +570,8 @@ export default function ReceiptsPage() {
               deleteReceipt(confirmDeleteId)
               setConfirmDeleteId(null)
               setShowDetail(null)
-              router.push(`/dashboard/billing?tab=billing&detail=${wbId}`)
+              // 198: เพิ่ม focus= เพื่อให้ billing page เข้า focus mode (เหมือน IV→WB pattern)
+              router.push(`/dashboard/billing?tab=billing&detail=${wbId}&focus=${wbId}`)
             } : undefined}
           />
         )
