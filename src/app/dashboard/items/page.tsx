@@ -13,11 +13,14 @@ import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import MergeCodesTool from '@/components/MergeCodesTool'
+import SyncNamesTool from '@/components/SyncNamesTool'
 import { canManageSettings } from '@/lib/permissions'
 import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
+import { useNameDrift } from '@/lib/use-name-drift'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
+import { RefreshCcw } from 'lucide-react'
 
-type TabKey = 'items' | 'categories' | 'merge'
+type TabKey = 'items' | 'categories' | 'merge' | 'sync'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
 type SortDir = 'asc' | 'desc'
 
@@ -77,6 +80,14 @@ export default function ItemsPage() {
 
   // 186: auto-scroll page เมื่อลาก row ใกล้ขอบบน/ล่าง — ใช้ทั้ง items + categories
   useAutoScrollOnDrag(dragCode !== null || dragCatKey !== null)
+
+  // 188: name drift detection — used for inline badge + Sync tab
+  const { driftMap, totalCodes: driftCodeCount } = useNameDrift()
+  const [syncFocusCode, setSyncFocusCode] = useState<string | null>(null)
+  const goToSyncTab = (code?: string) => {
+    setSyncFocusCode(code || null)
+    setTab('sync')
+  }
 
   // ---- Filtered & sorted items ----
   const filteredItems = useMemo(() => {
@@ -262,10 +273,13 @@ export default function ItemsPage() {
     )
   }
 
-  const tabs: { key: TabKey; label: string }[] = [
+  const tabs: { key: TabKey; label: string; badge?: number }[] = [
     { key: 'items', label: 'รายการผ้า' },
     { key: 'categories', label: 'หมวด' },
-    ...(canManageSettings(currentUser) ? [{ key: 'merge' as TabKey, label: 'รวมรหัส' }] : []),
+    ...(canManageSettings(currentUser) ? [
+      { key: 'merge' as TabKey, label: 'รวมรหัส' },
+      { key: 'sync' as TabKey, label: 'ซิงก์ชื่อ', badge: driftCodeCount },
+    ] : []),
   ]
 
   return (
@@ -287,9 +301,14 @@ export default function ItemsPage() {
       <div className="flex gap-1 mb-6 border-b border-slate-200">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={cn('px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap',
+            className={cn('px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap inline-flex items-center gap-1.5',
               tab === t.key ? 'border-[#1B3A5C] text-[#1B3A5C]' : 'border-transparent text-slate-500 hover:text-slate-700')}>
             {t.label}
+            {t.badge && t.badge > 0 ? (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                {t.badge}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -496,7 +515,27 @@ export default function ItemsPage() {
                           <input value={editItem.name ?? item.name}
                             onChange={e => setEditItem({ ...editItem, name: e.target.value })}
                             className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-                        ) : highlightText(item.name, highlightQ)}
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 flex-wrap">
+                            {highlightText(item.name, highlightQ)}
+                            {/* 188 ขั้น B: drift indicator */}
+                            {(() => {
+                              const drift = driftMap.get(item.code)
+                              if (!drift) return null
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); goToSyncTab(item.code) }}
+                                  title={`มี ${drift.qts.length} QT ใช้ชื่อเก่า — คลิกเพื่อซิงก์`}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors"
+                                >
+                                  <RefreshCcw className="w-2.5 h-2.5" />
+                                  {drift.qts.length} QT ตามไม่ทัน
+                                </button>
+                              )
+                            })()}
+                          </span>
+                        )}
                       </td>
                       <td className={cn("px-4 py-2 text-slate-500 text-xs", sortedBg('nameEn'))}>
                         {editingCode === item.code ? (
@@ -729,6 +768,11 @@ export default function ItemsPage() {
       {/* 174 ขั้น 2: Merge Codes Tool tab */}
       {tab === 'merge' && (
         <MergeCodesTool />
+      )}
+
+      {/* 188 ขั้น A: Sync Names Tool tab */}
+      {tab === 'sync' && (
+        <SyncNamesTool initialFocusCode={syncFocusCode} />
       )}
 
       {/* 154.1: Items Print List Modal */}
