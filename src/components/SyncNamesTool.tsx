@@ -108,13 +108,19 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
     setPromoteCtx({ mode: 'drift', sourceCode: entry.code, driftName, sourceItem, matchingQts })
   }
 
-  // 193: Promote orphan — สร้าง catalog item ใหม่จาก orphan code (keep code เดิม)
-  const openOrphanPromote = (entry: OrphanEntry) => {
-    const matchingQts = entry.qts.map(q => ({ id: q.id, number: q.number, status: q.status, pricePerUnit: q.pricePerUnit }))
+  // 193 + 199: Promote orphan
+  // - ถ้าไม่ระบุ name → ใช้ name แรก (กรณีมีชื่อเดียวอยู่แล้ว)
+  // - ถ้าระบุ name → split: เฉพาะ QT.items ที่ name นี้ ที่จะถูก promote
+  //   ผู้ใช้เลือกได้: เก็บ source code (ครั้งแรก) หรือ สร้าง code ใหม่ (split ครั้งต่อไป)
+  const openOrphanPromote = (entry: OrphanEntry, targetName?: string) => {
+    const name = targetName ?? entry.names[0] ?? entry.code
+    const matchingQts = entry.qts
+      .filter(q => targetName ? q.nameInQT === targetName : true)
+      .map(q => ({ id: q.id, number: q.number, status: q.status, pricePerUnit: q.pricePerUnit }))
     setPromoteCtx({
       mode: 'orphan',
       sourceCode: entry.code,
-      driftName: entry.names[0] || entry.code, // ใช้ชื่อที่พบบ่อยที่สุดเป็น default
+      driftName: name,
       sourceItem: undefined,
       matchingQts,
     })
@@ -464,19 +470,41 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                 const isIgnored = ignoreList.has(o.code)
                 return (
                   <tr key={o.code} className={`border-t border-slate-100 ${isIgnored ? 'opacity-50' : 'hover:bg-slate-50'}`}>
-                    <td className="px-3 py-2 font-mono text-xs">{o.code}</td>
+                    <td className="px-3 py-2 font-mono text-xs align-top">{o.code}</td>
                     <td className="px-3 py-2 text-slate-700">
-                      {o.names.length === 0 ? <span className="text-slate-400">(no name)</span> : o.names.map((n, i) => (
-                        <span key={i} className="inline-block bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded mr-1 mb-0.5 text-xs">{n}</span>
-                      ))}
+                      {o.names.length === 0 ? <span className="text-slate-400">(no name)</span> : o.names.map((n, i) => {
+                        const matchCount = o.qts.filter(q => q.nameInQT === n).length
+                        return (
+                          <span key={i} className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded mr-1 mb-0.5 text-xs">
+                            {n}
+                            <span className="text-amber-500">({matchCount})</span>
+                            {/* 199: ⚡ promote per name — split case */}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); openOrphanPromote(o, n) }}
+                              title={o.names.length > 1
+                                ? `Split: สร้าง code ใหม่จากชื่อนี้ + ย้าย ${matchCount} QT.items มา code ใหม่`
+                                : `Promote: สร้าง catalog item ${o.code} ด้วยชื่อนี้`
+                              }
+                              className="ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded hover:bg-amber-200 text-amber-600 hover:text-amber-900"
+                            >
+                              <Zap className="w-3 h-3" />
+                            </button>
+                          </span>
+                        )
+                      })}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-600">{o.totalRows}</td>
-                    <td className="px-3 py-2 text-right text-slate-600">฿{o.avgPrice.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-3 py-2 text-right font-mono text-slate-600 align-top">{o.totalRows}</td>
+                    <td className="px-3 py-2 text-right text-slate-600 align-top">฿{o.avgPrice.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right align-top">
                       <div className="inline-flex gap-1">
+                        {/* Promote ระดับ row — ใช้ name แรก (กรณีมีชื่อเดียว); ถ้าหลายชื่อใช้ ⚡ ที่ chip แทน */}
                         <button onClick={() => openOrphanPromote(o)}
-                          className="px-2 py-1 text-[10px] bg-amber-500 text-white rounded hover:bg-amber-600 inline-flex items-center gap-0.5"
-                          title="สร้าง catalog item ใหม่จากรหัสนี้">
+                          disabled={o.names.length > 1}
+                          className="px-2 py-1 text-[10px] bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-0.5"
+                          title={o.names.length > 1
+                            ? 'มีหลายชื่อ — ใช้ ⚡ ที่ชื่อแต่ละอันเพื่อ split'
+                            : 'สร้าง catalog item ใหม่จากรหัสนี้'}>
                           <Zap className="w-3 h-3" />Promote
                         </button>
                         <button onClick={() => openReassign(o)}
@@ -521,8 +549,12 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
             // 1. Add new catalog item
             addLinenItem(newItem)
             undoChanges.push({ table: 'linen_items', id: newItem.code, op: 'insert', newData: newItem as unknown as Record<string, unknown> })
-            // 2. Update QT items.code (เฉพาะ drift mode — orphan mode ไม่ต้องย้าย code)
-            if (promoteCtx.mode === 'drift') {
+            // 2. Update QT items.code:
+            //    drift mode → ย้ายเสมอ
+            //    orphan mode → ย้ายเฉพาะถ้า newCode ≠ sourceCode (split case)
+            //    ถ้า orphan + newCode == sourceCode → แค่ insert catalog (QT valid อัตโนมัติ)
+            const shouldMigrate = promoteCtx.mode === 'drift' || newItem.code !== promoteCtx.sourceCode
+            if (shouldMigrate) {
               for (const qtId of qtUpdates) {
                 const qt = quotations.find(q => q.id === qtId)
                 if (!qt) continue
@@ -536,12 +568,15 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
               }
             }
             // 197: push undo
+            const isSplit = promoteCtx.mode === 'orphan' && newItem.code !== promoteCtx.sourceCode
             pushUndoAction({
               type: 'promote_name',
-              description: promoteCtx.mode === 'orphan'
-                ? `Promote orphan ${promoteCtx.sourceCode} เข้า catalog`
-                : `Promote "${promoteCtx.driftName}" → ${newItem.code} (${qtUpdates.length} QT)`,
-              meta: { mode: promoteCtx.mode, source: promoteCtx.sourceCode, target: newItem.code },
+              description: isSplit
+                ? `Split orphan ${promoteCtx.sourceCode} → ${newItem.code} ("${promoteCtx.driftName}", ${qtUpdates.length} QT)`
+                : promoteCtx.mode === 'orphan'
+                  ? `Promote orphan ${promoteCtx.sourceCode} ("${promoteCtx.driftName}") เข้า catalog`
+                  : `Promote "${promoteCtx.driftName}" → ${newItem.code} (${qtUpdates.length} QT)`,
+              meta: { mode: promoteCtx.mode, source: promoteCtx.sourceCode, target: newItem.code, split: isSplit },
               changes: undoChanges,
             })
             setPromoteCtx(null)
@@ -582,9 +617,11 @@ function PromoteModal({
   onClose: () => void
   onCommit: (newItem: LinenItemDef, qtIds: string[]) => void
 }) {
-  // Auto-suggest code: ถ้า orphan → ใช้ source code เดิม, ถ้า drift → หาเลขถัดไป
+  // Auto-suggest code:
+  //   - orphan + source code ยังว่าง → ใช้ source code เดิม (1st promote)
+  //   - drift หรือ source code ถูกใช้แล้ว (split case) → หาเลขถัดไป
   const suggestedCode = useMemo(() => {
-    if (ctx.mode === 'orphan') return ctx.sourceCode
+    if (ctx.mode === 'orphan' && !existingCodes.has(ctx.sourceCode)) return ctx.sourceCode
     const prefixMatch = ctx.sourceCode.match(/^([A-Z]+)(\d+)/i)
     if (!prefixMatch) return `${ctx.sourceCode}_NEW`
     const [, prefix, numStr] = prefixMatch
@@ -619,8 +656,10 @@ function PromoteModal({
         : null
 
   const nameError = !newName.trim() ? 'ระบุชื่อ' : null
-  // Orphan mode: ไม่ต้อง require selectedQtIds (แค่สร้าง catalog item)
-  const canSubmit = !codeError && !nameError && (ctx.mode === 'orphan' || selectedQtIds.size > 0)
+  // Orphan + same code: insert อย่างเดียว ไม่ต้อง QT selection
+  // อื่นๆ (drift หรือ orphan-split): require QT selection
+  const isInsertOnly = ctx.mode === 'orphan' && codeUpper === ctx.sourceCode
+  const canSubmit = !codeError && !nameError && (isInsertOnly || selectedQtIds.size > 0)
 
   const toggleQt = (id: string) => {
     setSelectedQtIds(prev => {
@@ -725,8 +764,11 @@ function PromoteModal({
           </div>
         </div>
 
-        {/* QT selector — orphan mode ไม่ต้องย้าย QT, ซ่อน */}
-        {ctx.mode === 'drift' && (
+        {/* QT selector:
+            - drift mode → แสดง (เลือก QT ที่จะย้าย)
+            - orphan mode + same code → ซ่อน (ไม่ต้องย้าย, แค่ insert catalog)
+            - orphan mode + new code (split) → แสดง (เลือก QT.items ที่จะ split ออกไป) */}
+        {(ctx.mode === 'drift' || codeUpper !== ctx.sourceCode) && (
         <div className="mb-4">
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-xs font-medium text-slate-600">QT ที่จะย้าย ({selectedQtIds.size}/{ctx.matchingQts.length})</label>
@@ -756,11 +798,11 @@ function PromoteModal({
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900 mb-4 flex gap-2">
           <ArrowRight className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div>
-            {ctx.mode === 'orphan' ? (
+            {isInsertOnly ? (
               <>สร้าง <code className="bg-white/70 px-1 rounded">{codeUpper}</code> ใน catalog · QT ที่ใช้ {ctx.sourceCode} อยู่แล้วจะ valid ทันที</>
             ) : (
               <>สร้าง <code className="bg-white/70 px-1 rounded">{codeUpper}</code> ใน catalog
-              + ย้าย <strong>{selectedQtIds.size}</strong> QT.items[] จาก{' '}
+              + ย้าย <strong>{selectedQtIds.size}</strong> QT.items[] (name = &quot;{ctx.driftName}&quot;) จาก{' '}
               <code className="bg-white/70 px-1 rounded">{ctx.sourceCode}</code> →{' '}
               <code className="bg-white/70 px-1 rounded">{codeUpper}</code></>
             )}
