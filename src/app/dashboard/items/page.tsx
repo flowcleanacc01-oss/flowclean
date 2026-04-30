@@ -15,13 +15,14 @@ import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import MergeCodesTool from '@/components/MergeCodesTool'
 import SyncNamesTool from '@/components/SyncNamesTool'
 import CatalogHygieneCenter from '@/components/CatalogHygieneCenter'
+import VocabularyAudit from '@/components/VocabularyAudit'
 import { canManageSettings } from '@/lib/permissions'
 import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 import { useNameDrift } from '@/lib/use-name-drift'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
-import { RefreshCcw, Shield } from 'lucide-react'
+import { RefreshCcw, Shield, BookOpen } from 'lucide-react'
 
-type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync'
+type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
 type SortDir = 'asc' | 'desc'
 
@@ -282,6 +283,7 @@ export default function ItemsPage() {
     ...(canManageSettings(currentUser) ? [
       { key: 'merge' as TabKey, label: 'รวมรหัส' },
       { key: 'sync' as TabKey, label: 'ซิงก์ชื่อ', badge: driftCodeCount },
+      { key: 'vocab' as TabKey, label: 'Vocabulary Audit', icon: <BookOpen className="w-3.5 h-3.5" /> },
     ] : []),
   ]
 
@@ -790,6 +792,11 @@ export default function ItemsPage() {
       {/* 188 ขั้น A: Sync Names Tool tab */}
       {tab === 'sync' && (
         <SyncNamesTool initialFocusCode={syncFocusCode} />
+      )}
+
+      {/* 205: Vocabulary Audit tab — usage frequency across QT/LF/DN */}
+      {tab === 'vocab' && (
+        <VocabularyAudit />
       )}
 
       {/* 154.1: Items Print List Modal */}

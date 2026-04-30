@@ -21,7 +21,7 @@ import {
 import UndoPanel from '@/components/UndoPanel'
 
 interface Props {
-  onOpenTab: (tab: 'sync' | 'merge' | 'items') => void
+  onOpenTab: (tab: 'sync' | 'merge' | 'items' | 'vocab') => void
 }
 
 const VALIDATION_KEY = 'flowclean_catalog_validation'
@@ -159,7 +159,7 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
           <HelpCircle className="w-4 h-4" />
           🧭 ไม่แน่ใจว่าใช้ tool ไหน?
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             onClick={() => setWizardOpen(true)}
             className="text-left p-4 rounded-xl border-2 border-dashed border-slate-300 hover:border-[#3DD8D8] hover:bg-[#3DD8D8]/5 transition-colors group"
@@ -182,6 +182,18 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
             </div>
             <p className="text-xs text-slate-500">
               ตารางอ้างอิงเคส + tool — ดูแยกได้ทุกเคส
+            </p>
+          </button>
+          <button
+            onClick={() => onOpenTab('vocab')}
+            className="text-left p-4 rounded-xl border-2 border-dashed border-slate-300 hover:border-emerald-400 hover:bg-emerald-50 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-[#1B3A5C] mb-1">
+              <Activity className="w-4 h-4 text-emerald-500" />
+              <span className="font-semibold text-sm">Vocabulary Audit</span>
+            </div>
+            <p className="text-xs text-slate-500">
+              ดูความถี่การใช้ code ใน QT/LF/DN — หา candidate ลบ
             </p>
           </button>
         </div>
