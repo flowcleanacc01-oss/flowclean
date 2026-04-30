@@ -10,7 +10,7 @@ import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, aggregateDeliveryItemsByTotal, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { calculateTransportFeeTrip } from '@/lib/transport-fee'
-import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2 } from 'lucide-react'
+import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2, Sparkles } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import ExportButtons from '@/components/ExportButtons'
@@ -25,6 +25,7 @@ import QuotationPrint from '@/components/QuotationPrint'
 import CustomerPicker from '@/components/CustomerPicker'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
+import AddItemWizard from '@/components/AddItemWizard'
 import { getCatalogValidationPrefs } from '@/components/CatalogHygieneCenter'
 
 type TabKey = 'billing' | 'invoice' | 'quotation'
@@ -174,6 +175,9 @@ export default function BillingPage() {
   const [showSelectWbForIv, setShowSelectWbForIv] = useState(false)
   // 82: Payment Record Modal
   const [paymentModalWbId, setPaymentModalWbId] = useState<string | null>(null)
+
+  // 207: AddItemWizard state สำหรับ QT
+  const [qtWizardOpen, setQtWizardOpen] = useState(false)
 
   // Quotation state
   const [showCreateQU, setShowCreateQU] = useState(false)
@@ -2470,6 +2474,11 @@ export default function BillingPage() {
                   <option key={c.key} value={c.key}>{c.label}</option>
                 ))}
               </select>
+              <button type="button" onClick={() => setQtWizardOpen(true)}
+                className="text-xs px-2 py-1.5 bg-amber-50 text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors inline-flex items-center gap-1 font-medium"
+                title="เพิ่มรายการใหม่ใน catalog + QT พร้อมตรวจซ้ำ">
+                <Sparkles className="w-3 h-3" />เพิ่มรายการใหม่ (Wizard)
+              </button>
               <button type="button" onClick={() => {
                 // 77: เลือกทั้งหมด — เคารพ filter ปัจจุบัน (search + category)
                 const existingCodes = new Set(quItems.map(i => i.code))
@@ -3328,6 +3337,24 @@ export default function BillingPage() {
           )
         })()}
       </Modal>
+
+      {/* 207: AddItemWizard for QT — เพิ่มรายการใหม่ใน catalog + auto-add ลง quItems ที่กำลังแก้ */}
+      <AddItemWizard
+        open={qtWizardOpen}
+        onClose={() => setQtWizardOpen(false)}
+        context="qt"
+        customerId={quCustomerId || null}
+        onComplete={(result) => {
+          // เพิ่มเข้า quItems ที่กำลังแก้ทันที — ใช้ราคาที่ wizard return กลับมา
+          if (!quItems.some(i => i.code === result.code)) {
+            setQuItems([...quItems, {
+              code: result.code,
+              name: result.name,
+              pricePerUnit: result.pricePerUnit ?? null,
+            }])
+          }
+        }}
+      />
     </div>
   )
 }

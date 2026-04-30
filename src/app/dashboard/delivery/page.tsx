@@ -8,7 +8,7 @@ import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO
 import { highlightText, matchesAmountQuery } from '@/lib/highlight'
 import { type DeliveryNoteItem, LINEN_FORM_STATUS_CONFIG } from '@/types'
 import { calculateTransportFeeTrip, calculateDNSubtotal } from '@/lib/transport-fee'
-import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
+import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2, Sparkles } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
@@ -24,6 +24,7 @@ import CustomerPicker from '@/components/CustomerPicker'
 import { exportCSV } from '@/lib/export'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
+import AddItemWizard from '@/components/AddItemWizard'
 
 type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed'
 
@@ -46,6 +47,9 @@ export default function DeliveryPage() {
   const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  // 207: AddItemWizard state สำหรับ SD detail
+  const [sdWizardOpen, setSdWizardOpen] = useState(false)
   // 171.1: scroll to <mark> on arrival from global search
   useScrollToMark([showDetail])
   const [dnFilter, setDnFilter] = useState<DNFilter>('all')
@@ -1264,23 +1268,31 @@ export default function DeliveryPage() {
                       {!detailNote.isBilled && (
                         <tr className="border-t border-orange-100">
                           <td colSpan={isPer ? 6 : 4} className="px-3 py-2">
-                            <button
-                              onClick={() => {
-                                const updated = [...detailNote.items, {
-                                  code: '',
-                                  quantity: 1,
-                                  isClaim: false,
-                                  isAdhoc: true,
-                                  adhocName: '',
-                                  adhocPrice: 0,
-                                }]
-                                updateDeliveryNote(detailNote.id, { items: updated })
-                              }}
-                              className="text-xs px-2.5 py-1 border border-orange-300 text-orange-700 hover:bg-orange-50 rounded-lg font-medium inline-flex items-center gap-1"
-                              title="เพิ่มรายการที่ไม่มีใน catalog/QT — ไม่ปนสถิติ stock">
-                              <Plus className="w-3.5 h-3.5" /> รายการพิเศษ
-                            </button>
-                            <span className="text-[11px] text-slate-400 ml-2">รายการที่ไม่อยู่ใน QT (ราคาเฉพาะ ไม่นับ stock)</span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={() => setSdWizardOpen(true)}
+                                className="text-xs px-2.5 py-1 border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-lg font-medium inline-flex items-center gap-1"
+                                title="เพิ่มรายการใหม่ใน catalog + QT (Wizard) — แนะนำเมื่อจะใช้ซ้ำ">
+                                <Sparkles className="w-3.5 h-3.5" /> รายการใหม่ (Wizard)
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const updated = [...detailNote.items, {
+                                    code: '',
+                                    quantity: 1,
+                                    isClaim: false,
+                                    isAdhoc: true,
+                                    adhocName: '',
+                                    adhocPrice: 0,
+                                  }]
+                                  updateDeliveryNote(detailNote.id, { items: updated })
+                                }}
+                                className="text-xs px-2.5 py-1 border border-orange-300 text-orange-700 hover:bg-orange-50 rounded-lg font-medium inline-flex items-center gap-1"
+                                title="เพิ่มรายการครั้งเดียว ไม่อยากใส่ catalog ถาวร">
+                                <Plus className="w-3.5 h-3.5" /> รายการพิเศษ (one-off)
+                              </button>
+                              <span className="text-[11px] text-slate-400">Wizard = ใช้ซ้ำ + ตรวจซ้ำ · พิเศษ = ครั้งเดียว ไม่นับ stock</span>
+                            </div>
                           </td>
                         </tr>
                       )}
@@ -2007,6 +2019,24 @@ export default function DeliveryPage() {
           )
         })()}
       </Modal>
+
+      {/* 207: AddItemWizard for SD — เพิ่มรายการใหม่ใน catalog + QT + DN ปัจจุบัน */}
+      <AddItemWizard
+        open={sdWizardOpen}
+        onClose={() => setSdWizardOpen(false)}
+        context="sd"
+        customerId={detailNote?.customerId || null}
+        onComplete={(result) => {
+          if (!detailNote) return
+          if (detailNote.items.some(i => i.code === result.code && !i.isAdhoc)) return
+          const updated = [...detailNote.items, {
+            code: result.code,
+            quantity: 1,
+            isClaim: false,
+          }]
+          updateDeliveryNote(detailNote.id, { items: updated })
+        }}
+      />
     </div>
   )
 }

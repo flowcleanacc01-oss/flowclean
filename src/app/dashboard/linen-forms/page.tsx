@@ -10,7 +10,7 @@ import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LIN
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer } from '@/lib/recent-customers'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink, Sparkles } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
@@ -22,6 +22,7 @@ import SortableHeader from '@/components/SortableHeader'
 import { exportCSV } from '@/lib/export'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
+import AddItemWizard from '@/components/AddItemWizard'
 
 export default function LinenFormsPage() {
   const {
@@ -139,6 +140,10 @@ export default function LinenFormsPage() {
   const [newRows, setNewRows] = useState<LinenFormRow[]>([])
   const [newNotes, setNewNotes] = useState('')
   const [newBagsSent, setNewBagsSent] = useState(0)
+
+  // 207: AddItemWizard state — เปิดได้ทั้งใน create + detail modal
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardCustomerId, setWizardCustomerId] = useState<string | null>(null)
 
   // จำนวนผ้าตามสถานะ — แสดงค่าที่ relevant ที่สุด ณ สถานะนั้น
   const getPiecesForStatus = (f: typeof linenForms[number]): number => {
@@ -630,6 +635,15 @@ export default function LinenFormsPage() {
                   className="w-32 px-3 py-2 border border-teal-300 rounded-lg text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                   placeholder="0" />
               </div>
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setWizardCustomerId(newCustomerId); setWizardOpen(true) }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-amber-50 text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors"
+                  title="ถ้าเจอผ้ารายการใหม่ที่ไม่มีใน catalog/QT — เพิ่มได้ทันทีที่นี่">
+                  <Sparkles className="w-3.5 h-3.5" /> เพิ่มผ้ารายการใหม่ (Wizard)
+                </button>
+              </div>
               <LinenFormGrid
                 customer={getCustomer(newCustomerId)!}
                 rows={newRows}
@@ -870,6 +884,15 @@ export default function LinenFormsPage() {
               )
             })()}
 
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => { setWizardCustomerId(detailForm.customerId); setWizardOpen(true) }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-amber-50 text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors"
+                title="ถ้าเจอผ้ารายการใหม่ที่ไม่มีใน catalog/QT — เพิ่มได้ทันทีที่นี่">
+                <Sparkles className="w-3.5 h-3.5" /> เพิ่มผ้ารายการใหม่ (Wizard)
+              </button>
+            </div>
             <LinenFormGrid
               customer={detailCustomer}
               rows={detailForm.rows}
@@ -1213,6 +1236,15 @@ export default function LinenFormsPage() {
           />
         </div>
       </Modal>
+
+      {/* 207: Universal Add-Item Wizard — เปิดได้ทั้งจาก create + detail modal */}
+      <AddItemWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        context="lf"
+        customerId={wizardCustomerId}
+        onComplete={() => { /* catalog + QT updated; LinenFormGrid auto re-renders ผ่าน qtItems */ }}
+      />
     </div>
   )
 }

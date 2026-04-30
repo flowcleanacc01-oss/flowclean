@@ -16,11 +16,12 @@ import MergeCodesTool from '@/components/MergeCodesTool'
 import SyncNamesTool from '@/components/SyncNamesTool'
 import CatalogHygieneCenter from '@/components/CatalogHygieneCenter'
 import VocabularyAudit from '@/components/VocabularyAudit'
+import AddItemWizard from '@/components/AddItemWizard'
 import { canManageSettings } from '@/lib/permissions'
 import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 import { useNameDrift } from '@/lib/use-name-drift'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
-import { RefreshCcw, Shield, BookOpen } from 'lucide-react'
+import { RefreshCcw, Shield, BookOpen, Sparkles } from 'lucide-react'
 
 type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
@@ -91,6 +92,9 @@ export default function ItemsPage() {
     setSyncFocusCode(code || null)
     setTab('sync')
   }
+
+  // 207: Universal Add-Item Wizard
+  const [wizardOpen, setWizardOpen] = useState(false)
 
   // ---- Filtered & sorted items ----
   const filteredItems = useMemo(() => {
@@ -368,10 +372,15 @@ export default function ItemsPage() {
                   ? <><Check className="w-3.5 h-3.5" />เสร็จสิ้น</>
                   : <><ArrowUpDown className="w-3.5 h-3.5" />จัดลำดับใหม่</>}
               </button>
+              <button onClick={() => setWizardOpen(true)}
+                disabled={reorderMode}
+                className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-300 text-xs rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-40 font-medium">
+                <Sparkles className="w-3.5 h-3.5" />เพิ่มแบบ Wizard
+              </button>
               <button onClick={() => { setShowAddItem(true); setNewItem(EMPTY_NEW_ITEM) }}
                 disabled={reorderMode}
                 className="flex items-center gap-1 px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-xs rounded-lg hover:bg-[#2bb8b8] transition-colors disabled:opacity-40">
-                <Plus className="w-3.5 h-3.5" />เพิ่มรายการ
+                <Plus className="w-3.5 h-3.5" />เพิ่มเร็ว
               </button>
             </div>
             {/* 173.1: reorder hint banner */}
@@ -798,6 +807,15 @@ export default function ItemsPage() {
       {tab === 'vocab' && (
         <VocabularyAudit />
       )}
+
+      {/* 207: Universal Add-Item Wizard */}
+      <AddItemWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        context="items"
+        customerId={null}
+        onComplete={() => { /* catalog updated; no further action needed on items page */ }}
+      />
 
       {/* 154.1: Items Print List Modal */}
       <Modal open={showItemPrintList} onClose={() => setShowItemPrintList(false)} title="รายการผ้า" size="xl" closeLabel="close" className="print-target">
