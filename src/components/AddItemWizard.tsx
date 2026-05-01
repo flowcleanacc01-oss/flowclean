@@ -138,11 +138,23 @@ export default function AddItemWizard({
   // ───── Final: apply ──────────────────────────────────────
   const handleSelectExisting = (item: LinenItemDef, reason: string) => {
     void reason
-    // Get price for this customer if QT exists
+    // 209: รายการนี้มีใน catalog แล้ว — ตรวจ active QT
     let priceForCustomer = item.defaultPrice
     if (activeQT) {
       const qtRow = activeQT.items.find(it => it.code === item.code)
-      if (qtRow) priceForCustomer = qtRow.pricePerUnit
+      if (qtRow) {
+        // มีใน QT แล้ว → ใช้ราคา QT
+        priceForCustomer = qtRow.pricePerUnit
+      } else if (context !== 'items' && customerId) {
+        // ยังไม่มีใน QT → push เข้า QT (ใช้ defaultPrice)
+        // หมายเหตุ: ถ้า QT status = accepted user ต้อง re-accept (208.2 ในอนาคต)
+        const newRow = {
+          code: item.code,
+          name: item.name,
+          pricePerUnit: item.defaultPrice,
+        }
+        updateQuotation(activeQT.id, { items: [...activeQT.items, newRow] })
+      }
     }
     onComplete({
       code: item.code,

@@ -144,6 +144,9 @@ export default function LinenFormsPage() {
   // 207: AddItemWizard state — เปิดได้ทั้งใน create + detail modal
   const [wizardOpen, setWizardOpen] = useState(false)
   const [wizardCustomerId, setWizardCustomerId] = useState<string | null>(null)
+  // 209: track ว่า wizard ถูกเปิดจาก create หรือ detail (เพื่อรู้จะเพิ่ม row ที่ไหน)
+  const [wizardTarget, setWizardTarget] = useState<'create' | 'detail' | null>(null)
+  const [wizardTargetLfId, setWizardTargetLfId] = useState<string | null>(null)
 
   // จำนวนผ้าตามสถานะ — แสดงค่าที่ relevant ที่สุด ณ สถานะนั้น
   const getPiecesForStatus = (f: typeof linenForms[number]): number => {
@@ -638,7 +641,12 @@ export default function LinenFormsPage() {
               <div className="flex items-center justify-end">
                 <button
                   type="button"
-                  onClick={() => { setWizardCustomerId(newCustomerId); setWizardOpen(true) }}
+                  onClick={() => {
+                    setWizardCustomerId(newCustomerId)
+                    setWizardTarget('create')
+                    setWizardTargetLfId(null)
+                    setWizardOpen(true)
+                  }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-amber-50 text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors"
                   title="ถ้าเจอผ้ารายการใหม่ที่ไม่มีใน catalog/QT — เพิ่มได้ทันทีที่นี่">
                   <Sparkles className="w-3.5 h-3.5" /> เพิ่มผ้ารายการใหม่ (Wizard)
@@ -885,13 +893,41 @@ export default function LinenFormsPage() {
             })()}
 
             <div className="flex items-center justify-end">
-              <button
-                type="button"
-                onClick={() => { setWizardCustomerId(detailForm.customerId); setWizardOpen(true) }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-amber-50 text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors"
-                title="ถ้าเจอผ้ารายการใหม่ที่ไม่มีใน catalog/QT — เพิ่มได้ทันทีที่นี่">
-                <Sparkles className="w-3.5 h-3.5" /> เพิ่มผ้ารายการใหม่ (Wizard)
-              </button>
+              {(() => {
+                // 209: status guard
+                const hasSD = !!linkedDN
+                const isLateStatus = !['draft', 'received'].includes(detailForm.status)
+                const disabled = hasSD
+                const blockMsg = hasSD
+                  ? `ไม่สามารถเพิ่มรายการได้ — LF นี้สร้างใบส่งของ (${linkedDN?.noteNumber}) ไปแล้ว`
+                  : ''
+                const warnMsg = isLateStatus
+                  ? `LF อยู่สถานะ "${LINEN_FORM_STATUS_CONFIG[detailForm.status].label}" — เพิ่มรายการอาจกระทบยอดที่นับไปแล้ว ยืนยันต่อ?`
+                  : ''
+                return (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      if (disabled) { alert(blockMsg); return }
+                      if (warnMsg && !confirm(warnMsg)) return
+                      setWizardCustomerId(detailForm.customerId)
+                      setWizardTarget('detail')
+                      setWizardTargetLfId(detailForm.id)
+                      setWizardOpen(true)
+                    }}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded-lg transition-colors',
+                      disabled
+                        ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed'
+                        : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
+                    )}
+                    title={disabled ? blockMsg : 'ถ้าเจอผ้ารายการใหม่ที่ไม่มีใน catalog/QT — เพิ่มได้ทันทีที่นี่'}>
+                    <Sparkles className="w-3.5 h-3.5" /> เพิ่มผ้ารายการใหม่ (Wizard)
+                    {hasSD && <span className="text-[10px] ml-1">(ปิดเพราะมี SD แล้ว)</span>}
+                  </button>
+                )
+              })()}
             </div>
             <LinenFormGrid
               customer={detailCustomer}
@@ -1237,13 +1273,35 @@ export default function LinenFormsPage() {
         </div>
       </Modal>
 
-      {/* 207: Universal Add-Item Wizard — เปิดได้ทั้งจาก create + detail modal */}
+      {/* 207+209: Universal Add-Item Wizard — push row เข้า LF ปัจจุบัน */}
       <AddItemWizard
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         context="lf"
         customerId={wizardCustomerId}
-        onComplete={() => { /* catalog + QT updated; LinenFormGrid auto re-renders ผ่าน qtItems */ }}
+        onComplete={(result) => {
+          // 209: ถ้า code นี้ยังไม่อยู่ใน rows ของ LF ปัจจุบัน → push row ใหม่ค่า 0
+          const emptyRow: LinenFormRow = {
+            code: result.code,
+            col1_carryOver: 0,
+            col2_hotelCountIn: 0,
+            col3_hotelClaimCount: 0,
+            col4_factoryApproved: 0,
+            col5_factoryClaimApproved: 0,
+            col6_factoryPackSend: 0,
+            note: '',
+          }
+          if (wizardTarget === 'create') {
+            if (!newRows.some(r => r.code === result.code)) {
+              setNewRows([...newRows, emptyRow])
+            }
+          } else if (wizardTarget === 'detail' && wizardTargetLfId) {
+            const lf = linenForms.find(f => f.id === wizardTargetLfId)
+            if (lf && !lf.rows.some(r => r.code === result.code)) {
+              updateLinenForm(wizardTargetLfId, { rows: [...lf.rows, emptyRow] })
+            }
+          }
+        }}
       />
     </div>
   )
