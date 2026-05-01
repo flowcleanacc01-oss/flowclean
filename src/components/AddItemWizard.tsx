@@ -63,7 +63,6 @@ export default function AddItemWizard({
   const {
     linenCatalog, addLinenItem, linenCategories,
     customers, quotations, updateQuotation,
-    updateCustomer,
   } = useStore()
 
   // ───── Wizard state ─────────────────────────────────────
@@ -98,18 +97,23 @@ export default function AddItemWizard({
     setError('')
   }, [open, initialName, context])
 
-  // Customer + active QT (most recent accepted/sent QT for this customer)
+  // Customer + active QT
   const customer = useMemo(
     () => customerId ? customers.find(c => c.id === customerId) : null,
     [customerId, customers]
   )
+  // 208.3: เคารพ gate "QT ต้อง accepted ก่อน LF/SD จะเห็นรายการ"
+  // ค้น QT เฉพาะ context lf/sd (qt context จัดการเอง ผ่าน parent setQuItems)
   const activeQT: Quotation | null = useMemo(() => {
     if (!customerId) return null
+    if (context !== 'lf' && context !== 'sd') return null
     const list = quotations
-      .filter(q => q.customerId === customerId && (q.status === 'accepted' || q.status === 'sent'))
+      .filter(q => q.customerId === customerId && q.status === 'accepted')
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     return list[0] || null
-  }, [customerId, quotations])
+  }, [customerId, quotations, context])
+  // 208.3: ถ้า lf/sd แต่ไม่มี accepted QT → blocker
+  const noAcceptedQT = (context === 'lf' || context === 'sd') && !activeQT
 
   // ───── Step 1: similarity ───────────────────────────────
   const matches = useSimilarItems(nameInput, linenCatalog, 5)
@@ -138,16 +142,14 @@ export default function AddItemWizard({
   // ───── Final: apply ──────────────────────────────────────
   const handleSelectExisting = (item: LinenItemDef, reason: string) => {
     void reason
-    // 209: รายการนี้มีใน catalog แล้ว — ตรวจ active QT
     let priceForCustomer = item.defaultPrice
+    // 208.3 + 209: เฉพาะ lf/sd context — push เข้า accepted QT ถ้ายังไม่มี
+    // qt/items context ปล่อยให้ parent (setQuItems) จัดการเอง
     if (activeQT) {
       const qtRow = activeQT.items.find(it => it.code === item.code)
       if (qtRow) {
-        // มีใน QT แล้ว → ใช้ราคา QT
         priceForCustomer = qtRow.pricePerUnit
-      } else if (context !== 'items' && customerId) {
-        // ยังไม่มีใน QT → push เข้า QT (ใช้ defaultPrice)
-        // หมายเหตุ: ถ้า QT status = accepted user ต้อง re-accept (208.2 ในอนาคต)
+      } else if (context === 'lf' || context === 'sd') {
         const newRow = {
           code: item.code,
           name: item.name,
@@ -169,7 +171,7 @@ export default function AddItemWizard({
     const err = validateStep2()
     if (err) { setError(err); setStep(2); return }
 
-    // 1. Add to catalog
+    // 1. Add to catalog (always, permanent)
     const newItem: LinenItemDef = {
       code: code.trim().toUpperCase(),
       name: nameInput.trim(),
@@ -181,8 +183,10 @@ export default function AddItemWizard({
     }
     addLinenItem(newItem)
 
-    // 2. Add to active QT (if context allows)
-    if (addToQT && activeQT && customerId) {
+    // 2. Add to active QT — เฉพาะ lf/sd context (live-write)
+    //    qt context: parent's onComplete handles via setQuItems (form state)
+    //    208.3: ลบ legacy customer.enabledItems + priceList write (QT = single source of truth)
+    if ((context === 'lf' || context === 'sd') && addToQT && activeQT && customerId) {
       const newRow = {
         code: newItem.code,
         name: newItem.name,
@@ -191,16 +195,6 @@ export default function AddItemWizard({
       const exists = activeQT.items.some(it => it.code === newItem.code)
       if (!exists) {
         updateQuotation(activeQT.id, { items: [...activeQT.items, newRow] })
-      }
-      // Add to customer enabledItems + priceList (legacy compat)
-      if (customer) {
-        const enabled = customer.enabledItems.includes(newItem.code)
-          ? customer.enabledItems
-          : [...customer.enabledItems, newItem.code]
-        const pl = customer.priceList.some(p => p.code === newItem.code)
-          ? customer.priceList
-          : [...customer.priceList, { code: newItem.code, price: customerPrice || defaultPrice }]
-        updateCustomer(customer.id, { enabledItems: enabled, priceList: pl })
       }
     }
 
@@ -239,7 +233,23 @@ export default function AddItemWizard({
       {/* ━━━━━━━━━━━━━ STEP 1: ชื่อ + similarity ━━━━━━━━━━━━━ */}
       {step === 1 && (
         <div className="space-y-4">
-          <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
+          {/* 208.3: blocker เมื่อไม่มี accepted QT (lf/sd context) */}
+          {noAcceptedQT && (
+            <div className="flex items-start gap-3 bg-red-50 border-2 border-red-300 rounded-lg p-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-red-900">
+                <div className="font-semibold mb-1">ลูกค้านี้ยังไม่มี QT ที่ "ตกลง"</div>
+                <p className="text-xs text-red-800 leading-relaxed">
+                  การเพิ่มรายการต้องผ่าน QT ที่ accepted ก่อน — เพื่อล็อคราคา + รักษา audit trail<br />
+                  <strong>วิธีแก้</strong>: สร้าง QT ใหม่ → ใส่รายการ → กดเปลี่ยนสถานะเป็น "ตกลง" ก่อนเริ่มทำ LF/SD
+                </p>
+              </div>
+            </div>
+          )}
+          <div className={cn(
+            'flex items-start gap-3 border rounded-lg p-3',
+            noAcceptedQT ? 'bg-slate-50 border-slate-200 opacity-60' : 'bg-blue-50 border-blue-200'
+          )}>
             <Wand2 className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-900">
               <div className="font-semibold mb-0.5">ใส่ชื่อรายการที่อยากเพิ่ม</div>
@@ -256,14 +266,15 @@ export default function AddItemWizard({
                 value={nameInput}
                 onChange={e => setNameInput(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter' && nameInput.trim()) {
+                  if (e.key === 'Enter' && nameInput.trim() && !noAcceptedQT) {
                     e.preventDefault()
                     if (!hasExactMatch) goToStep2()
                   }
                 }}
                 placeholder="เช่น ผ้าเช็ดตัว 27x54 สีขาว"
                 autoFocus
-                className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
+                disabled={noAcceptedQT}
+                className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none disabled:bg-slate-100 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -280,8 +291,9 @@ export default function AddItemWizard({
                   <button
                     key={m.item.code}
                     onClick={() => handleSelectExisting(m.item, m.reason)}
+                    disabled={noAcceptedQT}
                     className={cn(
-                      'w-full text-left p-2.5 rounded-lg border-2 transition-colors group',
+                      'w-full text-left p-2.5 rounded-lg border-2 transition-colors group disabled:opacity-50 disabled:cursor-not-allowed',
                       m.score >= 90
                         ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100'
                         : 'border-slate-200 hover:border-[#3DD8D8] hover:bg-[#3DD8D8]/5'
@@ -320,7 +332,7 @@ export default function AddItemWizard({
             </button>
             <button
               onClick={goToStep2}
-              disabled={!nameInput.trim()}
+              disabled={!nameInput.trim() || noAcceptedQT}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg text-sm font-medium hover:bg-[#122740] disabled:opacity-40 disabled:cursor-not-allowed">
               {hasExactMatch ? 'ไม่ใช่ ขอเพิ่มใหม่' : 'ถัดไป'}
               <ArrowRight className="w-4 h-4" />
@@ -417,8 +429,8 @@ export default function AddItemWizard({
             </div>
           </div>
 
-          {/* QT integration (เฉพาะ context ที่มี customer) */}
-          {context !== 'items' && customer && (
+          {/* QT integration — เฉพาะ lf/sd (qt จัดการเองใน parent) */}
+          {(context === 'lf' || context === 'sd') && customer && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
               <label className="flex items-start gap-2 cursor-pointer">
                 <input
@@ -426,6 +438,7 @@ export default function AddItemWizard({
                   checked={addToQT}
                   onChange={e => setAddToQT(e.target.checked)}
                   className="mt-0.5 rounded"
+                  disabled={!activeQT}
                 />
                 <div className="flex-1">
                   <div className="text-sm font-medium text-blue-900">
@@ -433,8 +446,8 @@ export default function AddItemWizard({
                   </div>
                   <p className="text-[11px] text-blue-700">
                     {activeQT
-                      ? `→ QT ${activeQT.quotationNumber} (${activeQT.status})`
-                      : '⚠️ ยังไม่มี QT active — จะ skip'}
+                      ? `→ QT ${activeQT.quotationNumber} (accepted)`
+                      : '⚠️ ยังไม่มี QT ที่ accepted — รายการจะไม่ปรากฏใน LF/SD'}
                   </p>
                 </div>
               </label>
@@ -451,6 +464,13 @@ export default function AddItemWizard({
                   />
                 </div>
               )}
+            </div>
+          )}
+          {/* QT context note */}
+          {context === 'qt' && customer && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-xs text-blue-800">
+              <Wand2 className="w-3.5 h-3.5 inline-block mr-1 text-blue-600" />
+              รายการนี้จะถูก<strong>เพิ่มเข้า form QT</strong>ที่กำลังแก้ — กด "บันทึก" ใน QT เพื่อยืนยัน
             </div>
           )}
 
@@ -513,10 +533,16 @@ export default function AddItemWizard({
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                 <span><strong>Catalog</strong> — รายการกลางของระบบ</span>
               </li>
-              {context !== 'items' && customer && addToQT && activeQT && (
+              {(context === 'lf' || context === 'sd') && customer && addToQT && activeQT && (
                 <li className="flex items-center gap-2 text-sm text-slate-700">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                   <span><strong>QT {activeQT.quotationNumber}</strong> ของลูกค้า "{customer.shortName}" — ราคา {formatCurrency(customerPrice || defaultPrice)}</span>
+                </li>
+              )}
+              {context === 'qt' && customer && (
+                <li className="flex items-center gap-2 text-sm text-slate-700">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  <span><strong>QT row (form)</strong> ของลูกค้า "{customer.shortName}" — เพิ่มเข้า form ที่กำลังแก้</span>
                 </li>
               )}
               {cfg.addToHere && (
@@ -524,6 +550,26 @@ export default function AddItemWizard({
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                   <span><strong>{cfg.addToHere}</strong> — row ใหม่</span>
                 </li>
+              )}
+            </ul>
+          </div>
+
+          {/* 208.1: Persistence banner — อธิบายว่าอันไหน "บันทึกถาวรทันที" vs "รอ save" */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs">
+            <div className="font-semibold text-yellow-900 mb-1.5 flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-yellow-600" />
+              การบันทึกของแต่ละส่วน
+            </div>
+            <ul className="space-y-1 text-yellow-900 leading-relaxed">
+              <li>📦 <strong>Catalog</strong>: บันทึกถาวรทันทีหลังกดยืนยัน — ใช้ Hygiene Center → Undo ถ้าต้องการคืน</li>
+              {(context === 'lf' || context === 'sd') && activeQT && addToQT && (
+                <li>📋 <strong>QT {activeQT.quotationNumber}</strong>: บันทึกทันที (live-write) — Undo ผ่าน Hygiene Center</li>
+              )}
+              {context === 'qt' && (
+                <li>📋 <strong>QT row</strong>: เพิ่มเข้า form ที่กำลังแก้เท่านั้น — ต้องกด <strong>"บันทึก"</strong> ใน QT จึงจะเก็บลงระบบจริง · กด <strong>"ยกเลิก"</strong> = revert เฉพาะ QT (catalog ยังคงอยู่)</li>
+              )}
+              {cfg.addToHere && context !== 'qt' && (
+                <li>📄 <strong>{cfg.addToHere}</strong>: บันทึกทันที (live-edit)</li>
               )}
             </ul>
           </div>
