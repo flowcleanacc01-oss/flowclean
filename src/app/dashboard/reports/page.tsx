@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatNumber, cn, buildPriceMapFromQT, formatDate, todayISO, startOfMonthISO, endOfMonthISO } from '@/lib/utils'
 import { FileDown, ExternalLink, Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react'
@@ -43,6 +43,19 @@ export default function ReportsPage() {
   const [coAdjustModalOpen, setCoAdjustModalOpen] = useState(false)
   const [coEditingAdjustment, setCoEditingAdjustment] = useState<CarryOverAdjustment | undefined>(undefined)
   const [showCarryOverPrint, setShowCarryOverPrint] = useState(false)
+
+  // 210.1: เมื่อเปลี่ยนเดือนด้านบน (selMonth) บน carryover tab → sync ช่องวันที่ด้านล่าง
+  useEffect(() => {
+    if (tab !== 'carryover') return
+    const [yStr, mStr] = selMonth.split('-')
+    const y = Number(yStr), m = Number(mStr)
+    if (!y || !m) return
+    const start = new Date(y, m - 1, 1)
+    const end = new Date(y, m, 0)
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    setCoStartDate(fmt(start))
+    setCoEndDate(fmt(end))
+  }, [selMonth, tab])
 
   const activeCustomers = customers.filter(c => c.isActive)
   // Derive effective customer ID — validate against active list
@@ -119,7 +132,11 @@ export default function ReportsPage() {
     return d.toISOString().slice(0, 10)
   }
 
-  /** Get codes that have any LF activity for this customer in date range */
+  /** Get codes ที่ active สำหรับลูกค้านี้ใน date range
+   *  รวม: LF rows + adjustments + 210.2: items จาก accepted QT ของลูกค้า
+   *  (กัน edge case: เพิ่มรายการใน QT หลัง LF ถูกสร้าง — รายการใหม่ไม่มีใน LF.rows
+   *   แต่ user ต้องเห็นใน carry-over report เพื่อตรวจ)
+   */
   const coActiveCodes = useMemo(() => {
     if (!selCustomerId) return [] as string[]
     const codes = new Set<string>()
@@ -134,10 +151,15 @@ export default function ReportsPage() {
       if (a.date < coStartDate || a.date > coEndDate) continue
       for (const it of a.items) codes.add(it.code)
     }
+    // 210.2: include items จาก accepted QT (เห็นรายการใหม่ที่ยังไม่ได้ใช้ใน LF)
+    const acceptedQT = quotations.find(q => q.customerId === selCustomerId && q.status === 'accepted')
+    if (acceptedQT) {
+      for (const it of acceptedQT.items) codes.add(it.code)
+    }
     // Sort by catalog order
     const orderMap = new Map(linenCatalog.map((it, i) => [it.code, i]))
     return [...codes].sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999))
-  }, [selCustomerId, linenForms, carryOverAdjustments, linenCatalog, coStartDate, coEndDate])
+  }, [selCustomerId, linenForms, carryOverAdjustments, linenCatalog, coStartDate, coEndDate, quotations])
 
   const itemNameMap = useMemo(
     () => Object.fromEntries(linenCatalog.map(it => [it.code, it.name])),
