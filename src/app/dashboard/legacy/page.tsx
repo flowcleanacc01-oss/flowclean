@@ -9,6 +9,7 @@ import Modal from '@/components/Modal'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
 import CustomerPicker from '@/components/CustomerPicker'
+import FloatingTotalBar from '@/components/FloatingTotalBar'
 import { canViewBilling } from '@/lib/permissions'
 import type { LegacyDocKind } from '@/types'
 
@@ -208,22 +209,22 @@ export default function LegacyPage() {
                     )
                   })}
                 </tbody>
-                {filtered.length > 0 && (
-                  <tfoot>
-                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-semibold">
-                      <td colSpan={4} className="px-4 py-3 text-slate-700">
-                        รวม {filtered.length} เอกสาร{filtered.length > 1000 && ` (แสดง 1,000 แรก)`}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[#1B3A5C]">{formatCurrency(filtered.reduce((s, d) => s + d.amount, 0))}</td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                )}
               </table>
             </div>
           </div>
         </>
       )}
+
+      {/* 211: Floating total bar (pattern เดียวกับ 57c12b9) */}
+      {filtered.length > 0 && (() => {
+        const totalAmount = filtered.reduce((s, d) => s + d.amount, 0)
+        return (
+          <FloatingTotalBar>
+            <span>รวม {filtered.length} เอกสาร{filtered.length > 1000 && ` (แสดง 1,000 แรก)`}</span>
+            <span className="ml-auto">ยอดรวม <span className="text-[#1B3A5C]">{formatCurrency(totalAmount)}</span></span>
+          </FloatingTotalBar>
+        )
+      })()}
 
       {/* Detail Modal */}
       <Modal open={!!detail} onClose={() => setDetailId(null)} title={`${detail?.kind} ${detail?.docNumber || ''}`} size="md" closeLabel="close">
