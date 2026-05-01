@@ -640,12 +640,16 @@ export default function BillingPage() {
       setActiveQtId(newQT.id)
       scrollToActiveRow(newQT.id)
     }
+    // 208.2.2: auto-focus filter ลูกค้านี้ → user เห็น QT อื่นๆ ของลูกค้าด้วย พร้อมจัดการ
+    setQtCustomerFilter(quCustomerId)
     setEditQuId(null)
     setShowCreateQU(false)
   }
 
   // Open create modal with data from existing QT (edit mode — resets to draft)
   const handleEditQT = (q: typeof quotations[0]) => {
+    // 208.2.2: focus เฉพาะลูกค้านี้ทันที — ถ้า cancel ก็ยังเห็น QT ทั้งหมดของลูกค้า
+    setQtCustomerFilter(q.customerId)
     setEditQuId(q.id)
     setQuCustomerId(q.customerId)
     setQuCustomerName(q.customerName)
@@ -1459,6 +1463,50 @@ export default function BillingPage() {
             <p className="text-xs text-red-600 mt-1">กรุณาสร้างและกดตกลง QT ให้ลูกค้าเหล่านี้ก่อนออก SD/WB ใหม่</p>
           </div>
         )}
+        {/* 208.2.2: focus banner — เห็น QT ทั้งหมดของลูกค้าที่เพิ่งจัดการ */}
+        {qtCustomerFilter !== 'all' && (() => {
+          const focusCust = getCustomer(qtCustomerFilter)
+          const counts = {
+            draft: filteredQuotations.filter(q => q.status === 'draft').length,
+            sent: filteredQuotations.filter(q => q.status === 'sent').length,
+            accepted: filteredQuotations.filter(q => q.status === 'accepted').length,
+            rejected: filteredQuotations.filter(q => q.status === 'rejected').length,
+          }
+          return (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm text-blue-900 flex flex-wrap items-center gap-2">
+                <span className="font-medium">🔍 Focus mode:</span>
+                <span>QT ของลูกค้า <strong>{focusCust?.shortName || focusCust?.name || '-'}</strong></span>
+                <span className="text-blue-600">·</span>
+                <span className="text-xs">{filteredQuotations.length} ใบ</span>
+                {counts.draft > 0 && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
+                    📝 ร่าง {counts.draft}
+                  </span>
+                )}
+                {counts.sent > 0 && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                    ส่งแล้ว {counts.sent}
+                  </span>
+                )}
+                {counts.accepted > 0 && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                    ตกลง {counts.accepted}
+                  </span>
+                )}
+                {counts.rejected > 0 && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-800">
+                    ปฏิเสธ {counts.rejected}
+                  </span>
+                )}
+              </div>
+              <button onClick={() => setQtCustomerFilter('all')}
+                className="text-xs px-2.5 py-1 bg-white text-blue-700 border border-blue-300 rounded hover:bg-blue-100 font-medium">
+                ยกเลิก focus
+              </button>
+            </div>
+          )
+        })()}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1488,7 +1536,15 @@ export default function BillingPage() {
                   return (
                     <tr key={q.id}
                       data-row-id={q.id}
-                      className={cn("border-b border-slate-100 cursor-pointer", activeQtId === q.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
+                      className={cn(
+                        "border-b border-slate-100 cursor-pointer",
+                        activeQtId === q.id
+                          ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]'
+                          : q.status === 'draft'
+                            ? 'bg-amber-50/60 border-l-4 border-l-amber-400 hover:bg-amber-100/60'
+                            : 'hover:bg-slate-50'
+                      )}
+                      title={q.status === 'draft' ? 'แบบร่าง — ต้องเปลี่ยนสถานะเป็น "ตกลง" หรือ "ปฏิเสธ" เพื่อเคลียร์งาน' : undefined}
                       onClick={() => { setActiveQtId(q.id); setShowQuDetail(q.id) }}>
                       <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
                         <input type="checkbox" checked={selectedQtIds.includes(q.id)}
@@ -1522,7 +1578,12 @@ export default function BillingPage() {
                             <Edit2 className="w-3 h-3" />แก้ไข
                           </button>
                           <button onClick={() => {
-                            if (confirm(`ลบใบเสนอราคา ${q.quotationNumber}?`)) deleteQuotation(q.id)
+                            if (confirm(`ลบใบเสนอราคา ${q.quotationNumber}?`)) {
+                              const cid = q.customerId
+                              deleteQuotation(q.id)
+                              // 208.2.2: focus เฉพาะลูกค้านี้หลังลบ
+                              setQtCustomerFilter(cid)
+                            }
                           }}
                             className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded">
                             <Trash2 className="w-3.5 h-3.5" />
@@ -2800,8 +2861,11 @@ export default function BillingPage() {
                 )}
                 <button onClick={() => {
                   if (confirm(`ลบใบเสนอราคา ${detailQuotation.quotationNumber}?`)) {
+                    const cid = detailQuotation.customerId
                     deleteQuotation(detailQuotation.id)
                     setShowQuDetail(null)
+                    // 208.2.2: focus เฉพาะลูกค้านี้หลังลบ
+                    setQtCustomerFilter(cid)
                   }
                 }}
                   className="text-sm px-3 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100 flex items-center gap-1">
