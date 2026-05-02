@@ -10,7 +10,7 @@ import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, aggregateDeliveryItemsByTotal, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { calculateTransportFeeTrip } from '@/lib/transport-fee'
-import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2, Sparkles } from 'lucide-react'
+import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2, Sparkles, Target } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import ExportButtons from '@/components/ExportButtons'
@@ -1463,7 +1463,7 @@ export default function BillingPage() {
             <p className="text-xs text-red-600 mt-1">กรุณาสร้างและกดตกลง QT ให้ลูกค้าเหล่านี้ก่อนออก SD/WB ใหม่</p>
           </div>
         )}
-        {/* 208.2.2: focus banner — เห็น QT ทั้งหมดของลูกค้าที่เพิ่งจัดการ */}
+        {/* 208.2.2 + 212: focus banner — theme เดียวกับ FocusBanner (50) ของหน้าอื่น */}
         {qtCustomerFilter !== 'all' && (() => {
           const focusCust = getCustomer(qtCustomerFilter)
           const counts = {
@@ -1473,36 +1473,44 @@ export default function BillingPage() {
             rejected: filteredQuotations.filter(q => q.status === 'rejected').length,
           }
           return (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-sm text-blue-900 flex flex-wrap items-center gap-2">
-                <span className="font-medium">🔍 Focus mode:</span>
-                <span>QT ของลูกค้า <strong>{focusCust?.shortName || focusCust?.name || '-'}</strong></span>
-                <span className="text-blue-600">·</span>
-                <span className="text-xs">{filteredQuotations.length} ใบ</span>
-                {counts.draft > 0 && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
-                    📝 ร่าง {counts.draft}
-                  </span>
-                )}
-                {counts.sent > 0 && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
-                    ส่งแล้ว {counts.sent}
-                  </span>
-                )}
-                {counts.accepted > 0 && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                    ตกลง {counts.accepted}
-                  </span>
-                )}
-                {counts.rejected > 0 && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-800">
-                    ปฏิเสธ {counts.rejected}
-                  </span>
-                )}
+            <div className="bg-gradient-to-r from-[#3DD8D8]/10 to-blue-50 border border-[#3DD8D8] rounded-xl p-3 mb-4 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[#3DD8D8]/20 flex items-center justify-center flex-shrink-0">
+                <Target className="w-5 h-5 text-[#1B3A5C]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[#1B3A5C]">
+                  🎯 กำลังโฟกัส: ใบเสนอราคา (QT) ของลูกค้า {focusCust?.shortName || focusCust?.name || '-'} ({filteredQuotations.length} ใบ)
+                </p>
+                <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                  {counts.draft > 0 && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
+                      📝 ร่าง {counts.draft}
+                    </span>
+                  )}
+                  {counts.sent > 0 && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                      ส่งแล้ว {counts.sent}
+                    </span>
+                  )}
+                  {counts.accepted > 0 && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                      ตกลง {counts.accepted}
+                    </span>
+                  )}
+                  {counts.rejected > 0 && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-100 text-red-800">
+                      ปฏิเสธ {counts.rejected}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  กรองเฉพาะลูกค้านี้หลังแก้/ลบ — กดเพื่อปลดและดู QT ทั้งหมด
+                </p>
               </div>
               <button onClick={() => setQtCustomerFilter('all')}
-                className="text-xs px-2.5 py-1 bg-white text-blue-700 border border-blue-300 rounded hover:bg-blue-100 font-medium">
-                ยกเลิก focus
+                className="px-3 py-1.5 text-xs bg-white text-slate-700 rounded-lg hover:bg-slate-50 border border-slate-200 flex items-center gap-1 flex-shrink-0">
+                <X className="w-3 h-3" />
+                แสดงทั้งหมด
               </button>
             </div>
           )
