@@ -189,9 +189,18 @@ export default function DeliveryPage() {
         const textMatch = dn.noteNumber.toLowerCase().includes(q)
           || (customer?.shortName || '').toLowerCase().includes(q)
           || (customer?.name || '').toLowerCase().includes(q)
+        // 214: รหัส + ชื่อรายการ (audit: หา SD ที่มี item code นี้)
+        const itemMatch = !textMatch && dn.items.some(it => {
+          if ((it.code || '').toLowerCase().includes(q)) return true
+          const def = linenCatalog.find(c => c.code === it.code)
+          if (def && (def.name.toLowerCase().includes(q) || (def.nameEn || '').toLowerCase().includes(q))) return true
+          if (it.isAdhoc && (it.adhocName || '').toLowerCase().includes(q)) return true
+          if ((it.displayName || '').toLowerCase().includes(q)) return true
+          return false
+        })
         // 166.3.1: match by ยอดรวม
-        const amountMatch = matchesAmountQuery(search, [getDNTotalAmount(dn)])
-        if (!textMatch && !amountMatch) return false
+        const amountMatch = !textMatch && !itemMatch && matchesAmountQuery(search, [getDNTotalAmount(dn)])
+        if (!textMatch && !itemMatch && !amountMatch) return false
       }
       if (dateFrom) {
         if (dateFilterMode === 'single') {
@@ -601,7 +610,7 @@ export default function DeliveryPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="ค้นหาเลขที่ใบส่งของ, ชื่อลูกค้า, จำนวนเงิน"
+            placeholder="ค้นหาเลขที่ใบส่งของ, ชื่อลูกค้า, รหัสสินค้า, รายการสินค้า, จำนวนเงิน"
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
         {/* 162.2: searchable CustomerPicker */}

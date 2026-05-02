@@ -315,9 +315,14 @@ export default function BillingPage() {
         const textMatch = b.billingNumber.toLowerCase().includes(q)
           || (customer?.shortName || '').toLowerCase().includes(q)
           || (customer?.name || '').toLowerCase().includes(q)
-        // 162: also match by amount (ยอดรวม + จ่ายสุทธิ)
-        const amountMatch = matchesAmountQuery(search, [b.grandTotal, b.netPayable])
-        if (!textMatch && !amountMatch) return false
+        // 214: รหัส + ชื่อรายการใน lineItems (audit ราคา per item)
+        const itemMatch = !textMatch && b.lineItems.some(li =>
+          (li.code || '').toLowerCase().includes(q) || (li.name || '').toLowerCase().includes(q)
+        )
+        // 162: also match by amount (ยอดรวม + จ่ายสุทธิ + per-line amount)
+        const amounts = [b.grandTotal, b.netPayable, ...b.lineItems.map(li => li.pricePerUnit || 0)]
+        const amountMatch = !textMatch && !itemMatch && matchesAmountQuery(search, amounts)
+        if (!textMatch && !itemMatch && !amountMatch) return false
       }
       if (!matchesDateFilter(b.issueDate)) return false
       // WB filter
@@ -930,7 +935,10 @@ export default function BillingPage() {
           (it.code || '').toLowerCase().includes(s)
           || (it.name || '').toLowerCase().includes(s)
         )
-        if (!textMatch && !itemMatch) return false
+        // 214.1: match จำนวนเงิน (per-item pricePerUnit) — audit ราคาผ้าใน QT
+        const prices = q.items.map(it => it.pricePerUnit || 0)
+        const amountMatch = !textMatch && !itemMatch && matchesAmountQuery(search, prices)
+        if (!textMatch && !itemMatch && !amountMatch) return false
       }
       if (!matchesQtDateFilter(q.date)) return false
       return true
@@ -965,9 +973,14 @@ export default function BillingPage() {
         const textMatch = inv.invoiceNumber.toLowerCase().includes(q)
           || (customer?.shortName || '').toLowerCase().includes(q)
           || (customer?.name || '').toLowerCase().includes(q)
-        // 162: also match by amount (ยอดรวม VAT)
-        const amountMatch = matchesAmountQuery(search, [inv.grandTotal])
-        if (!textMatch && !amountMatch) return false
+        // 214: รหัส + ชื่อรายการใน lineItems
+        const itemMatch = !textMatch && inv.lineItems.some(li =>
+          (li.code || '').toLowerCase().includes(q) || (li.name || '').toLowerCase().includes(q)
+        )
+        // 162: also match by amount (ยอดรวม VAT + per-line amount)
+        const amounts = [inv.grandTotal, ...inv.lineItems.map(li => li.pricePerUnit || 0)]
+        const amountMatch = !textMatch && !itemMatch && matchesAmountQuery(search, amounts)
+        if (!textMatch && !itemMatch && !amountMatch) return false
       }
       if (!matchesDateFilter(inv.issueDate)) return false
       // IV filter
@@ -1134,9 +1147,9 @@ export default function BillingPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder={
-              tab === 'quotation' ? 'ค้นหาเลขที่ใบเสนอราคา, ชื่อลูกค้า, รหัสสินค้า, รายการสินค้า'
-              : tab === 'billing' ? 'ค้นหาเลขที่ใบวางบิล, ชื่อลูกค้า, จำนวนเงิน'
-              : 'ค้นหาเลขที่ใบกำกับภาษี, ชื่อลูกค้า, จำนวนเงิน'
+              tab === 'quotation' ? 'ค้นหาเลขที่ใบเสนอราคา, ชื่อลูกค้า, รหัสสินค้า, รายการสินค้า, จำนวนเงิน'
+              : tab === 'billing' ? 'ค้นหาเลขที่ใบวางบิล, ชื่อลูกค้า, รหัสสินค้า, รายการสินค้า, จำนวนเงิน'
+              : 'ค้นหาเลขที่ใบกำกับภาษี, ชื่อลูกค้า, รหัสสินค้า, รายการสินค้า, จำนวนเงิน'
             }
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>

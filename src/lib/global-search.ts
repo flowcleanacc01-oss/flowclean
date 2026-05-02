@@ -105,30 +105,34 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
     })
   }
 
-  // WBs (162: amount search)
+  // WBs (162: amount search · 214: รหัส + ชื่อรายการ + per-line amount)
   for (const b of store.billingStatements) {
     const c = custMap.get(b.customerId)
     const custLabel = c?.shortName || c?.name || '-'
+    const lineHaystack = b.lineItems.map(li => `${li.code} ${li.name}`).join(' ')
+    const lineAmounts = b.lineItems.map(li => li.pricePerUnit || 0)
     results.push({
       kind: 'wb',
       id: b.id,
       primary: b.billingNumber,
       secondary: `${custLabel} · ${b.billingMonth} · ${formatDate(b.issueDate)}`,
-      haystack: [b.billingNumber, custLabel, c?.customerCode, b.billingMonth, amountTokens(b.grandTotal, b.netPayable)].filter(Boolean).join(' ').toLowerCase(),
+      haystack: [b.billingNumber, custLabel, c?.customerCode, b.billingMonth, lineHaystack, amountTokens(b.grandTotal, b.netPayable, ...lineAmounts)].filter(Boolean).join(' ').toLowerCase(),
       href: `/dashboard/billing?tab=billing&detail=${b.id}`,
     })
   }
 
-  // IVs (162: amount search)
+  // IVs (162: amount search · 214: รหัส + ชื่อรายการ + per-line amount)
   for (const iv of store.taxInvoices) {
     const c = custMap.get(iv.customerId)
     const custLabel = c?.shortName || c?.name || '-'
+    const lineHaystack = iv.lineItems.map(li => `${li.code} ${li.name}`).join(' ')
+    const lineAmounts = iv.lineItems.map(li => li.pricePerUnit || 0)
     results.push({
       kind: 'iv',
       id: iv.id,
       primary: iv.invoiceNumber,
       secondary: `${custLabel} · ${formatDate(iv.issueDate)}`,
-      haystack: [iv.invoiceNumber, custLabel, c?.customerCode, iv.issueDate, amountTokens(iv.grandTotal)].filter(Boolean).join(' ').toLowerCase(),
+      haystack: [iv.invoiceNumber, custLabel, c?.customerCode, iv.issueDate, lineHaystack, amountTokens(iv.grandTotal, ...lineAmounts)].filter(Boolean).join(' ').toLowerCase(),
       href: `/dashboard/billing?tab=invoice&detail=${iv.id}`,
     })
   }
@@ -147,20 +151,21 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
     })
   }
 
-  // QTs (147: haystack รวม item codes + names + price-facing fields)
+  // QTs (147: haystack รวม item codes + names · 214.1: per-item amount)
   for (const q of store.quotations) {
     const c = custMap.get(q.customerId)
     const custLabel = c?.shortName || c?.name || '-'
     const qtItems = q.items.map(qi => {
       const def = catalogByCode.get(qi.code)
-      return `${qi.code} ${def?.name || ''} ${def?.nameEn || ''}`
+      return `${qi.code} ${qi.name || ''} ${def?.name || ''} ${def?.nameEn || ''}`
     }).join(' ')
+    const qtAmounts = q.items.map(qi => qi.pricePerUnit || 0)
     results.push({
       kind: 'qt',
       id: q.id,
       primary: q.quotationNumber,
       secondary: `${custLabel} · ${formatDate(q.date)}`,
-      haystack: [q.quotationNumber, custLabel, c?.customerCode, q.date, qtItems].filter(Boolean).join(' ').toLowerCase(),
+      haystack: [q.quotationNumber, custLabel, c?.customerCode, q.date, qtItems, amountTokens(...qtAmounts)].filter(Boolean).join(' ').toLowerCase(),
       href: `/dashboard/billing?tab=quotation&openqt=${q.id}`,
     })
   }

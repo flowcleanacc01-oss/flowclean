@@ -178,7 +178,17 @@ export default function LinenFormsPage() {
       if (search) {
         const customer = getCustomer(f.customerId)
         const q = search.toLowerCase()
-        if (!f.formNumber.toLowerCase().includes(q) && !(customer?.shortName || '').toLowerCase().includes(q) && !(customer?.name || '').toLowerCase().includes(q)) return false
+        const textMatch = f.formNumber.toLowerCase().includes(q)
+          || (customer?.shortName || '').toLowerCase().includes(q)
+          || (customer?.name || '').toLowerCase().includes(q)
+        // 214: รหัส + ชื่อรายการ (audit: หา LF ที่มี code นี้)
+        const itemMatch = !textMatch && f.rows.some(r => {
+          if ((r.code || '').toLowerCase().includes(q)) return true
+          const def = linenCatalog.find(c => c.code === r.code)
+          if (def && (def.name.toLowerCase().includes(q) || (def.nameEn || '').toLowerCase().includes(q))) return true
+          return false
+        })
+        if (!textMatch && !itemMatch) return false
       }
       if (dateFrom) {
         if (dateFilterMode === 'single') {
@@ -377,7 +387,7 @@ export default function LinenFormsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="ค้นหาเลขที่ใบส่งรับผ้า, ชื่อลูกค้า"
+            placeholder="ค้นหาเลขที่ใบส่งรับผ้า, ชื่อลูกค้า, รหัสสินค้า, รายการสินค้า"
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
           />
         </div>
