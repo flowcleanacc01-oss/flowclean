@@ -33,7 +33,7 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
 export default function CustomersPage() {
   const {
     customers, addCustomer, updateCustomer, deleteCustomer,
-    quotations, linenForms, deliveryNotes, billingStatements, checklists, taxInvoices, companyInfo,
+    quotations, linenForms, deliveryNotes, billingStatements, checklists, taxInvoices, companyInfo, linenCatalog,
     customerCategories, addCustomerCategory, updateCustomerCategory, deleteCustomerCategory, getCustomerCategoryLabel,
   } = useStore()
   const sp = useSearchParams()
@@ -140,6 +140,7 @@ export default function CustomersPage() {
       enabledItems: [...c.enabledItems], priceList: [...c.priceList], priceHistory: [...c.priceHistory],
       notes: c.notes, isActive: c.isActive,
       enableVat: c.enableVat !== false, enableWithholding: c.enableWithholding !== false,
+      itemNicknames: c.itemNicknames ? { ...c.itemNicknames } : {},
     })
     setShowForm(true)
   }
@@ -628,6 +629,86 @@ export default function CustomersPage() {
                   className={cn('text-xs underline ml-auto flex-shrink-0', qt ? 'text-emerald-600' : 'text-amber-600')}>
                   {qt ? 'ดู QT' : 'สร้าง QT'}
                 </Link>
+              </div>
+            )
+          })()}
+
+          {/* 213.2 Phase 1.2 — Nickname Editor (per-customer item display alias) */}
+          {editId && (() => {
+            const linkedAcceptedQT = quotations.find(q => q.customerId === editId && q.status === 'accepted')
+            const codes = linkedAcceptedQT
+              ? linkedAcceptedQT.items.map(it => it.code)
+              : (form.enabledItems || [])
+            const uniqueCodes = Array.from(new Set(codes)).filter(Boolean)
+            const nicknames = form.itemNicknames || {}
+            const setNickname = (code: string, nickname: string) => {
+              const next = { ...nicknames }
+              if (nickname.trim()) next[code] = nickname.trim()
+              else delete next[code]
+              setForm({ ...form, itemNicknames: next })
+            }
+            return (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                  <span className="font-medium text-blue-900 inline-flex items-center gap-1.5">
+                    🏷️ ชื่อย่อรายการ (per customer)
+                  </span>
+                  <span className="text-[11px] text-blue-700">
+                    {Object.keys(nicknames).length} รายการ
+                  </span>
+                </div>
+                <p className="text-xs text-blue-800 mb-2 leading-relaxed">
+                  ตั้งชื่อรายการเฉพาะลูกค้านี้ — ใช้แสดงใน LF/SD/QT/ใบพิมพ์ของลูกค้านี้เท่านั้น<br />
+                  📊 รายงาน, audit, Cmd+K → ใช้ชื่อ catalog (canonical) เสมอ ไม่กระทบ
+                </p>
+                {uniqueCodes.length === 0 ? (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                    ⚠️ ลูกค้านี้ยังไม่มีรายการผ้า — สร้าง QT พร้อมรายการก่อน แล้วกลับมาตั้ง nickname
+                  </p>
+                ) : (
+                  <div className="border border-blue-200 rounded-lg bg-white max-h-72 overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-blue-50 sticky top-0 z-10">
+                        <tr>
+                          <th className="text-left px-3 py-1.5 font-medium text-blue-900 w-20">รหัส</th>
+                          <th className="text-left px-3 py-1.5 font-medium text-blue-900">ชื่อ catalog (canonical)</th>
+                          <th className="text-left px-3 py-1.5 font-medium text-blue-900">Nickname (ลูกค้าเรียก)</th>
+                          <th className="w-8"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {uniqueCodes.map(code => {
+                          const def = linenCatalog.find(c => c.code === code)
+                          const nickname = nicknames[code] || ''
+                          return (
+                            <tr key={code} className="border-t border-slate-100">
+                              <td className="px-3 py-1 font-mono text-xs text-slate-600">{code}</td>
+                              <td className="px-3 py-1 text-slate-700">{def?.name || <span className="text-slate-400">— ไม่อยู่ใน catalog —</span>}</td>
+                              <td className="px-3 py-1">
+                                <input
+                                  type="text"
+                                  value={nickname}
+                                  onChange={e => setNickname(code, e.target.value)}
+                                  placeholder={def?.name || 'พิมพ์ nickname'}
+                                  className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                                />
+                              </td>
+                              <td className="px-1 py-1">
+                                {nickname && (
+                                  <button onClick={() => setNickname(code, '')}
+                                    title="ลบ nickname (กลับไปใช้ชื่อ catalog)"
+                                    className="text-slate-400 hover:text-red-500 p-1">
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )
           })()}

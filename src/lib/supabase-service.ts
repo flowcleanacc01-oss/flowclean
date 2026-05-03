@@ -138,6 +138,10 @@ const FIELD_MAP: Record<string, string> = {
   reasonCategory: 'reason_category',
   showInCustomerReport: 'show_in_customer_report',
   isDeleted: 'is_deleted',
+  // 213.2 Phase 1.1 — Catalog facets + customer nicknames
+  facetKey: 'facet_key',
+  itemNicknames: 'item_nicknames',
+  // facets stays the same (single word, no transformation needed)
 }
 
 // Reverse map: snake_case → camelCase

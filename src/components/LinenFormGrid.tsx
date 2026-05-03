@@ -5,6 +5,7 @@ import { Trash2, Zap, Check } from 'lucide-react'
 import type { LinenFormRow, Customer, LinenItemDef, LinenFormStatus, QuotationItem } from '@/types'
 import { cn } from '@/lib/utils'
 import { wasSynced } from '@/lib/sync-discrepancy'
+import { resolveDisplayName } from '@/lib/facet-generators'
 
 interface LinenFormGridProps {
   customer: Customer
@@ -55,12 +56,13 @@ export default function LinenFormGrid({
   onApproveSync,
 }: LinenFormGridProps) {
   // ถ้ามี qtItems → ใช้ลำดับ + ชื่อจาก QT, fallback ไป catalog
+  // 213.2 Phase 1.2 — apply customer.itemNicknames เป็น display alias (override ชื่อ)
   const enabledItems: LinenItemDef[] = qtItems
     ? qtItems.map(qi => {
         const catItem = catalog.find(c => c.code === qi.code)
         return {
           code: qi.code,
-          name: qi.name,
+          name: resolveDisplayName(qi.code, qi.name, customer.itemNicknames),
           nameEn: catItem?.nameEn || '',
           category: catItem?.category || 'other',
           unit: catItem?.unit || 'ชิ้น',
@@ -68,9 +70,12 @@ export default function LinenFormGrid({
           sortOrder: 0,
         }
       })
-    : catalog.filter(item =>
-        itemCodes ? itemCodes.includes(item.code) : customer.enabledItems.includes(item.code)
-      )
+    : catalog
+        .filter(item => itemCodes ? itemCodes.includes(item.code) : customer.enabledItems.includes(item.code))
+        .map(item => ({
+          ...item,
+          name: resolveDisplayName(item.code, item.name, customer.itemNicknames),
+        }))
 
   const [localRows, setLocalRows] = useState<LinenFormRow[]>(rows)
   const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null)

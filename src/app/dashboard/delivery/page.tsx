@@ -447,7 +447,12 @@ export default function DeliveryPage() {
 
   const detailNote = showDetail ? deliveryNotes.find(d => d.id === showDetail) : null
   const detailCustomer = detailNote ? getCustomer(detailNote.customerId) : null
-  const itemNameMap = Object.fromEntries(linenCatalog.map(i => [i.code, i.name]))
+  // 213.2 Phase 1.2 — display name resolves per-customer nickname (detail) หรือ catalog (default)
+  // detail context: ใช้ detailCustomer; create context: ใช้ selCustomerId
+  const ctxCustomer = detailCustomer || (selCustomerId ? getCustomer(selCustomerId) : null)
+  const itemNameMap = Object.fromEntries(
+    linenCatalog.map(i => [i.code, ctxCustomer?.itemNicknames?.[i.code] || i.name])
+  )
 
   // Resolve price for a DN: snapshot (locked) → current QT → legacy
   const getDNPrices = (dn: typeof deliveryNotes[number]): Record<string, number> => {

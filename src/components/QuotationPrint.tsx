@@ -8,9 +8,11 @@ interface QuotationPrintProps {
   quotation: Quotation
   company: CompanyInfo
   customerShortName?: string
+  /** 213.2 Phase 1.2 — per-customer item nickname override */
+  itemNicknames?: Record<string, string>
 }
 
-export default function QuotationPrint({ quotation, company, customerShortName }: QuotationPrintProps) {
+export default function QuotationPrint({ quotation, company, customerShortName, itemNicknames }: QuotationPrintProps) {
   const displayName = customerShortName || quotation.customerName
   return (
     <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-quotation">
@@ -63,7 +65,7 @@ export default function QuotationPrint({ quotation, company, customerShortName }
             <tr key={item.code}>
               <td className="text-center px-3 py-1.5 border border-slate-300">{idx + 1}</td>
               <td className="px-3 py-1.5 border border-slate-300 font-mono text-xs text-slate-500">{item.code}</td>
-              <td className="px-3 py-1.5 border border-slate-300">{item.name}</td>
+              <td className="px-3 py-1.5 border border-slate-300">{itemNicknames?.[item.code] || item.name}</td>
               <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(item.pricePerUnit)}</td>
             </tr>
           ))}

@@ -2906,7 +2906,7 @@ export default function BillingPage() {
       <Modal open={showQuPrint && !!detailQuotation} onClose={() => setShowQuPrint(false)} title="พิมพ์ใบเสนอราคา" size="xl" className="print-target">
         {detailQuotation && (
           <div>
-            <QuotationPrint quotation={detailQuotation} company={companyInfo} customerShortName={getCustomer(detailQuotation.customerId)?.shortName} />
+            <QuotationPrint quotation={detailQuotation} company={companyInfo} customerShortName={getCustomer(detailQuotation.customerId)?.shortName} itemNicknames={getCustomer(detailQuotation.customerId)?.itemNicknames} />
             <div className="flex justify-end mt-4 no-print">
               <ExportButtons targetId="print-quotation" filename={formatExportFilename(detailQuotation.quotationNumber, getCustomer(detailQuotation.customerId)?.shortName || detailQuotation.customerName, detailQuotation.date)} onExportCSV={handleQuotationCSV} />
             </div>
@@ -3336,7 +3336,7 @@ export default function BillingPage() {
             if (!qt) return null
             return (
               <div key={id} className="border border-slate-200 rounded-lg overflow-hidden break-after-page">
-                <QuotationPrint quotation={qt} company={companyInfo} customerShortName={getCustomer(qt.customerId)?.shortName} />
+                <QuotationPrint quotation={qt} company={companyInfo} customerShortName={getCustomer(qt.customerId)?.shortName} itemNicknames={getCustomer(qt.customerId)?.itemNicknames} />
               </div>
             )
           })}
