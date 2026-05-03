@@ -29,6 +29,31 @@ export const LINEN_CATEGORIES: Record<string, string> = Object.fromEntries(
   DEFAULT_LINEN_CATEGORIES.map(c => [c.key, c.label])
 )
 
+// ============================================================
+// 213.2 Phase 1.1 — Faceted vocabulary (optional, backward compat)
+// ============================================================
+
+/**
+ * Structured facets สำหรับ catalog item
+ * - ใช้แทนการตั้งชื่อ free-text (ซึ่งทำให้เกิด drift)
+ * - facetKey ของรายการที่ facets เหมือนกัน = string เดียวกัน → กัน duplicate
+ * - Code + canonical name auto-generated จาก facets
+ *
+ * Phase 1.1: optional — ของเก่าใช้งานได้ตามเดิม
+ * Phase 2+: enforce ผ่าน Wizard 2.0
+ */
+export interface LinenFacets {
+  type: string                  // REQUIRED — towel/bed_sheet/pillow_case/...
+  application?: string | null
+  size?: string | null          // standard preset (single/queen) OR custom WxH (30x60)
+  sizeUnit?: 'inch' | 'cm' | 'ft' | 'standard' | null
+  color?: string | null
+  weight?: 'thin' | 'medium' | 'thick' | null
+  material?: string | null
+  pattern?: string | null
+  variant?: string | null       // free-text fallback (1-2% เคสที่ vocab ครอบไม่ถึง)
+}
+
 export interface LinenItemDef {
   code: string
   name: string
@@ -37,6 +62,10 @@ export interface LinenItemDef {
   unit: string
   defaultPrice: number
   sortOrder: number
+  // 213.2 Phase 1.1 — optional facets
+  facets?: LinenFacets
+  /** Deterministic hash of facets — same facets = same key (กัน dup ระดับ schema) */
+  facetKey?: string
 }
 
 // Standard 21 items + 3 custom slots
@@ -150,6 +179,11 @@ export interface Customer {
   // VAT & WHT toggles — ลูกค้าบางรายไม่ต้องคิด VAT หรือไม่หัก ณ ที่จ่าย
   enableVat: boolean       // คิด VAT (default true)
   enableWithholding: boolean // หัก ณ ที่จ่าย (default true)
+  // 213.2 Phase 1.1 — per-customer item display alias
+  // Map: catalog code → nickname ที่ลูกค้าคนนี้ใช้
+  // ใช้ตอน render ใน LF/SD/QT/print ของลูกค้านี้
+  // Reports/audit/Cmd+K ใช้ canonical เสมอ
+  itemNicknames?: Record<string, string>
 }
 
 // ============================================================
