@@ -185,7 +185,7 @@ export default function LinenFormsPage() {
         const itemMatch = !textMatch && f.rows.some(r => {
           if ((r.code || '').toLowerCase().includes(q)) return true
           const def = linenCatalog.find(c => c.code === r.code)
-          if (def && (def.name.toLowerCase().includes(q) || (def.nameEn || '').toLowerCase().includes(q))) return true
+          if (def && ((def.name || '').toLowerCase().includes(q) || (def.nameEn || '').toLowerCase().includes(q))) return true
           return false
         })
         if (!textMatch && !itemMatch) return false

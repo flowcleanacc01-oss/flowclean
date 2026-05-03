@@ -193,7 +193,7 @@ export default function DeliveryPage() {
         const itemMatch = !textMatch && dn.items.some(it => {
           if ((it.code || '').toLowerCase().includes(q)) return true
           const def = linenCatalog.find(c => c.code === it.code)
-          if (def && (def.name.toLowerCase().includes(q) || (def.nameEn || '').toLowerCase().includes(q))) return true
+          if (def && ((def.name || '').toLowerCase().includes(q) || (def.nameEn || '').toLowerCase().includes(q))) return true
           if (it.isAdhoc && (it.adhocName || '').toLowerCase().includes(q)) return true
           if ((it.displayName || '').toLowerCase().includes(q)) return true
           return false
