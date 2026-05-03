@@ -178,13 +178,14 @@ export default function LinenFormsPage() {
       if (search) {
         const customer = getCustomer(f.customerId)
         const q = search.toLowerCase()
-        const textMatch = f.formNumber.toLowerCase().includes(q)
+        const textMatch = (f.formNumber || '').toLowerCase().includes(q)
           || (customer?.shortName || '').toLowerCase().includes(q)
           || (customer?.name || '').toLowerCase().includes(q)
         // 214: รหัส + ชื่อรายการ (audit: หา LF ที่มี code นี้)
-        const itemMatch = !textMatch && f.rows.some(r => {
+        const itemMatch = !textMatch && (f.rows || []).some(r => {
+          if (!r) return false
           if ((r.code || '').toLowerCase().includes(q)) return true
-          const def = linenCatalog.find(c => c.code === r.code)
+          const def = r.code ? linenCatalog.find(c => c.code === r.code) : null
           if (def && ((def.name || '').toLowerCase().includes(q) || (def.nameEn || '').toLowerCase().includes(q))) return true
           return false
         })

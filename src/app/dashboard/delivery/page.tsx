@@ -186,13 +186,14 @@ export default function DeliveryPage() {
       if (search) {
         const customer = getCustomer(dn.customerId)
         const q = search.toLowerCase()
-        const textMatch = dn.noteNumber.toLowerCase().includes(q)
+        const textMatch = (dn.noteNumber || '').toLowerCase().includes(q)
           || (customer?.shortName || '').toLowerCase().includes(q)
           || (customer?.name || '').toLowerCase().includes(q)
         // 214: รหัส + ชื่อรายการ (audit: หา SD ที่มี item code นี้)
-        const itemMatch = !textMatch && dn.items.some(it => {
+        const itemMatch = !textMatch && (dn.items || []).some(it => {
+          if (!it) return false
           if ((it.code || '').toLowerCase().includes(q)) return true
-          const def = linenCatalog.find(c => c.code === it.code)
+          const def = it.code ? linenCatalog.find(c => c.code === it.code) : null
           if (def && ((def.name || '').toLowerCase().includes(q) || (def.nameEn || '').toLowerCase().includes(q))) return true
           if (it.isAdhoc && (it.adhocName || '').toLowerCase().includes(q)) return true
           if ((it.displayName || '').toLowerCase().includes(q)) return true
