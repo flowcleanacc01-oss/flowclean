@@ -165,6 +165,13 @@ export default function DeliveryPage() {
   }
   const sortedBg = (key: string) => sortKey === key ? 'bg-[#1B3A5C]/[0.04]' : ''
 
+  // Resolve price for a DN: snapshot (locked) → current QT → legacy
+  // ⚠️ ต้องประกาศก่อน getDNTotalAmount + filtered useMemo (ไม่งั้น TDZ ตอน amountMatch)
+  const getDNPrices = (dn: typeof deliveryNotes[number]): Record<string, number> => {
+    if (dn.priceSnapshot && Object.keys(dn.priceSnapshot).length > 0) return dn.priceSnapshot
+    return buildPriceMapFromQT(dn.customerId, quotations)
+  }
+
   // Calculate total amount for a DN (items subtotal + transport fees + adjustments)
   const getDNTotalAmount = (dn: typeof deliveryNotes[number]): number => {
     const customer = getCustomer(dn.customerId)
@@ -453,12 +460,6 @@ export default function DeliveryPage() {
   const itemNameMap = Object.fromEntries(
     linenCatalog.map(i => [i.code, ctxCustomer?.itemNicknames?.[i.code] || i.name])
   )
-
-  // Resolve price for a DN: snapshot (locked) → current QT → legacy
-  const getDNPrices = (dn: typeof deliveryNotes[number]): Record<string, number> => {
-    if (dn.priceSnapshot && Object.keys(dn.priceSnapshot).length > 0) return dn.priceSnapshot
-    return buildPriceMapFromQT(dn.customerId, quotations)
-  }
 
   // Map DN id → billing statement (for WB badge)
   const dnBillingMap = useMemo(() => {
