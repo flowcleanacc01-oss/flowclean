@@ -10,7 +10,8 @@ import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, aggregateDeliveryItemsByTotal, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { calculateTransportFeeTrip } from '@/lib/transport-fee'
-import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2, Sparkles, Target } from 'lucide-react'
+import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2, Sparkles, Target, GripVertical, ArrowUpDown } from 'lucide-react'
+import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import ExportButtons from '@/components/ExportButtons'
@@ -213,6 +214,11 @@ export default function BillingPage() {
   const [quEnableMinPerMonth, setQuEnableMinPerMonth] = useState(false)
   const [quMonthlyFlatRate, setQuMonthlyFlatRate] = useState(0)
   const [quNeedCustomerWarn, setQuNeedCustomerWarn] = useState(false)
+  // 216: reorder mode for QT items table (mirrors items page pattern)
+  const [qtReorderMode, setQtReorderMode] = useState(false)
+  const [qtDragCode, setQtDragCode] = useState<string | null>(null)
+  const [qtDragOverCode, setQtDragOverCode] = useState<string | null>(null)
+  useAutoScrollOnDrag(qtDragCode !== null)
 
   // Option A: Customer → QT shortcut (newqt=customerId in URL)
   useEffect(() => {
@@ -817,6 +823,18 @@ export default function BillingPage() {
     ;[arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]]
     setQuItems(arr)
   }
+
+  // 216: drag-drop reorder for QT items (move source to target position)
+  const handleReorderDropQuItem = useCallback((sourceCode: string, targetCode: string) => {
+    if (sourceCode === targetCode) return
+    const srcIdx = quItems.findIndex(i => i.code === sourceCode)
+    const tgtIdx = quItems.findIndex(i => i.code === targetCode)
+    if (srcIdx < 0 || tgtIdx < 0) return
+    const arr = [...quItems]
+    const [moved] = arr.splice(srcIdx, 1)
+    arr.splice(tgtIdx, 0, moved)
+    setQuItems(arr)
+  }, [quItems])
 
   const detailBilling = showDetail ? billingStatements.find(b => b.id === showDetail) : null
   const detailCustomer = detailBilling ? getCustomer(detailBilling.customerId) : null
@@ -2433,7 +2451,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* Create/Edit Quotation Modal */}
-      <Modal open={showCreateQU} onClose={() => { setShowCreateQU(false); setEditQuId(null); setShowLoadFromQT(false) }} title={editQuId ? 'แก้ไขใบเสนอราคา (ย้อนกลับเป็นร่าง)' : 'สร้างใบเสนอราคา'} size="xl" closeLabel="cancel">
+      <Modal open={showCreateQU} onClose={() => { setShowCreateQU(false); setEditQuId(null); setShowLoadFromQT(false); setQtReorderMode(false); setQtDragCode(null); setQtDragOverCode(null) }} title={editQuId ? 'แก้ไขใบเสนอราคา (ย้อนกลับเป็นร่าง)' : 'สร้างใบเสนอราคา'} size="xl" closeLabel="cancel">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -2547,17 +2565,40 @@ export default function BillingPage() {
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input value={quSearch} onChange={e => setQuSearch(e.target.value)}
                   placeholder="ค้นหา..."
-                  className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  disabled={qtReorderMode}
+                  className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed" />
               </div>
               <select value={quFilterCat} onChange={e => setQuFilterCat(e.target.value)}
-                className="px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+                disabled={qtReorderMode}
+                className="px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed">
                 <option value="all">ทุกหมวด</option>
                 {sortedCategories.map(c => (
                   <option key={c.key} value={c.key}>{c.label}</option>
                 ))}
               </select>
+              {/* 216: reorder mode toggle — clears search/filter so drag matches displayed order */}
+              <button type="button" onClick={() => {
+                setQtReorderMode(m => {
+                  const next = !m
+                  if (next) { setQuSearch(''); setQuFilterCat('all') }
+                  return next
+                })
+              }}
+                disabled={quItems.length < 2}
+                className={cn(
+                  'text-xs px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+                  qtReorderMode
+                    ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                )}
+                title={quItems.length < 2 ? 'ต้องมีอย่างน้อย 2 รายการ' : 'จัดลำดับใหม่ด้วยการลาก'}>
+                {qtReorderMode
+                  ? <><Check className="w-3 h-3" />เสร็จสิ้น</>
+                  : <><ArrowUpDown className="w-3 h-3" />จัดลำดับใหม่</>}
+              </button>
               <button type="button" onClick={() => setQtWizardOpen(true)}
-                className="text-xs px-2 py-1.5 bg-amber-50 text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors inline-flex items-center gap-1 font-medium"
+                disabled={qtReorderMode}
+                className="text-xs px-2 py-1.5 bg-amber-50 text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors inline-flex items-center gap-1 font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                 title="เพิ่มรายการใหม่ใน catalog + QT พร้อมตรวจซ้ำ">
                 <Sparkles className="w-3 h-3" />เพิ่มรายการใหม่ (Wizard)
               </button>
@@ -2578,7 +2619,8 @@ export default function BillingPage() {
                   .map(i => ({ code: i.code, name: i.name, pricePerUnit: i.defaultPrice > 0 ? i.defaultPrice : null }))
                 setQuItems([...quItems, ...newItems])
               }}
-                className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                disabled={qtReorderMode}
+                className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="เลือกทุกรายการที่ตรงกับ filter ปัจจุบัน">
                 เลือกทั้งหมด
               </button>
@@ -2595,7 +2637,8 @@ export default function BillingPage() {
                 }
                 setQuItems(quItems.filter(i => !matchesFilter(i)))
               }}
-                className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                disabled={qtReorderMode}
+                className="text-xs px-2 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="ยกเลิกเฉพาะรายการที่ตรงกับ filter ปัจจุบัน">
                 ไม่เลือกเลย
               </button>
@@ -2605,12 +2648,21 @@ export default function BillingPage() {
                   if (!confirm('ต้องการเคลียร์ราคาทั้งหมดหรือไม่?\n\nระบบจะรีเซ็ตช่อง "ราคา/หน่วย" ของทุกรายการเป็นว่าง\n\n⚠ ไม่สามารถเรียกคืนได้')) return
                   setQuItems(quItems.map(i => ({ ...i, pricePerUnit: null })))
                 }}
+                  disabled={qtReorderMode}
                   title="เคลียร์ราคาทุกรายการ"
-                  className="text-xs px-2 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1">
+                  className="text-xs px-2 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed">
                   <Trash2 className="w-3 h-3" />เคลียร์ราคาทั้งหมด
                 </button>
               )}
             </div>
+            {/* 216: reorder hint banner */}
+            {qtReorderMode && (
+              <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2">
+                <span className="font-semibold">โหมดจัดลำดับ:</span>
+                จับ <span className="font-mono px-1.5 py-0.5 bg-white border border-amber-300 rounded">⋮⋮</span> ลากลงไปยังตำแหน่งที่ต้องการ — กด &quot;เสร็จสิ้น&quot; เมื่อจัดเสร็จ
+                <span className="ml-auto text-amber-600">รายการที่ยังไม่เลือกถูกซ่อนชั่วคราว</span>
+              </div>
+            )}
             <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10">
@@ -2635,12 +2687,35 @@ export default function BillingPage() {
                       if (!item.code.toLowerCase().includes(s) && !item.name.toLowerCase().includes(s) && !(catItem?.nameEn || '').toLowerCase().includes(s)) return null
                     }
                     if (quFilterCat !== 'all' && catItem?.category !== quFilterCat) return null
+                    const isDragging = qtDragCode === item.code
+                    const isDragOver = qtDragOverCode === item.code && qtDragCode !== item.code
                     return (
-                      <tr key={item.code} className="border-t border-slate-100 hover:bg-slate-50">
+                      <tr key={item.code}
+                        draggable={qtReorderMode}
+                        onDragStart={qtReorderMode ? (e) => {
+                          setQtDragCode(item.code)
+                          e.dataTransfer.effectAllowed = 'move'
+                        } : undefined}
+                        onDragEnter={qtReorderMode ? () => setQtDragOverCode(item.code) : undefined}
+                        onDragOver={qtReorderMode ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } : undefined}
+                        onDragEnd={qtReorderMode ? () => { setQtDragCode(null); setQtDragOverCode(null) } : undefined}
+                        onDrop={qtReorderMode ? (e) => {
+                          e.preventDefault()
+                          if (qtDragCode) handleReorderDropQuItem(qtDragCode, item.code)
+                          setQtDragCode(null); setQtDragOverCode(null)
+                        } : undefined}
+                        className={cn(
+                          'border-t border-slate-100 transition-colors',
+                          !qtReorderMode && 'hover:bg-slate-50',
+                          qtReorderMode && 'select-none',
+                          isDragging && 'opacity-40',
+                          isDragOver && 'border-t-2 border-t-amber-500 bg-amber-50',
+                        )}>
                         <td className="px-1 py-1 text-center">
                           <input type="checkbox" checked={true}
+                            disabled={qtReorderMode}
                             onChange={() => setQuItems(quItems.filter(i => i.code !== item.code))}
-                            className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8] cursor-pointer" />
+                            className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" />
                         </td>
                         <td className="px-3 py-1 font-mono text-xs text-slate-600">{item.code}</td>
                         <td className="px-1 py-1 text-center text-xs text-slate-400">{idx + 1}</td>
@@ -2652,6 +2727,7 @@ export default function BillingPage() {
                           <input type="number" min={0} step={0.5}
                             data-qt-row={idx}
                             value={item.pricePerUnit === null ? '' : item.pricePerUnit}
+                            disabled={qtReorderMode}
                             onFocus={e => e.currentTarget.select()}
                             onChange={e => {
                               const updated = [...quItems]
@@ -2670,28 +2746,34 @@ export default function BillingPage() {
                                 if (prev) { prev.focus(); prev.select() }
                               }
                             }}
-                            className={cn("w-24 px-2 py-1 border rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none",
+                            className={cn("w-24 px-2 py-1 border rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed",
                               item.pricePerUnit === null ? "border-red-400 bg-red-50"
                               : item.pricePerUnit === 0 ? "border-orange-300 bg-orange-50"
                               : "border-slate-200")} />
                         </td>
                         <td className="px-1 py-1 text-center">
-                          <div className="flex items-center justify-center gap-0.5">
-                            <button type="button" onClick={() => moveQuItem(item.code, 'up')} disabled={idx === 0}
-                              className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-default transition-colors">
-                              <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
-                            </button>
-                            <button type="button" onClick={() => moveQuItem(item.code, 'down')} disabled={idx === quItems.length - 1}
-                              className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-default transition-colors">
-                              <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
-                            </button>
-                          </div>
+                          {qtReorderMode ? (
+                            <div className="flex items-center justify-center cursor-grab active:cursor-grabbing text-amber-500 hover:text-amber-600">
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-0.5">
+                              <button type="button" onClick={() => moveQuItem(item.code, 'up')} disabled={idx === 0}
+                                className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-default transition-colors">
+                                <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                              </button>
+                              <button type="button" onClick={() => moveQuItem(item.code, 'down')} disabled={idx === quItems.length - 1}
+                                className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 disabled:cursor-default transition-colors">
+                                <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )
                   })}
                   {/* Unchecked items — catalog items not in quItems */}
-                  {(() => {
+                  {!qtReorderMode && (() => {
                     const checkedCodes = new Set(quItems.map(i => i.code))
                     return [...linenCatalog]
                       .filter(cat => !checkedCodes.has(cat.code))
