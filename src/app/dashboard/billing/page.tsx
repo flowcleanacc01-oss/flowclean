@@ -205,6 +205,14 @@ export default function BillingPage() {
   const [qtDragCode, setQtDragCode] = useState<string | null>(null)
   const [qtDragOverCode, setQtDragOverCode] = useState<string | null>(null)
   useAutoScrollOnDrag(qtDragCode !== null)
+  // 216-fix: reset reorder state ทุกครั้งที่ modal ปิด (ครอบ Cancel button + ESC + backdrop ในที่เดียว)
+  useEffect(() => {
+    if (!showCreateQU) {
+      setQtReorderMode(false)
+      setQtDragCode(null)
+      setQtDragOverCode(null)
+    }
+  }, [showCreateQU])
 
   // Option A: Customer → QT shortcut (newqt=customerId in URL)
   useEffect(() => {
@@ -2437,7 +2445,7 @@ export default function BillingPage() {
       </Modal>
 
       {/* Create/Edit Quotation Modal */}
-      <Modal open={showCreateQU} onClose={() => { setShowCreateQU(false); setEditQuId(null); setShowLoadFromQT(false); setQtReorderMode(false); setQtDragCode(null); setQtDragOverCode(null) }} title={editQuId ? 'แก้ไขใบเสนอราคา (ย้อนกลับเป็นร่าง)' : 'สร้างใบเสนอราคา'} size="xl" closeLabel="cancel">
+      <Modal open={showCreateQU} onClose={() => { setShowCreateQU(false); setEditQuId(null); setShowLoadFromQT(false) }} title={editQuId ? 'แก้ไขใบเสนอราคา (ย้อนกลับเป็นร่าง)' : 'สร้างใบเสนอราคา'} size="xl" closeLabel="cancel">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -2502,10 +2510,11 @@ export default function BillingPage() {
               <label className="text-sm font-medium text-slate-600">รายการผ้า + ราคา ({quItems.length} รายการ)</label>
               <div className="relative">
                 <button type="button" onClick={() => { setShowLoadFromQT(!showLoadFromQT); setQuLoadQTSearch('') }}
-                  className="flex items-center gap-1 text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
+                  disabled={qtReorderMode}
+                  className="flex items-center gap-1 text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                   <FileText className="w-3.5 h-3.5" />โหลดจากใบเสนอราคา
                 </button>
-                {showLoadFromQT && (
+                {showLoadFromQT && !qtReorderMode && (
                   <div className="absolute z-20 mt-1 right-0 w-80 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 flex flex-col">
                     <div className="sticky top-0 p-2 border-b border-slate-100 bg-white">
                       <input value={quLoadQTSearch} onChange={e => setQuLoadQTSearch(e.target.value)}
