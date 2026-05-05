@@ -25,6 +25,7 @@ import TaxInvoicePrint from '@/components/TaxInvoicePrint'
 import QuotationPrint from '@/components/QuotationPrint'
 import CustomerPicker from '@/components/CustomerPicker'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
+import { useTabUrlSync } from '@/lib/use-tab-url-sync'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
 import AddItemWizard from '@/components/AddItemWizard'
 import { getCatalogValidationPrefs } from '@/components/CatalogHygieneCenter'
@@ -46,21 +47,8 @@ export default function BillingPage() {
   const pathname = usePathname()
   const router = useRouter()
   const urlHighlightQ = searchParams.get('q') || '' // 147.2
-  const [tabState, setTabState] = useState<TabKey>(() => {
-    const t = searchParams.get('tab')
-    if (t === 'invoice' || t === 'quotation') return t
-    return 'billing'
-  })
-  const tab = tabState
-  // 187: setTab → sync URL ?tab= ทุกครั้ง เพื่อให้ Sidebar highlight ตรงกับ tab จริง
-  const setTab = useCallback((t: TabKey) => {
-    setTabState(t)
-    const sp = new URLSearchParams(Array.from(searchParams.entries()))
-    if (sp.get('tab') !== t) {
-      sp.set('tab', t)
-      router.replace(`${pathname}?${sp.toString()}`, { scroll: false })
-    }
-  }, [searchParams, pathname, router])
+  // 219: tab state synced with URL ?tab= + browser back/forward support
+  const [tab, setTab] = useTabUrlSync<TabKey>(['billing', 'invoice', 'quotation'] as const, 'billing')
   const [search, setSearch] = useState('')
   // 162.1: combine local search + URL ?q so live typing also highlights
   const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
@@ -77,10 +65,8 @@ export default function BillingPage() {
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
 
   // Sync tab + auto-open detail from URL params (cross-page navigation)
+  // 219: tab sync ย้ายไปอยู่ใน useTabUrlSync แล้ว — ที่นี่จัดการแค่ modal auto-open
   useEffect(() => {
-    const t = searchParams.get('tab')
-    if (t === 'billing' || t === 'invoice' || t === 'quotation') setTab(t)
-
     // Auto-open WB detail
     const detailParam = searchParams.get('detail')
     if (detailParam) {

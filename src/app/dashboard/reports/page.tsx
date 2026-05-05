@@ -16,13 +16,17 @@ import Modal from '@/components/Modal'
 import CarryOverAdjustModal from '@/components/CarryOverAdjustModal'
 import { CARRY_OVER_MODE_CONFIG, CARRY_OVER_REASON_CONFIG } from '@/types'
 import { canViewReports } from '@/lib/permissions'
+import { useTabUrlSync } from '@/lib/use-tab-url-sync'
 import type { CarryOverMode, CarryOverAdjustment, BillingStatement } from '@/types'
 
 type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation'
 
+const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation'] as const
+
 export default function ReportsPage() {
   const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations, carryOverAdjustments, deleteCarryOverAdjustment } = useStore()
-  const [tab, setTab] = useState<TabKey>('monthly')
+  // 219: tab synced with URL — supports browser back/forward
+  const [tab, setTab] = useTabUrlSync<TabKey>(REPORTS_TABS, 'monthly')
   const [showDeliveryPrint, setShowDeliveryPrint] = useState(false)
   const [showStockPrint, setShowStockPrint] = useState(false)
   const [showConsolidationPrint, setShowConsolidationPrint] = useState(false)

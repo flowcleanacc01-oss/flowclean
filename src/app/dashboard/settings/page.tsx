@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
+import { useTabUrlSync } from '@/lib/use-tab-url-sync'
 import { canManageSettings } from '@/lib/permissions'
 import { cn, formatDate } from '@/lib/utils'
 import { validatePassword } from '@/lib/auth'
@@ -46,16 +47,11 @@ export default function SettingsPage() {
   } = useStore()
 
   const searchParams = useSearchParams()
-  const [tab, setTab] = useState<TabKey>(() => {
-    const t = searchParams.get('tab')
-    if (t === 'users' || t === 'company' || t === 'documents' || t === 'auditlog') return t
-    return 'users'
-  })
-
-  useEffect(() => {
-    const t = searchParams.get('tab')
-    if (t === 'users' || t === 'company' || t === 'documents' || t === 'auditlog') setTab(t)
-  }, [searchParams])
+  // 219: tab synced with URL — supports browser back/forward
+  const [tab, setTab] = useTabUrlSync<TabKey>(
+    ['users', 'company', 'documents', 'auditlog'] as const,
+    'users',
+  )
 
   // New user form
   const [newName, setNewName] = useState('')

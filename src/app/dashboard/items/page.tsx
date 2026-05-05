@@ -12,6 +12,7 @@ import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
+import { useTabUrlSync } from '@/lib/use-tab-url-sync'
 import MergeCodesTool from '@/components/MergeCodesTool'
 import SyncNamesTool from '@/components/SyncNamesTool'
 import CatalogHygieneCenter from '@/components/CatalogHygieneCenter'
@@ -49,7 +50,11 @@ export default function ItemsPage() {
   const [showItemPrintList, setShowItemPrintList] = useState(false) // 154.1
 
   // 196: default tab = items (Hygiene Center เป็น optional, admin เปิดเอง)
-  const [tab, setTab] = useState<TabKey>('items')
+  // 219: tab synced with URL — supports browser back/forward
+  const [tab, setTab] = useTabUrlSync<TabKey>(
+    ['hygiene', 'items', 'categories', 'merge', 'sync', 'vocab'] as const,
+    'items',
+  )
   // 180: scroll to first <mark> when arriving from global search with ?q=
   useScrollToMark([tab])
 
