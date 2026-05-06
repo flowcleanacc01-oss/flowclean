@@ -2,12 +2,17 @@
 
 /**
  * 207 — Similarity detection สำหรับ AddItemWizard
+ * 218.1 — เพิ่ม Thai phonetic class match (ซิป↔ซิบ, ฟ↔ฝ, etc.)
  *
  * ตรวจรายการใกล้เคียงใน catalog เพื่อกัน user เพิ่มรายการซ้ำ
- * Strategy:
- *  1. Exact substring (case-insensitive, ทั้งสอง direction) — น้ำหนักสูงสุด
- *  2. Token overlap (split by space/_/-) — น้ำหนักกลาง
- *  3. nameEn match — น้ำหนักต่ำ
+ * Strategy (เก็บ score สูงสุด):
+ *  1. Exact match → 100
+ *  2. Substring → 85-90
+ *  3. nameEn substring → 70
+ *  4. Phonetic exact (218.1) → 92  ← เสียงเหมือนเป๊ะ (สะกดต่าง)
+ *  5. Phonetic substring (218.1) → 75-80
+ *  6. Token overlap → 60-85
+ * Threshold: ตอบกลับเฉพาะ score >= 60 (218.1 raised from 25)
  */
 import { useMemo } from 'react'
 import type { LinenItemDef } from '@/types'
@@ -16,6 +21,49 @@ export interface SimilarMatch {
   item: LinenItemDef
   score: number  // 0-100, higher = more similar
   reason: string // คำอธิบายให้ user
+}
+
+const MIN_SCORE_TO_SHOW = 60 // 218.1: ขึ้นจาก 25 → 60
+
+/**
+ * 218.1 — Thai phonetic class mapping
+ * ตัวอักษรที่ออกเสียงใกล้กันในภาษาไทย → map เป็น class เดียว
+ * เพื่อให้ "ซิป" ≈ "ซิบ", "ฟอง" ≈ "ฝอง", "ฉัน" ≈ "ชั้น" ฯลฯ
+ */
+const PHONETIC_CLASSES: Record<string, string> = {
+  // P class — บ/ป/พ/ผ/ภ (Thai final-consonant neutralization — เสียง /p/ /b/ /pʰ/ สับกันได้)
+  'บ': 'P', 'ป': 'P', 'พ': 'P', 'ผ': 'P', 'ภ': 'P',
+  // S class — ส/ซ/ศ/ษ
+  'ส': 'S', 'ซ': 'S', 'ศ': 'S', 'ษ': 'S',
+  // K class — ก/ค/ข/ฆ
+  'ก': 'K', 'ค': 'K', 'ข': 'K', 'ฆ': 'K',
+  // T class — ท/ต/ฏ/ฐ/ฑ/ฒ/ด/ถ/ธ
+  'ท': 'T', 'ต': 'T', 'ฏ': 'T', 'ฐ': 'T', 'ฑ': 'T', 'ฒ': 'T', 'ด': 'T', 'ถ': 'T', 'ธ': 'T',
+  // F class — ฟ/ฝ
+  'ฟ': 'F', 'ฝ': 'F',
+  // H class — ห/ฮ
+  'ห': 'H', 'ฮ': 'H',
+  // CH class — จ/ช/ฉ/ฌ
+  'จ': 'CH', 'ช': 'CH', 'ฉ': 'CH', 'ฌ': 'CH',
+  // L class — ร/ล/ฬ (loanword สับกัน)
+  'ร': 'L', 'ล': 'L', 'ฬ': 'L',
+  // N class — น/ณ
+  'น': 'N', 'ณ': 'N',
+  // Y class — ย/ญ
+  'ย': 'Y', 'ญ': 'Y',
+}
+
+const THAI_TONE_MARKS = /[่-๋์]/g // ◌่ ◌้ ◌๊ ◌๋ ◌์
+
+/** 218.1 — Normalize string เป็น phonetic representation */
+function phoneticNormalize(s: string): string {
+  const cleaned = (s || '').toLowerCase().trim().replace(/\s+/g, '')
+  const noTones = cleaned.replace(THAI_TONE_MARKS, '')
+  let result = ''
+  for (const c of noTones) {
+    result += PHONETIC_CLASSES[c] || c
+  }
+  return result
 }
 
 /** Normalize Thai/English string สำหรับเปรียบเทียบ */
@@ -47,7 +95,24 @@ function computeScore(query: string, item: LinenItemDef): { score: number; reaso
     return { score: 70, reason: `ใกล้กับ EN "${item.nameEn}"` }
   }
 
-  // 3. Token overlap
+  // 3. Phonetic match (218.1) — เสียงเหมือนแต่สะกดต่าง (ซิป↔ซิบ, ฉัน↔ชั้น, ฟอง↔ฝอง)
+  if (q.length >= 3) {
+    const qPhonetic = phoneticNormalize(q)
+    const namePhonetic = phoneticNormalize(name)
+    if (qPhonetic && namePhonetic && qPhonetic === namePhonetic) {
+      return { score: 92, reason: `"${item.name}" — เสียงเหมือนกัน (สะกดต่าง)` }
+    }
+    if (qPhonetic.length >= 4 && namePhonetic.length >= 4) {
+      if (namePhonetic.includes(qPhonetic)) {
+        return { score: 80, reason: `"${item.name}" — มีเสียงคล้ายอยู่ในชื่อ` }
+      }
+      if (qPhonetic.includes(namePhonetic)) {
+        return { score: 75, reason: `"${item.name}" — เป็นส่วนหนึ่งของเสียงที่พิมพ์` }
+      }
+    }
+  }
+
+  // 4. Token overlap
   const qTokens = tokenize(q)
   const nameTokens = tokenize(name)
   if (qTokens.length === 0 || nameTokens.length === 0) return { score: 0, reason: '' }
@@ -56,8 +121,8 @@ function computeScore(query: string, item: LinenItemDef): { score: number; reaso
 
   // ratio = common / max(qTokens, nameTokens)
   const ratio = common.length / Math.max(qTokens.length, nameTokens.length)
-  const score = Math.round(ratio * 60) // max 60 from token overlap
-  if (score < 25) return { score: 0, reason: '' }
+  const score = Math.round(ratio * 85) // 218.1: max 85 (raised from 60)
+  if (score < MIN_SCORE_TO_SHOW) return { score: 0, reason: '' }
   return { score, reason: `คล้ายคำ "${common.join(', ')}"` }
 }
 
@@ -68,7 +133,7 @@ export function useSimilarItems(query: string, catalog: LinenItemDef[], topN = 5
     const matches: SimilarMatch[] = []
     for (const item of catalog) {
       const { score, reason } = computeScore(query, item)
-      if (score > 0) matches.push({ item, score, reason })
+      if (score >= MIN_SCORE_TO_SHOW) matches.push({ item, score, reason })
     }
     matches.sort((a, b) => b.score - a.score)
     return matches.slice(0, topN)

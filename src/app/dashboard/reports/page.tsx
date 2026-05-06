@@ -17,11 +17,12 @@ import CarryOverAdjustModal from '@/components/CarryOverAdjustModal'
 import { CARRY_OVER_MODE_CONFIG, CARRY_OVER_REASON_CONFIG } from '@/types'
 import { canViewReports } from '@/lib/permissions'
 import { useTabUrlSync } from '@/lib/use-tab-url-sync'
+import PriceAudit from '@/components/PriceAudit'
 import type { CarryOverMode, CarryOverAdjustment, BillingStatement } from '@/types'
 
-type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation'
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit'
 
-const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation'] as const
+const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit'] as const
 
 export default function ReportsPage() {
   const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations, carryOverAdjustments, deleteCarryOverAdjustment } = useStore()
@@ -82,6 +83,7 @@ export default function ReportsPage() {
     { key: 'delivery', label: 'รายงานส่งของ' },
     { key: 'stock', label: 'สต็อกรายเดือน' },
     { key: 'consolidation', label: 'รวบเดือน' },
+    { key: 'priceaudit', label: '🛡️ Price Audit' },
   ]
 
   const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
@@ -1172,6 +1174,9 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+
+      {/* 217.1: Price Audit Tab — read-only monitoring */}
+      {tab === 'priceaudit' && <PriceAudit />}
 
       {/* Delivery Report Print Modal */}
       <Modal open={showDeliveryPrint} onClose={() => setShowDeliveryPrint(false)} title="พิมพ์รายงานส่งสินค้า" size="full" className="print-target">
