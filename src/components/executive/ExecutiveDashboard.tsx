@@ -9,13 +9,20 @@ import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { canViewExecutiveDashboard } from '@/lib/permissions'
 import { useExecutiveDashboard, previousMonth } from '@/lib/use-executive-dashboard'
-import { Sparkles, Calendar } from 'lucide-react'
+import { useExecutiveTier23 } from '@/lib/use-executive-tier23'
+import { Sparkles, Calendar, Database } from 'lucide-react'
 import CustomerRevenueShare from './CustomerRevenueShare'
 import CategoryRevenueShare from './CategoryRevenueShare'
 import MoMWaterfall from './MoMWaterfall'
 import CustomerHealthScore from './CustomerHealthScore'
 import PriceRealization from './PriceRealization'
 import YieldPerPiece from './YieldPerPiece'
+import ItemMixProfitability from './ItemMixProfitability'
+import SeasonalityDecomposition from './SeasonalityDecomposition'
+import CustomerCohortRetention from './CustomerCohortRetention'
+import ChurnRiskPredictor from './ChurnRiskPredictor'
+import CapacityUtilization from './CapacityUtilization'
+import WinLossQT from './WinLossQT'
 
 function nowYM(): string {
   const d = new Date()
@@ -43,11 +50,21 @@ export default function ExecutiveDashboard() {
   const { currentUser } = useStore()
 
   const [currentMonth, setCurrentMonth] = useState(() => nowYM())
+  const [includeLegacy, setIncludeLegacy] = useState(true)
   const prevMonth = useMemo(() => previousMonth(currentMonth), [currentMonth])
   const trendFrom = useMemo(() => ymToISOStart(monthMinus(currentMonth, 5)), [currentMonth])
   const trendTo = useMemo(() => ymToISOEnd(currentMonth), [currentMonth])
 
   const data = useExecutiveDashboard({ currentMonth, prevMonth, trendFrom, trendTo })
+
+  // Tier 2-3 — wider window (24 months back) for seasonality + cohort + churn
+  const tier23From = useMemo(() => ymToISOStart(monthMinus(currentMonth, 23)), [currentMonth])
+  const tier23 = useExecutiveTier23({
+    dateFrom: tier23From,
+    dateTo: trendTo,
+    anchorMonth: currentMonth,
+    includeLegacy,
+  })
 
   if (!canViewExecutiveDashboard(currentUser)) {
     return (
@@ -101,6 +118,15 @@ export default function ExecutiveDashboard() {
         <div className="w-full text-xs text-slate-500">
           เปรียบเทียบ: <strong>{prevMonth}</strong> → <strong>{currentMonth}</strong>
           {' · '}Health window: <strong>{trendFrom.slice(0, 7)}</strong> ถึง <strong>{currentMonth}</strong> (6 เดือน)
+          {' · '}Tier 2-3 window: <strong>{tier23From.slice(0, 7)}</strong> ถึง <strong>{currentMonth}</strong> (24 เดือน)
+        </div>
+        <div className="w-full flex items-center gap-2 pt-2 border-t border-slate-100">
+          <Database className="w-3.5 h-3.5 text-slate-400" />
+          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+            <input type="checkbox" checked={includeLegacy} onChange={e => setIncludeLegacy(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+            รวมข้อมูล legacy (WB เก่า ปี 2565-2568) — เห็น history ลึก เห็น seasonality + cohort จริง
+          </label>
         </div>
       </div>
 
@@ -128,6 +154,31 @@ export default function ExecutiveDashboard() {
 
       {/* 220.E Yield per Piece */}
       <YieldPerPiece rows={data.yieldRanking} />
+
+      {/* ─────────────────────────────────────────────────── */}
+      <div className="pt-2 border-t border-slate-200">
+        <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold mb-3 mt-2">
+          📊 Tier 2-3 — Strategic Analytics ({tier23From.slice(0, 7)} ถึง {currentMonth})
+        </div>
+      </div>
+
+      {/* 222.2 Seasonality Decomposition */}
+      <SeasonalityDecomposition data={tier23.seasonality} />
+
+      {/* 222.3 Customer Cohort Retention */}
+      <CustomerCohortRetention data={tier23.cohorts} usingLegacy={includeLegacy} />
+
+      {/* 222.4 Churn Risk Predictor */}
+      <ChurnRiskPredictor rows={tier23.churnRisk} usingLegacy={includeLegacy} />
+
+      {/* 222.1 Item Mix Profitability — current data only */}
+      <ItemMixProfitability rows={tier23.itemMix} />
+
+      {/* 222.5 Capacity Utilization — current LF only */}
+      <CapacityUtilization data={tier23.capacity} />
+
+      {/* 222.6 Win-Loss QT Analysis */}
+      <WinLossQT data={tier23.winLoss} usingLegacy={includeLegacy} />
 
       {/* Footer */}
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-500 text-center">
