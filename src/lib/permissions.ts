@@ -76,3 +76,6 @@ export const canResetData = (u: AppUser | null) => hasRole(u, ['admin'])
 
 /** Audit log viewer — Admin only */
 export const canViewAuditLog = (u: AppUser | null) => hasRole(u, ['admin'])
+
+/** Executive Dashboard (220) — Admin only — strategic insight + concentration risk */
+export const canViewExecutiveDashboard = (u: AppUser | null) => hasRole(u, ['admin'])

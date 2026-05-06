@@ -15,14 +15,15 @@ import CarryOverReportPrint from '@/components/CarryOverReportPrint'
 import Modal from '@/components/Modal'
 import CarryOverAdjustModal from '@/components/CarryOverAdjustModal'
 import { CARRY_OVER_MODE_CONFIG, CARRY_OVER_REASON_CONFIG } from '@/types'
-import { canViewReports } from '@/lib/permissions'
+import { canViewReports, canViewExecutiveDashboard } from '@/lib/permissions'
 import { useTabUrlSync } from '@/lib/use-tab-url-sync'
 import PriceAudit from '@/components/PriceAudit'
+import ExecutiveDashboard from '@/components/executive/ExecutiveDashboard'
 import type { CarryOverMode, CarryOverAdjustment, BillingStatement } from '@/types'
 
-type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit'
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'executive'
 
-const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit'] as const
+const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'executive'] as const
 
 export default function ReportsPage() {
   const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations, carryOverAdjustments, deleteCarryOverAdjustment } = useStore()
@@ -84,6 +85,7 @@ export default function ReportsPage() {
     { key: 'stock', label: 'สต็อกรายเดือน' },
     { key: 'consolidation', label: 'รวบเดือน' },
     { key: 'priceaudit', label: '🛡️ Price Audit' },
+    ...(canViewExecutiveDashboard(currentUser) ? [{ key: 'executive' as TabKey, label: '✨ Executive' }] : []),
   ]
 
   const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
@@ -1177,6 +1179,9 @@ export default function ReportsPage() {
 
       {/* 217.1: Price Audit Tab — read-only monitoring */}
       {tab === 'priceaudit' && <PriceAudit />}
+
+      {/* 220: Executive Dashboard — admin only */}
+      {tab === 'executive' && <ExecutiveDashboard />}
 
       {/* Delivery Report Print Modal */}
       <Modal open={showDeliveryPrint} onClose={() => setShowDeliveryPrint(false)} title="พิมพ์รายงานส่งสินค้า" size="full" className="print-target">
