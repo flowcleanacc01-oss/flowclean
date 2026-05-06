@@ -15,7 +15,7 @@
  */
 import { useMemo } from 'react'
 import { useStore } from './store'
-import type { BillingStatement, Customer, DeliveryNote, LinenForm, Quotation, CustomerType } from '@/types'
+import type { BillingStatement, Customer, DeliveryNote, LinenForm, Quotation, CustomerType, LegacyDocument } from '@/types'
 import { CUSTOMER_TYPE_CONFIG } from '@/types'
 
 // ────────────────────────────────────────────────────────────────
@@ -31,6 +31,8 @@ export interface ExecutiveFilters {
   trendFrom: string
   /** ISO date — end (default: today) */
   trendTo: string
+  /** 221: รวม legacy WB เข้า revenue calculations (A, B, C, Health Score) */
+  includeLegacy: boolean
 }
 
 export interface CustomerShareRow {
@@ -104,6 +106,10 @@ export interface ExecutiveStats {
   lostCustomers: number
   netChange: number
   netChangePct: number
+  /** 221: legacy integration stats */
+  legacyRevenueIncluded: number   // total legacy WB amount included in current month
+  legacyDocsUsed: number          // # legacy docs used
+  legacyDocsUnmatched: number     // # legacy docs skipped (no customerId match)
 }
 
 export interface ExecutiveData {
@@ -200,11 +206,11 @@ function monthsBetween(startYM: string, endYM: string): string[] {
 // ────────────────────────────────────────────────────────────────
 
 export function useExecutiveDashboard(filters: ExecutiveFilters): ExecutiveData {
-  const { billingStatements, customers, deliveryNotes, linenForms, quotations } = useStore()
+  const { billingStatements, customers, deliveryNotes, linenForms, quotations, legacyDocuments } = useStore()
 
   return useMemo(() => {
-    return computeExecutive(filters, billingStatements, customers, deliveryNotes, linenForms, quotations)
-  }, [filters, billingStatements, customers, deliveryNotes, linenForms, quotations])
+    return computeExecutive(filters, billingStatements, customers, deliveryNotes, linenForms, quotations, legacyDocuments)
+  }, [filters, billingStatements, customers, deliveryNotes, linenForms, quotations, legacyDocuments])
 }
 
 function computeExecutive(
@@ -214,8 +220,35 @@ function computeExecutive(
   deliveryNotes: DeliveryNote[],
   linenForms: LinenForm[],
   quotations: Quotation[],
+  legacyDocuments: LegacyDocument[],
 ): ExecutiveData {
   const custMap = new Map(customers.map(c => [c.id, c]))
+  const validCustomerIds = new Set(customers.map(c => c.id))
+
+  // ── 221: Filter legacy WB into per-customer per-month revenue
+  // Unmatched (no customerId match) → counted but skipped from calculation
+  let legacyDocsUsed = 0
+  let legacyDocsUnmatched = 0
+  // Map: customerId → billingMonth → legacy revenue
+  const legacyRevByCustomerMonth = new Map<string, Map<string, number>>()
+  if (filters.includeLegacy) {
+    for (const d of legacyDocuments) {
+      if (d.kind !== 'WB') continue
+      const ym = (d.docDate || '').slice(0, 7)
+      if (!ym) continue
+      if (!d.customerId || !validCustomerIds.has(d.customerId)) {
+        legacyDocsUnmatched++
+        continue
+      }
+      let m = legacyRevByCustomerMonth.get(d.customerId)
+      if (!m) { m = new Map(); legacyRevByCustomerMonth.set(d.customerId, m) }
+      m.set(ym, (m.get(ym) || 0) + (d.amount || 0))
+      legacyDocsUsed++
+    }
+  }
+  const getLegacyRev = (cid: string, ym: string): number =>
+    legacyRevByCustomerMonth.get(cid)?.get(ym) || 0
+  let legacyRevenueIncluded = 0
 
   // ── Build accepted QT map (latest per customer)
   const qtByCustomer = new Map<string, Quotation>()
@@ -229,10 +262,20 @@ function computeExecutive(
   const currentBills = billingStatements.filter(b => b.billingMonth === filters.currentMonth)
   const prevBills = billingStatements.filter(b => b.billingMonth === filters.prevMonth)
 
-  // ── 220.1 Customer Revenue Share (current month)
+  // ── 220.1 Customer Revenue Share (current month + 221: legacy if enabled)
   const revByCustomer = new Map<string, number>()
   for (const b of currentBills) {
     revByCustomer.set(b.customerId, (revByCustomer.get(b.customerId) || 0) + b.subtotal)
+  }
+  // 221: เพิ่ม legacy WB ของเดือนเดียวกัน (matched customers only)
+  if (filters.includeLegacy) {
+    for (const [cid, monthMap] of legacyRevByCustomerMonth.entries()) {
+      const legacy = monthMap.get(filters.currentMonth) || 0
+      if (legacy > 0) {
+        revByCustomer.set(cid, (revByCustomer.get(cid) || 0) + legacy)
+        legacyRevenueIncluded += legacy
+      }
+    }
   }
   const totalRevenue = Array.from(revByCustomer.values()).reduce((a, b) => a + b, 0)
 
@@ -264,15 +307,15 @@ function computeExecutive(
   const top20Count = Math.max(1, Math.ceil(customerShare.length * 0.2))
   const paretoTopShare = customerShare.slice(0, top20Count).reduce((sum, r) => sum + r.share, 0)
 
-  // ── 220.2 Category Revenue Share
+  // ── 220.2 Category Revenue Share — derive from revByCustomer (already includes legacy)
   const revByCategory = new Map<CustomerType, { revenue: number; customers: Set<string> }>()
-  for (const b of currentBills) {
-    const c = custMap.get(b.customerId)
+  for (const [cid, rev] of revByCustomer.entries()) {
+    const c = custMap.get(cid)
     if (!c) continue
     const cat = c.customerType
     const ex = revByCategory.get(cat) || { revenue: 0, customers: new Set() }
-    ex.revenue += b.subtotal
-    ex.customers.add(b.customerId)
+    ex.revenue += rev
+    ex.customers.add(cid)
     revByCategory.set(cat, ex)
   }
   const categoryShare: CategoryShareRow[] = Array.from(revByCategory.entries())
@@ -285,10 +328,18 @@ function computeExecutive(
     }))
     .sort((a, b) => b.revenue - a.revenue)
 
-  // ── 220.3 MoM Waterfall
+  // ── 220.3 MoM Waterfall — prev period also includes legacy if enabled
   const prevRevByCustomer = new Map<string, number>()
   for (const b of prevBills) {
     prevRevByCustomer.set(b.customerId, (prevRevByCustomer.get(b.customerId) || 0) + b.subtotal)
+  }
+  if (filters.includeLegacy) {
+    for (const [cid, monthMap] of legacyRevByCustomerMonth.entries()) {
+      const legacy = monthMap.get(filters.prevMonth) || 0
+      if (legacy > 0) {
+        prevRevByCustomer.set(cid, (prevRevByCustomer.get(cid) || 0) + legacy)
+      }
+    }
   }
 
   // Union of all customers in either period
@@ -330,7 +381,7 @@ function computeExecutive(
   const netChange = totalRevenue - prevTotal
   const netChangePct = prevTotal === 0 ? 0 : (netChange / prevTotal) * 100
 
-  // ── 220.C Customer Health Score (use trend window)
+  // ── 220.C Customer Health Score (use trend window) — 221: include legacy
   const trendMonths = monthsBetween(filters.trendFrom.slice(0, 7), filters.trendTo.slice(0, 7))
   const billsByCustMonth = new Map<string, Map<string, number>>()
   for (const b of billingStatements) {
@@ -338,6 +389,17 @@ function computeExecutive(
     let cm = billsByCustMonth.get(b.customerId)
     if (!cm) { cm = new Map(); billsByCustMonth.set(b.customerId, cm) }
     cm.set(b.billingMonth, (cm.get(b.billingMonth) || 0) + b.subtotal)
+  }
+  // 221: เพิ่ม legacy WB ที่อยู่ใน trend window
+  if (filters.includeLegacy) {
+    for (const [cid, monthMap] of legacyRevByCustomerMonth.entries()) {
+      let cm = billsByCustMonth.get(cid)
+      for (const [ym, rev] of monthMap.entries()) {
+        if (ym < trendMonths[0] || ym > trendMonths[trendMonths.length - 1]) continue
+        if (!cm) { cm = new Map(); billsByCustMonth.set(cid, cm) }
+        cm.set(ym, (cm.get(ym) || 0) + rev)
+      }
+    }
   }
 
   // Discrepancy rate per customer (LF rows that have discrepancy / total LF rows)
@@ -510,6 +572,9 @@ function computeExecutive(
     lostCustomers,
     netChange,
     netChangePct,
+    legacyRevenueIncluded,
+    legacyDocsUsed,
+    legacyDocsUnmatched,
   }
 
   return {

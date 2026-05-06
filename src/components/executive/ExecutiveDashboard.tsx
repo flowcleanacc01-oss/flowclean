@@ -55,7 +55,7 @@ export default function ExecutiveDashboard() {
   const trendFrom = useMemo(() => ymToISOStart(monthMinus(currentMonth, 5)), [currentMonth])
   const trendTo = useMemo(() => ymToISOEnd(currentMonth), [currentMonth])
 
-  const data = useExecutiveDashboard({ currentMonth, prevMonth, trendFrom, trendTo })
+  const data = useExecutiveDashboard({ currentMonth, prevMonth, trendFrom, trendTo, includeLegacy })
 
   // Tier 2-3 — wider window (24 months back) for seasonality + cohort + churn
   const tier23From = useMemo(() => ymToISOStart(monthMinus(currentMonth, 23)), [currentMonth])
@@ -129,6 +129,26 @@ export default function ExecutiveDashboard() {
           </label>
         </div>
       </div>
+
+      {/* 221: Legacy integration banner */}
+      {includeLegacy && (data.stats.legacyDocsUsed > 0 || data.stats.legacyDocsUnmatched > 0) && (
+        <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-3 text-xs text-cyan-800 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="font-semibold">📦 Legacy รวมแล้ว:</span>
+          <span>
+            +<strong>{data.stats.legacyRevenueIncluded.toLocaleString()}</strong> บาท
+            จาก {data.stats.legacyDocsUsed} legacy WB ในเดือนนี้
+          </span>
+          {data.stats.legacyDocsUnmatched > 0 && (
+            <span className="text-amber-700">
+              ⚠️ ตัด {data.stats.legacyDocsUnmatched} docs ที่ไม่ match customer
+            </span>
+          )}
+          <span className="ml-auto text-cyan-600">
+            ใช้ใน: 220.1 / 220.2 / 220.3 / Health Score
+            <span className="text-slate-500 ml-2">· D, E ยังเป็น current only (ไม่มี item-level)</span>
+          </span>
+        </div>
+      )}
 
       {/* 220.3 Waterfall — แสดงก่อน เพราะ "ใครทำให้ขึ้น/ลง" คือคำถามแรกของผู้บริหาร */}
       <MoMWaterfall
