@@ -28,6 +28,7 @@ export type SnapshotTable =
   | 'delivery_notes'
   | 'billing_statements'
   | 'tax_invoices'
+  | 'linen_forms'
 
 export interface SnapshotChange {
   table: SnapshotTable
