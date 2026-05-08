@@ -95,14 +95,15 @@ function computeScore(query: string, item: LinenItemDef): { score: number; reaso
     return { score: 70, reason: `ใกล้กับ EN "${item.nameEn}"` }
   }
 
-  // 3. Phonetic match (218.1) — เสียงเหมือนแต่สะกดต่าง (ซิป↔ซิบ, ฉัน↔ชั้น, ฟอง↔ฝอง)
+  // 3. Phonetic match (218.1 + 234) — เสียงเหมือนแต่สะกดต่าง (ซิป↔ซิบ, ฉัน↔ชั้น, ฟอง↔ฝอง)
   if (q.length >= 3) {
     const qPhonetic = phoneticNormalize(q)
     const namePhonetic = phoneticNormalize(name)
     if (qPhonetic && namePhonetic && qPhonetic === namePhonetic) {
       return { score: 92, reason: `"${item.name}" — เสียงเหมือนกัน (สะกดต่าง)` }
     }
-    if (qPhonetic.length >= 4 && namePhonetic.length >= 4) {
+    // 234 fix: ลด threshold จาก 4 → 3 เพื่อให้ "ซิป" (3 chars phonetic = "SิP") match substring ใน "ปลอกหมอนซิบ" ได้
+    if (qPhonetic.length >= 3 && namePhonetic.length >= 3) {
       if (namePhonetic.includes(qPhonetic)) {
         return { score: 80, reason: `"${item.name}" — มีเสียงคล้ายอยู่ในชื่อ` }
       }
