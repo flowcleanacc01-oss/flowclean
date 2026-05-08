@@ -82,6 +82,8 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
     dnItemsCount?: number
     /** 226.A: Customer count */
     customerCount?: number
+    /** 227: total QT count (ใช้ตรวจว่า per-name reassign เป็น last name ไหม) */
+    totalQtCount?: number
   } | null>(null)
 
   const [includeAccepted, setIncludeAccepted] = useState(true)
@@ -148,16 +150,22 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
     })
   }
 
-  // 201: Reassign per-name — ใช้กับ drift หรือ orphan ที่มีหลายชื่อ
+  // 201 + 227: Reassign per-name — ใช้กับ drift หรือ orphan ที่มีหลายชื่อ
+  // 227 fix: ส่ง LF/DN/Customer counts มาด้วย — ถ้า matching QT = total QT → cascade
   const openReassignByName = (
     sourceCode: string,
     nameFilter: string,
     qts: { id: string; number: string; status: QuotationStatus; nameInQT: string }[],
+    orphanEntry?: OrphanEntry,
   ) => {
     setReassignCtx({
       sourceCode,
       nameFilter,
       matchingQts: qts.filter(q => q.nameInQT === nameFilter),
+      lfRowsCount: orphanEntry?.lfs.reduce((s, l) => s + l.rowsCount, 0),
+      dnItemsCount: orphanEntry?.dns.length,
+      customerCount: orphanEntry?.customers.length,
+      totalQtCount: qts.length,
     })
   }
 
@@ -275,8 +283,26 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
 
     let custUpdated = 0
 
-    // 2. LF (225) + Customer (226.A) — no nameFilter scope
-    if (!nameFilter) {
+    // 227: ถ้า per-name reassign — ตรวจว่าหลัง update QT แล้ว source code ยังมี QT อื่นใช้อยู่ไหม
+    // ถ้าไม่มี (= last name ของ orphan นี้) → cascade ไป LF/DN/Customer เสมอ
+    let shouldCascade = !nameFilter
+    if (nameFilter) {
+      const stillInOtherQT = quotations.some(q => {
+        const isUpdated = qtIds.has(q.id)
+        const items = isUpdated
+          ? q.items.map(it =>
+              it.code === sourceCode && (it.name || '').trim() === nameFilter
+                ? { ...it, code: targetCode }
+                : it,
+            )
+          : q.items
+        return items.some(it => it.code === sourceCode)
+      })
+      shouldCascade = !stillInOtherQT
+    }
+
+    // 2. LF (225) + Customer (226.A) — cascade เมื่อ row-level OR per-name แต่เป็น last name
+    if (shouldCascade) {
       for (const lf of linenForms) {
         const hasOrphan = (lf.rows || []).some(r => (r.code || '').trim() === sourceCode)
         if (!hasOrphan) continue
@@ -627,7 +653,7 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                             {/* 201: 🔄 Reassign per-name */}
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); openReassignByName(o.code, n, o.qts.map(q => ({ id: q.id, number: q.number, status: q.status, nameInQT: q.nameInQT }))) }}
+                              onClick={(e) => { e.stopPropagation(); openReassignByName(o.code, n, o.qts.map(q => ({ id: q.id, number: q.number, status: q.status, nameInQT: q.nameInQT })), o) }}
                               title={`Reassign: ย้าย ${matchCount} QT.items ที่มีชื่อนี้ → catalog code อื่น`}
                               className="inline-flex items-center justify-center w-4 h-4 rounded hover:bg-blue-200 text-blue-600 hover:text-blue-900"
                             >
@@ -997,6 +1023,7 @@ function ReassignModal({
     lfRowsCount?: number
     dnItemsCount?: number
     customerCount?: number
+    totalQtCount?: number
   }
   catalogCodes: LinenItemDef[]
   onClose: () => void
@@ -1016,11 +1043,15 @@ function ReassignModal({
   }, [catalogCodes, search])
 
   const target = catalogCodes.find(c => c.code === targetCode)
-  // 225 + 226.A: ปุ่ม commit เปิดได้ถ้ามี target + (มี QT เลือก หรือ มี LF/DN/Customer ให้ย้าย)
+  // 225 + 226.A + 227: ปุ่ม commit เปิดได้ถ้ามี target + (มี QT เลือก หรือ มี LF/DN/Customer ให้ย้าย)
   const lfCount = ctx.lfRowsCount || 0
   const dnCount = ctx.dnItemsCount || 0
   const custCount = ctx.customerCount || 0
-  const hasNonQtSources = !ctx.nameFilter && (lfCount + dnCount + custCount) > 0
+  // 227: per-name reassign จะ cascade LF/DN/Customer เมื่อ matching QT === total QT (last name)
+  const totalQt = ctx.totalQtCount || ctx.matchingQts.length
+  const isLastName = ctx.nameFilter ? selectedQtIds.size === totalQt && selectedQtIds.size > 0 : false
+  const willCascade = !ctx.nameFilter || isLastName
+  const hasNonQtSources = willCascade && (lfCount + dnCount + custCount) > 0
   const canCommit = !!target && (selectedQtIds.size > 0 || hasNonQtSources)
   const toggleQt = (id: string) => {
     setSelectedQtIds(prev => {
@@ -1055,10 +1086,20 @@ function ReassignModal({
           )}
           <div className="flex flex-wrap gap-x-3 gap-y-0.5">
             <span>QT.items ที่ตรง scope: <strong>{ctx.matchingQts.length} rows</strong></span>
-            {!ctx.nameFilter && lfCount > 0 && <span className="text-blue-700">LF: <strong>{lfCount} rows</strong></span>}
-            {!ctx.nameFilter && dnCount > 0 && <span className="text-emerald-700">DN: <strong>{dnCount} items</strong></span>}
-            {!ctx.nameFilter && custCount > 0 && <span className="text-purple-700">Customer: <strong>{custCount} ราย</strong></span>}
+            {willCascade && lfCount > 0 && <span className="text-blue-700">LF: <strong>{lfCount} rows</strong></span>}
+            {willCascade && dnCount > 0 && <span className="text-emerald-700">DN: <strong>{dnCount} items</strong></span>}
+            {willCascade && custCount > 0 && <span className="text-purple-700">Customer: <strong>{custCount} ราย</strong></span>}
           </div>
+          {ctx.nameFilter && isLastName && (lfCount + dnCount + custCount > 0) && (
+            <div className="text-[10px] text-emerald-700 italic mt-0.5 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+              ✨ <strong>Last name ของ {ctx.sourceCode}</strong> — จะ cascade LF/DN/Customer ตามไปด้วย → orphan code นี้ลบออกจาก list อัตโนมัติ
+            </div>
+          )}
+          {ctx.nameFilter && !isLastName && (lfCount + dnCount + custCount > 0) && (
+            <div className="text-[10px] text-amber-700 italic mt-0.5 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+              ⚠ Per-name split — LF/DN/Customer จะ <strong>คงไว้ที่ {ctx.sourceCode}</strong> รอ reassign name อื่นต่อ
+            </div>
+          )}
           {!ctx.nameFilter && (lfCount + dnCount + custCount > 0) && (
             <div className="text-[10px] text-slate-500 italic mt-0.5">
               💡 Reassign จะย้าย code ใน LF + DN + Customer (enabledItems/priceList/priceHistory) ทั้งหมด (auto)
@@ -1116,9 +1157,9 @@ function ReassignModal({
             <ArrowRight className="w-3 h-3 inline mr-1" />
             ย้าย{' '}
             {selectedQtIds.size > 0 && <><strong>{selectedQtIds.size}</strong> QT </>}
-            {!ctx.nameFilter && lfCount > 0 && <>{selectedQtIds.size > 0 ? '+ ' : ''}<strong>{lfCount}</strong> LF rows </>}
-            {!ctx.nameFilter && dnCount > 0 && <>{(selectedQtIds.size > 0 || lfCount > 0) ? '+ ' : ''}<strong>{dnCount}</strong> DN items </>}
-            {!ctx.nameFilter && custCount > 0 && <>{(selectedQtIds.size > 0 || lfCount > 0 || dnCount > 0) ? '+ ' : ''}<strong>{custCount}</strong> Customer </>}
+            {willCascade && lfCount > 0 && <>{selectedQtIds.size > 0 ? '+ ' : ''}<strong>{lfCount}</strong> LF rows </>}
+            {willCascade && dnCount > 0 && <>{(selectedQtIds.size > 0 || lfCount > 0) ? '+ ' : ''}<strong>{dnCount}</strong> DN items </>}
+            {willCascade && custCount > 0 && <>{(selectedQtIds.size > 0 || lfCount > 0 || dnCount > 0) ? '+ ' : ''}<strong>{custCount}</strong> Customer </>}
             จาก{' '}
             <code className="bg-white/70 px-1 rounded">{ctx.sourceCode}</code> →{' '}
             <code className="bg-white/70 px-1 rounded">{target.code}</code> ({target.name})
