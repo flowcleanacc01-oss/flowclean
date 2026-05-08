@@ -13,6 +13,7 @@ import { useOrphanCodes, type OrphanEntry } from '@/lib/use-orphan-codes'
 import { pushUndoAction, type SnapshotChange } from '@/lib/undo-stack'
 import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
+import HoverPopover from '@/components/HoverPopover'
 import { CheckCircle2, Loader2, RefreshCcw, AlertTriangle, ArrowRight, Zap, EyeOff, Eye, MoveRight } from 'lucide-react'
 import type { QuotationStatus, LinenItemDef } from '@/types'
 
@@ -668,43 +669,119 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                     <td className="px-3 py-2 text-right text-xs align-top">
                       <div className="inline-flex flex-col items-end gap-0.5">
                         {o.qts.length > 0 && (
-                          <span className="font-mono text-slate-700"
-                            title={o.qts.map(q => `${q.number} (${q.status}) — "${q.nameInQT}"`).join('\n')}>
-                            QT {o.qts.length}
-                          </span>
+                          <HoverPopover
+                            trigger={
+                              <span className="font-mono text-slate-700 cursor-help underline decoration-dotted decoration-slate-400">
+                                QT {o.qts.length}
+                              </span>
+                            }
+                            content={
+                              <div>
+                                <div className="font-semibold mb-1 text-slate-200">QT references</div>
+                                <ul className="space-y-0.5">
+                                  {o.qts.slice(0, 12).map(q => (
+                                    <li key={q.id} className="text-[11px]">
+                                      <span className="font-mono text-cyan-300">{q.number}</span>
+                                      <span className="ml-1 opacity-70">({q.status})</span>
+                                      <span className="ml-1 opacity-90">— &quot;{q.nameInQT || '—'}&quot;</span>
+                                    </li>
+                                  ))}
+                                  {o.qts.length > 12 && (
+                                    <li className="text-[10px] opacity-60 italic">+{o.qts.length - 12} อื่นๆ</li>
+                                  )}
+                                </ul>
+                              </div>
+                            }
+                          />
                         )}
                         {o.lfs.length > 0 && (() => {
-                          // 230: group LF by customer for tooltip
                           const byCust = new Map<string, number>()
                           for (const l of o.lfs) byCust.set(l.customerShortName, (byCust.get(l.customerShortName) || 0) + l.rowsCount)
-                          const tooltip = Array.from(byCust.entries())
-                            .map(([cust, count]) => `${cust} (${count} rows)`)
-                            .join('\n') + '\n\n' +
-                            o.lfs.map(l => `${l.formNumber} · ${l.customerShortName} · ${l.rowsCount} rows · ${l.date}`).join('\n')
                           return (
-                            <span className="font-mono text-blue-700 cursor-help"
-                              title={tooltip}>
-                              LF {o.lfs.reduce((s, l) => s + l.rowsCount, 0)} ({byCust.size} ลค.)
-                            </span>
+                            <HoverPopover
+                              trigger={
+                                <span className="font-mono text-blue-700 cursor-help underline decoration-dotted decoration-blue-300">
+                                  LF {o.lfs.reduce((s, l) => s + l.rowsCount, 0)} ({byCust.size} ลค.)
+                                </span>
+                              }
+                              content={
+                                <div>
+                                  <div className="font-semibold mb-1 text-slate-200">LF references — by customer</div>
+                                  <ul className="space-y-0.5 mb-2">
+                                    {Array.from(byCust.entries()).slice(0, 10).map(([cust, count]) => (
+                                      <li key={cust} className="text-[11px]">
+                                        <span className="text-cyan-300">{cust}</span>
+                                        <span className="ml-1 opacity-70">({count} rows)</span>
+                                      </li>
+                                    ))}
+                                    {byCust.size > 10 && <li className="text-[10px] opacity-60 italic">+{byCust.size - 10} ลค. อื่นๆ</li>}
+                                  </ul>
+                                  <div className="font-semibold text-slate-200 mb-1 mt-2 border-t border-slate-700 pt-1">LF forms</div>
+                                  <ul className="space-y-0.5">
+                                    {o.lfs.slice(0, 8).map(l => (
+                                      <li key={l.id} className="text-[10px]">
+                                        <span className="font-mono text-cyan-300">{l.formNumber}</span>
+                                        <span className="ml-1 opacity-90">{l.customerShortName}</span>
+                                        <span className="ml-1 opacity-60">· {l.rowsCount} rows · {l.date}</span>
+                                      </li>
+                                    ))}
+                                    {o.lfs.length > 8 && <li className="text-[10px] opacity-60 italic">+{o.lfs.length - 8} ใบอื่นๆ</li>}
+                                  </ul>
+                                </div>
+                              }
+                            />
                           )
                         })()}
                         {o.dns.length > 0 && (() => {
                           const byCust = new Map<string, number>()
                           for (const d of o.dns) byCust.set(d.customerShortName, (byCust.get(d.customerShortName) || 0) + 1)
-                          const tooltip = Array.from(byCust.entries())
-                            .map(([cust, count]) => `${cust} (${count} items)`)
-                            .join('\n')
                           return (
-                            <span className="font-mono text-emerald-700 cursor-help" title={tooltip}>
-                              DN {o.dns.length} ({byCust.size} ลค.)
-                            </span>
+                            <HoverPopover
+                              trigger={
+                                <span className="font-mono text-emerald-700 cursor-help underline decoration-dotted decoration-emerald-300">
+                                  DN {o.dns.length} ({byCust.size} ลค.)
+                                </span>
+                              }
+                              content={
+                                <div>
+                                  <div className="font-semibold mb-1 text-slate-200">DN references</div>
+                                  <ul className="space-y-0.5">
+                                    {o.dns.slice(0, 10).map(d => (
+                                      <li key={d.id} className="text-[10px]">
+                                        <span className="font-mono text-cyan-300">{d.noteNumber}</span>
+                                        <span className="ml-1 opacity-90">{d.customerShortName}</span>
+                                        <span className="ml-1 opacity-60">· {d.quantity} ชิ้น</span>
+                                      </li>
+                                    ))}
+                                    {o.dns.length > 10 && <li className="text-[10px] opacity-60 italic">+{o.dns.length - 10} อื่นๆ</li>}
+                                  </ul>
+                                </div>
+                              }
+                            />
                           )
                         })()}
                         {o.customers.length > 0 && (
-                          <span className="font-mono text-purple-700 cursor-help"
-                            title={o.customers.map(c => `${c.shortName} (${c.sources.join(', ')})`).join('\n')}>
-                            Customer {o.customers.length}
-                          </span>
+                          <HoverPopover
+                            trigger={
+                              <span className="font-mono text-purple-700 cursor-help underline decoration-dotted decoration-purple-300">
+                                Customer {o.customers.length}
+                              </span>
+                            }
+                            content={
+                              <div>
+                                <div className="font-semibold mb-1 text-slate-200">Customer references</div>
+                                <ul className="space-y-0.5">
+                                  {o.customers.slice(0, 12).map(c => (
+                                    <li key={c.id} className="text-[11px]">
+                                      <span className="text-cyan-300">{c.shortName}</span>
+                                      <span className="ml-1 opacity-70">({c.sources.join(', ')})</span>
+                                    </li>
+                                  ))}
+                                  {o.customers.length > 12 && <li className="text-[10px] opacity-60 italic">+{o.customers.length - 12} อื่นๆ</li>}
+                                </ul>
+                              </div>
+                            }
+                          />
                         )}
                         <span className="text-[10px] text-slate-400">รวม {o.totalRows} rows</span>
                       </div>
