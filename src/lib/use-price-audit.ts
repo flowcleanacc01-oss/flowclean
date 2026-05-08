@@ -60,6 +60,8 @@ export interface PriceAuditStats {
   ok: number
   total: number
   flatRateExcluded: number
+  /** 235: ลูกค้าที่ flat-rate + DN count ในช่วง — ใช้ debug ว่าเลขมาจากใคร */
+  flatRateCustomers: { id: string; shortName: string; name: string; dnCount: number }[]
   customersAudited: number
   dnsAudited: number
 }
@@ -112,6 +114,7 @@ export function usePriceAudit(filters: PriceAuditFilters): PriceAuditResult {
   return useMemo(() => {
     const allRows: PriceAuditRow[] = []
     let flatRateExcluded = 0
+    const flatRateCustMap = new Map<string, { id: string; shortName: string; name: string; dnCount: number }>()
     const customerIdsSeen = new Set<string>()
     const dnIdsSeen = new Set<string>()
 
@@ -138,6 +141,10 @@ export function usePriceAudit(filters: PriceAuditFilters): PriceAuditResult {
       const isFlatRate = cust.billingModel === 'monthly_flat' || cust.enableMinPerMonth === true
       if (isFlatRate && !filters.showFlatRate) {
         flatRateExcluded++
+        // 235: track customer info เพื่อ debug
+        const ex = flatRateCustMap.get(cust.id)
+        if (ex) ex.dnCount++
+        else flatRateCustMap.set(cust.id, { id: cust.id, shortName: cust.shortName, name: cust.name, dnCount: 1 })
         continue
       }
 
@@ -217,6 +224,7 @@ export function usePriceAudit(filters: PriceAuditFilters): PriceAuditResult {
       ok: allRows.filter(r => r.reason === 'ok').length,
       total: allRows.length,
       flatRateExcluded,
+      flatRateCustomers: Array.from(flatRateCustMap.values()).sort((a, b) => b.dnCount - a.dnCount),
       customersAudited: customerIdsSeen.size,
       dnsAudited: dnIdsSeen.size,
     }

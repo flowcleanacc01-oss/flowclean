@@ -20,8 +20,9 @@ import DateFilter from '@/components/DateFilter'
 import CustomerPicker from '@/components/CustomerPicker'
 import {
   Search, AlertTriangle, AlertOctagon, CheckCircle2, FileSpreadsheet,
-  ShieldAlert, Eye, EyeOff, ChevronDown, ChevronUp, ArrowUpDown,
+  ShieldAlert, Eye, EyeOff, ChevronDown, ChevronUp, ArrowUpDown, Info,
 } from 'lucide-react'
+import HoverPopover from '@/components/HoverPopover'
 
 type SortCol = 'severity' | 'dnDate' | 'dnNumber' | 'customer' | 'item' | 'snapshot' | 'qt' | 'diff'
 type SortDir = 'asc' | 'desc'
@@ -195,15 +196,54 @@ export default function PriceAudit() {
           onClick={() => { setSeverity('all'); setReason('all') }}
           sub={`${stats.dnsAudited} DN · ${stats.customersAudited} ลูกค้า`}
         />
-        <StatCard
-          icon={<EyeOff className="w-4 h-4" />}
-          label="Flat-rate ข้าม"
-          value={stats.flatRateExcluded}
-          color="slate"
-          active={false}
-          onClick={() => {}}
-          sub="ไม่นับเพราะเหมาเดือน"
-          disabled
+        {/* 235: hover เห็นรายชื่อลูกค้า flat-rate ที่ถูกข้าม */}
+        <HoverPopover
+          placement="bottom-start"
+          trigger={
+            <div className="h-full">
+              <StatCard
+                icon={<EyeOff className="w-4 h-4" />}
+                label="Flat-rate ข้าม"
+                value={stats.flatRateExcluded}
+                color="slate"
+                active={false}
+                onClick={() => {}}
+                sub={stats.flatRateCustomers.length > 0
+                  ? `${stats.flatRateCustomers.length} ลูกค้า · hover เพื่อดู`
+                  : 'ไม่นับเพราะเหมาเดือน'}
+                disabled
+              />
+            </div>
+          }
+          content={
+            stats.flatRateCustomers.length === 0 ? (
+              <div className="text-[11px]">ไม่มีลูกค้า flat-rate ในช่วงนี้</div>
+            ) : (
+              <div>
+                <div className="font-semibold mb-1 text-slate-200">
+                  <Info className="w-3 h-3 inline mr-1" />
+                  ลูกค้า flat-rate ที่ถูกข้าม ({stats.flatRateCustomers.length} ราย)
+                </div>
+                <ul className="space-y-0.5 mt-1">
+                  {stats.flatRateCustomers.slice(0, 15).map(c => (
+                    <li key={c.id} className="text-[11px] flex items-center justify-between gap-3">
+                      <span>
+                        <span className="text-cyan-300 font-medium">{c.shortName}</span>
+                        <span className="opacity-70 ml-1">— {c.name}</span>
+                      </span>
+                      <span className="font-mono text-amber-300">{c.dnCount} DN</span>
+                    </li>
+                  ))}
+                  {stats.flatRateCustomers.length > 15 && (
+                    <li className="text-[10px] opacity-60 italic">+{stats.flatRateCustomers.length - 15} ราย อื่นๆ</li>
+                  )}
+                </ul>
+                <div className="text-[10px] opacity-70 mt-2 pt-2 border-t border-slate-700">
+                  ลูกค้าเหล่านี้คิดเงินเหมาเดือน — Price Audit ไม่ตรวจ (ไม่มีราคาต่อชิ้นให้เทียบ)
+                </div>
+              </div>
+            )
+          }
         />
       </div>
 
