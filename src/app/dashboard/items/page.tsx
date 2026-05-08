@@ -18,6 +18,8 @@ import SyncNamesTool from '@/components/SyncNamesTool'
 import CatalogHygieneCenter from '@/components/CatalogHygieneCenter'
 import VocabularyAudit from '@/components/VocabularyAudit'
 import AddItemWizard from '@/components/AddItemWizard'
+import CodeConflictWarning from '@/components/CodeConflictWarning'
+import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
 import { canManageSettings } from '@/lib/permissions'
 import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 import { useNameDrift } from '@/lib/use-name-drift'
@@ -44,6 +46,7 @@ export default function ItemsPage() {
     currentUser, defaultPrices, updateDefaultPrice,
     linenCatalog, addLinenItem, updateLinenItem, deleteLinenItem,
     linenCategories, addCategory, updateCategory, deleteCategory, getCategoryLabel,
+    quotations, linenForms, deliveryNotes, customers,
   } = useStore()
   const sp = useSearchParams()
   const urlHighlightQ = sp.get('q') || '' // 147.2
@@ -100,6 +103,16 @@ export default function ItemsPage() {
 
   // 207: Universal Add-Item Wizard
   const [wizardOpen, setWizardOpen] = useState(false)
+
+  // 232: Code conflict check สำหรับ Quick Add (รหัสที่ user ใส่ มี ref เก่าค้างหรือไม่)
+  const newItemCodeRefs = useMemo(
+    () => getCodeReferences(newItem.code.trim().toUpperCase(), { quotations, linenForms, deliveryNotes, customers }),
+    [newItem.code, quotations, linenForms, deliveryNotes, customers],
+  )
+  const newItemConflict = useMemo(
+    () => detectConflict(newItemCodeRefs, newItem.name),
+    [newItemCodeRefs, newItem.name],
+  )
 
   // ---- Filtered & sorted items ----
   const filteredItems = useMemo(() => {
@@ -425,10 +438,35 @@ export default function ItemsPage() {
                     placeholder="ราคา"
                     className="px-2 py-1.5 border border-slate-200 rounded text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                 </div>
+                {/* 232: Code reuse conflict warning */}
+                {newItem.code && newItemConflict !== 'no_refs' && (
+                  <div className="mt-2">
+                    <CodeConflictWarning
+                      code={newItem.code.trim().toUpperCase()}
+                      plannedName={newItem.name}
+                      refs={newItemCodeRefs}
+                      conflict={newItemConflict}
+                      compact
+                    />
+                  </div>
+                )}
                 <div className="flex gap-2 mt-2">
-                  <button onClick={handleAddItem} disabled={!newItem.code || !newItem.name}
-                    className="px-3 py-1.5 bg-[#3DD8D8] text-[#1B3A5C] text-xs rounded hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5" />บันทึก
+                  <button
+                    onClick={() => {
+                      if (newItemConflict === 'name_drift') {
+                        if (!confirm(`⚠ รหัส ${newItem.code.toUpperCase()} มี ref เก่าค้างที่ใช้ชื่ออื่น\n\nถ้าใช้ชื่อ "${newItem.name}" จะเกิด name drift ใน QT/DN เก่า\n\nยืนยันจะเพิ่มต่อหรือไม่?`)) return
+                      }
+                      handleAddItem()
+                    }}
+                    disabled={!newItem.code || !newItem.name}
+                    className={cn(
+                      'px-3 py-1.5 text-xs rounded transition-colors flex items-center gap-1 disabled:opacity-50',
+                      newItemConflict === 'name_drift'
+                        ? 'bg-amber-500 text-white hover:bg-amber-600'
+                        : 'bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8]',
+                    )}>
+                    <Check className="w-3.5 h-3.5" />
+                    {newItemConflict === 'name_drift' ? 'บันทึกทั้งที่มี drift' : 'บันทึก'}
                   </button>
                   <button onClick={() => setShowAddItem(false)}
                     className="px-3 py-1.5 text-slate-600 text-xs hover:bg-slate-100 rounded transition-colors flex items-center gap-1">

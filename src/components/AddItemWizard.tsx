@@ -24,6 +24,8 @@ import {
   CheckCircle2, Wand2, Layers, ShoppingBag, ListPlus, Search,
 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
+import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
+import CodeConflictWarning from '@/components/CodeConflictWarning'
 
 export type WizardContext = 'items' | 'qt' | 'lf' | 'sd'
 
@@ -63,6 +65,7 @@ export default function AddItemWizard({
   const {
     linenCatalog, addLinenItem, linenCategories,
     customers, quotations, updateQuotation,
+    linenForms, deliveryNotes,
   } = useStore()
 
   // ───── Wizard state ─────────────────────────────────────
@@ -379,6 +382,17 @@ export default function AddItemWizard({
               {code && !isCodeUnique(code, linenCatalog) && (
                 <p className="text-[11px] text-red-600 mt-0.5">รหัสนี้มีอยู่แล้ว</p>
               )}
+              {/* 232: Code reuse conflict warning */}
+              {code && isCodeUnique(code, linenCatalog) && (() => {
+                const refs = getCodeReferences(code, { quotations, linenForms, deliveryNotes, customers })
+                const conflict = detectConflict(refs, nameInput)
+                if (conflict === 'no_refs') return null
+                return (
+                  <div className="mt-2">
+                    <CodeConflictWarning code={code} plannedName={nameInput} refs={refs} conflict={conflict} compact />
+                  </div>
+                )
+              })()}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 block mb-1">ชื่อ EN (optional)</label>

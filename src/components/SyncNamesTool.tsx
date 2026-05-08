@@ -11,6 +11,8 @@ import { useStore } from '@/lib/store'
 import { useNameDrift, type DriftEntry } from '@/lib/use-name-drift'
 import { useOrphanCodes, type OrphanEntry } from '@/lib/use-orphan-codes'
 import { pushUndoAction, type SnapshotChange } from '@/lib/undo-stack'
+import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
+import CodeConflictWarning from '@/components/CodeConflictWarning'
 import { CheckCircle2, Loader2, RefreshCcw, AlertTriangle, ArrowRight, Zap, EyeOff, Eye, MoveRight } from 'lucide-react'
 import type { QuotationStatus, LinenItemDef } from '@/types'
 
@@ -829,6 +831,8 @@ function PromoteModal({
   onClose: () => void
   onCommit: (newItem: LinenItemDef, qtIds: string[]) => void
 }) {
+  // 232: code conflict check — guard ก่อน promote ถ้า code มี ref เก่าค้าง
+  const { quotations, linenForms, deliveryNotes, customers } = useStore()
   // Auto-suggest code:
   //   - orphan + source code ยังว่าง → ใช้ source code เดิม (1st promote)
   //   - drift หรือ source code ถูกใช้แล้ว (split case) → หาเลขถัดไป
@@ -856,6 +860,16 @@ function PromoteModal({
   const [newPrice, setNewPrice] = useState(suggestedPrice)
   const [selectedQtIds, setSelectedQtIds] = useState<Set<string>>(new Set(ctx.matchingQts.map(q => q.id)))
   const [running, setRunning] = useState(false)
+  const [confirmDespiteConflict, setConfirmDespiteConflict] = useState(false)
+
+  // 232: ตรวจ code reference ที่ค้างอยู่ในระบบ + ดู conflict กับ name ที่ user จะใส่
+  const codeRefs = useMemo(
+    () => getCodeReferences(newCode.trim().toUpperCase(), { quotations, linenForms, deliveryNotes, customers }),
+    [newCode, quotations, linenForms, deliveryNotes, customers],
+  )
+  const conflict = useMemo(() => detectConflict(codeRefs, newName), [codeRefs, newName])
+  // ถ้า conflict = name_drift และ user ยังไม่ confirm → block submit
+  const blockedByConflict = conflict === 'name_drift' && !confirmDespiteConflict
 
   const codeUpper = newCode.trim().toUpperCase()
   // Orphan mode: ใช้ source code เดิมได้ (เพราะมันยังไม่อยู่ใน catalog)
@@ -871,7 +885,7 @@ function PromoteModal({
   // Orphan + same code: insert อย่างเดียว ไม่ต้อง QT selection
   // อื่นๆ (drift หรือ orphan-split): require QT selection
   const isInsertOnly = ctx.mode === 'orphan' && codeUpper === ctx.sourceCode
-  const canSubmit = !codeError && !nameError && (isInsertOnly || selectedQtIds.size > 0)
+  const canSubmit = !codeError && !nameError && (isInsertOnly || selectedQtIds.size > 0) && !blockedByConflict
 
   const toggleQt = (id: string) => {
     setSelectedQtIds(prev => {
@@ -974,6 +988,27 @@ function PromoteModal({
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
             />
           </div>
+
+          {/* 232: Code conflict warning */}
+          {!codeError && conflict !== 'no_refs' && (
+            <CodeConflictWarning
+              code={codeUpper}
+              plannedName={newName}
+              refs={codeRefs}
+              conflict={conflict}
+            />
+          )}
+          {conflict === 'name_drift' && (
+            <label className="flex items-start gap-2 text-xs cursor-pointer p-2 bg-amber-50 border border-amber-200 rounded-lg">
+              <input type="checkbox" checked={confirmDespiteConflict}
+                onChange={e => setConfirmDespiteConflict(e.target.checked)}
+                className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-400" />
+              <span className="text-amber-900">
+                <strong>ฉันเข้าใจความเสี่ยง</strong> — จะ promote ต่อทั้งที่ทำให้เกิด name drift
+                (จะ Reassign ref เก่าทีหลัง)
+              </span>
+            </label>
+          )}
         </div>
 
         {/* QT selector:
