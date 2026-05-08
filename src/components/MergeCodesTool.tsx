@@ -28,6 +28,7 @@ export default function MergeCodesTool() {
     deliveryNotes, updateDeliveryNote,
     billingStatements, updateBillingStatement,
     taxInvoices, updateTaxInvoice,
+    linenForms, updateLinenForm,
     deleteLinenItem,
   } = useStore()
 
@@ -63,17 +64,20 @@ export default function MergeCodesTool() {
       (c.priceList || []).some(p => p.code === src) ||
       (c.priceHistory || []).some(p => (p as { code?: string }).code === src)
     )
+    // 229: เพิ่ม LF coverage ที่ขาดหายไป — ก่อนหน้านี้ MergeCodesTool ไม่แตะ LF เลย
+    const lfMatches = linenForms.filter(f => (f.rows || []).some(r => r.code === src))
     const wbMatches = billingStatements.filter(b => (b.lineItems || []).some(li => li.code === src))
     const ivMatches = taxInvoices.filter(t => (t.lineItems || []).some(li => li.code === src))
 
     return [
       { label: 'Quotation (QT)',         count: qtMatches.length,   affectedIds: qtMatches.map(q => q.id) },
+      { label: 'Linen Form (LF) — rows', count: lfMatches.length, affectedIds: lfMatches.map(f => f.id) },
       { label: 'Customer (enabledItems/priceList)', count: custMatches.length, affectedIds: custMatches.map(c => c.id) },
       { label: 'Delivery Note (SD) + priceSnapshot', count: dnMatches.length, affectedIds: dnMatches.map(d => d.id) },
       { label: `Billing (WB) ${includeWB ? '— จะเปลี่ยน' : '— ข้าม'}`,         count: wbMatches.length, affectedIds: wbMatches.map(b => b.id) },
       { label: `Tax Invoice (IV) ${includeIV ? '— จะเปลี่ยน' : '— ข้าม'}`,     count: ivMatches.length, affectedIds: ivMatches.map(t => t.id) },
     ]
-  }, [sourceCode, targetCode, quotations, customers, deliveryNotes, billingStatements, taxInvoices, includeWB, includeIV])
+  }, [sourceCode, targetCode, quotations, customers, deliveryNotes, linenForms, billingStatements, taxInvoices, includeWB, includeIV])
 
   const totalAffected = stats.reduce((s, x) => s + x.count, 0)
   const canPreview = sourceCode && targetCode && sourceCode !== targetCode
@@ -158,6 +162,14 @@ export default function MergeCodesTool() {
           })
           updateDeliveryNote(d.id, updates)
         }
+      }
+
+      // 3.5 (229): Linen Forms — rewrite row.code (เพิ่มที่ขาดหายไป)
+      const lfList = linenForms.filter(f => (f.rows || []).some(r => r.code === src))
+      for (const f of lfList) {
+        undoChanges.push({ table: 'linen_forms', id: f.id, op: 'update', oldData: { rows: f.rows } })
+        const newRows = f.rows.map(r => r.code === src ? { ...r, code: tgt } : r)
+        updateLinenForm(f.id, { rows: newRows })
       }
 
       // 4. Billing Statements (optional)
