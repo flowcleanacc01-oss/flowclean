@@ -6,6 +6,7 @@ import type { LinenFormRow, Customer, LinenItemDef, LinenFormStatus, QuotationIt
 import { cn } from '@/lib/utils'
 import { wasSynced } from '@/lib/sync-discrepancy'
 import { resolveDisplayName } from '@/lib/facet-generators'
+import { highlightText } from '@/lib/highlight'
 
 interface LinenFormGridProps {
   customer: Customer
@@ -22,6 +23,8 @@ interface LinenFormGridProps {
   formStatus?: LinenFormStatus
   /** 70+73+74+75: One-click sync (⚡) — ถ้ามี = แสดงปุ่ม ⚡ ที่ row ที่มี discrepancy */
   onApproveSync?: (code: string) => void
+  /** 233: highlight query — wrap matches in <mark> ใน item.code/name (ใช้กับ Cmd+K + FindBar) */
+  highlightQ?: string
 }
 
 const COL_LABELS = [
@@ -54,6 +57,7 @@ export default function LinenFormGrid({
   editableColumns = ['col2', 'col3', 'col4', 'col5', 'col6', 'note'],
   formStatus,
   onApproveSync,
+  highlightQ = '',
 }: LinenFormGridProps) {
   // ถ้ามี qtItems → ใช้ลำดับ + ชื่อจาก QT, fallback ไป catalog
   // 213.2 Phase 1.2 — apply customer.itemNicknames เป็น display alias (override ชื่อ)
@@ -302,8 +306,8 @@ export default function LinenFormGrid({
                   'border-b border-slate-100 transition-colors',
                   activeRowIdx === rowIndex ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50'
                 )}>
-                  <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{item.code}</td>
-                  <td className={cn('px-3 py-1.5', activeRowIdx === rowIndex ? 'text-[#1B3A5C] font-semibold' : 'text-slate-700')}>{item.name}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{highlightText(item.code, highlightQ)}</td>
+                  <td className={cn('px-3 py-1.5', activeRowIdx === rowIndex ? 'text-[#1B3A5C] font-semibold' : 'text-slate-700')}>{highlightText(item.name, highlightQ)}</td>
 
                   {/* Col 1 - ยกยอดมา (auto) */}
                   <td className="px-1 py-1 text-center">

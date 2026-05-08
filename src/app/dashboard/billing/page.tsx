@@ -28,6 +28,7 @@ import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import { useTabUrlSync } from '@/lib/use-tab-url-sync'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
 import AddItemWizard from '@/components/AddItemWizard'
+import FindableText from '@/components/FindableText'
 import { getCatalogValidationPrefs } from '@/components/CatalogHygieneCenter'
 
 type TabKey = 'billing' | 'invoice' | 'quotation'
@@ -2065,6 +2066,8 @@ export default function BillingPage() {
                           }}
                           className="w-full px-2 py-0.5 border border-transparent hover:border-slate-200 focus:border-[#3DD8D8] rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-transparent"
                         />
+                        {/* 233: hidden findable text สำหรับ Cmd+K + FindBar */}
+                        <FindableText value={`${item.code} ${item.name}`} highlightQ={highlightQ} />
                       </td>
                       <td className="px-3 py-1.5 text-right">{item.quantity}</td>
                       <td className="px-3 py-1.5 text-right">{formatCurrency(item.pricePerUnit)}</td>
@@ -2288,6 +2291,8 @@ export default function BillingPage() {
                           }}
                           className="w-full px-2 py-0.5 border border-transparent hover:border-slate-200 focus:border-[#3DD8D8] rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-transparent"
                         />
+                        {/* 233: hidden findable text สำหรับ Cmd+K + FindBar */}
+                        <FindableText value={`${item.code} ${item.name}`} highlightQ={highlightQ} />
                       </td>
                       <td className="px-3 py-1.5 text-right">{item.quantity}</td>
                       <td className="px-3 py-1.5 text-right">{formatCurrency(item.pricePerUnit)}</td>

@@ -311,7 +311,7 @@ export default function ReceiptsPage() {
                 <tbody>
                   {detailRC.lineItems.map((item, idx) => (
                     <tr key={idx} className="border-t border-slate-100">
-                      <td className="px-3 py-1.5">{item.name}</td>
+                      <td className="px-3 py-1.5">{highlightText(item.name, highlightQ)}</td>
                       <td className="px-3 py-1.5 text-right">{item.quantity}</td>
                       <td className="px-3 py-1.5 text-right">{formatCurrency(item.pricePerUnit)}</td>
                       <td className="px-3 py-1.5 text-right">{formatCurrency(item.amount)}</td>

@@ -673,6 +673,7 @@ export default function LinenFormsPage() {
                 carryOver={getCarryOver(newCustomerId, newDate)}
                 editableColumns={['col2', 'col3', 'note']}
                 formStatus="draft"
+                highlightQ={highlightQ}
               />
             </>
           )}
@@ -950,6 +951,7 @@ export default function LinenFormsPage() {
               carryOver={detailCarryOver}
               headerLabel={`ลูกค้า: ${detailCustomer.shortName || detailCustomer.name}  |  วันที่: ${formatDate(detailForm.date)}`}
               formStatus={detailForm.status}
+              highlightQ={highlightQ}
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
                 detailForm.status === 'received' ? ['col2', 'col3', 'col5', 'note'] :

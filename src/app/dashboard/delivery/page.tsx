@@ -6,6 +6,7 @@ import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { highlightText, matchesAmountQuery } from '@/lib/highlight'
+import FindableText from '@/components/FindableText'
 import { type DeliveryNoteItem, LINEN_FORM_STATUS_CONFIG } from '@/types'
 import { calculateTransportFeeTrip, calculateDNSubtotal } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
@@ -896,9 +897,9 @@ export default function DeliveryPage() {
                   <tbody>
                     {deliveryItems.map((item, idx) => (
                       <tr key={`${item.code}-${item.isClaim}`} className="border-t border-slate-100">
-                        <td className="px-3 py-1.5 font-mono text-xs">{item.code}</td>
+                        <td className="px-3 py-1.5 font-mono text-xs">{highlightText(item.code, highlightQ)}</td>
                         <td className="px-3 py-1.5">
-                          {itemNameMap[item.code] || item.code}
+                          {highlightText(itemNameMap[item.code] || item.code, highlightQ)}
                           {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
                         </td>
                         <td className="px-3 py-1.5 text-right">
@@ -1165,7 +1166,7 @@ export default function DeliveryPage() {
                             isAdhoc && 'bg-orange-50/40',
                           )}>
                             <td className="px-3 py-1.5 font-mono text-xs">
-                              {isAdhoc ? <span className="text-orange-700 font-semibold">★ พิเศษ</span> : item.code}
+                              {isAdhoc ? <span className="text-orange-700 font-semibold">★ พิเศษ</span> : highlightText(item.code, highlightQ)}
                             </td>
                             <td className="px-2 py-1">
                               {isAdhoc ? (
@@ -1190,6 +1191,13 @@ export default function DeliveryPage() {
                                   className="w-full px-2 py-0.5 border border-transparent hover:border-slate-200 focus:border-[#3DD8D8] rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-transparent"
                                 />
                               )}
+                              {/* 233: hidden findable text — input value แสดง mark ไม่ได้ */}
+                              <FindableText
+                                value={isAdhoc
+                                  ? (item.adhocName || '')
+                                  : (item.displayName ?? ('ค่าบริการซัก ' + (itemNameMap[item.code] || item.code)))}
+                                highlightQ={highlightQ}
+                              />
                               {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
                             </td>
                             <td className="px-3 py-1.5 text-right">
