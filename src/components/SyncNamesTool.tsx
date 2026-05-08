@@ -665,11 +665,41 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                     </td>
                     <td className="px-3 py-2 text-right text-xs align-top">
                       <div className="inline-flex flex-col items-end gap-0.5">
-                        {o.qts.length > 0 && <span className="font-mono text-slate-700">QT {o.qts.length}</span>}
-                        {o.lfs.length > 0 && <span className="font-mono text-blue-700">LF {o.lfs.reduce((s, l) => s + l.rowsCount, 0)}</span>}
-                        {o.dns.length > 0 && <span className="font-mono text-emerald-700">DN {o.dns.length}</span>}
+                        {o.qts.length > 0 && (
+                          <span className="font-mono text-slate-700"
+                            title={o.qts.map(q => `${q.number} (${q.status}) — "${q.nameInQT}"`).join('\n')}>
+                            QT {o.qts.length}
+                          </span>
+                        )}
+                        {o.lfs.length > 0 && (() => {
+                          // 230: group LF by customer for tooltip
+                          const byCust = new Map<string, number>()
+                          for (const l of o.lfs) byCust.set(l.customerShortName, (byCust.get(l.customerShortName) || 0) + l.rowsCount)
+                          const tooltip = Array.from(byCust.entries())
+                            .map(([cust, count]) => `${cust} (${count} rows)`)
+                            .join('\n') + '\n\n' +
+                            o.lfs.map(l => `${l.formNumber} · ${l.customerShortName} · ${l.rowsCount} rows · ${l.date}`).join('\n')
+                          return (
+                            <span className="font-mono text-blue-700 cursor-help"
+                              title={tooltip}>
+                              LF {o.lfs.reduce((s, l) => s + l.rowsCount, 0)} ({byCust.size} ลค.)
+                            </span>
+                          )
+                        })()}
+                        {o.dns.length > 0 && (() => {
+                          const byCust = new Map<string, number>()
+                          for (const d of o.dns) byCust.set(d.customerShortName, (byCust.get(d.customerShortName) || 0) + 1)
+                          const tooltip = Array.from(byCust.entries())
+                            .map(([cust, count]) => `${cust} (${count} items)`)
+                            .join('\n')
+                          return (
+                            <span className="font-mono text-emerald-700 cursor-help" title={tooltip}>
+                              DN {o.dns.length} ({byCust.size} ลค.)
+                            </span>
+                          )
+                        })()}
                         {o.customers.length > 0 && (
-                          <span className="font-mono text-purple-700"
+                          <span className="font-mono text-purple-700 cursor-help"
                             title={o.customers.map(c => `${c.shortName} (${c.sources.join(', ')})`).join('\n')}>
                             Customer {o.customers.length}
                           </span>

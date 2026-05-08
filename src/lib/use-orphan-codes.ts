@@ -25,10 +25,10 @@ export interface OrphanEntry {
   avgPrice: number
   /** QT references */
   qts: { id: string; number: string; status: QuotationStatus; nameInQT: string; pricePerUnit: number }[]
-  /** LF references (225) */
-  lfs: { id: string; formNumber: string; date: string; rowsCount: number }[]
-  /** DN references (225) */
-  dns: { id: string; noteNumber: string; date: string; itemName: string; quantity: number; pricePerUnit: number }[]
+  /** LF references (225 + 230: เพิ่ม customer info) */
+  lfs: { id: string; formNumber: string; date: string; rowsCount: number; customerId: string; customerShortName: string }[]
+  /** DN references (225 + 230: เพิ่ม customer info) */
+  dns: { id: string; noteNumber: string; date: string; itemName: string; quantity: number; pricePerUnit: number; customerId: string; customerShortName: string }[]
   /** Customer references (226.A) — ชื่อลูกค้า + array ของ field ที่ใช้ code นี้ */
   customers: { id: string; shortName: string; name: string; sources: CustomerOrphanSource[]; priceListPrice: number | null }[]
 }
@@ -39,6 +39,7 @@ export function useOrphanCodes() {
   return useMemo(() => {
     const catalogCodes = new Set(linenCatalog.map(i => i.code))
     const map = new Map<string, OrphanEntry>()
+    const custMap = new Map(customers.map(c => [c.id, c]))
 
     const ensure = (code: string): OrphanEntry => {
       if (!map.has(code)) {
@@ -79,15 +80,21 @@ export function useOrphanCodes() {
         const code = (r.code || '').trim()
         byCode.set(code, (byCode.get(code) || 0) + 1)
       }
+      const lfCust = custMap.get(lf.customerId)
       for (const [code, rowsCount] of byCode.entries()) {
         const e = ensure(code)
         e.totalRows += rowsCount
-        e.lfs.push({ id: lf.id, formNumber: lf.formNumber, date: lf.date, rowsCount })
+        e.lfs.push({
+          id: lf.id, formNumber: lf.formNumber, date: lf.date, rowsCount,
+          customerId: lf.customerId,
+          customerShortName: lfCust?.shortName || lf.customerId.slice(0, 8),
+        })
       }
     }
 
     // 3. DN (skip ad-hoc — ad-hoc ไม่นับเป็น vocab)
     for (const dn of deliveryNotes) {
+      const dnCust = custMap.get(dn.customerId)
       for (const item of dn.items || []) {
         if (item.isAdhoc) continue
         const code = (item.code || '').trim()
@@ -100,6 +107,8 @@ export function useOrphanCodes() {
         e.dns.push({
           id: dn.id, noteNumber: dn.noteNumber, date: dn.date,
           itemName, quantity: item.quantity || 0, pricePerUnit: snapshotPrice,
+          customerId: dn.customerId,
+          customerShortName: dnCust?.shortName || dn.customerId.slice(0, 8),
         })
       }
     }
