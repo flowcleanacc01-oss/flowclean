@@ -2,10 +2,10 @@ import type { Customer, DeliveryNote, BillingLineItem, LinenItemDef, QuotationIt
 import { formatDate } from './utils'
 
 /**
- * Get the effective priceMap for a DN:
+ * Get the effective priceMap for a DN (226.B):
  * 1. DN.priceSnapshot (ล็อคราคา ณ วันสร้าง)
  * 2. fallback → qtItems (from current accepted QT)
- * 3. fallback → customer.priceList (legacy)
+ * — ลบ customer.priceList legacy fallback ออก (QT = single source of truth)
  */
 function getDNPriceMap(
   note: DeliveryNote,
@@ -23,7 +23,7 @@ function getDNPriceMap(
  */
 export function aggregateDeliveryItems(
   notes: DeliveryNote[],
-  customer: Customer,
+  _customer: Customer,
   catalog: LinenItemDef[] = [],
   qtItems?: QuotationItem[]
 ): BillingLineItem[] {
@@ -32,10 +32,10 @@ export function aggregateDeliveryItems(
     ? Object.fromEntries(qtItems.map(i => [i.code, i.name]))
     : Object.fromEntries(catalog.map(i => [i.code, i.name]))
 
-  // Fallback priceMap (for old DNs without priceSnapshot)
+  // 226.B: Fallback priceMap จาก QT only — legacy customer.priceList ตัดออก
   const fallbackPriceMap = qtItems
     ? Object.fromEntries(qtItems.map(i => [i.code, i.pricePerUnit]))
-    : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+    : {}
 
   // Aggregate by (code, price) — handles price changes mid-month
   // Layer 3: Ad-hoc items aggregate by (adhoc-{name}, price) แยกจาก code ปกติ
@@ -142,12 +142,13 @@ export function aggregateDeliveryItems(
  */
 export function aggregateDeliveryItemsByDate(
   notes: DeliveryNote[],
-  customer: Customer,
+  _customer: Customer,
   qtItems?: QuotationItem[],
 ): BillingLineItem[] {
+  // 226.B: priceMap จาก QT only — legacy customer.priceList ตัดออก
   const fallbackPriceMap = qtItems
     ? Object.fromEntries(qtItems.map(i => [i.code, i.pricePerUnit]))
-    : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+    : {}
   const result: BillingLineItem[] = []
   const sortedNotes = [...notes].sort((a, b) => a.date.localeCompare(b.date))
 
@@ -200,12 +201,13 @@ export function aggregateDeliveryItemsByDate(
  */
 export function aggregateDeliveryItemsByTotal(
   notes: DeliveryNote[],
-  customer: Customer,
+  _customer: Customer,
   qtItems?: QuotationItem[],
 ): BillingLineItem[] {
+  // 226.B: priceMap จาก QT only — legacy customer.priceList ตัดออก
   const fallbackPriceMap = qtItems
     ? Object.fromEntries(qtItems.map(i => [i.code, i.pricePerUnit]))
-    : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+    : {}
 
   let serviceTotal = 0
   let totalDiscount = 0

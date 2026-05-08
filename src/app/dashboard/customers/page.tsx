@@ -635,10 +635,9 @@ export default function CustomersPage() {
 
           {/* 213.2 Phase 1.2 — Nickname Editor (per-customer item display alias) */}
           {editId && (() => {
+            // 226.B: QT = single source of truth — ไม่ใช้ form.enabledItems เป็น fallback อีกแล้ว
             const linkedAcceptedQT = quotations.find(q => q.customerId === editId && q.status === 'accepted')
-            const codes = linkedAcceptedQT
-              ? linkedAcceptedQT.items.map(it => it.code)
-              : (form.enabledItems || [])
+            const codes = linkedAcceptedQT ? linkedAcceptedQT.items.map(it => it.code) : []
             const uniqueCodes = Array.from(new Set(codes)).filter(Boolean)
             const nicknames = form.itemNicknames || {}
             const setNickname = (code: string, nickname: string) => {

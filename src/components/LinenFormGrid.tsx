@@ -71,7 +71,8 @@ export default function LinenFormGrid({
         }
       })
     : catalog
-        .filter(item => itemCodes ? itemCodes.includes(item.code) : customer.enabledItems.includes(item.code))
+        // 226.B: ไม่ fallback ไป customer.enabledItems — ถ้าไม่มี itemCodes (จาก QT) = empty
+        .filter(item => itemCodes ? itemCodes.includes(item.code) : false)
         .map(item => ({
           ...item,
           name: resolveDisplayName(item.code, item.name, customer.itemNicknames),

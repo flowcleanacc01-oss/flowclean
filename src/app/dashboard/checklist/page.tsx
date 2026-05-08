@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
+import { getCustomerEnabledCodes } from '@/lib/customer-pricing'
 import { highlightText } from '@/lib/highlight'
 import {
   CHECKLIST_TYPE_CONFIG, CHECKLIST_STATUS_CONFIG,
@@ -17,7 +18,7 @@ import ExportButtons from '@/components/ExportButtons'
 export default function ChecklistPage() {
   const {
     checklists, addChecklist, updateChecklist, updateChecklistStatus, deleteChecklist,
-    linenForms, deliveryNotes, customers, getCustomer, linenCatalog, companyInfo,
+    linenForms, deliveryNotes, customers, getCustomer, linenCatalog, companyInfo, quotations,
   } = useStore()
 
   const [search, setSearch] = useState('')
@@ -508,13 +509,17 @@ export default function ChecklistPage() {
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-2">เลือกลูกค้า</label>
               <div className="grid gap-2">
-                {customers.filter(c => c.isActive).map(c => (
-                  <button key={c.id} onClick={() => setBlankCustomerId(c.id)}
-                    className="text-left px-4 py-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-                    <span className="font-medium text-slate-800">{c.shortName || c.name}</span>
-                    <span className="text-xs text-slate-500 ml-2">({c.enabledItems.length} รายการ)</span>
-                  </button>
-                ))}
+                {customers.filter(c => c.isActive).map(c => {
+                  const codes = getCustomerEnabledCodes(c.id, quotations)
+                  return (
+                    <button key={c.id} onClick={() => setBlankCustomerId(c.id)}
+                      className="text-left px-4 py-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                      <span className="font-medium text-slate-800">{c.shortName || c.name}</span>
+                      <span className="text-xs text-slate-500 ml-2">({codes.length} รายการ)</span>
+                      {codes.length === 0 && <span className="text-xs text-amber-600 ml-2">⚠ ยังไม่มี QT</span>}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           ) : (
@@ -527,7 +532,13 @@ export default function ChecklistPage() {
               {(() => {
                 const cust = getCustomer(blankCustomerId)
                 if (!cust) return null
-                const items = linenCatalog.filter(i => cust.enabledItems.includes(i.code))
+                const codes = getCustomerEnabledCodes(cust.id, quotations)
+                const items = linenCatalog.filter(i => codes.includes(i.code))
+                if (items.length === 0) {
+                  return <div className="p-6 text-center text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
+                    ⚠ ลูกค้านี้ยังไม่มี accepted QT — กรุณาสร้าง QT ก่อนพิมพ์ใบเช็ค
+                  </div>
+                }
                 return <BlankChecklistPrint customer={cust} company={companyInfo} items={items} date={todayISO()} />
               })()}
             </div>

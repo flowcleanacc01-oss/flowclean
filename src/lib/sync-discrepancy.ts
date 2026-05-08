@@ -137,11 +137,11 @@ export function recalcTransportAfterSync(
 ): RecalcResult[] {
   const results: RecalcResult[] = []
 
-  // Build price map (priority: DN.priceSnapshot → accepted QT → customer.priceList)
+  // 226.B: Build price map (priority: DN.priceSnapshot → accepted QT) — ตัด customer.priceList legacy
   const acceptedQT = quotations.find(q => q.customerId === customer.id && q.status === 'accepted')
   const fallbackPriceMap = acceptedQT
     ? Object.fromEntries(acceptedQT.items.map(i => [i.code, i.pricePerUnit]))
-    : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+    : {}
   const pm = (affectedDn.priceSnapshot && Object.keys(affectedDn.priceSnapshot).length > 0)
     ? affectedDn.priceSnapshot
     : fallbackPriceMap

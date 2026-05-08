@@ -38,7 +38,12 @@ interface Props {
 }
 
 export default function SyncNamesTool({ initialFocusCode }: Props) {
-  const { quotations, updateQuotation, linenCatalog, addLinenItem, linenForms, updateLinenForm, deliveryNotes, updateDeliveryNote } = useStore()
+  const {
+    quotations, updateQuotation, linenCatalog, addLinenItem,
+    linenForms, updateLinenForm,
+    deliveryNotes, updateDeliveryNote,
+    customers, updateCustomer,
+  } = useStore()
   const { driftMap, totalCodes, totalQts } = useNameDrift()
   const drifts = useMemo(() => Array.from(driftMap.values()).sort((a, b) => b.qts.length - a.qts.length), [driftMap])
 
@@ -75,6 +80,8 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
     /** 225: LF/DN counts (ใช้แสดงใน modal — reassign ทั้งหมดถ้าไม่มี nameFilter) */
     lfRowsCount?: number
     dnItemsCount?: number
+    /** 226.A: Customer count */
+    customerCount?: number
   } | null>(null)
 
   const [includeAccepted, setIncludeAccepted] = useState(true)
@@ -130,13 +137,14 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
     })
   }
 
-  // 193 + 225: Reassign — ย้าย code จาก orphan → catalog code อื่น (ครอบ QT + LF + DN)
+  // 193 + 225 + 226.A: Reassign — ย้าย code จาก orphan → catalog code อื่น (ครอบ QT + LF + DN + Customer)
   const openReassign = (entry: OrphanEntry) => {
     setReassignCtx({
       sourceCode: entry.code,
       matchingQts: entry.qts.map(q => ({ id: q.id, number: q.number, status: q.status, nameInQT: q.nameInQT })),
       lfRowsCount: entry.lfs.reduce((s, l) => s + l.rowsCount, 0),
       dnItemsCount: entry.dns.length,
+      customerCount: entry.customers.length,
     })
   }
 
@@ -265,7 +273,9 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
       qtUpdated++
     }
 
-    // 2. LF (225) — reassign ทุก LF ที่มี orphan code นี้ (no nameFilter — LF row ไม่มี name)
+    let custUpdated = 0
+
+    // 2. LF (225) + Customer (226.A) — no nameFilter scope
     if (!nameFilter) {
       for (const lf of linenForms) {
         const hasOrphan = (lf.rows || []).some(r => (r.code || '').trim() === sourceCode)
@@ -300,21 +310,59 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
         updateDeliveryNote(dn.id, { items: newItems, priceSnapshot: newSnapshot })
         dnUpdated++
       }
+
+      // 4. Customer (226.A) — rewrite enabledItems / priceList / priceHistory
+      for (const c of customers) {
+        const inEnabled = (c.enabledItems || []).includes(sourceCode)
+        const inPriceList = (c.priceList || []).some(p => p.code === sourceCode)
+        const inPriceHistory = (c.priceHistory || []).some(p => (p as unknown as { code?: string }).code === sourceCode)
+        if (!inEnabled && !inPriceList && !inPriceHistory) continue
+
+        undoChanges.push({
+          table: 'customers', id: c.id, op: 'update',
+          oldData: {
+            enabledItems: c.enabledItems,
+            priceList: c.priceList,
+            priceHistory: c.priceHistory,
+          },
+        })
+        const updates: Record<string, unknown> = {}
+        if (inEnabled) {
+          // dedup ถ้ามี target อยู่แล้ว
+          updates.enabledItems = Array.from(new Set(
+            (c.enabledItems || []).map(x => x === sourceCode ? targetCode : x),
+          ))
+        }
+        if (inPriceList) {
+          const hasTgt = c.priceList.some(p => p.code === targetCode)
+          updates.priceList = hasTgt
+            ? c.priceList.filter(p => p.code !== sourceCode)
+            : c.priceList.map(p => p.code === sourceCode ? { ...p, code: targetCode } : p)
+        }
+        if (inPriceHistory) {
+          updates.priceHistory = (c.priceHistory as unknown as Array<Record<string, unknown>>).map(p =>
+            p.code === sourceCode ? { ...p, code: targetCode } : p,
+          )
+        }
+        updateCustomer(c.id, updates)
+        custUpdated++
+      }
     }
 
-    const totalUpdated = qtUpdated + lfUpdated + dnUpdated
+    const totalUpdated = qtUpdated + lfUpdated + dnUpdated + custUpdated
     if (undoChanges.length > 0) {
       const parts: string[] = []
       if (qtUpdated > 0) parts.push(`${qtUpdated} QT`)
       if (lfUpdated > 0) parts.push(`${lfUpdated} LF`)
       if (dnUpdated > 0) parts.push(`${dnUpdated} DN`)
+      if (custUpdated > 0) parts.push(`${custUpdated} Customer`)
       const desc = nameFilter
         ? `Reassign ${sourceCode} ("${nameFilter}") → ${targetCode} (${parts.join(' · ')})`
         : `Reassign ${sourceCode} → ${targetCode} (${parts.join(' · ')})`
       pushUndoAction({
         type: 'reassign_orphan',
         description: desc,
-        meta: { from: sourceCode, to: targetCode, qtCount: qtUpdated, lfCount: lfUpdated, dnCount: dnUpdated, nameFilter },
+        meta: { from: sourceCode, to: targetCode, qtCount: qtUpdated, lfCount: lfUpdated, dnCount: dnUpdated, custCount: custUpdated, nameFilter },
         changes: undoChanges,
       })
     }
@@ -539,7 +587,7 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
             </div>
           </div>
           <div className="px-4 py-2 bg-red-50/40 text-[11px] text-red-800 border-b border-red-100">
-            รหัสที่อยู่ใน QT/LF/DN แต่ <strong>ไม่มีใน catalog</strong> — เลือก action ต่อแถว: Promote (เพิ่มเข้า catalog) · Reassign (ย้ายไป code อื่น ครอบทั้ง QT+LF+DN) · Ignore (ซ่อน)
+            รหัสที่อยู่ใน QT/LF/DN/Customer แต่ <strong>ไม่มีใน catalog</strong> — เลือก action ต่อแถว: Promote (เพิ่มเข้า catalog) · Reassign (ย้ายไป code อื่น ครอบ QT+LF+DN+Customer) · Ignore (ซ่อน)
           </div>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -594,6 +642,12 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                         {o.qts.length > 0 && <span className="font-mono text-slate-700">QT {o.qts.length}</span>}
                         {o.lfs.length > 0 && <span className="font-mono text-blue-700">LF {o.lfs.reduce((s, l) => s + l.rowsCount, 0)}</span>}
                         {o.dns.length > 0 && <span className="font-mono text-emerald-700">DN {o.dns.length}</span>}
+                        {o.customers.length > 0 && (
+                          <span className="font-mono text-purple-700"
+                            title={o.customers.map(c => `${c.shortName} (${c.sources.join(', ')})`).join('\n')}>
+                            Customer {o.customers.length}
+                          </span>
+                        )}
                         <span className="text-[10px] text-slate-400">รวม {o.totalRows} rows</span>
                       </div>
                     </td>
@@ -942,6 +996,7 @@ function ReassignModal({
     matchingQts: { id: string; number: string; status: QuotationStatus; nameInQT: string }[]
     lfRowsCount?: number
     dnItemsCount?: number
+    customerCount?: number
   }
   catalogCodes: LinenItemDef[]
   onClose: () => void
@@ -961,10 +1016,11 @@ function ReassignModal({
   }, [catalogCodes, search])
 
   const target = catalogCodes.find(c => c.code === targetCode)
-  // 225: ปุ่ม commit เปิดได้ถ้ามี target + (มี QT เลือก หรือ มี LF/DN ให้ย้าย)
+  // 225 + 226.A: ปุ่ม commit เปิดได้ถ้ามี target + (มี QT เลือก หรือ มี LF/DN/Customer ให้ย้าย)
   const lfCount = ctx.lfRowsCount || 0
   const dnCount = ctx.dnItemsCount || 0
-  const hasNonQtSources = !ctx.nameFilter && (lfCount + dnCount) > 0
+  const custCount = ctx.customerCount || 0
+  const hasNonQtSources = !ctx.nameFilter && (lfCount + dnCount + custCount) > 0
   const canCommit = !!target && (selectedQtIds.size > 0 || hasNonQtSources)
   const toggleQt = (id: string) => {
     setSelectedQtIds(prev => {
@@ -1001,10 +1057,11 @@ function ReassignModal({
             <span>QT.items ที่ตรง scope: <strong>{ctx.matchingQts.length} rows</strong></span>
             {!ctx.nameFilter && lfCount > 0 && <span className="text-blue-700">LF: <strong>{lfCount} rows</strong></span>}
             {!ctx.nameFilter && dnCount > 0 && <span className="text-emerald-700">DN: <strong>{dnCount} items</strong></span>}
+            {!ctx.nameFilter && custCount > 0 && <span className="text-purple-700">Customer: <strong>{custCount} ราย</strong></span>}
           </div>
-          {!ctx.nameFilter && (lfCount + dnCount > 0) && (
+          {!ctx.nameFilter && (lfCount + dnCount + custCount > 0) && (
             <div className="text-[10px] text-slate-500 italic mt-0.5">
-              💡 Reassign จะย้าย code ใน LF + DN ทั้งหมด (auto, ไม่มี filter เพราะ row ไม่มี name)
+              💡 Reassign จะย้าย code ใน LF + DN + Customer (enabledItems/priceList/priceHistory) ทั้งหมด (auto)
             </div>
           )}
         </div>
@@ -1061,6 +1118,7 @@ function ReassignModal({
             {selectedQtIds.size > 0 && <><strong>{selectedQtIds.size}</strong> QT </>}
             {!ctx.nameFilter && lfCount > 0 && <>{selectedQtIds.size > 0 ? '+ ' : ''}<strong>{lfCount}</strong> LF rows </>}
             {!ctx.nameFilter && dnCount > 0 && <>{(selectedQtIds.size > 0 || lfCount > 0) ? '+ ' : ''}<strong>{dnCount}</strong> DN items </>}
+            {!ctx.nameFilter && custCount > 0 && <>{(selectedQtIds.size > 0 || lfCount > 0 || dnCount > 0) ? '+ ' : ''}<strong>{custCount}</strong> Customer </>}
             จาก{' '}
             <code className="bg-white/70 px-1 rounded">{ctx.sourceCode}</code> →{' '}
             <code className="bg-white/70 px-1 rounded">{target.code}</code> ({target.name})

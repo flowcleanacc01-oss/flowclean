@@ -767,7 +767,8 @@ export default function BillingPage() {
       // Month fee goes on the LAST DN of each month (if not billed)
       if (updatedCust.enableMinPerMonth && updatedCust.monthlyFlatRate > 0) {
         const affectedMonths = new Set(targetDNs.map(d => d.date.slice(0, 7)))
-        const fallbackPriceMap = Object.fromEntries(cust.priceList.map(p => [p.code, p.price]))
+        // 226.B: fallback ใช้ newSnapshot (จาก QT ปัจจุบัน) แทน customer.priceList legacy
+        const fallbackPriceMap = newSnapshot
 
         for (const month of affectedMonths) {
           // All DNs in this month for this customer (sorted newest first)

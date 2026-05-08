@@ -26,11 +26,11 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
   const customer = customers.find(c => c.id === customerId)
 
   /**
-   * Resolve รายการผ้าของลูกค้า — ใช้ priority เดียวกับ LinenFormGrid:
-   * 1. QT accepted (ถ้ามี)
-   * 2. customer.enabledItems (legacy)
-   * 3. codes ที่ปรากฏใน LF history ของลูกค้านี้ (fallback กรณีไม่มี QT/enabledItems)
-   * 4. linenCatalog ทั้งหมด (สุดท้าย — กรณีลูกค้าใหม่)
+   * Resolve รายการผ้าของลูกค้า — 226.B: ตัด customer.enabledItems fallback ออก
+   * Priority:
+   * 1. QT accepted (primary — QT = single source of truth)
+   * 2. codes จาก LF history (lookup เผื่อยังไม่มี QT แต่มีงานเก่า)
+   * 3. linenCatalog ทั้งหมด (final fallback — ลูกค้าใหม่ยังไม่มี QT/LF)
    */
   const enabledItems = useMemo(() => {
     if (!customer) return []
@@ -43,12 +43,7 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
         .filter((it): it is NonNullable<typeof it> => !!it)
     }
 
-    // Priority 2: customer.enabledItems
-    if (customer.enabledItems && customer.enabledItems.length > 0) {
-      return linenCatalog.filter(it => customer.enabledItems.includes(it.code))
-    }
-
-    // Priority 3: codes จาก LF history
+    // Priority 2: codes จาก LF history
     const lfCodes = new Set<string>()
     for (const f of linenForms) {
       if (f.customerId !== customer.id) continue
@@ -58,7 +53,7 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
       return linenCatalog.filter(it => lfCodes.has(it.code))
     }
 
-    // Fallback: catalog ทั้งหมด
+    // Final fallback: catalog ทั้งหมด
     return linenCatalog
   }, [customer, linenCatalog, linenForms, quotations])
 

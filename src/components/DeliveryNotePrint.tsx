@@ -15,10 +15,10 @@ interface DeliveryNotePrintProps {
 export default function DeliveryNotePrint({ note, customer, company, catalog, priceMap: priceMapProp }: DeliveryNotePrintProps) {
   // 213.2 Phase 1.2 — Apply customer.itemNicknames (override catalog name for this customer)
   const itemNameMap = Object.fromEntries(catalog.map(i => [i.code, customer.itemNicknames?.[i.code] || i.name]))
-  // Priority: DN.priceSnapshot (locked at creation) → priceMapProp (from QT) → customer.priceList (legacy)
+  // 226.B: Priority: DN.priceSnapshot (locked at creation) → priceMapProp (from QT) — legacy customer.priceList ตัดออก
   const priceMap = (note.priceSnapshot && Object.keys(note.priceSnapshot).length > 0)
     ? note.priceSnapshot
-    : priceMapProp ?? Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+    : priceMapProp ?? {}
   const totalItems = note.items.reduce((s, i) => s + i.quantity, 0)
   const isPer = (customer.enablePerPiece ?? true)
   const itemSubtotal = isPer ? note.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0) : 0

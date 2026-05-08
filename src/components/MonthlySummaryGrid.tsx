@@ -18,8 +18,9 @@ export default function MonthlySummaryGrid({ customer, month, linenForms, delive
   const summary = useMemo(() => {
     const [year, m] = month.split('-').map(Number)
     const daysInMonth = new Date(year, m, 0).getDate()
-    const enabledCodes = customer.enabledItems
-    const priceMap = priceMapProp ?? Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+    // 226.B: derive จาก priceMap ที่ caller ส่งมา (จาก QT) — fallback เป็น empty
+    const priceMap = priceMapProp ?? {}
+    const enabledCodes = Object.keys(priceMap)
 
     // Build grid: code → day → quantity (from col5 of linen forms)
     const grid: Record<string, Record<number, number>> = {}

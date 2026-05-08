@@ -1,23 +1,27 @@
 'use client'
 
 /**
- * 193/194/225 — Detect orphan codes (code in QT/LF/DN but NOT in catalog)
+ * 193/194/225/226.A — Detect orphan codes (code in QT/LF/DN/Customer but NOT in catalog)
  *
- * 225 fix: ขยาย scope จาก QT-only → QT + LF + DN
- * ก่อนหน้านี้ codes ที่อยู่ใน LF/DN เก่า แต่ถูกลบจาก catalog แล้ว
- * จะกลายเป็น "orphan ที่ลบไม่ได้" — Vocab Audit เห็นแต่ Hygiene Center reassign ไม่ได้
+ * 225: ขยาย scope จาก QT-only → QT + LF + DN
+ * 226.A: เพิ่ม Customer.enabledItems / priceList / priceHistory
+ *   ก่อน 226.A — code ที่อยู่ใน customer.enabledItems แต่ไม่อยู่ใน catalog → invisible
+ *   แก้ผ่าน MergeCodesTool ได้แต่ไม่เห็นใน orphan list
  */
 import { useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import type { QuotationStatus } from '@/types'
 
+/** 226.A: customer.* fields ที่อาจมี orphan code */
+export type CustomerOrphanSource = 'enabledItems' | 'priceList' | 'priceHistory'
+
 export interface OrphanEntry {
   code: string
   /** unique names found across all sources */
   names: string[]
-  /** total rows referencing this code (qts + lfs + dns) */
+  /** total rows referencing this code (qts + lfs + dns + customers) */
   totalRows: number
-  /** average pricePerUnit from QT + DN snapshots (excl. zero) */
+  /** average pricePerUnit from QT + DN snapshots + Customer.priceList (excl. zero) */
   avgPrice: number
   /** QT references */
   qts: { id: string; number: string; status: QuotationStatus; nameInQT: string; pricePerUnit: number }[]
@@ -25,10 +29,12 @@ export interface OrphanEntry {
   lfs: { id: string; formNumber: string; date: string; rowsCount: number }[]
   /** DN references (225) */
   dns: { id: string; noteNumber: string; date: string; itemName: string; quantity: number; pricePerUnit: number }[]
+  /** Customer references (226.A) — ชื่อลูกค้า + array ของ field ที่ใช้ code นี้ */
+  customers: { id: string; shortName: string; name: string; sources: CustomerOrphanSource[]; priceListPrice: number | null }[]
 }
 
 export function useOrphanCodes() {
-  const { linenCatalog, quotations, linenForms, deliveryNotes } = useStore()
+  const { linenCatalog, quotations, linenForms, deliveryNotes, customers } = useStore()
 
   return useMemo(() => {
     const catalogCodes = new Set(linenCatalog.map(i => i.code))
@@ -36,7 +42,7 @@ export function useOrphanCodes() {
 
     const ensure = (code: string): OrphanEntry => {
       if (!map.has(code)) {
-        map.set(code, { code, names: [], totalRows: 0, avgPrice: 0, qts: [], lfs: [], dns: [] })
+        map.set(code, { code, names: [], totalRows: 0, avgPrice: 0, qts: [], lfs: [], dns: [], customers: [] })
       }
       return map.get(code)!
     }
@@ -98,11 +104,47 @@ export function useOrphanCodes() {
       }
     }
 
-    // Compute avg price (QT + DN snapshots, ignore zero)
+    // 4. Customer (226.A) — scan enabledItems / priceList / priceHistory
+    for (const c of customers) {
+      const sources: { code: string; source: CustomerOrphanSource; price?: number }[] = []
+      for (const code of c.enabledItems || []) {
+        const trimmed = (code || '').trim()
+        if (trimmed && !catalogCodes.has(trimmed)) sources.push({ code: trimmed, source: 'enabledItems' })
+      }
+      for (const p of c.priceList || []) {
+        const trimmed = (p.code || '').trim()
+        if (trimmed && !catalogCodes.has(trimmed)) sources.push({ code: trimmed, source: 'priceList', price: p.price })
+      }
+      for (const p of c.priceHistory || []) {
+        const ph = p as unknown as { code?: string }
+        const trimmed = (ph.code || '').trim()
+        if (trimmed && !catalogCodes.has(trimmed)) sources.push({ code: trimmed, source: 'priceHistory' })
+      }
+      // Group by code per customer (1 customer × 1 code = 1 entry, multiple sources)
+      const byCode = new Map<string, { sources: Set<CustomerOrphanSource>; priceListPrice: number | null }>()
+      for (const s of sources) {
+        const ex = byCode.get(s.code) || { sources: new Set<CustomerOrphanSource>(), priceListPrice: null }
+        ex.sources.add(s.source)
+        if (s.source === 'priceList' && s.price != null && s.price > 0) ex.priceListPrice = s.price
+        byCode.set(s.code, ex)
+      }
+      for (const [code, info] of byCode.entries()) {
+        const e = ensure(code)
+        e.customers.push({
+          id: c.id, shortName: c.shortName, name: c.name,
+          sources: Array.from(info.sources),
+          priceListPrice: info.priceListPrice,
+        })
+        e.totalRows += info.sources.size
+      }
+    }
+
+    // Compute avg price (QT + DN snapshots + Customer.priceList, ignore zero)
     for (const e of map.values()) {
       const prices = [
         ...e.qts.map(q => q.pricePerUnit),
         ...e.dns.map(d => d.pricePerUnit),
+        ...e.customers.map(c => c.priceListPrice).filter((p): p is number => p != null && p > 0),
       ].filter(p => p > 0)
       e.avgPrice = prices.length === 0 ? 0 : Math.round((prices.reduce((s, p) => s + p, 0) / prices.length) * 100) / 100
     }

@@ -56,8 +56,9 @@ export function createDNLastOfMonthCompare(linenForms: LinenForm[]) {
 /**
  * Calculate DN item subtotal (before VAT, excluding transport fees)
  */
-export function calculateDNSubtotal(dn: DeliveryNote, customer: Customer, priceMap?: Record<string, number>): number {
-  const pm = priceMap ?? Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+export function calculateDNSubtotal(dn: DeliveryNote, _customer: Customer, priceMap?: Record<string, number>): number {
+  // 226.B: priceMap ต้องมาจาก caller (DN snapshot หรือ QT) — ไม่ fallback ไป customer.priceList
+  const pm = priceMap ?? {}
   return dn.items.reduce((sum, item) => {
     if (item.isClaim) return sum
     // Layer 3: Ad-hoc รายการพิเศษ ใช้ราคาที่กรอกเอง ไม่อ้างอิง priceMap

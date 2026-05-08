@@ -38,7 +38,8 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
       if (!item.isClaim) usedCodes.add(item.code)
     }
   }
-  const resolvedPriceMap = priceMapProp ?? Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+  // 226.B: ใช้ priceMap จาก caller (QT) — ไม่ fallback ไป customer.priceList อีกแล้ว
+  const resolvedPriceMap = priceMapProp ?? {}
   for (const code of Object.keys(resolvedPriceMap)) usedCodes.add(code)
 
   // Items sorted by catalog sortOrder

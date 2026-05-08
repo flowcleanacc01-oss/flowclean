@@ -273,8 +273,9 @@ export default function LinenFormsPage() {
     if (custId) trackRecentCustomer(custId)
     const cust = getCustomer(custId)
     if (cust) {
+      // 226.B: QT = single source of truth — ถ้าไม่มี QT ให้ user เห็น empty + prompt
       const linkedQT = getLinkedQT(cust.name, custId)
-      const codes = linkedQT ? linkedQT.items.map(i => i.code) : cust.enabledItems
+      const codes = linkedQT ? linkedQT.items.map(i => i.code) : []
       setNewRows(buildRows(codes))
     }
   }
