@@ -14,7 +14,8 @@ import { pushUndoAction, type SnapshotChange } from '@/lib/undo-stack'
 import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
 import HoverPopover from '@/components/HoverPopover'
-import { CheckCircle2, Loader2, RefreshCcw, AlertTriangle, ArrowRight, Zap, EyeOff, Eye, MoveRight } from 'lucide-react'
+import { CheckCircle2, Loader2, RefreshCcw, AlertTriangle, ArrowRight, Zap, EyeOff, Eye, MoveRight, ExternalLink } from 'lucide-react'
+import Link from 'next/link'
 import type { QuotationStatus, LinenItemDef } from '@/types'
 
 const IGNORE_KEY = 'flowclean_orphan_ignore'
@@ -677,17 +678,21 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                             }
                             content={
                               <div>
-                                <div className="font-semibold mb-1 text-slate-200">QT references</div>
-                                <ul className="space-y-0.5">
-                                  {o.qts.slice(0, 12).map(q => (
+                                <div className="font-semibold mb-1 text-slate-200">QT references (คลิกเพื่อเปิด)</div>
+                                <ul className="space-y-1">
+                                  {o.qts.slice(0, 20).map(q => (
                                     <li key={q.id} className="text-[11px]">
-                                      <span className="font-mono text-cyan-300">{q.number}</span>
+                                      <Link href={`/dashboard/billing?tab=quotation&openqt=${q.id}`}
+                                        className="inline-flex items-center gap-1 font-mono text-cyan-300 hover:text-cyan-100 hover:underline">
+                                        <ExternalLink className="w-3 h-3 opacity-70" />
+                                        {q.number}
+                                      </Link>
                                       <span className="ml-1 opacity-70">({q.status})</span>
-                                      <span className="ml-1 opacity-90">— &quot;{q.nameInQT || '—'}&quot;</span>
+                                      <span className="ml-1 opacity-90 block ml-4">&quot;{q.nameInQT || '—'}&quot;</span>
                                     </li>
                                   ))}
-                                  {o.qts.length > 12 && (
-                                    <li className="text-[10px] opacity-60 italic">+{o.qts.length - 12} อื่นๆ</li>
+                                  {o.qts.length > 20 && (
+                                    <li className="text-[10px] opacity-60 italic">+{o.qts.length - 20} อื่นๆ</li>
                                   )}
                                 </ul>
                               </div>
@@ -708,24 +713,28 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                                 <div>
                                   <div className="font-semibold mb-1 text-slate-200">LF references — by customer</div>
                                   <ul className="space-y-0.5 mb-2">
-                                    {Array.from(byCust.entries()).slice(0, 10).map(([cust, count]) => (
+                                    {Array.from(byCust.entries()).slice(0, 12).map(([cust, count]) => (
                                       <li key={cust} className="text-[11px]">
                                         <span className="text-cyan-300">{cust}</span>
                                         <span className="ml-1 opacity-70">({count} rows)</span>
                                       </li>
                                     ))}
-                                    {byCust.size > 10 && <li className="text-[10px] opacity-60 italic">+{byCust.size - 10} ลค. อื่นๆ</li>}
+                                    {byCust.size > 12 && <li className="text-[10px] opacity-60 italic">+{byCust.size - 12} ลค. อื่นๆ</li>}
                                   </ul>
-                                  <div className="font-semibold text-slate-200 mb-1 mt-2 border-t border-slate-700 pt-1">LF forms</div>
-                                  <ul className="space-y-0.5">
-                                    {o.lfs.slice(0, 8).map(l => (
+                                  <div className="font-semibold text-slate-200 mb-1 mt-2 border-t border-slate-700 pt-1">LF forms (คลิกเพื่อเปิด)</div>
+                                  <ul className="space-y-1">
+                                    {o.lfs.slice(0, 30).map(l => (
                                       <li key={l.id} className="text-[10px]">
-                                        <span className="font-mono text-cyan-300">{l.formNumber}</span>
+                                        <Link href={`/dashboard/linen-forms?detail=${l.id}`}
+                                          className="inline-flex items-center gap-1 font-mono text-cyan-300 hover:text-cyan-100 hover:underline">
+                                          <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                                          {l.formNumber}
+                                        </Link>
                                         <span className="ml-1 opacity-90">{l.customerShortName}</span>
                                         <span className="ml-1 opacity-60">· {l.rowsCount} rows · {l.date}</span>
                                       </li>
                                     ))}
-                                    {o.lfs.length > 8 && <li className="text-[10px] opacity-60 italic">+{o.lfs.length - 8} ใบอื่นๆ</li>}
+                                    {o.lfs.length > 30 && <li className="text-[10px] opacity-60 italic">+{o.lfs.length - 30} ใบอื่นๆ</li>}
                                   </ul>
                                 </div>
                               }
@@ -744,16 +753,20 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                               }
                               content={
                                 <div>
-                                  <div className="font-semibold mb-1 text-slate-200">DN references</div>
-                                  <ul className="space-y-0.5">
-                                    {o.dns.slice(0, 10).map(d => (
+                                  <div className="font-semibold mb-1 text-slate-200">DN references (คลิกเพื่อเปิด)</div>
+                                  <ul className="space-y-1">
+                                    {o.dns.slice(0, 30).map(d => (
                                       <li key={d.id} className="text-[10px]">
-                                        <span className="font-mono text-cyan-300">{d.noteNumber}</span>
+                                        <Link href={`/dashboard/delivery?detail=${d.id}`}
+                                          className="inline-flex items-center gap-1 font-mono text-cyan-300 hover:text-cyan-100 hover:underline">
+                                          <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                                          {d.noteNumber}
+                                        </Link>
                                         <span className="ml-1 opacity-90">{d.customerShortName}</span>
                                         <span className="ml-1 opacity-60">· {d.quantity} ชิ้น</span>
                                       </li>
                                     ))}
-                                    {o.dns.length > 10 && <li className="text-[10px] opacity-60 italic">+{o.dns.length - 10} อื่นๆ</li>}
+                                    {o.dns.length > 30 && <li className="text-[10px] opacity-60 italic">+{o.dns.length - 30} อื่นๆ</li>}
                                   </ul>
                                 </div>
                               }
@@ -769,15 +782,19 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
                             }
                             content={
                               <div>
-                                <div className="font-semibold mb-1 text-slate-200">Customer references</div>
-                                <ul className="space-y-0.5">
-                                  {o.customers.slice(0, 12).map(c => (
+                                <div className="font-semibold mb-1 text-slate-200">Customer references (คลิกเพื่อเปิด)</div>
+                                <ul className="space-y-1">
+                                  {o.customers.slice(0, 30).map(c => (
                                     <li key={c.id} className="text-[11px]">
-                                      <span className="text-cyan-300">{c.shortName}</span>
+                                      <Link href={`/dashboard/customers?detail=${c.id}`}
+                                        className="inline-flex items-center gap-1 text-cyan-300 hover:text-cyan-100 hover:underline">
+                                        <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                                        {c.shortName}
+                                      </Link>
                                       <span className="ml-1 opacity-70">({c.sources.join(', ')})</span>
                                     </li>
                                   ))}
-                                  {o.customers.length > 12 && <li className="text-[10px] opacity-60 italic">+{o.customers.length - 12} อื่นๆ</li>}
+                                  {o.customers.length > 30 && <li className="text-[10px] opacity-60 italic">+{o.customers.length - 30} อื่นๆ</li>}
                                 </ul>
                               </div>
                             }

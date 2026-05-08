@@ -53,14 +53,19 @@ export default function HoverPopover({
         <div
           role="tooltip"
           className={cn(
-            'absolute z-50 bg-slate-800 text-white text-xs rounded-lg shadow-xl px-3 py-2',
-            'min-w-[220px] max-w-[360px] whitespace-normal break-words',
-            'border border-slate-700',
+            'absolute z-50 bg-slate-800 text-white text-xs rounded-lg shadow-xl',
+            'min-w-[240px] max-w-[420px] max-h-[60vh] overflow-y-auto',
+            'whitespace-normal break-words border border-slate-700',
+            // custom scrollbar styling
+            '[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-thumb]:rounded',
             positionClasses,
             panelClassName,
           )}
+          // ป้องกัน popover ปิดเมื่อ user เลื่อน scroll หรือ click ภายใน
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
         >
-          {content}
+          <div className="px-3 py-2">{content}</div>
         </div>
       )}
     </span>

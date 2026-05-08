@@ -47,6 +47,15 @@ export default function LinenFormsPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   // 171.1: scroll to <mark> on arrival from global search
   useScrollToMark([showDetail])
+  // 236: watch ?detail= URL changes — เปิด modal เมื่อ Cmd+K ส่ง link มาจาก same page
+  useEffect(() => {
+    const detailParam = searchParams.get('detail')
+    if (detailParam && detailParam !== showDetail) {
+      setShowDetail(detailParam)
+      setActiveRowId(detailParam)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   // Date filter & sort state
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')

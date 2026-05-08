@@ -50,6 +50,14 @@ export default function DeliveryPage() {
 
   // 171.1: scroll to <mark> on arrival from global search
   useScrollToMark([showDetail])
+  // 236: watch ?detail= URL changes — เปิด modal เมื่อ Cmd+K ส่ง link มาจาก same page
+  useEffect(() => {
+    const detailParam = searchParams.get('detail')
+    if (detailParam && detailParam !== showDetail) {
+      setShowDetail(detailParam)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
   const [dnFilter, setDnFilter] = useState<DNFilter>('all')
 
   // Focus mode (50): from ?focus=ID1,ID2 — override all filters + auto-open detail
