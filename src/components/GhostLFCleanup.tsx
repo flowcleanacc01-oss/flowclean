@@ -13,25 +13,53 @@
  *
  * Workflow: เลือก source code + scope → preview LF rows → เลือก target → execute
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { pushUndoAction, type SnapshotChange } from '@/lib/undo-stack'
-import { AlertTriangle, ArrowRight, Calendar, CheckCircle2, Loader2, X, Users, Filter } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Calendar, CheckCircle2, Loader2, X, Users, Filter, Sparkles } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 
 export default function GhostLFCleanup() {
+  const sp = useSearchParams()
   const {
     linenCatalog, customers, linenForms, updateLinenForm,
   } = useStore()
 
-  const [sourceCode, setSourceCode] = useState('')
+  // 242.1: prefill จาก URL (เปิดจาก Orphan Inspector / Reuse Detector)
+  // ?ghostSource=A62 &ghostCustomers=id1,id2 &ghostDateTo=2026-01-31
+  const urlSource = sp.get('ghostSource') || ''
+  const urlCustomers = sp.get('ghostCustomers') || ''
+  const urlDateTo = sp.get('ghostDateTo') || ''
+
+  const [sourceCode, setSourceCode] = useState(urlSource)
   const [targetCode, setTargetCode] = useState('')
-  const [scopeCustomerIds, setScopeCustomerIds] = useState<Set<string>>(new Set())
+  const [scopeCustomerIds, setScopeCustomerIds] = useState<Set<string>>(
+    () => new Set(urlCustomers ? urlCustomers.split(',').filter(Boolean) : [])
+  )
   const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [dateTo, setDateTo] = useState(urlDateTo)
   const [showConfirm, setShowConfirm] = useState(false)
   const [running, setRunning] = useState(false)
   const [done, setDone] = useState<{ count: number; ts: string } | null>(null)
+  const prefilledRef = useState({ source: '', customers: '', dateTo: '' })[0]
+
+  // sync URL → state เมื่อ URL เปลี่ยน (เคส user navigate ระหว่าง tools)
+  useEffect(() => {
+    if (urlSource && urlSource !== prefilledRef.source) {
+      setSourceCode(urlSource)
+      prefilledRef.source = urlSource
+    }
+    if (urlCustomers && urlCustomers !== prefilledRef.customers) {
+      setScopeCustomerIds(new Set(urlCustomers.split(',').filter(Boolean)))
+      prefilledRef.customers = urlCustomers
+    }
+    if (urlDateTo && urlDateTo !== prefilledRef.dateTo) {
+      setDateTo(urlDateTo)
+      prefilledRef.dateTo = urlDateTo
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlSource, urlCustomers, urlDateTo])
 
   // ทุก code ที่อยู่ใน LF rows (รวม catalog + orphan + reuse-as-source-of-ghost)
   const allCodesInLF = useMemo(() => {
@@ -85,6 +113,45 @@ export default function GhostLFCleanup() {
 
   const targetItem = linenCatalog.find(i => i.code === targetCode)
   const canExecute = sourceCode && targetCode && sourceCode !== targetCode && preview.lfs.length > 0
+
+  // 242.1: Auto-suggest target — เทียบราคาที่ลูกค้า scope มี ในQT/priceList กับ catalog ปัจจุบัน
+  const { quotations, deliveryNotes } = useStore()
+  const suggestedTarget = useMemo(() => {
+    if (!sourceCode) return null
+    // ดึงราคาเฉลี่ยของ source code จากแหล่งต่างๆ (QT items + DN priceSnapshot + customer.priceList)
+    const prices: number[] = []
+    for (const q of quotations) {
+      for (const it of q.items || []) {
+        if (it.code === sourceCode && (it.pricePerUnit || 0) > 0) prices.push(it.pricePerUnit)
+      }
+    }
+    for (const dn of deliveryNotes) {
+      const snap = dn.priceSnapshot?.[sourceCode]
+      if (snap && snap > 0) prices.push(snap)
+    }
+    for (const c of customers) {
+      if (scopeCustomerIds.size > 0 && !scopeCustomerIds.has(c.id)) continue
+      for (const p of c.priceList || []) {
+        if (p.code === sourceCode && (p.price || 0) > 0) prices.push(p.price)
+      }
+    }
+    if (prices.length === 0) return null
+    const avg = prices.reduce((s, p) => s + p, 0) / prices.length
+    // หา catalog ที่ราคาใกล้สุด (±20%)
+    const candidates = linenCatalog
+      .filter(i => i.code !== sourceCode && i.defaultPrice > 0)
+      .map(i => ({
+        item: i,
+        diff: Math.abs(i.defaultPrice - avg),
+        pct: Math.abs(i.defaultPrice - avg) / Math.max(i.defaultPrice, 0.01),
+      }))
+      .filter(c => c.pct <= 0.2)
+      .sort((a, b) => a.diff - b.diff)
+    if (candidates.length === 0) return null
+    const top = candidates[0]
+    const confidence: 'high' | 'medium' = top.pct <= 0.05 ? 'high' : 'medium'
+    return { code: top.item.code, name: top.item.name, price: top.item.defaultPrice, avgFound: Math.round(avg * 100) / 100, confidence }
+  }, [sourceCode, quotations, deliveryNotes, customers, scopeCustomerIds, linenCatalog])
 
   const toggleCustomer = (id: string) => {
     setScopeCustomerIds(prev => {
@@ -207,6 +274,49 @@ export default function GhostLFCleanup() {
             {targetItem && <p className="text-[11px] text-slate-500 mt-1">{targetItem.name} · ราคา {targetItem.defaultPrice}</p>}
           </div>
         </div>
+
+        {/* 242.1: Auto-suggest target — เทียบราคา source ใน scope กับ catalog */}
+        {suggestedTarget && targetCode !== suggestedTarget.code && (
+          <div className={cn(
+            'flex items-center justify-between gap-3 p-2.5 rounded-lg border',
+            suggestedTarget.confidence === 'high'
+              ? 'bg-emerald-50 border-emerald-200'
+              : 'bg-amber-50 border-amber-200'
+          )}>
+            <div className="flex items-center gap-2 text-xs">
+              <Sparkles className={cn(
+                'w-4 h-4',
+                suggestedTarget.confidence === 'high' ? 'text-emerald-600' : 'text-amber-600'
+              )} />
+              <div>
+                <span className={cn(
+                  'font-semibold',
+                  suggestedTarget.confidence === 'high' ? 'text-emerald-800' : 'text-amber-800'
+                )}>
+                  Suggested target: <span className="font-mono">{suggestedTarget.code}</span> — {suggestedTarget.name}
+                </span>
+                <span className={cn(
+                  'ml-2',
+                  suggestedTarget.confidence === 'high' ? 'text-emerald-600' : 'text-amber-700'
+                )}>
+                  (avg ราคาใน source = ฿{suggestedTarget.avgFound} · catalog = ฿{suggestedTarget.price})
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTargetCode(suggestedTarget.code)}
+              className={cn(
+                'text-[11px] font-medium px-2.5 py-1 rounded-md whitespace-nowrap',
+                suggestedTarget.confidence === 'high'
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-amber-600 text-white hover:bg-amber-700'
+              )}
+            >
+              ใช้ค่านี้
+            </button>
+          </div>
+        )}
 
         {/* Scope: customer + date range */}
         <div className="border-t border-slate-100 pt-4 space-y-3">

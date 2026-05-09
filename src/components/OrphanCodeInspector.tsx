@@ -16,7 +16,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { useOrphanCodes, type OrphanEntry } from '@/lib/use-orphan-codes'
-import { AlertTriangle, ArrowRight, Plus, Trash2, Search, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Plus, Trash2, Search, Sparkles, ChevronDown, ChevronUp, Ghost } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface SuggestedTarget {
@@ -104,6 +104,14 @@ export default function OrphanCodeInspector() {
   const goDelete = (source: string, target?: string) => {
     const sp = new URLSearchParams({ tab: 'merge', mergeSource: source, deleteAfter: '1' })
     if (target) sp.set('mergeTarget', target)
+    router.push(`/dashboard/items?${sp.toString()}`)
+  }
+  // 242.1: เปิด Ghost LF Cleanup prefilled — เฉพาะ orphan ที่มี LF refs (rewrite per-row, ไม่กระทบ catalog)
+  const goGhostCleanup = (entry: typeof orphans[0]) => {
+    const sp = new URLSearchParams({ tab: 'ghost', ghostSource: entry.code })
+    // prefill customer scope จาก LF refs ที่กระทบ
+    const customerIds = Array.from(new Set(entry.lfs.map(lf => lf.customerId)))
+    if (customerIds.length > 0) sp.set('ghostCustomers', customerIds.join(','))
     router.push(`/dashboard/items?${sp.toString()}`)
   }
 
@@ -260,6 +268,18 @@ export default function OrphanCodeInspector() {
                       <Trash2 className="w-3.5 h-3.5" />
                       ลบทิ้ง (ผ่าน merge)
                     </button>
+                    {/* 242.1: Ghost LF Cleanup — เฉพาะ orphan ที่มี LF refs (rewrite per-row, ไม่กระทบ catalog) */}
+                    {entry.lfs.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); goGhostCleanup(entry) }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-700 hover:bg-amber-50 hover:border-amber-400 transition-colors"
+                        title={`Ghost LF Cleanup — rewrite ${entry.lfs.length} LF rows ของลูกค้าที่กระทบ (ไม่แตะ catalog)`}
+                      >
+                        <Ghost className="w-3.5 h-3.5" />
+                        Ghost LF Cleanup ({entry.lfs.length} LF)
+                      </button>
+                    )}
                   </div>
 
                   {/* Names found */}
