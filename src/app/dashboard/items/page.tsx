@@ -25,6 +25,7 @@ import { canManageSettings } from '@/lib/permissions'
 import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 import { useNameDrift } from '@/lib/use-name-drift'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
+import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
 import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle } from 'lucide-react'
 
@@ -144,14 +145,9 @@ export default function ItemsPage() {
   // ---- Filtered & sorted items ----
   const filteredItems = useMemo(() => {
     let items = [...linenCatalog]
-    // Search
+    // Search — 241: Thai-aware tolerant filter (substring → phonetic fallback)
     if (search) {
-      const s = search.toLowerCase()
-      items = items.filter(i =>
-        i.code.toLowerCase().includes(s) ||
-        i.name.toLowerCase().includes(s) ||
-        i.nameEn.toLowerCase().includes(s)
-      )
+      items = items.filter(i => matchesThaiQueryAnyField([i.code, i.name, i.nameEn], search))
     }
     // Filter by category
     if (filterCat !== 'all') {

@@ -6,6 +6,7 @@ import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { highlightText } from '@/lib/highlight'
+import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
@@ -186,16 +187,14 @@ export default function LinenFormsPage() {
       if (customerFilter !== 'all' && f.customerId !== customerFilter) return false
       if (search) {
         const customer = getCustomer(f.customerId)
-        const q = search.toLowerCase()
-        const textMatch = (f.formNumber || '').toLowerCase().includes(q)
-          || (customer?.shortName || '').toLowerCase().includes(q)
-          || (customer?.name || '').toLowerCase().includes(q)
+        // 241: Thai-aware tolerant filter — substring → phonetic fallback (Thai only)
+        const textMatch = matchesThaiQueryAnyField([f.formNumber, customer?.shortName, customer?.name], search)
         // 214: รหัส + ชื่อรายการ (audit: หา LF ที่มี code นี้)
         const itemMatch = !textMatch && (f.rows || []).some(r => {
           if (!r) return false
-          if ((r.code || '').toLowerCase().includes(q)) return true
+          if (matchesThaiQuery(r.code || '', search)) return true
           const def = r.code ? linenCatalog.find(c => c.code === r.code) : null
-          if (def && ((def.name || '').toLowerCase().includes(q) || (def.nameEn || '').toLowerCase().includes(q))) return true
+          if (def && matchesThaiQueryAnyField([def.name, def.nameEn], search)) return true
           return false
         })
         if (!textMatch && !itemMatch) return false

@@ -6,6 +6,7 @@ import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { highlightText, matchesAmountQuery } from '@/lib/highlight'
+import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import FindableText from '@/components/FindableText'
 import { type DeliveryNoteItem, LINEN_FORM_STATUS_CONFIG } from '@/types'
 import { calculateTransportFeeTrip, calculateDNSubtotal } from '@/lib/transport-fee'
@@ -198,18 +199,16 @@ export default function DeliveryPage() {
       if (customerFilter !== 'all' && dn.customerId !== customerFilter) return false
       if (search) {
         const customer = getCustomer(dn.customerId)
-        const q = search.toLowerCase()
-        const textMatch = (dn.noteNumber || '').toLowerCase().includes(q)
-          || (customer?.shortName || '').toLowerCase().includes(q)
-          || (customer?.name || '').toLowerCase().includes(q)
+        // 241: Thai-aware tolerant filter — substring → phonetic fallback (Thai only)
+        const textMatch = matchesThaiQueryAnyField([dn.noteNumber, customer?.shortName, customer?.name], search)
         // 214: รหัส + ชื่อรายการ (audit: หา SD ที่มี item code นี้)
         const itemMatch = !textMatch && (dn.items || []).some(it => {
           if (!it) return false
-          if ((it.code || '').toLowerCase().includes(q)) return true
+          if (matchesThaiQuery(it.code || '', search)) return true
           const def = it.code ? linenCatalog.find(c => c.code === it.code) : null
-          if (def && ((def.name || '').toLowerCase().includes(q) || (def.nameEn || '').toLowerCase().includes(q))) return true
-          if (it.isAdhoc && (it.adhocName || '').toLowerCase().includes(q)) return true
-          if ((it.displayName || '').toLowerCase().includes(q)) return true
+          if (def && matchesThaiQueryAnyField([def.name, def.nameEn], search)) return true
+          if (it.isAdhoc && matchesThaiQuery(it.adhocName || '', search)) return true
+          if (matchesThaiQuery(it.displayName || '', search)) return true
           return false
         })
         // 166.3.1: match by ยอดรวม

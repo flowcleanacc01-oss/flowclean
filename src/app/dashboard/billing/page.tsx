@@ -6,6 +6,7 @@ import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
+import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, aggregateDeliveryItemsByTotal, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
@@ -313,13 +314,11 @@ export default function BillingPage() {
 
       if (search) {
         const customer = getCustomer(b.customerId)
-        const q = search.toLowerCase()
-        const textMatch = b.billingNumber.toLowerCase().includes(q)
-          || (customer?.shortName || '').toLowerCase().includes(q)
-          || (customer?.name || '').toLowerCase().includes(q)
+        // 241: Thai-aware tolerant filter — substring → phonetic fallback (Thai only)
+        const textMatch = matchesThaiQueryAnyField([b.billingNumber, customer?.shortName, customer?.name], search)
         // 214: รหัส + ชื่อรายการใน lineItems (audit ราคา per item)
         const itemMatch = !textMatch && b.lineItems.some(li =>
-          (li.code || '').toLowerCase().includes(q) || (li.name || '').toLowerCase().includes(q)
+          matchesThaiQuery(li.code || '', search) || matchesThaiQuery(li.name || '', search)
         )
         // 162: also match by amount (ยอดรวม + จ่ายสุทธิ + per-line amount)
         const amounts = [b.grandTotal, b.netPayable, ...b.lineItems.map(li => li.pricePerUnit || 0)]
@@ -945,16 +944,14 @@ export default function BillingPage() {
     return quotations.filter(q => {
       if (qtCustomerFilter !== 'all' && q.customerId !== qtCustomerFilter) return false
       if (search) {
-        const s = search.toLowerCase()
         const customer = getCustomer(q.customerId)
-        const textMatch = q.quotationNumber.toLowerCase().includes(s)
-          || (customer?.shortName || '').toLowerCase().includes(s)
-          || (customer?.name || '').toLowerCase().includes(s)
-          || q.customerName.toLowerCase().includes(s)
+        // 241: Thai-aware tolerant filter — substring → phonetic fallback (Thai only)
+        const textMatch = matchesThaiQueryAnyField(
+          [q.quotationNumber, customer?.shortName, customer?.name, q.customerName], search
+        )
         // 171.3: match item code/name ใน q.items[]
         const itemMatch = !textMatch && q.items.some(it =>
-          (it.code || '').toLowerCase().includes(s)
-          || (it.name || '').toLowerCase().includes(s)
+          matchesThaiQuery(it.code || '', search) || matchesThaiQuery(it.name || '', search)
         )
         // 214.1: match จำนวนเงิน (per-item pricePerUnit) — audit ราคาผ้าใน QT
         const prices = q.items.map(it => it.pricePerUnit || 0)
@@ -990,13 +987,11 @@ export default function BillingPage() {
 
       if (search) {
         const customer = getCustomer(inv.customerId)
-        const q = search.toLowerCase()
-        const textMatch = inv.invoiceNumber.toLowerCase().includes(q)
-          || (customer?.shortName || '').toLowerCase().includes(q)
-          || (customer?.name || '').toLowerCase().includes(q)
+        // 241: Thai-aware tolerant filter — substring → phonetic fallback (Thai only)
+        const textMatch = matchesThaiQueryAnyField([inv.invoiceNumber, customer?.shortName, customer?.name], search)
         // 214: รหัส + ชื่อรายการใน lineItems
         const itemMatch = !textMatch && inv.lineItems.some(li =>
-          (li.code || '').toLowerCase().includes(q) || (li.name || '').toLowerCase().includes(q)
+          matchesThaiQuery(li.code || '', search) || matchesThaiQuery(li.name || '', search)
         )
         // 162: also match by amount (ยอดรวม VAT + per-line amount)
         const amounts = [inv.grandTotal, ...inv.lineItems.map(li => li.pricePerUnit || 0)]
