@@ -24,7 +24,8 @@ import UndoPanel from '@/components/UndoPanel'
 interface Props {
   // 240: เพิ่ม 'orphan' — Orphan Inspector tab
   // 240.3: เพิ่ม 'reuse' — Code Reuse Detector tab
-  onOpenTab: (tab: 'sync' | 'merge' | 'items' | 'vocab' | 'orphan' | 'reuse') => void
+  // 242: เพิ่ม 'ghost' — Ghost LF Cleanup tab
+  onOpenTab: (tab: 'sync' | 'merge' | 'items' | 'vocab' | 'orphan' | 'reuse' | 'ghost') => void
 }
 
 const VALIDATION_KEY = 'flowclean_catalog_validation'
@@ -176,7 +177,7 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
           <HelpCircle className="w-4 h-4" />
           🧭 ไม่แน่ใจว่าใช้ tool ไหน?
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <button
             onClick={() => setWizardOpen(true)}
             className="text-left p-4 rounded-xl border-2 border-dashed border-slate-300 hover:border-[#3DD8D8] hover:bg-[#3DD8D8]/5 transition-colors group"
@@ -199,6 +200,19 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
             </div>
             <p className="text-xs text-slate-500">
               ตารางอ้างอิงเคส + tool — ดูแยกได้ทุกเคส
+            </p>
+          </button>
+          {/* 242: Ghost LF Cleanup quick action */}
+          <button
+            onClick={() => onOpenTab('ghost')}
+            className="text-left p-4 rounded-xl border-2 border-dashed border-slate-300 hover:border-amber-400 hover:bg-amber-50 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-[#1B3A5C] mb-1">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <span className="font-semibold text-sm">Ghost LF Cleanup</span>
+            </div>
+            <p className="text-xs text-slate-500">
+              ลบ &quot;ผี&quot; ใน LF (per-row · scope by ลูกค้า + วันที่ · ไม่กระทบ catalog) · ใช้กับ reuse case
             </p>
           </button>
           <button

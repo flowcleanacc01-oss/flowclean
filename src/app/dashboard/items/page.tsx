@@ -19,6 +19,7 @@ import CatalogHygieneCenter from '@/components/CatalogHygieneCenter'
 import VocabularyAudit from '@/components/VocabularyAudit'
 import OrphanCodeInspector from '@/components/OrphanCodeInspector'
 import CodeReuseDetector from '@/components/CodeReuseDetector'
+import GhostLFCleanup from '@/components/GhostLFCleanup'
 import AddItemWizard from '@/components/AddItemWizard'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
 import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
@@ -29,9 +30,9 @@ import { useOrphanCodes } from '@/lib/use-orphan-codes'
 import { useCodeReuse } from '@/lib/use-code-reuse'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
-import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle, Shuffle } from 'lucide-react'
+import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle, Shuffle, Ghost } from 'lucide-react'
 
-type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse'
+type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse' | 'ghost'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
 type SortDir = 'asc' | 'desc'
 
@@ -69,8 +70,9 @@ export default function ItemsPage() {
   // 219: tab synced with URL — supports browser back/forward
   // 240: เพิ่ม tab 'orphan' — Orphan Code Inspector
   // 240.3: เพิ่ม tab 'reuse' — Code Reuse Detector
+  // 242: เพิ่ม tab 'ghost' — Ghost LF Cleanup (per-LF row.code rewrite ไม่กระทบ catalog)
   const [tab, setTab] = useTabUrlSync<TabKey>(
-    ['hygiene', 'items', 'categories', 'merge', 'sync', 'vocab', 'orphan', 'reuse'] as const,
+    ['hygiene', 'items', 'categories', 'merge', 'sync', 'vocab', 'orphan', 'reuse', 'ghost'] as const,
     'items',
   )
   // 180: scroll to first <mark> when arriving from global search with ?q=
@@ -337,6 +339,7 @@ export default function ItemsPage() {
       { key: 'sync' as TabKey, label: 'ซิงก์ชื่อ', badge: driftCodeCount },
       { key: 'orphan' as TabKey, label: 'Orphan Inspector', badge: orphanCodeCount, icon: <AlertTriangle className="w-3.5 h-3.5" /> },
       { key: 'reuse' as TabKey, label: 'Reuse Detector', badge: reuseCodeCount, icon: <Shuffle className="w-3.5 h-3.5" /> },
+      { key: 'ghost' as TabKey, label: 'Ghost LF Cleanup', icon: <Ghost className="w-3.5 h-3.5" /> },
       { key: 'vocab' as TabKey, label: 'Vocabulary Audit', icon: <BookOpen className="w-3.5 h-3.5" /> },
     ] : []),
   ]
@@ -886,6 +889,11 @@ export default function ItemsPage() {
       {/* 240.3: Code Reuse Detector tab */}
       {tab === 'reuse' && (
         <CodeReuseDetector />
+      )}
+
+      {/* 242: Ghost LF Cleanup tab */}
+      {tab === 'ghost' && (
+        <GhostLFCleanup />
       )}
 
       {/* 188 ขั้น A: Sync Names Tool tab */}
