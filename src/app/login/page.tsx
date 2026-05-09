@@ -64,6 +64,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="flowcleanwash@gmail.com"
+                autoComplete="username"
                 className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3DD8D8] focus:border-transparent transition-shadow"
                 autoFocus
               />
@@ -77,6 +78,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="รหัสผ่าน"
+                  autoComplete="current-password"
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3DD8D8] focus:border-transparent transition-shadow pr-11"
                 />
                 <button
