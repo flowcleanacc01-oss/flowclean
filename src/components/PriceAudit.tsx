@@ -196,33 +196,34 @@ export default function PriceAudit() {
           onClick={() => { setSeverity('all'); setReason('all') }}
           sub={`${stats.dnsAudited} DN · ${stats.customersAudited} ลูกค้า`}
         />
-        {/* 235: hover เห็นรายชื่อลูกค้า flat-rate ที่ถูกข้าม */}
+        {/* 237: ปรับ label ให้ชัด — ลูกค้าที่ถูกข้ามคือ "เหมาเดือน" (ไม่มีราคา/ชิ้น)
+            ไม่ใช่ลูกค้า per-piece + min/month floor (ตัวนั้นยัง audit ได้) */}
         <HoverPopover
           placement="bottom-start"
           trigger={
             <div className="h-full">
               <StatCard
                 icon={<EyeOff className="w-4 h-4" />}
-                label="Flat-rate ข้าม"
+                label="เหมาเดือน ข้าม"
                 value={stats.flatRateExcluded}
                 color="slate"
                 active={false}
                 onClick={() => {}}
                 sub={stats.flatRateCustomers.length > 0
                   ? `${stats.flatRateCustomers.length} ลูกค้า · hover เพื่อดู`
-                  : 'ไม่นับเพราะเหมาเดือน'}
+                  : 'ไม่มีราคา/ชิ้นให้เทียบ'}
                 disabled
               />
             </div>
           }
           content={
             stats.flatRateCustomers.length === 0 ? (
-              <div className="text-[11px]">ไม่มีลูกค้า flat-rate ในช่วงนี้</div>
+              <div className="text-[11px]">ไม่มีลูกค้าเหมาเดือนในช่วงนี้</div>
             ) : (
               <div>
                 <div className="font-semibold mb-1 text-slate-200">
                   <Info className="w-3 h-3 inline mr-1" />
-                  ลูกค้า flat-rate ที่ถูกข้าม ({stats.flatRateCustomers.length} ราย)
+                  ลูกค้าเหมาเดือนที่ถูกข้าม ({stats.flatRateCustomers.length} ราย)
                 </div>
                 <ul className="space-y-0.5 mt-1">
                   {stats.flatRateCustomers.slice(0, 15).map(c => (
@@ -239,7 +240,8 @@ export default function PriceAudit() {
                   )}
                 </ul>
                 <div className="text-[10px] opacity-70 mt-2 pt-2 border-t border-slate-700">
-                  ลูกค้าเหล่านี้คิดเงินเหมาเดือน — Price Audit ไม่ตรวจ (ไม่มีราคาต่อชิ้นให้เทียบ)
+                  เหมาเดือน = ไม่ติ๊ก &quot;คิดตามหน่วย&quot; → ไม่มีราคา/ชิ้นให้ Price Audit เทียบ<br />
+                  (ลูกค้าที่คิดตามหน่วย + มี &quot;ขั้นต่ำ/เดือน&quot; ยัง audit ได้ปกติ)
                 </div>
               </div>
             )

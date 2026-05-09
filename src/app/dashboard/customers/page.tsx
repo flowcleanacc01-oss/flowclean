@@ -15,6 +15,7 @@ import Modal from '@/components/Modal'
 import SortableHeader from '@/components/SortableHeader'
 import CustomerSearchInline from '@/components/CustomerSearchInline'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
+import { isFlatRateCustomer } from '@/lib/customer-pricing'
 
 type PageTab = 'customers' | 'categories'
 type SortKey = 'shortName' | 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'tax' | 'qt' | 'contact' | 'isActive'
@@ -153,10 +154,12 @@ export default function CustomersPage() {
 
   const handleSave = () => {
     if (!form.name) return
-    // Derive billingModel from flags for backward compat
+    // 237: Derive billingModel from flags for backward compat
+    // True flat-rate = !enablePerPiece && enableMinPerMonth (เหมาเดือน, ไม่มีราคา/ชิ้น)
+    // per-piece + min/month floor → ยังเป็น per-piece
     const derived = {
       ...form,
-      billingModel: form.enableMinPerMonth ? 'monthly_flat' as const : 'per_piece' as const,
+      billingModel: isFlatRateCustomer(form) ? 'monthly_flat' as const : 'per_piece' as const,
     }
     if (editId) {
       updateCustomer(editId, derived)

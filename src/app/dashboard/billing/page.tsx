@@ -10,6 +10,7 @@ import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, aggregateDeliveryItemsByTotal, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { calculateTransportFeeTrip } from '@/lib/transport-fee'
+import { isFlatRateCustomer } from '@/lib/customer-pricing'
 import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2, Sparkles, Target, GripVertical, ArrowUpDown } from 'lucide-react'
 import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 import Modal from '@/components/Modal'
@@ -726,7 +727,9 @@ export default function BillingPage() {
 
     // Auto sync billing conditions
     if (cust) {
-      updateCustomer(cust.id, {
+      // 237: derive billingModel ใหม่ตาม flags ที่อัพเดต — ปิด 2-path inconsistency
+      // (Customer form ก็ derive ตอน save แต่ QT accept เคยข้าม → billingModel เน่า)
+      const newFlags = {
         enablePerPiece: qt.enablePerPiece ?? true,
         enableMinPerTrip: qt.enableMinPerTrip ?? false,
         minPerTrip: qt.minPerTrip ?? 0,
@@ -734,6 +737,10 @@ export default function BillingPage() {
         minPerTripThreshold: qt.minPerTripThreshold ?? 0,
         enableMinPerMonth: qt.enableMinPerMonth ?? false,
         monthlyFlatRate: qt.monthlyFlatRate ?? 0,
+      }
+      updateCustomer(cust.id, {
+        ...newFlags,
+        billingModel: isFlatRateCustomer(newFlags) ? 'monthly_flat' as const : 'per_piece' as const,
       })
     }
 

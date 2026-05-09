@@ -10,6 +10,7 @@
  */
 import { useMemo } from 'react'
 import { useStore } from './store'
+import { isFlatRateCustomer } from './customer-pricing'
 
 export type PriceAuditReason =
   | 'ok'
@@ -138,8 +139,9 @@ export function usePriceAudit(filters: PriceAuditFilters): PriceAuditResult {
       const cust = customers.find(c => c.id === dn.customerId)
       if (!cust) continue
 
-      const isFlatRate = cust.billingModel === 'monthly_flat' || cust.enableMinPerMonth === true
-      if (isFlatRate && !filters.showFlatRate) {
+      // 237: ใช้ helper เดียวกันทั้งระบบ — true flat-rate = !enablePerPiece && enableMinPerMonth
+      // (per-piece + min/month floor ไม่นับ — ยังมีราคา/ชิ้นต้อง audit)
+      if (isFlatRateCustomer(cust) && !filters.showFlatRate) {
         flatRateExcluded++
         // 235: track customer info เพื่อ debug
         const ex = flatRateCustMap.get(cust.id)

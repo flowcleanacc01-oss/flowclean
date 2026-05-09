@@ -17,6 +17,7 @@ import { useMemo } from 'react'
 import { useStore } from './store'
 import type { BillingStatement, Customer, DeliveryNote, LinenForm, Quotation, CustomerType, LegacyDocument } from '@/types'
 import { CUSTOMER_TYPE_CONFIG } from '@/types'
+import { isFlatRateCustomer } from './customer-pricing'
 
 // ────────────────────────────────────────────────────────────────
 // Types
@@ -490,7 +491,8 @@ function computeExecutive(
     if (!currentDNIds.has(dn.id)) continue
     const cust = custMap.get(dn.customerId)
     if (!cust) continue
-    if (cust.billingModel === 'monthly_flat' || cust.enableMinPerMonth) continue
+    // 237: ตัดเฉพาะ true flat-rate (เหมาเดือน) — per-piece + min/month floor ยังต้อง audit
+    if (isFlatRateCustomer(cust)) continue
     const qt = qtByCustomer.get(dn.customerId)
     if (!qt) continue
     const qtMap = new Map(qt.items.map(it => [it.code, it.pricePerUnit]))
@@ -532,7 +534,8 @@ function computeExecutive(
     if (!currentDNIds.has(dn.id)) continue
     const cust = custMap.get(dn.customerId)
     if (!cust) continue
-    if (cust.billingModel === 'monthly_flat' || cust.enableMinPerMonth) continue
+    // 237: ตัดเฉพาะ true flat-rate (เหมาเดือน) — per-piece + min/month floor ยังนับยอดชิ้น
+    if (isFlatRateCustomer(cust)) continue
     let pieces = 0
     for (const item of dn.items) {
       if (item.isClaim) continue

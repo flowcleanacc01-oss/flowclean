@@ -8,7 +8,24 @@
  * Pattern: หา accepted QT ล่าสุดของลูกค้า → ดึง items + prices
  * ถ้าไม่มี accepted QT → return empty (caller ต้อง handle UX เช่น "กรุณาสร้าง QT ก่อน")
  */
-import type { Quotation } from '@/types'
+import type { Customer, Quotation } from '@/types'
+
+/**
+ * 237 — True flat-rate (เหมาเดือน, ไม่มีราคา/ชิ้น)
+ *
+ * = ลูกค้าที่ "ไม่คิดตามหน่วย" + "เหมาเดือน"
+ *   → billing ใช้ monthlyFlatRate ตรงๆ ไม่มีราคา/ชิ้นให้เทียบ
+ *   → audit/analytics ตัดออก (ไม่มีอะไรให้ audit)
+ *
+ * ⚠️ ห้ามสับสนกับ "per-piece + min/month floor":
+ *   `enablePerPiece + enableMinPerMonth` = คิดตามชิ้นปกติ + มี floor เดือน
+ *   → ยังเป็น per-piece, ไม่ใช่ flat-rate, ต้อง audit ราคา/ชิ้นปกติ
+ */
+export function isFlatRateCustomer(
+  c: Pick<Customer, 'enablePerPiece' | 'enableMinPerMonth'>
+): boolean {
+  return !(c.enablePerPiece ?? true) && (c.enableMinPerMonth ?? false)
+}
 
 /** หา accepted QT ล่าสุดของลูกค้า (ตาม date desc) */
 export function getLatestAcceptedQT(customerId: string, quotations: Quotation[]): Quotation | null {
