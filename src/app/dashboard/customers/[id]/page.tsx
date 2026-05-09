@@ -138,8 +138,9 @@ export default function CustomerDetailPage() {
   return (
     <div>
       {/* 185.2.3: Sticky header — ชื่อลูกค้า + search ค้นหาเปลี่ยนลูกค้าได้เลย
-          top-14 = ใต้ dashboard top bar (h-14) */}
-      <div className="sticky top-14 z-30 -mx-4 lg:-mx-8 px-4 lg:px-8 py-3 mb-4 bg-slate-50/95 border-b border-slate-200 backdrop-blur-sm">
+          top-14 = ใต้ dashboard top bar (h-14)
+          242.2: เอา backdrop-blur ออก — flicker เมื่อ drag-select text ใต้ sticky */}
+      <div className="sticky top-14 z-30 -mx-4 lg:-mx-8 px-4 lg:px-8 py-3 mb-4 bg-slate-50 border-b border-slate-200">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-[#e8eef5] flex items-center justify-center flex-shrink-0">

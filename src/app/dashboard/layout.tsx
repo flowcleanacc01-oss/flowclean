@@ -30,7 +30,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         collapsed ? 'lg:pl-16' : 'lg:pl-60',
       )}>
         {/* 121: Sticky top bar — Search + Bell (ไม่ชนปุ่ม "สร้าง" อีก) */}
-        <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-sm border-b border-slate-200">
+        {/* 242.2: เอา backdrop-blur ออก — เป็น browser bug: text selection ใต้ backdrop-filter
+            → repaint loop → หน้าจอกระพริบ (flicker) เมื่อ user drag-select บน chip/text */}
+        <header className="sticky top-0 z-30 bg-white border-b border-slate-200">
           <div className="max-w-7xl mx-auto h-14 flex items-center justify-end gap-2 pl-16 pr-4 lg:px-8">
             <HeaderActions />
           </div>
