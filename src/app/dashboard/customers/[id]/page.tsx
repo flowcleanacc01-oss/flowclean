@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatNumber, cn, formatDate, buildPriceMapFromQT } from '@/lib/utils'
@@ -16,6 +16,7 @@ import {
 import type { LinenFormStatus, BillingStatus } from '@/types'
 import RevenueTrendChart from '@/components/RevenueTrendChart'
 import CustomerSearchInline from '@/components/CustomerSearchInline'
+import Modal from '@/components/Modal'
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -115,6 +116,9 @@ export default function CustomerDetailPage() {
   const catalogMap = useMemo(() =>
     Object.fromEntries(linenCatalog.map(i => [i.code, i.name])),
     [linenCatalog])
+
+  // 238: orphan code cleanup modal — เปิดจาก carry-over badge
+  const [orphanCleanupCode, setOrphanCleanupCode] = useState<string | null>(null)
 
   // Linked accepted QT for this customer (matched by customerId, only 1 allowed)
   const linkedQT = useMemo(() =>
@@ -320,14 +324,34 @@ export default function CustomerDetailPage() {
                 <AlertTriangle className="w-4 h-4" />ผ้าค้าง
               </h3>
               <div className="space-y-1">
-                {carryOver.map(([code, qty]) => (
-                  <div key={code} className="flex justify-between text-sm py-1">
-                    <span className="text-slate-600">{catalogMap[code] || code}</span>
-                    <span className={cn('font-medium', qty < 0 ? 'text-red-600' : 'text-emerald-600')}>
-                      {qty > 0 ? '+' : ''}{qty}
-                    </span>
-                  </div>
-                ))}
+                {carryOver.map(([code, qty]) => {
+                  const isOrphan = !catalogMap[code]
+                  return (
+                    <div key={code} className="flex justify-between text-sm py-1">
+                      <span className="text-slate-600 flex items-center gap-2">
+                        {isOrphan ? (
+                          <>
+                            <span className="font-mono text-orange-700">{code}</span>
+                            {/* 238: orphan badge — ลบจาก catalog แล้ว แต่ค้างใน LF */}
+                            <button
+                              type="button"
+                              onClick={() => setOrphanCleanupCode(code)}
+                              className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-300 hover:bg-orange-200 transition-colors"
+                              title="รหัสนี้ถูกลบจาก catalog แล้ว · คลิกเพื่อจัดการ"
+                            >
+                              ลบจาก catalog แล้ว
+                            </button>
+                          </>
+                        ) : (
+                          catalogMap[code]
+                        )}
+                      </span>
+                      <span className={cn('font-medium', qty < 0 ? 'text-red-600' : 'text-emerald-600')}>
+                        {qty > 0 ? '+' : ''}{qty}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -514,6 +538,119 @@ export default function CustomerDetailPage() {
             </DocSection>
           )}
         </div>
+      </div>
+
+      {/* 238: Orphan code cleanup modal — เปิดจาก carry-over badge */}
+      {orphanCleanupCode && (
+        <Modal
+          open={true}
+          onClose={() => setOrphanCleanupCode(null)}
+          title={`จัดการรหัสผ้า ${orphanCleanupCode}`}
+          size="md"
+          closeLabel="cancel"
+        >
+          <OrphanCleanupContent
+            code={orphanCleanupCode}
+            onClose={() => setOrphanCleanupCode(null)}
+            router={router}
+          />
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+// 238: Orphan code cleanup — แสดง preview + 3 ปุ่ม delegate ไปหน้า items
+function OrphanCleanupContent({
+  code,
+  onClose,
+  router,
+}: {
+  code: string
+  onClose: () => void
+  router: ReturnType<typeof useRouter>
+}) {
+  const { customers, quotations, deliveryNotes, linenForms } = useStore()
+
+  // นับ usage ของ orphan code ทั่วระบบ
+  const usage = useMemo(() => {
+    const lf = linenForms.filter(f => (f.rows || []).some(r => r.code === code)).length
+    const qt = quotations.filter(q => (q.items || []).some(it => it.code === code)).length
+    const sd = deliveryNotes.filter(d => (d.items || []).some(it => it.code === code)).length
+    const cust = customers.filter(c =>
+      (c.enabledItems || []).includes(code) ||
+      (c.priceList || []).some(p => p.code === code)
+    ).length
+    return { lf, qt, sd, cust }
+  }, [code, linenForms, quotations, deliveryNotes, customers])
+
+  const goItems = (params: Record<string, string>) => {
+    const sp = new URLSearchParams(params)
+    router.push(`/dashboard/items?${sp.toString()}`)
+    onClose()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+        <div className="flex items-center gap-2 text-sm text-orange-800 mb-2">
+          <AlertTriangle className="w-4 h-4" />
+          <span className="font-semibold">รหัส <span className="font-mono">{code}</span> ถูกลบจาก catalog แล้ว</span>
+        </div>
+        <div className="text-xs text-orange-700">
+          แต่ยังถูก reference อยู่ใน:
+          <span className="ml-1 font-mono">
+            {usage.lf} LF · {usage.qt} QT · {usage.sd} SD · {usage.cust} ลูกค้า
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => goItems({ tab: 'merge', mergeSource: code })}
+          className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-[#3DD8D8] hover:bg-cyan-50 transition-colors group"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-slate-800 text-sm">Map รวมกับรหัสที่มีอยู่</div>
+              <div className="text-xs text-slate-500 mt-0.5">เปลี่ยนทุก reference เป็น code ใหม่ (เลือก target ได้)</div>
+            </div>
+            <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-[#3DD8D8]" />
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => goItems({ addCode: code })}
+          className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 transition-colors group"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-slate-800 text-sm">เพิ่มกลับเข้า catalog</div>
+              <div className="text-xs text-slate-500 mt-0.5">สร้าง item ใหม่ด้วย code <span className="font-mono">{code}</span> + ตั้งชื่อใหม่</div>
+            </div>
+            <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-emerald-500" />
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => goItems({ tab: 'merge', mergeSource: code, deleteAfter: '1' })}
+          className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-red-400 hover:bg-red-50 transition-colors group"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-slate-800 text-sm">ลบรหัสนี้ออกจากระบบ</div>
+              <div className="text-xs text-slate-500 mt-0.5">รวมเป็นรหัสอื่น + ลบทิ้งหลัง merge (ต้องเลือก target)</div>
+            </div>
+            <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-red-500" />
+          </div>
+        </button>
+      </div>
+
+      <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">
+        ทุก action ใช้ Hygiene Center → MergeCodesTool (รองรับ undo)
       </div>
     </div>
   )

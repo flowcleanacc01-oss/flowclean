@@ -109,11 +109,12 @@ export default function FindBar() {
   return (
     <div
       data-find-skip
-      className="fixed top-3 right-4 z-[55] bg-white rounded-xl shadow-2xl border border-slate-200 flex items-center gap-1 pl-3 pr-1 py-1.5 animate-fadeIn"
+      // 239: orange theme — match active mark color (#fb923c) + ตัว "Clean" ใน logo
+      className="fixed top-3 right-4 z-[55] bg-orange-50 rounded-xl shadow-2xl border-2 border-orange-300 flex items-center gap-1 pl-3 pr-1 py-1.5 animate-fadeIn"
       role="search"
       aria-label="ค้นหาในหน้านี้"
     >
-      <Search className="w-4 h-4 text-slate-400 flex-shrink-0" aria-hidden="true" />
+      <Search className="w-4 h-4 text-orange-500 flex-shrink-0" aria-hidden="true" />
       <input
         ref={inputRef}
         value={query}
@@ -122,15 +123,15 @@ export default function FindBar() {
         placeholder="ค้นหาในหน้านี้"
         aria-label="ค้นหาในหน้านี้"
         className={cn(
-          'w-44 sm:w-56 text-sm outline-none px-1 py-1 bg-transparent',
-          noMatch && 'text-red-600',
+          'w-44 sm:w-56 text-sm outline-none px-1 py-1 bg-transparent placeholder:text-orange-400/70',
+          noMatch ? 'text-red-600' : 'text-orange-900',
         )}
       />
       <span
         className={cn(
           'text-[11px] font-mono px-1.5 py-0.5 rounded min-w-[3.5rem] text-center select-none',
           noMatch ? 'bg-red-50 text-red-600' :
-          total === 0 ? 'text-slate-300' : 'bg-slate-100 text-slate-600',
+          total === 0 ? 'text-orange-300' : 'bg-orange-100 text-orange-700',
         )}
         aria-live="polite"
       >
@@ -142,7 +143,7 @@ export default function FindBar() {
         disabled={total === 0}
         aria-label="ก่อนหน้า"
         title="ก่อนหน้า (Shift+Enter)"
-        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-[#1B3A5C] hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent"
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-orange-600 hover:text-orange-800 hover:bg-orange-200 disabled:opacity-30 disabled:hover:bg-transparent"
       >
         <ChevronUp className="w-4 h-4" aria-hidden="true" />
       </button>
@@ -152,7 +153,7 @@ export default function FindBar() {
         disabled={total === 0}
         aria-label="ถัดไป"
         title="ถัดไป (Enter)"
-        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-[#1B3A5C] hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent"
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-orange-600 hover:text-orange-800 hover:bg-orange-200 disabled:opacity-30 disabled:hover:bg-transparent"
       >
         <ChevronDown className="w-4 h-4" aria-hidden="true" />
       </button>
@@ -161,7 +162,7 @@ export default function FindBar() {
         onClick={close}
         aria-label="ปิดค้นหาในหน้านี้"
         title="ปิด (Esc)"
-        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-slate-100"
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-orange-500 hover:text-red-500 hover:bg-orange-200"
       >
         <X className="w-4 h-4" aria-hidden="true" />
       </button>

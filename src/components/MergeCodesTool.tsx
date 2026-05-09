@@ -13,14 +13,21 @@
  *
  * Workflow: Source + Target → Preview → Confirm → Execute
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { pushUndoAction, type SnapshotChange } from '@/lib/undo-stack'
 
 type Stat = { label: string; count: number; affectedIds: string[] }
 
-export default function MergeCodesTool() {
+interface Props {
+  /** 238: prefill source code (เช่นจาก carry-over orphan badge) */
+  initialSource?: string
+  /** 238: prefill deleteSource flag (สำหรับ "ลบรหัสนี้ออกจากระบบ") */
+  initialDeleteSource?: boolean
+}
+
+export default function MergeCodesTool({ initialSource, initialDeleteSource }: Props = {}) {
   const {
     linenCatalog,
     quotations, updateQuotation,
@@ -32,14 +39,24 @@ export default function MergeCodesTool() {
     deleteLinenItem,
   } = useStore()
 
-  const [sourceCode, setSourceCode] = useState('')
+  const [sourceCode, setSourceCode] = useState(initialSource ?? '')
   const [targetCode, setTargetCode] = useState('')
   const [includeWB, setIncludeWB] = useState(false)
   const [includeIV, setIncludeIV] = useState(false)
-  const [deleteSource, setDeleteSource] = useState(false)
+  const [deleteSource, setDeleteSource] = useState(initialDeleteSource ?? false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [running, setRunning] = useState(false)
   const [done, setDone] = useState<{ stats: Stat[]; ts: string } | null>(null)
+
+  // 238: sync source/delete จาก parent (เช่น URL params เปลี่ยน)
+  useEffect(() => {
+    if (initialSource && initialSource !== sourceCode) setSourceCode(initialSource)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSource])
+  useEffect(() => {
+    if (initialDeleteSource !== undefined) setDeleteSource(initialDeleteSource)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDeleteSource])
 
   const sortedCatalog = useMemo(
     () => [...linenCatalog].sort((a, b) => a.code.localeCompare(b.code)),

@@ -180,12 +180,13 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
     customers: Set<string>
     qtCount: number
     sdCount: number
+    lfCount: number  // 238: รวม LF rows ที่ reference code นี้
   }
   const itemAgg = new Map<string, ItemAggregate>()
   const upsert = (code: string, name: string, inCat: boolean): ItemAggregate => {
     let a = itemAgg.get(code)
     if (!a) {
-      a = { code, names: new Set(), inCatalog: inCat, customers: new Set(), qtCount: 0, sdCount: 0 }
+      a = { code, names: new Set(), inCatalog: inCat, customers: new Set(), qtCount: 0, sdCount: 0, lfCount: 0 }
       itemAgg.set(code, a)
     } else if (inCat) a.inCatalog = true
     if (name) a.names.add(name.trim())
@@ -216,12 +217,36 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
       a.customers.add(d.customerId)
     }
   }
+  // 238: LF rows — orphan codes ที่อยู่ใน LF (carry-over) จะหาเจอใน Cmd+K
+  for (const f of store.linenForms) {
+    const seenLf = new Set<string>()
+    for (const r of f.rows || []) {
+      if (!r.code) continue
+      const a = upsert(r.code, '', catalogByCode.has(r.code))
+      if (!seenLf.has(r.code)) { a.lfCount++; seenLf.add(r.code) }
+      a.customers.add(f.customerId)
+    }
+  }
+  // 238: Customer fields — code ที่ user enable/มี price แต่ไม่อยู่ใน QT/DN/LF
+  for (const c of store.customers) {
+    const seen = new Set<string>()
+    const collect = (code: string) => {
+      if (!code || seen.has(code)) return
+      seen.add(code)
+      const a = upsert(code, '', catalogByCode.has(code))
+      a.customers.add(c.id)
+    }
+    for (const code of c.enabledItems || []) collect(code)
+    for (const p of c.priceList || []) collect(p.code)
+    for (const p of c.priceHistory || []) collect((p as { code?: string }).code || '')
+  }
   for (const a of itemAgg.values()) {
     const cat = catalogByCode.get(a.code)
     const primaryName = cat?.name || [...a.names][0] || a.code
     const variantNames = [...a.names].filter(n => n !== primaryName)
-    const summary = a.customers.size > 0 || a.qtCount > 0 || a.sdCount > 0
-      ? `ใช้ใน ${a.customers.size} ลูกค้า · ${a.qtCount} QT · ${a.sdCount} SD`
+    const hasUsage = a.customers.size > 0 || a.qtCount > 0 || a.sdCount > 0 || a.lfCount > 0
+    const summary = hasUsage
+      ? `ใช้ใน ${a.customers.size} ลูกค้า · ${a.qtCount} QT · ${a.sdCount} SD · ${a.lfCount} LF`
       : 'ยังไม่มีการใช้งาน'
     const tag = a.inCatalog ? '' : ' · ⚠ ไม่มีใน catalog'
     results.push({
@@ -239,7 +264,10 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
         cat?.category,
         cat?.unit,
       ].filter(Boolean).join(' ').toLowerCase(),
-      href: `/dashboard/items`,
+      // 238: orphan code → เปิด Hygiene Center พร้อม prefill MergeCodesTool
+      href: a.inCatalog
+        ? `/dashboard/items`
+        : `/dashboard/items?tab=merge&mergeSource=${encodeURIComponent(a.code)}`,
     })
   }
 

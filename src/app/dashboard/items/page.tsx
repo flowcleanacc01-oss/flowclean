@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useStore } from '@/lib/store'
 import { canManageItems } from '@/lib/permissions'
 import { cn, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
@@ -50,6 +50,12 @@ export default function ItemsPage() {
   } = useStore()
   const sp = useSearchParams()
   const urlHighlightQ = sp.get('q') || '' // 147.2
+  // 238: prefill MergeCodesTool source code (เปิดจาก carry-over orphan badge)
+  const urlMergeSource = sp.get('mergeSource') || ''
+  const urlMergeDelete = sp.get('deleteAfter') === '1'
+  // 238: prefill add-item form ด้วย code (re-add orphan to catalog)
+  const urlAddCode = sp.get('addCode') || ''
+  const addCodeHandledRef = useRef<string>('')
   const [showItemPrintList, setShowItemPrintList] = useState(false) // 154.1
 
   // 196: default tab = items (Hygiene Center เป็น optional, admin เปิดเอง)
@@ -92,6 +98,20 @@ export default function ItemsPage() {
 
   // 186: auto-scroll page เมื่อลาก row ใกล้ขอบบน/ล่าง — ใช้ทั้ง items + categories
   useAutoScrollOnDrag(dragCode !== null || dragCatKey !== null)
+
+  // 238: ถ้ามี ?addCode= → เปิด AddItem form prefill code (re-add orphan to catalog)
+  useEffect(() => {
+    if (!urlAddCode || addCodeHandledRef.current === urlAddCode) return
+    // กันถ้าโค้ดมีอยู่แล้ว (race หรือ user ใส่ ?addCode= ของ code ที่ไม่ orphan)
+    if (linenCatalog.some(i => i.code === urlAddCode)) {
+      addCodeHandledRef.current = urlAddCode
+      return
+    }
+    setTab('items')
+    setShowAddItem(true)
+    setNewItem({ ...EMPTY_NEW_ITEM, code: urlAddCode.toUpperCase() })
+    addCodeHandledRef.current = urlAddCode
+  }, [urlAddCode, linenCatalog, setTab])
 
   // 188: name drift detection — used for inline badge + Sync tab
   const { driftMap, totalCodes: driftCodeCount } = useNameDrift()
@@ -837,8 +857,9 @@ export default function ItemsPage() {
       )}
 
       {/* 174 ขั้น 2: Merge Codes Tool tab */}
+      {/* 238: ถ้ามี ?mergeSource= ใน URL → prefill source + (optional) deleteSource */}
       {tab === 'merge' && (
-        <MergeCodesTool />
+        <MergeCodesTool initialSource={urlMergeSource || undefined} initialDeleteSource={urlMergeDelete || undefined} />
       )}
 
       {/* 188 ขั้น A: Sync Names Tool tab */}
