@@ -65,9 +65,14 @@ export function useAutoScrollOnDrag(
         rafRef.current = null
         return
       }
-      window.scrollBy({ top: dy, behavior: 'auto' })
+      // 242.4 (R2): scroll ONE container only — modal ถ้ามี, ไม่งั้น window
+      // กัน background page ขยับใต้ modal ระหว่าง drag
       const modalScroll = modalScrollRef.current
-      if (modalScroll) modalScroll.scrollTop += dy
+      if (modalScroll) {
+        modalScroll.scrollTop += dy
+      } else {
+        window.scrollBy({ top: dy, behavior: 'auto' })
+      }
       rafRef.current = requestAnimationFrame(tick)
     }
 
