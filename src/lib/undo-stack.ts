@@ -29,6 +29,7 @@ export type SnapshotTable =
   | 'billing_statements'
   | 'tax_invoices'
   | 'linen_forms'
+  | 'carry_over_adjustments'  // 240.2: MergeCodesTool rewrite items[].code ในตารางนี้ด้วย
 
 export interface SnapshotChange {
   table: SnapshotTable

@@ -1,16 +1,17 @@
 'use client'
 
 /**
- * 193/194/225/226.A — Detect orphan codes (code in QT/LF/DN/Customer but NOT in catalog)
+ * 193/194/225/226.A/240.2 — Detect orphan codes (code in QT/LF/DN/Customer/CO-Adjust but NOT in catalog)
  *
  * 225: ขยาย scope จาก QT-only → QT + LF + DN
  * 226.A: เพิ่ม Customer.enabledItems / priceList / priceHistory
- *   ก่อน 226.A — code ที่อยู่ใน customer.enabledItems แต่ไม่อยู่ใน catalog → invisible
- *   แก้ผ่าน MergeCodesTool ได้แต่ไม่เห็นใน orphan list
+ * 240.2: เพิ่ม carryOverAdjustments[].items[].code
+ *   ก่อน 240.2 — orphan ที่อยู่ใน CO adjustments เท่านั้น (เช่น merge เก่าก่อน Feature 229
+ *   ที่ไม่ rewrite CO) → orphan list มองไม่เห็น → เลือกใน MergeCodesTool ไม่ได้
  */
 import { useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import type { QuotationStatus } from '@/types'
+import type { QuotationStatus, CarryOverAdjustmentType } from '@/types'
 
 /** 226.A: customer.* fields ที่อาจมี orphan code */
 export type CustomerOrphanSource = 'enabledItems' | 'priceList' | 'priceHistory'
@@ -19,7 +20,7 @@ export interface OrphanEntry {
   code: string
   /** unique names found across all sources */
   names: string[]
-  /** total rows referencing this code (qts + lfs + dns + customers) */
+  /** total rows referencing this code (qts + lfs + dns + customers + coas) */
   totalRows: number
   /** average pricePerUnit from QT + DN snapshots + Customer.priceList (excl. zero) */
   avgPrice: number
@@ -31,10 +32,12 @@ export interface OrphanEntry {
   dns: { id: string; noteNumber: string; date: string; itemName: string; quantity: number; pricePerUnit: number; customerId: string; customerShortName: string }[]
   /** Customer references (226.A) — ชื่อลูกค้า + array ของ field ที่ใช้ code นี้ */
   customers: { id: string; shortName: string; name: string; sources: CustomerOrphanSource[]; priceListPrice: number | null }[]
+  /** 240.2: Carry-Over Adjustments references */
+  coas: { id: string; date: string; type: CarryOverAdjustmentType; customerId: string; customerShortName: string; delta: number }[]
 }
 
 export function useOrphanCodes() {
-  const { linenCatalog, quotations, linenForms, deliveryNotes, customers } = useStore()
+  const { linenCatalog, quotations, linenForms, deliveryNotes, customers, carryOverAdjustments } = useStore()
 
   return useMemo(() => {
     const catalogCodes = new Set(linenCatalog.map(i => i.code))
@@ -43,7 +46,7 @@ export function useOrphanCodes() {
 
     const ensure = (code: string): OrphanEntry => {
       if (!map.has(code)) {
-        map.set(code, { code, names: [], totalRows: 0, avgPrice: 0, qts: [], lfs: [], dns: [], customers: [] })
+        map.set(code, { code, names: [], totalRows: 0, avgPrice: 0, qts: [], lfs: [], dns: [], customers: [], coas: [] })
       }
       return map.get(code)!
     }
@@ -113,7 +116,27 @@ export function useOrphanCodes() {
       }
     }
 
-    // 4. Customer (226.A) — scan enabledItems / priceList / priceHistory
+    // 4. Carry-Over Adjustments (240.2) — orphan ที่ค้างอยู่ในตารางปรับผ้าค้าง
+    //   เคสจริง: A19 → H17 merge เก่า ก่อน Feature 229 → A19 หลุดออกจาก LF/QT/DN/Customer
+    //   แต่ adjustments[].items[].code = "A19" ยังค้าง → carry-over computeแสดง A19 ขึ้นมาตลอด
+    for (const ca of carryOverAdjustments) {
+      if (ca.isDeleted) continue
+      const caCust = custMap.get(ca.customerId)
+      for (const it of ca.items || []) {
+        const code = (it.code || '').trim()
+        if (!code || catalogCodes.has(code)) continue
+        const e = ensure(code)
+        e.totalRows++
+        e.coas.push({
+          id: ca.id, date: ca.date, type: ca.type,
+          customerId: ca.customerId,
+          customerShortName: caCust?.shortName || ca.customerId.slice(0, 8),
+          delta: it.delta || 0,
+        })
+      }
+    }
+
+    // 5. Customer (226.A) — scan enabledItems / priceList / priceHistory
     for (const c of customers) {
       const sources: { code: string; source: CustomerOrphanSource; price?: number }[] = []
       for (const code of c.enabledItems || []) {
@@ -165,5 +188,6 @@ export function useOrphanCodes() {
       totalCodes: orphans.length,
       totalRows: orphans.reduce((s, e) => s + e.totalRows, 0),
     }
-  }, [linenCatalog, quotations, linenForms, deliveryNotes])
+    // 240.2: เพิ่ม customers + carryOverAdjustments ใน deps (ก่อนหน้าขาด → stale orphan list)
+  }, [linenCatalog, quotations, linenForms, deliveryNotes, customers, carryOverAdjustments])
 }

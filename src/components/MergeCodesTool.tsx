@@ -39,6 +39,7 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
     billingStatements, updateBillingStatement,
     taxInvoices, updateTaxInvoice,
     linenForms, updateLinenForm,
+    carryOverAdjustments, updateCarryOverAdjustment,
     deleteLinenItem,
   } = useStore()
 
@@ -106,6 +107,8 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
     )
     // 229: เพิ่ม LF coverage ที่ขาดหายไป — ก่อนหน้านี้ MergeCodesTool ไม่แตะ LF เลย
     const lfMatches = linenForms.filter(f => (f.rows || []).some(r => r.code === src))
+    // 240.2: เพิ่ม CO Adjustments — ตารางปรับผ้าค้าง (เคสจริง: A19 ค้างอยู่ตรงนี้เท่านั้น)
+    const coaMatches = carryOverAdjustments.filter(ca => !ca.isDeleted && (ca.items || []).some(it => it.code === src))
     const wbMatches = billingStatements.filter(b => (b.lineItems || []).some(li => li.code === src))
     const ivMatches = taxInvoices.filter(t => (t.lineItems || []).some(li => li.code === src))
 
@@ -114,10 +117,11 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
       { label: 'Linen Form (LF) — rows', count: lfMatches.length, affectedIds: lfMatches.map(f => f.id) },
       { label: 'Customer (enabledItems/priceList)', count: custMatches.length, affectedIds: custMatches.map(c => c.id) },
       { label: 'Delivery Note (SD) + priceSnapshot', count: dnMatches.length, affectedIds: dnMatches.map(d => d.id) },
+      { label: 'Carry-Over ปรับผ้าค้าง', count: coaMatches.length, affectedIds: coaMatches.map(ca => ca.id) },
       { label: `Billing (WB) ${includeWB ? '— จะเปลี่ยน' : '— ข้าม'}`,         count: wbMatches.length, affectedIds: wbMatches.map(b => b.id) },
       { label: `Tax Invoice (IV) ${includeIV ? '— จะเปลี่ยน' : '— ข้าม'}`,     count: ivMatches.length, affectedIds: ivMatches.map(t => t.id) },
     ]
-  }, [sourceCode, targetCode, quotations, customers, deliveryNotes, linenForms, billingStatements, taxInvoices, includeWB, includeIV])
+  }, [sourceCode, targetCode, quotations, customers, deliveryNotes, linenForms, carryOverAdjustments, billingStatements, taxInvoices, includeWB, includeIV])
 
   const totalAffected = stats.reduce((s, x) => s + x.count, 0)
   const canPreview = sourceCode && targetCode && sourceCode !== targetCode
@@ -210,6 +214,24 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
         undoChanges.push({ table: 'linen_forms', id: f.id, op: 'update', oldData: { rows: f.rows } })
         const newRows = f.rows.map(r => r.code === src ? { ...r, code: tgt } : r)
         updateLinenForm(f.id, { rows: newRows })
+      }
+
+      // 3.6 (240.2): Carry-Over Adjustments — rewrite items[].code
+      // เคสจริง: A19 ค้างเฉพาะที่ตารางนี้ — ก่อนหน้านี้ MergeCodesTool ไม่แตะ → orphan ลบไม่หาย
+      // Merge logic: ถ้ารายการมี code ใหม่อยู่แล้วในแถวเดียวกัน → รวม delta (sum) แทน duplicate
+      const coaList = carryOverAdjustments.filter(ca =>
+        !ca.isDeleted && (ca.items || []).some(it => it.code === src)
+      )
+      for (const ca of coaList) {
+        undoChanges.push({ table: 'carry_over_adjustments', id: ca.id, op: 'update', oldData: { items: ca.items } })
+        // Build new items: merge src → tgt, sum delta if tgt already exists
+        const tgtExisting = ca.items.find(it => it.code === tgt)
+        const srcItems = ca.items.filter(it => it.code === src)
+        const otherItems = ca.items.filter(it => it.code !== src && it.code !== tgt)
+        const sumSrcDelta = srcItems.reduce((s, it) => s + (it.delta || 0), 0)
+        const newTgtDelta = (tgtExisting?.delta || 0) + sumSrcDelta
+        const newItems = [...otherItems, { code: tgt, delta: newTgtDelta }]
+        updateCarryOverAdjustment(ca.id, { items: newItems }, `merge ${src} → ${tgt}`)
       }
 
       // 4. Billing Statements (optional)

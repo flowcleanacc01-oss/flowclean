@@ -10,7 +10,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { useUndoStack, markUndone, type UndoAction, type SnapshotChange } from '@/lib/undo-stack'
 import { History, RotateCcw, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
-import type { LinenItemDef, Quotation, Customer, DeliveryNote, BillingStatement, TaxInvoice, LinenForm } from '@/types'
+import type { LinenItemDef, Quotation, Customer, DeliveryNote, BillingStatement, TaxInvoice, LinenForm, CarryOverAdjustment } from '@/types'
 
 const TYPE_LABEL: Record<UndoAction['type'], { label: string; color: string }> = {
   sync_names:       { label: 'Sync Names',       color: 'bg-amber-100 text-amber-700' },
@@ -40,6 +40,7 @@ export default function UndoPanel() {
     updateBillingStatement,
     updateTaxInvoice,
     updateLinenForm,
+    updateCarryOverAdjustment,
   } = useStore()
   const [running, setRunning] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
@@ -77,6 +78,10 @@ export default function UndoPanel() {
           break
         case 'linen_forms':
           updateLinenForm(c.id, c.oldData as Partial<LinenForm>)
+          break
+        case 'carry_over_adjustments':
+          // 240.2: undo merge ของ carryOverAdjustments — restore items[]
+          updateCarryOverAdjustment(c.id, c.oldData as Partial<CarryOverAdjustment>, 'undo merge codes')
           break
       }
     } else if (c.op === 'delete' && c.oldData) {

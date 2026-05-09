@@ -174,6 +174,9 @@ export default function OrphanCodeInspector() {
                   </div>
                   <div className="text-[11px] text-slate-500 mt-0.5">
                     {entry.lfs.length} LF · {entry.qts.length} QT · {entry.dns.length} SD · {entry.customers.length} ลูกค้า
+                    {entry.coas.length > 0 && (
+                      <span className="ml-1 text-orange-600 font-medium">· {entry.coas.length} ปรับผ้าค้าง</span>
+                    )}
                     {customerNames && <span className="ml-1.5 text-slate-400">({customerNames}{moreCust})</span>}
                   </div>
                 </div>
@@ -321,6 +324,33 @@ export default function OrphanCodeInspector() {
                         ))}
                         {entry.lfs.length > 10 && (
                           <div className="text-[10px] text-slate-400 italic">+{entry.lfs.length - 10} LF อื่น</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 240.2: Carry-Over Adjustments references */}
+                  {entry.coas.length > 0 && (
+                    <div className="text-xs bg-orange-50 border border-orange-200 rounded p-2">
+                      <div className="font-semibold text-orange-800 mb-1">
+                        ปรับผ้าค้าง (CO Adjustments) ({entry.coas.length}):
+                      </div>
+                      <div className="text-[10px] text-orange-700 mb-1.5">
+                        ⚠ orphan ที่ค้างเฉพาะที่นี่ — เกิดจาก merge เก่าก่อน Feature 240 (ไม่ rewrite ตารางนี้)
+                      </div>
+                      <div className="space-y-0.5 max-h-32 overflow-auto pr-2">
+                        {entry.coas.slice(0, 10).map((co, i) => (
+                          <div key={`${co.id}-${i}`} className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
+                            <span className="text-slate-500">{co.date}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-white text-[10px]">{co.type}</span>
+                            <span className="flex-1 truncate">{co.customerShortName}</span>
+                            <span className={cn('font-mono font-semibold', co.delta < 0 ? 'text-red-600' : 'text-emerald-600')}>
+                              {co.delta > 0 ? '+' : ''}{co.delta}
+                            </span>
+                          </div>
+                        ))}
+                        {entry.coas.length > 10 && (
+                          <div className="text-[10px] text-orange-600 italic">+{entry.coas.length - 10} adjustment อื่น</div>
                         )}
                       </div>
                     </div>
