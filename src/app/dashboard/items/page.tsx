@@ -18,6 +18,7 @@ import SyncNamesTool from '@/components/SyncNamesTool'
 import CatalogHygieneCenter from '@/components/CatalogHygieneCenter'
 import VocabularyAudit from '@/components/VocabularyAudit'
 import OrphanCodeInspector from '@/components/OrphanCodeInspector'
+import CodeReuseDetector from '@/components/CodeReuseDetector'
 import AddItemWizard from '@/components/AddItemWizard'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
 import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
@@ -25,11 +26,12 @@ import { canManageSettings } from '@/lib/permissions'
 import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 import { useNameDrift } from '@/lib/use-name-drift'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
+import { useCodeReuse } from '@/lib/use-code-reuse'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
-import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle } from 'lucide-react'
+import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle, Shuffle } from 'lucide-react'
 
-type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan'
+type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
 type SortDir = 'asc' | 'desc'
 
@@ -66,8 +68,9 @@ export default function ItemsPage() {
   // 196: default tab = items (Hygiene Center เป็น optional, admin เปิดเอง)
   // 219: tab synced with URL — supports browser back/forward
   // 240: เพิ่ม tab 'orphan' — Orphan Code Inspector
+  // 240.3: เพิ่ม tab 'reuse' — Code Reuse Detector
   const [tab, setTab] = useTabUrlSync<TabKey>(
-    ['hygiene', 'items', 'categories', 'merge', 'sync', 'vocab', 'orphan'] as const,
+    ['hygiene', 'items', 'categories', 'merge', 'sync', 'vocab', 'orphan', 'reuse'] as const,
     'items',
   )
   // 180: scroll to first <mark> when arriving from global search with ?q=
@@ -123,7 +126,11 @@ export default function ItemsPage() {
   const { driftMap, totalCodes: driftCodeCount } = useNameDrift()
   // 240: orphan code count for tab badge
   const { totalCodes: orphanCodeCount } = useOrphanCodes()
-  const [syncFocusCode, setSyncFocusCode] = useState<string | null>(null)
+  // 240.3: code reuse suspect count for tab badge
+  const { totalCodes: reuseCodeCount } = useCodeReuse()
+  // 240.3: รับ ?focus=<code> URL → set syncFocusCode (เปิดจาก CodeReuseDetector)
+  const urlFocus = sp.get('focus') || ''
+  const [syncFocusCode, setSyncFocusCode] = useState<string | null>(urlFocus || null)
   const goToSyncTab = (code?: string) => {
     setSyncFocusCode(code || null)
     setTab('sync')
@@ -329,6 +336,7 @@ export default function ItemsPage() {
       { key: 'merge' as TabKey, label: 'รวมรหัส' },
       { key: 'sync' as TabKey, label: 'ซิงก์ชื่อ', badge: driftCodeCount },
       { key: 'orphan' as TabKey, label: 'Orphan Inspector', badge: orphanCodeCount, icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+      { key: 'reuse' as TabKey, label: 'Reuse Detector', badge: reuseCodeCount, icon: <Shuffle className="w-3.5 h-3.5" /> },
       { key: 'vocab' as TabKey, label: 'Vocabulary Audit', icon: <BookOpen className="w-3.5 h-3.5" /> },
     ] : []),
   ]
@@ -873,6 +881,11 @@ export default function ItemsPage() {
       {/* 240: Orphan Code Inspector tab */}
       {tab === 'orphan' && (
         <OrphanCodeInspector />
+      )}
+
+      {/* 240.3: Code Reuse Detector tab */}
+      {tab === 'reuse' && (
+        <CodeReuseDetector />
       )}
 
       {/* 188 ขั้น A: Sync Names Tool tab */}

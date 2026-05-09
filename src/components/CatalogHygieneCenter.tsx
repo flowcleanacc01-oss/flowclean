@@ -14,15 +14,17 @@ import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { useNameDrift } from '@/lib/use-name-drift'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
+import { useCodeReuse } from '@/lib/use-code-reuse'
 import {
   Activity, AlertTriangle, ArrowRight, BookOpen, CheckCircle2,
-  HelpCircle, History, Layers, RefreshCcw, Settings, Shield, Sparkles, Zap,
+  HelpCircle, History, Layers, RefreshCcw, Settings, Shield, Shuffle, Sparkles, Zap,
 } from 'lucide-react'
 import UndoPanel from '@/components/UndoPanel'
 
 interface Props {
   // 240: เพิ่ม 'orphan' — Orphan Inspector tab
-  onOpenTab: (tab: 'sync' | 'merge' | 'items' | 'vocab' | 'orphan') => void
+  // 240.3: เพิ่ม 'reuse' — Code Reuse Detector tab
+  onOpenTab: (tab: 'sync' | 'merge' | 'items' | 'vocab' | 'orphan' | 'reuse') => void
 }
 
 const VALIDATION_KEY = 'flowclean_catalog_validation'
@@ -50,6 +52,8 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
   const { linenCatalog, quotations } = useStore()
   const { driftMap, totalCodes: driftCodes, totalQts: driftQts } = useNameDrift()
   const { orphans, totalCodes: orphanCodes, totalRows: orphanRows } = useOrphanCodes()
+  // 240.3: code reuse suspect (drift name with low similarity)
+  const { totalCodes: reuseCodes, highSeverity: reuseHighSeverity, totalQtsAffected: reuseQts } = useCodeReuse()
 
   // Code clashes (รหัสเดียว ชื่อต่าง — รวมทั้ง drift names + catalog name)
   const clashCount = useMemo(() => {
@@ -114,7 +118,7 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
           <Activity className="w-4 h-4" />
           📊 Audit — สิ่งที่ระบบเจอ
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <DashCard
             icon={<Layers className="w-5 h-5" />}
             label="Catalog items"
@@ -141,6 +145,18 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
             sub={`${orphanRows} rows ใน QT/LF/DN/ลูกค้า ไม่มีใน catalog`}
             actionLabel={orphanCodes > 0 ? 'เปิด Inspector' : 'ดู'}
             onClick={() => onOpenTab('orphan')}
+          />
+          {/* 240.3: Code Reuse Suspect — code ที่ name ใน QT เก่า ≠ catalog (similarity ต่ำ = อาจ reuse) */}
+          <DashCard
+            icon={<Shuffle className="w-5 h-5" />}
+            label="Code Reuse Suspect"
+            value={reuseCodes}
+            color={reuseHighSeverity > 0 ? 'red' : reuseCodes > 0 ? 'orange' : 'slate'}
+            sub={reuseCodes > 0
+              ? `${reuseHighSeverity > 0 ? `${reuseHighSeverity} high · ` : ''}${reuseQts} QT กระทบ`
+              : 'ไม่พบ reuse'}
+            actionLabel={reuseCodes > 0 ? 'เปิด Detector' : 'ดู'}
+            onClick={() => onOpenTab('reuse')}
           />
           <DashCard
             icon={<Sparkles className="w-5 h-5" />}
