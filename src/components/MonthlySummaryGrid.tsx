@@ -78,7 +78,8 @@ export default function MonthlySummaryGrid({ customer, month, linenForms, delive
     const net = Math.round((grandAmount + vat - withholding) * 100) / 100
 
     return { daysInMonth, enabledCodes, priceMap, grid, itemTotals, grandQty, grandAmount, vat, withholding, net }
-  }, [customer, month, linenForms, deliveryNotes])
+    // 242.5: เพิ่ม priceMapProp ใน deps — ก่อนหน้าขาด → grid ค้างค่าเก่าเมื่อ caller update price (เช่น QT accept ใหม่)
+  }, [customer, month, linenForms, deliveryNotes, priceMapProp])
 
   return (
     <div className="overflow-x-auto border border-slate-200 rounded-lg">

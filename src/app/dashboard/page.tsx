@@ -68,8 +68,9 @@ export default function DashboardPage() {
       s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0), 0), 0)
 
     // 2.4 ผ้าค้าง/คืนสะสม — LF status=confirmed ทุกใบ → sum (col6 - col5)
+    // 242.5: เพิ่ม `|| 0` defensive — กัน NaN ถ้า col5 undefined (legacy data ที่ field ใหม่)
     const carryOverAll = confirmedForms.reduce((s, f) =>
-      s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved, 0), 0)
+      s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0) - (r.col5_factoryClaimApproved || 0), 0), 0)
 
     return { countedInWaiting, washedWaiting, checkedOut, carryOverAll }
   }, [linenForms, today])

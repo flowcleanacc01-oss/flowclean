@@ -210,10 +210,12 @@ export function recalcTransportAfterAdj(
 ): RecalcResult[] {
   const results: RecalcResult[] = []
 
+  // 226.B: Build price map (priority: DN.priceSnapshot → accepted QT) — ตัด customer.priceList legacy
+  // ก่อน 242.5: line 216 ยังใช้ customer.priceList → inconsistent กับ recalcTransportAfterSync ที่ตัดแล้ว
   const acceptedQT = quotations.find(q => q.customerId === customer.id && q.status === 'accepted')
   const fallbackPriceMap = acceptedQT
     ? Object.fromEntries(acceptedQT.items.map(i => [i.code, i.pricePerUnit]))
-    : Object.fromEntries(customer.priceList.map(p => [p.code, p.price]))
+    : {}
   const pm = (affectedDn.priceSnapshot && Object.keys(affectedDn.priceSnapshot).length > 0)
     ? affectedDn.priceSnapshot
     : fallbackPriceMap
