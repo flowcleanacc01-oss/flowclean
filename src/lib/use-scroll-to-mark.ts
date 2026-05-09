@@ -22,8 +22,12 @@ export function useScrollToMark(deps: unknown[] = []) {
     let cancelled = false
     let attempts = 0
     const maxAttempts = 20 // ~1 sec total
+    // 242.4 (R1): track active handles for proper cleanup — กัน overlapping pollers
+    let activeTimeoutId: ReturnType<typeof setTimeout> | null = null
+    let activeRafId: number | null = null
 
     const tryScroll = () => {
+      activeTimeoutId = null
       if (cancelled) return
       attempts++
       // Search modal scroll containers first (so we scroll inside the modal),
@@ -43,13 +47,20 @@ export function useScrollToMark(deps: unknown[] = []) {
         return
       }
       if (attempts < maxAttempts) {
-        setTimeout(tryScroll, 50)
+        activeTimeoutId = setTimeout(tryScroll, 50)
       }
     }
     // RAF + small delay to allow first paint after route push
-    requestAnimationFrame(() => setTimeout(tryScroll, 60))
+    activeRafId = requestAnimationFrame(() => {
+      activeRafId = null
+      activeTimeoutId = setTimeout(tryScroll, 60)
+    })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      if (activeRafId !== null) cancelAnimationFrame(activeRafId)
+      if (activeTimeoutId !== null) clearTimeout(activeTimeoutId)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, ...deps])
 }

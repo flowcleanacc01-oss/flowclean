@@ -82,13 +82,21 @@ export default function CustomerPicker({
   useLayoutEffect(() => {
     if (!open) return
     updatePos()
-    const onScroll = () => updatePos()
-    const onResize = () => updatePos()
-    window.addEventListener('resize', onResize)
-    window.addEventListener('scroll', onScroll, true)
+    // 242.4 (R1): rAF throttle scroll/resize handlers — กัน layout thrash
+    let pending = false
+    const scheduleUpdate = () => {
+      if (pending) return
+      pending = true
+      requestAnimationFrame(() => {
+        pending = false
+        updatePos()
+      })
+    }
+    window.addEventListener('resize', scheduleUpdate)
+    window.addEventListener('scroll', scheduleUpdate, true)
     return () => {
-      window.removeEventListener('resize', onResize)
-      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', scheduleUpdate)
+      window.removeEventListener('scroll', scheduleUpdate, true)
     }
   }, [open])
 

@@ -62,22 +62,36 @@ export default function CustomerSearchInline({
   }, [baseList, query])
 
   // Position portal panel just under the input
+  // 242.4 (R1): rAF throttle + skip update if pos unchanged + ตัด query ออกจาก deps
+  //   ก่อนหน้า: scroll listener fire ทุก event + setPos ทุกครั้ง → layout thrash
+  //   ก่อนหน้า: query ใน deps → scroll handler unbind/rebind ทุก keystroke
   const [pos, setPos] = useState({ top: 0, left: 0, width: 360 })
   useEffect(() => {
     if (!open) return
+    let pending = false
+    let lastPos = { top: 0, left: 0, width: 0 }
     const update = () => {
+      pending = false
       const r = wrapRef.current?.getBoundingClientRect()
       if (!r) return
-      setPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 360) })
+      const next = { top: r.bottom + 4, left: r.left, width: Math.max(r.width, 360) }
+      if (next.top === lastPos.top && next.left === lastPos.left && next.width === lastPos.width) return
+      lastPos = next
+      setPos(next)
+    }
+    const scheduleUpdate = () => {
+      if (pending) return
+      pending = true
+      requestAnimationFrame(update)
     }
     update()
-    window.addEventListener('resize', update)
-    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', scheduleUpdate)
+    window.addEventListener('scroll', scheduleUpdate, true)
     return () => {
-      window.removeEventListener('resize', update)
-      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', scheduleUpdate)
+      window.removeEventListener('scroll', scheduleUpdate, true)
     }
-  }, [open, query])
+  }, [open])
 
   // Close on outside click
   useEffect(() => {

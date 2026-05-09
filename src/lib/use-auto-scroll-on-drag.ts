@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 
 /**
  * 186 — Auto-scroll page while HTML5 drag is in progress
+ * 242.4 (R1) — RAF loop runs ONLY when cursor in edge zone
  *
  * เมื่อ user ลาก row ขึ้นแตะขอบบน/ล่างของ viewport →
  * page scroll เองอัตโนมัติ ไม่ต้องปล่อยแล้วจับใหม่
@@ -11,15 +12,11 @@ import { useEffect, useRef } from 'react'
  * Usage:
  *   useAutoScrollOnDrag(dragCode !== null)
  *
- * - active: ตอน drag กำลังเกิด (เช่น dragCode != null)
- * - threshold: ระยะจากขอบที่เริ่ม scroll (default 80px)
- * - maxSpeed: ความเร็วสูงสุด px/frame (default 18)
- *
- * Algorithm:
- *   - ฟัง dragover ที่ window → จับ cursor y
- *   - ถ้า y < threshold หรือ y > vh - threshold → คำนวณ speed (proportional)
- *   - rAF loop scroll window
- *   - หยุดเมื่อ active=false หรือ cursor พ้น dead zone
+ * Optimizations (242.4):
+ *   - Resolve scroll container ONCE on drag start (not per frame)
+ *   - rAF loop active only when cursor in edge zone (not full 60fps loop)
+ *   - Restart rAF on dragover when cursor enters edge zone
+ *   - Stop rAF immediately when cursor leaves edge zone
  */
 export function useAutoScrollOnDrag(
   active: boolean,
@@ -28,6 +25,7 @@ export function useAutoScrollOnDrag(
   const { threshold = 80, maxSpeed = 18 } = opts
   const cursorY = useRef<number | null>(null)
   const rafRef = useRef<number | null>(null)
+  const modalScrollRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!active) {
@@ -36,39 +34,52 @@ export function useAutoScrollOnDrag(
         rafRef.current = null
       }
       cursorY.current = null
+      modalScrollRef.current = null
       return
     }
 
-    const onDragOver = (e: DragEvent) => {
-      cursorY.current = e.clientY
+    // 242.4: resolve modal scroll container ONCE at drag start (not per frame)
+    modalScrollRef.current = document.querySelector<HTMLElement>('.max-h-\\[94vh\\] > .overflow-auto')
+
+    const computeDy = (y: number): number => {
+      const vh = window.innerHeight
+      if (y < threshold) {
+        const ratio = 1 - y / threshold
+        return -Math.ceil(ratio * maxSpeed)
+      } else if (y > vh - threshold) {
+        const ratio = 1 - (vh - y) / threshold
+        return Math.ceil(ratio * maxSpeed)
+      }
+      return 0
     }
 
     const tick = () => {
       const y = cursorY.current
-      if (y !== null) {
-        const vh = window.innerHeight
-        let dy = 0
-        if (y < threshold) {
-          // closer to top → faster up scroll
-          const ratio = 1 - y / threshold
-          dy = -Math.ceil(ratio * maxSpeed)
-        } else if (y > vh - threshold) {
-          const ratio = 1 - (vh - y) / threshold
-          dy = Math.ceil(ratio * maxSpeed)
-        }
-        if (dy !== 0) {
-          // Scroll the closest scrollable ancestor — fall back to window
-          window.scrollBy({ top: dy, behavior: 'auto' })
-          // Also scroll modal bodies if present (LF/Billing detail modals)
-          const modalScroll = document.querySelector<HTMLElement>('.max-h-\\[94vh\\] > .overflow-auto')
-          if (modalScroll) modalScroll.scrollTop += dy
-        }
+      if (y === null) {
+        rafRef.current = null
+        return
       }
+      const dy = computeDy(y)
+      if (dy === 0) {
+        // 242.4: stop loop when cursor leaves edge zone — restart on next dragover
+        rafRef.current = null
+        return
+      }
+      window.scrollBy({ top: dy, behavior: 'auto' })
+      const modalScroll = modalScrollRef.current
+      if (modalScroll) modalScroll.scrollTop += dy
       rafRef.current = requestAnimationFrame(tick)
     }
 
+    const onDragOver = (e: DragEvent) => {
+      cursorY.current = e.clientY
+      // 242.4: kick rAF only if not already running AND cursor in edge zone
+      if (rafRef.current === null && computeDy(e.clientY) !== 0) {
+        rafRef.current = requestAnimationFrame(tick)
+      }
+    }
+
     window.addEventListener('dragover', onDragOver)
-    rafRef.current = requestAnimationFrame(tick)
 
     return () => {
       window.removeEventListener('dragover', onDragOver)
@@ -77,6 +88,7 @@ export function useAutoScrollOnDrag(
         rafRef.current = null
       }
       cursorY.current = null
+      modalScrollRef.current = null
     }
   }, [active, threshold, maxSpeed])
 }

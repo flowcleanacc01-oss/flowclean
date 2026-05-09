@@ -35,20 +35,26 @@ export function useFindMatches(active: boolean) {
   useEffect(() => {
     if (!active) return
     scan()
-    // 242.3: defensive — debounce scan + remove characterData
-    // ก่อนหน้านี้ characterData: true → ทุก text update ใน body trigger scan ทันที
-    // → ถ้า user typing/select ถี่ๆ + DOM ใหญ่ → CPU spike + UI freeze
+    // 242.3: debounce + ตัด characterData
+    // 242.4 (R1): narrow scope จาก document.body → <main> + open dialogs
+    //   ก่อนหน้านี้ observe ทั้ง body → header / sidebar / portal mutate ก็ trigger scan
     let scanTimer: ReturnType<typeof setTimeout> | null = null
     const debouncedScan = () => {
       if (scanTimer) clearTimeout(scanTimer)
       scanTimer = setTimeout(scan, 80)
     }
     const obs = new MutationObserver(debouncedScan)
-    obs.observe(document.body, {
-      subtree: true,
-      childList: true,
-      // characterData: false — mark text ไม่เปลี่ยน (highlight render ใหม่ทั้ง mark element)
-    })
+    // ใช้ <main> เป็น scope หลัก — ครอบคลุม content ที่ render mark
+    const main = document.querySelector('main')
+    const targets: Element[] = []
+    if (main) targets.push(main)
+    // เพิ่ม open dialog/modal (mark อาจอยู่ใน modal ที่ portal ออกนอก main)
+    document.querySelectorAll('[role="dialog"]').forEach(d => targets.push(d))
+    // Fallback: ถ้าหา target ไม่ได้เลย → กลับไปใช้ body (กัน edge case render order)
+    if (targets.length === 0) targets.push(document.body)
+    for (const t of targets) {
+      obs.observe(t, { subtree: true, childList: true })
+    }
     return () => {
       obs.disconnect()
       if (scanTimer) clearTimeout(scanTimer)
