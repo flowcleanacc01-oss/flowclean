@@ -270,10 +270,15 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
                       <td className="px-2 py-1.5">
                         {isSelected ? (
                           <input type="number" value={delta}
+                            min={-9999} max={9999} step={1}
                             data-cornavrow={rowIndex}
                             onFocus={e => e.currentTarget.select()}
                             onKeyDown={e => tabularNumberNav(e, 'data-cornavrow', rowIndex, enabledItems.length - 1)}
-                            onChange={e => setItemDelta(item.code, parseInt(e.target.value) || 0)}
+                            onChange={e => {
+                              const n = parseInt(e.target.value) || 0
+                              const clamped = Math.max(-9999, Math.min(9999, n))
+                              setItemDelta(item.code, clamped)
+                            }}
                             className="w-full px-2 py-1 border border-slate-200 rounded text-right focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]" />
                         ) : (
                           <span className="text-slate-300">-</span>
