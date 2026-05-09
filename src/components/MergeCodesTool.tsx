@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { pushUndoAction, type SnapshotChange } from '@/lib/undo-stack'
+import { useOrphanCodes } from '@/lib/use-orphan-codes'
 
 type Stat = { label: string; count: number; affectedIds: string[] }
 
@@ -69,7 +70,23 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
     [linenCatalog],
   )
 
-  const sourceItem = linenCatalog.find(i => i.code === sourceCode)
+  // 240 fix: รวม orphan codes (code ที่ลบจาก catalog แล้ว แต่ยังอยู่ใน QT/LF/DN/Customer)
+  // เข้า source dropdown — ก่อนหน้านี้ user เลือก orphan ไม่ได้ → reassign ไม่ได้!
+  const { orphans } = useOrphanCodes()
+  const sourceOptions = useMemo(() => {
+    const catItems = sortedCatalog.map(i => ({
+      code: i.code, name: i.name, isOrphan: false, defaultPrice: i.defaultPrice,
+    }))
+    const orphanItems = orphans.map(e => ({
+      code: e.code,
+      name: e.names[0] || '(ไม่พบชื่อ — orphan)',
+      isOrphan: true,
+      defaultPrice: e.avgPrice,
+    }))
+    return [...catItems, ...orphanItems].sort((a, b) => a.code.localeCompare(b.code))
+  }, [sortedCatalog, orphans])
+
+  const sourceItem = sourceOptions.find(i => i.code === sourceCode)
   const targetItem = linenCatalog.find(i => i.code === targetCode)
 
   // Build preview stats
@@ -220,12 +237,13 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
       }
 
       // 6. Delete source code from catalog (optional)
+      // 240 fix: ถ้า source เป็น orphan (ไม่อยู่ใน catalog) → skip delete (ไม่มีอะไรให้ลบ)
       if (deleteSource) {
         const deletedItem = linenCatalog.find(i => i.code === src)
         if (deletedItem) {
           undoChanges.push({ table: 'linen_items', id: src, op: 'delete', oldData: deletedItem as unknown as Record<string, unknown> })
+          deleteLinenItem(src)
         }
-        deleteLinenItem(src)
       }
 
       // 197: push undo
@@ -276,11 +294,20 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
             >
               <option value="">— เลือกรหัสต้นทาง —</option>
-              {sortedCatalog.map(i => (
-                <option key={i.code} value={i.code}>{i.code} — {i.name}</option>
+              {/* 240 fix: รวม catalog + orphan (orphan tag ⚠ — ไม่อยู่ใน catalog แล้ว) */}
+              {sourceOptions.map(i => (
+                <option key={i.code} value={i.code}>
+                  {i.code} — {i.name}{i.isOrphan ? ' ⚠ (orphan)' : ''}
+                </option>
               ))}
             </select>
-            {sourceItem && <p className="text-[11px] text-slate-500 mt-1">{sourceItem.name} · ราคา {sourceItem.defaultPrice}</p>}
+            {sourceItem && (
+              <p className="text-[11px] text-slate-500 mt-1">
+                {sourceItem.name}
+                {sourceItem.defaultPrice > 0 && <> · ราคา {sourceItem.defaultPrice}</>}
+                {sourceItem.isOrphan && <span className="ml-1 text-orange-600">· orphan (ไม่อยู่ใน catalog แล้ว)</span>}
+              </p>
+            )}
           </div>
           <ArrowRight className="w-5 h-5 text-slate-400 mb-3 hidden sm:block" />
           <div>
@@ -311,11 +338,19 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
               className="rounded border-slate-300" />
             รวมใบกำกับภาษี (IV) ที่ออกแล้วด้วย <span className="text-red-600 text-xs">⚠ ผลกระทบทาง compliance</span>
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={deleteSource} onChange={e => setDeleteSource(e.target.checked)}
-              className="rounded border-slate-300" />
-            ลบรหัสต้นทาง <strong>{sourceCode || '...'}</strong> ออกจาก catalog หลังรวมเสร็จ
-          </label>
+          {/* 240 fix: ถ้า source เป็น orphan → ไม่ต้องแสดง "ลบ" toggle (ลบจาก catalog ไปแล้ว) */}
+          {!sourceItem?.isOrphan && (
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={deleteSource} onChange={e => setDeleteSource(e.target.checked)}
+                className="rounded border-slate-300" />
+              ลบรหัสต้นทาง <strong>{sourceCode || '...'}</strong> ออกจาก catalog หลังรวมเสร็จ
+            </label>
+          )}
+          {sourceItem?.isOrphan && (
+            <div className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded-md px-3 py-2">
+              ℹ <strong>{sourceCode}</strong> เป็น orphan (ลบจาก catalog ไปแล้ว) — ไม่มี &quot;ลบจาก catalog&quot; ให้ติ๊ก · merge นี้จะ rewrite reference ทั้งหมดเป็น <strong>{targetCode || '...'}</strong>
+            </div>
+          )}
         </div>
 
         {/* Preview */}
