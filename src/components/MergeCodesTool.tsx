@@ -25,9 +25,11 @@ interface Props {
   initialSource?: string
   /** 238: prefill deleteSource flag (สำหรับ "ลบรหัสนี้ออกจากระบบ") */
   initialDeleteSource?: boolean
+  /** 240: prefill target code (1-click reassign จาก Orphan Inspector) */
+  initialTarget?: string
 }
 
-export default function MergeCodesTool({ initialSource, initialDeleteSource }: Props = {}) {
+export default function MergeCodesTool({ initialSource, initialDeleteSource, initialTarget }: Props = {}) {
   const {
     linenCatalog,
     quotations, updateQuotation,
@@ -40,7 +42,7 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource }: P
   } = useStore()
 
   const [sourceCode, setSourceCode] = useState(initialSource ?? '')
-  const [targetCode, setTargetCode] = useState('')
+  const [targetCode, setTargetCode] = useState(initialTarget ?? '')
   const [includeWB, setIncludeWB] = useState(false)
   const [includeIV, setIncludeIV] = useState(false)
   const [deleteSource, setDeleteSource] = useState(initialDeleteSource ?? false)
@@ -48,11 +50,15 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource }: P
   const [running, setRunning] = useState(false)
   const [done, setDone] = useState<{ stats: Stat[]; ts: string } | null>(null)
 
-  // 238: sync source/delete จาก parent (เช่น URL params เปลี่ยน)
+  // 238/240: sync source/target/delete จาก parent (เช่น URL params เปลี่ยน)
   useEffect(() => {
     if (initialSource && initialSource !== sourceCode) setSourceCode(initialSource)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSource])
+  useEffect(() => {
+    if (initialTarget && initialTarget !== targetCode) setTargetCode(initialTarget)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTarget])
   useEffect(() => {
     if (initialDeleteSource !== undefined) setDeleteSource(initialDeleteSource)
     // eslint-disable-next-line react-hooks/exhaustive-deps

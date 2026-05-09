@@ -21,7 +21,8 @@ import {
 import UndoPanel from '@/components/UndoPanel'
 
 interface Props {
-  onOpenTab: (tab: 'sync' | 'merge' | 'items' | 'vocab') => void
+  // 240: เพิ่ม 'orphan' — Orphan Inspector tab
+  onOpenTab: (tab: 'sync' | 'merge' | 'items' | 'vocab' | 'orphan') => void
 }
 
 const VALIDATION_KEY = 'flowclean_catalog_validation'
@@ -137,9 +138,9 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
             label="Orphan Codes"
             value={orphanCodes}
             color={orphanCodes > 0 ? 'red' : 'slate'}
-            sub={`${orphanRows} rows ใน QT ไม่มีใน catalog`}
-            actionLabel={orphanCodes > 0 ? 'นำเข้า/แก้' : 'ดู'}
-            onClick={() => onOpenTab('sync')}
+            sub={`${orphanRows} rows ใน QT/LF/DN/ลูกค้า ไม่มีใน catalog`}
+            actionLabel={orphanCodes > 0 ? 'เปิด Inspector' : 'ดู'}
+            onClick={() => onOpenTab('orphan')}
           />
           <DashCard
             icon={<Sparkles className="w-5 h-5" />}
