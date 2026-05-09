@@ -35,13 +35,24 @@ export function useFindMatches(active: boolean) {
   useEffect(() => {
     if (!active) return
     scan()
-    const obs = new MutationObserver(() => scan())
+    // 242.3: defensive — debounce scan + remove characterData
+    // ก่อนหน้านี้ characterData: true → ทุก text update ใน body trigger scan ทันที
+    // → ถ้า user typing/select ถี่ๆ + DOM ใหญ่ → CPU spike + UI freeze
+    let scanTimer: ReturnType<typeof setTimeout> | null = null
+    const debouncedScan = () => {
+      if (scanTimer) clearTimeout(scanTimer)
+      scanTimer = setTimeout(scan, 80)
+    }
+    const obs = new MutationObserver(debouncedScan)
     obs.observe(document.body, {
       subtree: true,
       childList: true,
-      characterData: true,
+      // characterData: false — mark text ไม่เปลี่ยน (highlight render ใหม่ทั้ง mark element)
     })
-    return () => obs.disconnect()
+    return () => {
+      obs.disconnect()
+      if (scanTimer) clearTimeout(scanTimer)
+    }
   }, [active, scan])
 
   // Clamp index when match list changes
