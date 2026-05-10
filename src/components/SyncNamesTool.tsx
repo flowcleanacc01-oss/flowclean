@@ -11,6 +11,7 @@ import { useStore } from '@/lib/store'
 import { useNameDrift, type DriftEntry } from '@/lib/use-name-drift'
 import { useOrphanCodes, type OrphanEntry } from '@/lib/use-orphan-codes'
 import { pushUndoAction, type SnapshotChange } from '@/lib/undo-stack'
+import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
 import HoverPopover from '@/components/HoverPopover'
@@ -1079,6 +1080,8 @@ function PromoteModal({
               step={0.5}
               value={newPrice}
               onChange={e => setNewPrice(Number(e.target.value))}
+              onKeyDown={blockNumberArrowKeys}
+              onFocus={e => e.currentTarget.select()}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
             />
           </div>

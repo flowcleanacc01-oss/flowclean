@@ -12,6 +12,7 @@ import type { AuditLog, BankAccount, UserRole } from '@/types'
 import { USER_ROLE_CONFIG } from '@/types'
 import { Plus, Trash2, RotateCcw, Check, KeyRound, X, Eye, EyeOff, Info, ChevronDown } from 'lucide-react'
 import { genId } from '@/lib/utils'
+import { blockNumberArrowKeys } from '@/lib/modal-nav'
 
 type TabKey = 'users' | 'company' | 'documents' | 'auditlog'
 
@@ -437,6 +438,8 @@ export default function SettingsPage() {
                 <label className="block font-medium text-slate-600 mb-1">VAT (%)</label>
                 <input type="number" value={companyDraft.vatRate ?? 7}
                   onChange={e => handleCompanyChange('vatRate', parseFloat(e.target.value) || 0)}
+                  onKeyDown={blockNumberArrowKeys}
+                  onFocus={e => e.currentTarget.select()}
                   min={0} max={100} step={0.01}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                 <p className="text-[11px] text-slate-400 mt-0.5">ค่าเริ่มต้น 7%</p>
@@ -445,6 +448,8 @@ export default function SettingsPage() {
                 <label className="block font-medium text-slate-600 mb-1">หัก ณ ที่จ่าย (%)</label>
                 <input type="number" value={companyDraft.withholdingRate ?? 3}
                   onChange={e => handleCompanyChange('withholdingRate', parseFloat(e.target.value) || 0)}
+                  onKeyDown={blockNumberArrowKeys}
+                  onFocus={e => e.currentTarget.select()}
                   min={0} max={100} step={0.01}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                 <p className="text-[11px] text-slate-400 mt-0.5">ค่าเริ่มต้น 3%</p>

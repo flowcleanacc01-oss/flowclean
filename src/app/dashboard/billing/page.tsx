@@ -7,6 +7,7 @@ import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
 import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
+import { tabularNumberNav, blockNumberArrowKeys } from '@/lib/modal-nav'
 import { format } from 'date-fns'
 import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, aggregateDeliveryItemsByTotal, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
@@ -1822,6 +1823,8 @@ export default function BillingPage() {
                       <td className="px-3 py-1 text-right">
                         <input type="number" min="0" step="0.01" value={billingExtraCharge || ''}
                           onChange={e => setBillingExtraCharge(Math.max(0, parseFloat(e.target.value) || 0))}
+                          onKeyDown={blockNumberArrowKeys}
+                          onFocus={e => e.currentTarget.select()}
                           placeholder="0.00"
                           className="w-28 text-right border border-slate-200 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]" />
                       </td>
@@ -1837,6 +1840,8 @@ export default function BillingPage() {
                       <td className="px-3 py-1 text-right">
                         <input type="number" min="0" step="0.01" value={billingDiscount || ''}
                           onChange={e => setBillingDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
+                          onKeyDown={blockNumberArrowKeys}
+                          onFocus={e => e.currentTarget.select()}
                           placeholder="0.00"
                           className="w-28 text-right border border-slate-200 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-300" />
                       </td>
@@ -2830,7 +2835,10 @@ export default function BillingPage() {
               <div className="ml-6 space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-slate-600 w-24">ขั้นต่ำ/ครั้ง (฿)</span>
-                  <input type="number" min={0} value={quMinPerTrip || ''} onChange={e => setQuMinPerTrip(sanitizeNumber(e.target.value))}
+                  <input type="number" min={0} value={quMinPerTrip || ''}
+                    onChange={e => setQuMinPerTrip(sanitizeNumber(e.target.value))}
+                    onKeyDown={blockNumberArrowKeys}
+                    onFocus={e => e.currentTarget.select()}
                     className="w-28 px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -2838,7 +2846,10 @@ export default function BillingPage() {
                     className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                   <span className="text-sm text-slate-600">เวฟขั้นต่ำถ้ายอดถึง (฿)</span>
                   {quEnableWaive && (
-                    <input type="number" min={0} value={quMinPerTripThreshold || ''} onChange={e => setQuMinPerTripThreshold(sanitizeNumber(e.target.value))}
+                    <input type="number" min={0} value={quMinPerTripThreshold || ''}
+                      onChange={e => setQuMinPerTripThreshold(sanitizeNumber(e.target.value))}
+                      onKeyDown={blockNumberArrowKeys}
+                      onFocus={e => e.currentTarget.select()}
                       className="w-24 px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                   )}
                 </label>
@@ -2852,7 +2863,10 @@ export default function BillingPage() {
             {quEnableMinPerMonth && (
               <div className="ml-6 flex items-center gap-2">
                 <span className="text-sm text-slate-600 w-24">ขั้นต่ำ/เดือน (฿)</span>
-                <input type="number" min={0} value={quMonthlyFlatRate || ''} onChange={e => setQuMonthlyFlatRate(sanitizeNumber(e.target.value))}
+                <input type="number" min={0} value={quMonthlyFlatRate || ''}
+                  onChange={e => setQuMonthlyFlatRate(sanitizeNumber(e.target.value))}
+                  onKeyDown={blockNumberArrowKeys}
+                  onFocus={e => e.currentTarget.select()}
                   className="w-28 px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               </div>
             )}

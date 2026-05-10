@@ -7,6 +7,7 @@ import { useStore } from '@/lib/store'
 import { formatDate, formatNumber, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { highlightText, matchesAmountQuery } from '@/lib/highlight'
 import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
+import { tabularNumberNav, blockNumberArrowKeys } from '@/lib/modal-nav'
 import FindableText from '@/components/FindableText'
 import { type DeliveryNoteItem, LINEN_FORM_STATUS_CONFIG } from '@/types'
 import { calculateTransportFeeTrip, calculateDNSubtotal } from '@/lib/transport-fee'
@@ -910,8 +911,12 @@ export default function DeliveryPage() {
                           {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
                         </td>
                         <td className="px-3 py-1.5 text-right">
+                          {/* 243: arrow ↑↓/Enter เลื่อน row + onFocus auto-select */}
                           <input type="number" min={0} value={item.quantity}
+                            data-dnitemnav={idx}
                             onChange={e => setDeliveryItems(prev => prev.map((di, i) => i === idx ? { ...di, quantity: sanitizeNumber(e.target.value, 99999) } : di))}
+                            onKeyDown={e => tabularNumberNav(e, 'data-dnitemnav', idx, deliveryItems.length - 1)}
+                            onFocus={e => e.currentTarget.select()}
                             className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                         </td>
                       </tr>
@@ -960,6 +965,8 @@ export default function DeliveryPage() {
                 <label className="block text-xs font-medium text-slate-600 mb-1">ค่าใช้จ่ายเพิ่มเติม (บาท)</label>
                 <input type="number" min={0} step={0.01} value={dnExtraCharge || ''}
                   onChange={e => setDnExtraCharge(Math.max(0, parseFloat(e.target.value) || 0))}
+                  onKeyDown={blockNumberArrowKeys}
+                  onFocus={e => e.currentTarget.select()}
                   placeholder="0.00"
                   className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               </div>
@@ -975,6 +982,8 @@ export default function DeliveryPage() {
                 <label className="block text-xs font-medium text-slate-600 mb-1">ส่วนลด (บาท)</label>
                 <input type="number" min={0} step={0.01} value={dnDiscount || ''}
                   onChange={e => setDnDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
+                  onKeyDown={blockNumberArrowKeys}
+                  onFocus={e => e.currentTarget.select()}
                   placeholder="0.00"
                   className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-orange-300 focus:outline-none" />
               </div>
@@ -1221,8 +1230,11 @@ export default function DeliveryPage() {
                                   )
                                 }
                                 return (
+                                  /* 243: arrow ↑↓/Enter เลื่อน row ของ DN detail */
                                   <input type="number" min={0} value={item.quantity}
+                                    data-dndetailnav={idx}
                                     onFocus={e => e.currentTarget.select()}
+                                    onKeyDown={e => tabularNumberNav(e, 'data-dndetailnav', idx, detailNote.items.length - 1)}
                                     onChange={e => {
                                       const newQty = parseInt(e.target.value) || 0
                                       const updated = detailNote.items.map((di, i) => i === idx ? { ...di, quantity: newQty } : di)
@@ -1252,10 +1264,13 @@ export default function DeliveryPage() {
                             {isPer && (
                               <td className="px-3 py-1.5 text-right">
                                 {isAdhoc ? (
+                                  /* 243: arrow ↑↓/Enter — ใช้ data-attr ต่างจาก qty เพื่อ navigate ภายใน price column */
                                   <input type="number" min={0} step="0.01"
                                     value={item.adhocPrice ?? 0}
                                     disabled={isBilled}
+                                    data-dndetailpricenav={idx}
                                     onFocus={e => e.currentTarget.select()}
+                                    onKeyDown={e => tabularNumberNav(e, 'data-dndetailpricenav', idx, detailNote.items.length - 1)}
                                     onChange={e => {
                                       const newPrice = parseFloat(e.target.value) || 0
                                       const updated = detailNote.items.map((di, i) => i === idx ? { ...di, adhocPrice: newPrice } : di)
@@ -1328,6 +1343,8 @@ export default function DeliveryPage() {
                           <td className="px-3 py-1.5 text-right">
                             <input type="number" value={tripFee}
                               onChange={e => updateDeliveryNote(detailNote.id, { transportFeeTrip: sanitizeNumber(e.target.value) })}
+                              onKeyDown={blockNumberArrowKeys}
+                              onFocus={e => e.currentTarget.select()}
                               className="w-24 px-2 py-1 border border-amber-300 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-white" />
                           </td>
                           <td></td>
@@ -1343,6 +1360,8 @@ export default function DeliveryPage() {
                           <td className="px-3 py-1.5 text-right">
                             <input type="number" value={monthFee}
                               onChange={e => updateDeliveryNote(detailNote.id, { transportFeeMonth: sanitizeNumber(e.target.value) })}
+                              onKeyDown={blockNumberArrowKeys}
+                              onFocus={e => e.currentTarget.select()}
                               className="w-24 px-2 py-1 border border-purple-300 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-white" />
                           </td>
                           <td></td>
@@ -1398,6 +1417,7 @@ export default function DeliveryPage() {
                       <label className="block text-xs font-medium text-slate-600 mb-1">ค่าใช้จ่ายเพิ่มเติม (บาท)</label>
                       <input type="number" min={0} step={0.01} value={adjExtra || ''}
                         onFocus={e => e.currentTarget.select()}
+                        onKeyDown={blockNumberArrowKeys}
                         onChange={e => setAdjExtra(Math.max(0, parseFloat(e.target.value) || 0))}
                         placeholder="0.00"
                         className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
@@ -1415,6 +1435,7 @@ export default function DeliveryPage() {
                       <label className="block text-xs font-medium text-slate-600 mb-1">ส่วนลด (บาท)</label>
                       <input type="number" min={0} step={0.01} value={adjDiscount || ''}
                         onFocus={e => e.currentTarget.select()}
+                        onKeyDown={blockNumberArrowKeys}
                         onChange={e => setAdjDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
                         placeholder="0.00"
                         className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-orange-300 focus:outline-none" />

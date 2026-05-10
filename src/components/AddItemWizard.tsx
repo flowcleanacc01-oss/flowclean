@@ -24,6 +24,7 @@ import {
   CheckCircle2, Wand2, Layers, ShoppingBag, ListPlus, Search,
 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
+import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
 
@@ -436,6 +437,8 @@ export default function AddItemWizard({
                 type="number"
                 value={defaultPrice}
                 onChange={e => setDefaultPrice(Number(e.target.value) || 0)}
+                onKeyDown={blockNumberArrowKeys}
+                onFocus={e => e.currentTarget.select()}
                 min={0}
                 step={0.5}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
@@ -472,6 +475,8 @@ export default function AddItemWizard({
                     type="number"
                     value={customerPrice || defaultPrice}
                     onChange={e => setCustomerPrice(Number(e.target.value) || 0)}
+                    onKeyDown={blockNumberArrowKeys}
+                    onFocus={e => e.currentTarget.select()}
                     min={0}
                     step={0.5}
                     className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm text-right bg-white focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"

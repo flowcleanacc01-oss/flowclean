@@ -29,6 +29,7 @@ import { useNameDrift } from '@/lib/use-name-drift'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
 import { useCodeReuse } from '@/lib/use-code-reuse'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
+import { tabularNumberNav, blockNumberArrowKeys } from '@/lib/modal-nav'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
 import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle, Shuffle, Ghost } from 'lucide-react'
 
@@ -478,6 +479,8 @@ export default function ItemsPage() {
                     className="px-2 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                   <input type="number" min={0} step={0.5} value={newItem.defaultPrice}
                     onChange={e => setNewItem({ ...newItem, defaultPrice: sanitizeNumber(e.target.value) })}
+                    onKeyDown={blockNumberArrowKeys}
+                    onFocus={e => e.currentTarget.select()}
                     placeholder="ราคา"
                     className="px-2 py-1.5 border border-slate-200 rounded text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                 </div>
@@ -672,9 +675,13 @@ export default function ItemsPage() {
                         ) : item.unit}
                       </td>
                       <td className={cn("px-4 py-2 text-right", sortedBg('defaultPrice'))}>
+                        {/* 243: arrow ↑↓/Enter เลื่อน row + onFocus auto-select (เหมือน LF/QT) */}
                         <input type="number" min={0} step={0.5}
+                          data-itemnav={idx}
                           value={defaultPrices[item.code] ?? item.defaultPrice}
                           onChange={e => updateDefaultPrice(item.code, sanitizeNumber(e.target.value))}
+                          onKeyDown={e => tabularNumberNav(e, 'data-itemnav', idx, filteredItems.length - 1)}
+                          onFocus={e => e.currentTarget.select()}
                           className="w-20 px-2 py-1 border border-slate-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                       </td>
                       <td className="px-4 py-2 text-right">

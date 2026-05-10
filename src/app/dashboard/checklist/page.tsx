@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
+import { tabularNumberNav } from '@/lib/modal-nav'
 import { getCustomerEnabledCodes } from '@/lib/customer-pricing'
 import { highlightText } from '@/lib/highlight'
 import {
@@ -320,14 +321,18 @@ export default function ChecklistPage() {
                         <td className="px-3 py-1 text-slate-700">{item.name}</td>
                         <td className="px-3 py-1 text-right text-slate-600">{item.expectedQty}</td>
                         <td className="px-1 py-1 text-right">
+                          {/* 243: arrow ↑↓/Enter เลื่อน row + onFocus auto-select */}
                           <input type="number" min={0}
                             value={item.actualQty || ''}
+                            data-cknew={idx}
                             onChange={e => {
                               const val = sanitizeNumber(e.target.value, 99999)
                               const updated = [...newItems]
                               updated[idx] = { ...item, actualQty: val, passed: val === item.expectedQty }
                               setNewItems(updated)
                             }}
+                            onKeyDown={e => tabularNumberNav(e, 'data-cknew', idx, newItems.length - 1)}
+                            onFocus={e => e.currentTarget.select()}
                             className="w-20 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                         </td>
                         <td className="px-3 py-1 text-center">
@@ -414,12 +419,15 @@ export default function ChecklistPage() {
                       <td className="px-3 py-1.5 text-right">
                         {detailCL.status === 'draft' ? (
                           <input type="number" min={0} value={item.actualQty || ''}
+                            data-ckdetail={idx}
                             onChange={e => {
                               const val = sanitizeNumber(e.target.value, 99999)
                               const updatedItems = [...detailCL.items]
                               updatedItems[idx] = { ...item, actualQty: val, passed: val === item.expectedQty }
                               updateChecklist(detailCL.id, { items: updatedItems })
                             }}
+                            onKeyDown={e => tabularNumberNav(e, 'data-ckdetail', idx, detailCL.items.length - 1)}
+                            onFocus={e => e.currentTarget.select()}
                             className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                         ) : (
                           <span className={cn(item.actualQty !== item.expectedQty && 'text-red-600 font-medium')}>{item.actualQty}</span>

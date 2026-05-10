@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { canViewExpenses } from '@/lib/permissions'
 import { formatCurrency, formatDate, todayISO, sanitizeNumber, cn, scrollToActiveRow } from '@/lib/utils'
+import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type Expense } from '@/types'
 import Modal from '@/components/Modal'
@@ -291,6 +292,8 @@ function ExpenseFormModal({ initial, onSave, onClose }: {
               type="number"
               value={form.amount || ''}
               onChange={e => setForm(prev => ({ ...prev, amount: sanitizeNumber(e.target.value) }))}
+              onKeyDown={blockNumberArrowKeys}
+              onFocus={e => e.currentTarget.select()}
               min="0"
               step="0.01"
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]"

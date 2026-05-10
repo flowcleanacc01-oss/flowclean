@@ -16,6 +16,7 @@ import SortableHeader from '@/components/SortableHeader'
 import CustomerSearchInline from '@/components/CustomerSearchInline'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
 import { isFlatRateCustomer } from '@/lib/customer-pricing'
+import { blockNumberArrowKeys } from '@/lib/modal-nav'
 
 type PageTab = 'customers' | 'categories'
 type SortKey = 'shortName' | 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'tax' | 'qt' | 'contact' | 'isActive'
@@ -551,6 +552,8 @@ export default function CustomersPage() {
             <div>
               <label className="block font-medium text-slate-600 mb-1">เครดิต (วัน)</label>
               <input type="number" value={form.creditDays} onChange={e => setForm({ ...form, creditDays: sanitizeNumber(e.target.value, 365) || 30 })}
+                onKeyDown={blockNumberArrowKeys}
+                onFocus={e => e.currentTarget.select()}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
           </div>
