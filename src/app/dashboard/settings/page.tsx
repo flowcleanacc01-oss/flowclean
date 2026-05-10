@@ -493,7 +493,7 @@ export default function SettingsPage() {
                           if (ba.isDefault && updated.length > 0) updated[0].isDefault = true
                           setCompanyDraft(prev => ({ ...prev, bankAccounts: updated }))
                           companyDirty.current = true
-                        }} className="p-1 text-slate-400 hover:text-red-500"><X className="w-3.5 h-3.5" /></button>
+                        }} aria-label="ลบบัญชีธนาคาร" className="p-1 min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-slate-400 hover:text-red-500"><X className="w-3.5 h-3.5" /></button>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

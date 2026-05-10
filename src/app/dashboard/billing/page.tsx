@@ -1625,7 +1625,8 @@ export default function BillingPage() {
                               setQtCustomerFilter(cid)
                             }
                           }}
-                            className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded">
+                            aria-label="ลบใบเสนอราคา"
+                            className="p-1 min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -1835,7 +1836,7 @@ export default function BillingPage() {
                         <input type="text" value={billingDiscountNote}
                           onChange={e => setBillingDiscountNote(e.target.value)}
                           placeholder="หมายเหตุ..."
-                          className="w-full text-right border border-slate-200 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-300" />
+                          className="w-full text-right border border-slate-200 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]" />
                       </td>
                       <td className="px-3 py-1 text-right">
                         <input type="number" min="0" step="0.01" value={billingDiscount || ''}
@@ -1843,7 +1844,7 @@ export default function BillingPage() {
                           onKeyDown={blockNumberArrowKeys}
                           onFocus={e => e.currentTarget.select()}
                           placeholder="0.00"
-                          className="w-28 text-right border border-slate-200 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-orange-300" />
+                          className="w-28 text-right border border-slate-200 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]" />
                       </td>
                     </tr>
                     <tr className="border-t border-slate-200 bg-slate-50">

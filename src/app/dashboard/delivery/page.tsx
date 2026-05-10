@@ -985,7 +985,7 @@ export default function DeliveryPage() {
                   onKeyDown={blockNumberArrowKeys}
                   onFocus={e => e.currentTarget.select()}
                   placeholder="0.00"
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-orange-300 focus:outline-none" />
+                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุส่วนลด</label>
@@ -1194,7 +1194,7 @@ export default function DeliveryPage() {
                                     const updated = detailNote.items.map((di, i) => i === idx ? { ...di, adhocName: e.target.value } : di)
                                     updateDeliveryNote(detailNote.id, { items: updated })
                                   }}
-                                  className="w-full px-2 py-0.5 border border-orange-200 focus:border-orange-400 rounded text-sm focus:ring-1 focus:ring-orange-300 focus:outline-none bg-white disabled:bg-slate-50 disabled:text-slate-400"
+                                  className="w-full px-2 py-0.5 border border-orange-200 focus:border-orange-400 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-white disabled:bg-slate-50 disabled:text-slate-400"
                                 />
                               ) : (
                                 <input
@@ -1276,7 +1276,7 @@ export default function DeliveryPage() {
                                       const updated = detailNote.items.map((di, i) => i === idx ? { ...di, adhocPrice: newPrice } : di)
                                       updateDeliveryNote(detailNote.id, { items: updated })
                                     }}
-                                    className="w-20 px-2 py-0.5 border border-orange-200 rounded text-right text-sm focus:ring-1 focus:ring-orange-300 focus:outline-none bg-white disabled:bg-slate-50 disabled:text-slate-400" />
+                                    className="w-20 px-2 py-0.5 border border-orange-200 rounded text-right text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-white disabled:bg-slate-50 disabled:text-slate-400" />
                                 ) : (
                                   formatCurrency(price)
                                 )}
@@ -1291,7 +1291,8 @@ export default function DeliveryPage() {
                                     const updated = detailNote.items.filter((_, i) => i !== idx)
                                     updateDeliveryNote(detailNote.id, { items: updated })
                                   }}
-                                  className="p-1 text-orange-400 hover:text-red-500 hover:bg-red-50 rounded">
+                                  aria-label="ลบรายการ"
+                                  className="p-1 min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-orange-400 hover:text-red-500 hover:bg-red-50 rounded">
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               )}
@@ -1438,7 +1439,7 @@ export default function DeliveryPage() {
                         onKeyDown={blockNumberArrowKeys}
                         onChange={e => setAdjDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
                         placeholder="0.00"
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-orange-300 focus:outline-none" />
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">หมายเหตุส่วนลด</label>

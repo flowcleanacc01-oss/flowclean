@@ -962,11 +962,11 @@ export default function ReportsPage() {
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-1">
                           <button onClick={() => { setCoEditingAdjustment(a); setCoAdjustModalOpen(true) }}
-                            className="p-1 text-slate-400 hover:text-[#1B3A5C]" title="แก้ไข">
+                            className="p-1 min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-slate-400 hover:text-[#1B3A5C]" title="แก้ไข" aria-label="แก้ไขรายการปรับยอด">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => { if (confirm(`ลบรายการปรับยอดวันที่ ${formatDate(a.date)} ?`)) deleteCarryOverAdjustment(a.id) }}
-                            className="p-1 text-slate-400 hover:text-red-600" title="ลบ">
+                            className="p-1 min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-slate-400 hover:text-red-600" title="ลบ" aria-label="ลบรายการปรับยอด">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>

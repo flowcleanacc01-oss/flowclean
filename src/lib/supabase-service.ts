@@ -172,6 +172,31 @@ function toCamelCaseArray<T>(rows: Record<string, unknown>[]): T[] {
 }
 
 // ============================================================
+// Pagination helper — Supabase API caps at 1000 rows per request
+// Use .range() loop to fetch all rows for unbounded tables
+// ============================================================
+async function fetchAllPaginated<T>(
+  tableName: string,
+  orderColumn: string,
+  ascending: boolean = false,
+): Promise<T[]> {
+  const PAGE = 1000
+  const all: unknown[] = []
+  for (let from = 0; from < 100000; from += PAGE) {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .order(orderColumn, { ascending })
+      .range(from, from + PAGE - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...data)
+    if (data.length < PAGE) break
+  }
+  return toCamelCaseArray<T>(all as Record<string, unknown>[])
+}
+
+// ============================================================
 // Linen Categories (Dynamic)
 // ============================================================
 
@@ -384,12 +409,7 @@ export async function deleteCustomerDB(id: string): Promise<void> {
 // ============================================================
 
 export async function fetchLinenForms(): Promise<LinenForm[]> {
-  const { data, error } = await supabase
-    .from('linen_forms')
-    .select('*')
-    .order('date', { ascending: false })
-  if (error) throw error
-  return toCamelCaseArray<LinenForm>(data || [])
+  return fetchAllPaginated<LinenForm>('linen_forms', 'date')
 }
 
 export async function insertLinenForm(form: LinenForm): Promise<void> {
@@ -409,12 +429,7 @@ export async function deleteLinenFormDB(id: string): Promise<void> {
 // ============================================================
 
 export async function fetchDeliveryNotes(): Promise<DeliveryNote[]> {
-  const { data, error } = await supabase
-    .from('delivery_notes')
-    .select('*')
-    .order('date', { ascending: false })
-  if (error) throw error
-  return toCamelCaseArray<DeliveryNote>(data || [])
+  return fetchAllPaginated<DeliveryNote>('delivery_notes', 'date')
 }
 
 export async function insertDeliveryNote(note: DeliveryNote): Promise<void> {
@@ -434,12 +449,7 @@ export async function deleteDeliveryNoteDB(id: string): Promise<void> {
 // ============================================================
 
 export async function fetchBillingStatements(): Promise<BillingStatement[]> {
-  const { data, error } = await supabase
-    .from('billing_statements')
-    .select('*')
-    .order('issue_date', { ascending: false })
-  if (error) throw error
-  return toCamelCaseArray<BillingStatement>(data || [])
+  return fetchAllPaginated<BillingStatement>('billing_statements', 'issue_date')
 }
 
 export async function insertBillingStatement(bs: BillingStatement): Promise<void> {
@@ -459,12 +469,7 @@ export async function deleteBillingStatementDB(id: string): Promise<void> {
 // ============================================================
 
 export async function fetchTaxInvoices(): Promise<TaxInvoice[]> {
-  const { data, error } = await supabase
-    .from('tax_invoices')
-    .select('*')
-    .order('issue_date', { ascending: false })
-  if (error) throw error
-  return toCamelCaseArray<TaxInvoice>(data || [])
+  return fetchAllPaginated<TaxInvoice>('tax_invoices', 'issue_date')
 }
 
 export async function insertTaxInvoice(ti: TaxInvoice): Promise<void> {
@@ -484,12 +489,7 @@ export async function deleteTaxInvoiceDB(id: string): Promise<void> {
 // ============================================================
 
 export async function fetchReceipts(): Promise<Receipt[]> {
-  const { data, error } = await supabase
-    .from('receipts')
-    .select('*')
-    .order('issue_date', { ascending: false })
-  if (error) throw error
-  return toCamelCaseArray<Receipt>(data || [])
+  return fetchAllPaginated<Receipt>('receipts', 'issue_date')
 }
 
 export async function insertReceipt(rc: Receipt): Promise<void> {
@@ -532,12 +532,7 @@ export async function fetchLegacyDocuments(): Promise<LegacyDocument[]> {
 // ============================================================
 
 export async function fetchQuotations(): Promise<Quotation[]> {
-  const { data, error } = await supabase
-    .from('quotations')
-    .select('*')
-    .order('date', { ascending: false })
-  if (error) throw error
-  return toCamelCaseArray<Quotation>(data || [])
+  return fetchAllPaginated<Quotation>('quotations', 'date')
 }
 
 export async function insertQuotation(q: Quotation): Promise<void> {
@@ -557,12 +552,7 @@ export async function deleteQuotationDB(id: string): Promise<void> {
 // ============================================================
 
 export async function fetchExpenses(): Promise<Expense[]> {
-  const { data, error } = await supabase
-    .from('expenses')
-    .select('*')
-    .order('date', { ascending: false })
-  if (error) throw error
-  return toCamelCaseArray<Expense>(data || [])
+  return fetchAllPaginated<Expense>('expenses', 'date')
 }
 
 export async function insertExpense(exp: Expense): Promise<void> {
@@ -582,12 +572,7 @@ export async function deleteExpenseDB(id: string): Promise<void> {
 // ============================================================
 
 export async function fetchChecklists(): Promise<ProductChecklist[]> {
-  const { data, error } = await supabase
-    .from('product_checklists')
-    .select('*')
-    .order('date', { ascending: false })
-  if (error) throw error
-  return toCamelCaseArray<ProductChecklist>(data || [])
+  return fetchAllPaginated<ProductChecklist>('product_checklists', 'date')
 }
 
 export async function insertChecklist(cl: ProductChecklist): Promise<void> {
@@ -607,12 +592,7 @@ export async function deleteChecklistDB(id: string): Promise<void> {
 // ============================================================
 
 export async function fetchCarryOverAdjustments(): Promise<CarryOverAdjustment[]> {
-  const { data, error } = await supabase
-    .from('carry_over_adjustments')
-    .select('*')
-    .order('date', { ascending: false })
-  if (error) throw error
-  return toCamelCaseArray<CarryOverAdjustment>(data || [])
+  return fetchAllPaginated<CarryOverAdjustment>('carry_over_adjustments', 'date')
 }
 
 export async function insertCarryOverAdjustment(adj: CarryOverAdjustment): Promise<void> {

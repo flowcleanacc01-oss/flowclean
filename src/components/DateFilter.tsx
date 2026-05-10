@@ -132,7 +132,9 @@ export default function DateFilter({
         )}
 
         {hasFilter && (
-          <button onClick={onClear} className="p-1 text-slate-400 hover:text-red-500 transition-colors" title="ล้างตัวกรองวันที่">
+          <button onClick={onClear}
+            aria-label="ล้างตัวกรองวันที่"
+            className="p-1 min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors" title="ล้างตัวกรองวันที่">
             <X className="w-4 h-4" />
           </button>
         )}
