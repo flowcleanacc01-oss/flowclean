@@ -251,6 +251,9 @@ export default function ItemsPage() {
   }, [linenCatalog, updateLinenItem])
 
   // 173.1: drop = move source to target position + reassign sequential sortOrder
+  // 242.1 fix: drop ABOVE target consistently — match visual cue (top border highlight)
+  //   เดิม: ลากลง → แทรกใต้ target (เพราะ tgtIdx shift หลัง splice) — ไม่ตรงกับเส้นเข้มที่ขึ้นด้านบน
+  //   แก้: ปรับ tgt index ตาม direction → ทุกกรณีแทรกด้านบน target
   const handleReorderDropItem = useCallback((sourceCode: string, targetCode: string) => {
     if (sourceCode === targetCode) return
     const sorted = [...linenCatalog].sort((a, b) => a.sortOrder - b.sortOrder)
@@ -258,7 +261,10 @@ export default function ItemsPage() {
     const tgtIdx = sorted.findIndex(i => i.code === targetCode)
     if (srcIdx < 0 || tgtIdx < 0) return
     const [moved] = sorted.splice(srcIdx, 1)
-    sorted.splice(tgtIdx, 0, moved)
+    // ลากลง (src < tgt) → tgt shift ไปด้านบน 1 → ใช้ tgtIdx-1 ให้แทรกก่อน target
+    // ลากขึ้น (src > tgt) → tgt ไม่ shift → ใช้ tgtIdx ให้แทรกก่อน target
+    const insertIdx = srcIdx < tgtIdx ? tgtIdx - 1 : tgtIdx
+    sorted.splice(insertIdx, 0, moved)
     // Reassign sequential sortOrder (1..N) — only update items whose order changed
     sorted.forEach((it, i) => {
       const newOrder = i + 1
@@ -293,6 +299,7 @@ export default function ItemsPage() {
   }, [linenCategories, updateCategory])
 
   // 173.1: drop reorder for categories
+  // 242.1 fix: drop ABOVE target (same logic as items — match visual cue)
   const handleReorderDropCat = useCallback((sourceKey: string, targetKey: string) => {
     if (sourceKey === targetKey) return
     const sorted = [...linenCategories].sort((a, b) => a.sortOrder - b.sortOrder)
@@ -300,7 +307,8 @@ export default function ItemsPage() {
     const tgtIdx = sorted.findIndex(c => c.key === targetKey)
     if (srcIdx < 0 || tgtIdx < 0) return
     const [moved] = sorted.splice(srcIdx, 1)
-    sorted.splice(tgtIdx, 0, moved)
+    const insertIdx = srcIdx < tgtIdx ? tgtIdx - 1 : tgtIdx
+    sorted.splice(insertIdx, 0, moved)
     sorted.forEach((c, i) => {
       const newOrder = i + 1
       if (c.sortOrder !== newOrder) updateCategory(c.key, { sortOrder: newOrder })

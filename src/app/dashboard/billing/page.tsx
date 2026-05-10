@@ -827,6 +827,7 @@ export default function BillingPage() {
   }
 
   // 216: drag-drop reorder for QT items (move source to target position)
+  // 242.1 fix: drop ABOVE target consistently — match visual cue (top border highlight)
   const handleReorderDropQuItem = useCallback((sourceCode: string, targetCode: string) => {
     if (sourceCode === targetCode) return
     const srcIdx = quItems.findIndex(i => i.code === sourceCode)
@@ -834,7 +835,8 @@ export default function BillingPage() {
     if (srcIdx < 0 || tgtIdx < 0) return
     const arr = [...quItems]
     const [moved] = arr.splice(srcIdx, 1)
-    arr.splice(tgtIdx, 0, moved)
+    const insertIdx = srcIdx < tgtIdx ? tgtIdx - 1 : tgtIdx
+    arr.splice(insertIdx, 0, moved)
     setQuItems(arr)
   }, [quItems])
 
