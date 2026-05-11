@@ -41,6 +41,7 @@ export const PHONETIC_CLASSES: Record<string, string> = {
 }
 
 const THAI_TONE_MARKS = /[่-๋์]/g
+const TONE_TEST = /[่-๋์]/ // non-global version for .test() (stateful /g bug)
 const THAI_RANGE = /[฀-๿]/
 
 /** เช็คว่า string มี Thai char ไหม (ใช้ตัดสินว่าจะ apply phonetic หรือไม่) */
@@ -97,12 +98,21 @@ export function phoneticDistance(a: string, b: string): number {
 /**
  * Phonetic Levenshtein substring — sliding window of length qp.length ± maxDist
  * Returns true if any window has edit distance ≤ maxDist with query phonetic
+ *
+ * 248.1: min query phonetic length raised from 3 → 5
+ * Why: query "ซิป" (qp "SิP" length 3) with maxDist=1 matched windows like
+ * "SP" (length 2, Lev 1 by deleting ิ) → false positives ทั่วระบบ:
+ *   - "ผ้าสปามือ" matched ซิป via "SP" window
+ *   - "ผ้าคาดศรีษะ" matched ซิป via "SะP" window
+ *   - "ไส้ผ้านวม" matched ซิป via "SP" window
+ * Short queries (3-4 chars) usually have enough specificity via Layer 2 substring.
+ * Real typo-tolerance cases (สครับ↔สคับ) still work because Layer 4 split kicks in.
  */
 function phoneticFuzzyIncludes(textPhonetic: string, queryPhonetic: string, maxDist = 1): boolean {
   const qp = queryPhonetic
   const tp = textPhonetic
   if (!qp || !tp) return false
-  if (qp.length < 3) return false // guard short queries (avoid false positives)
+  if (qp.length < 5) return false // 248.1: stricter (was 3) — short queries had too many false positives
   if (tp.length + maxDist < qp.length) return false
 
   const minLen = Math.max(1, qp.length - maxDist)
@@ -141,8 +151,8 @@ function matchesThaiQueryCore(text: string, query: string): boolean {
   // Layer 2: phonetic substring
   if (tPhonetic.includes(qPhonetic)) return true
 
-  // Layer 3: phonetic Levenshtein ≤ 1 (min query 3 chars)
-  if (q.length >= 3 && phoneticFuzzyIncludes(tPhonetic, qPhonetic, 1)) return true
+  // Layer 3: phonetic Levenshtein ≤ 1 (guard inside: qp.length ≥ 5 — 248.1)
+  if (phoneticFuzzyIncludes(tPhonetic, qPhonetic, 1)) return true
 
   return false
 }
@@ -221,6 +231,136 @@ export function matchesThaiQueryAnyField(fields: (string | undefined | null)[], 
     if (f && matchesThaiQuery(f, q)) return true
   }
   return false
+}
+
+// ════════════════════════════════════════════════════════════════
+// 248 — Highlight: find match ranges in text (for <mark> wrapping)
+// ════════════════════════════════════════════════════════════════
+
+/** Direct case-insensitive substring matches */
+function findDirectRanges(lowerText: string, lowerQuery: string): Array<[number, number]> {
+  if (!lowerQuery) return []
+  const ranges: Array<[number, number]> = []
+  let idx = 0
+  while ((idx = lowerText.indexOf(lowerQuery, idx)) !== -1) {
+    ranges.push([idx, idx + lowerQuery.length])
+    idx += lowerQuery.length
+  }
+  return ranges
+}
+
+/**
+ * Phonetic substring matches — back-map phonetic-substring index to original text index.
+ *
+ * For each char in lowerText:
+ *   - tone marks (่-๋์) are skipped (not in phonetic)
+ *   - other chars map via PHONETIC_CLASSES (single char → class letter), or kept as-is
+ *   - CH class adds 2 chars to phonetic per 1 original (จ→CH, ช→CH, ฉ→CH, ฌ→CH)
+ * Track tpStart[i] = original-text index where phonetic[i] originated.
+ *
+ * After finding phonetic substring [pi, pj] in tpStr, original range is
+ * [tpStart[pi], tpStart[pj]+1] extended to include trailing tone marks.
+ */
+function findPhoneticRanges(lowerText: string, lowerQuery: string): Array<[number, number]> {
+  if (!lowerQuery || !containsThai(lowerQuery)) return []
+  const qp = phoneticThai(lowerQuery)
+  if (!qp || qp.length < 2) return []
+
+  // Build phonetic of text + position map (skip tones)
+  const tpChars: string[] = []
+  const tpStart: number[] = []
+  for (let i = 0; i < lowerText.length; i++) {
+    const c = lowerText[i]
+    if (TONE_TEST.test(c)) continue
+    const mapped = PHONETIC_CLASSES[c] || c
+    for (let j = 0; j < mapped.length; j++) {
+      tpChars.push(mapped[j])
+      tpStart.push(i)
+    }
+  }
+  const tpStr = tpChars.join('')
+
+  const ranges: Array<[number, number]> = []
+  let idx = 0
+  while ((idx = tpStr.indexOf(qp, idx)) !== -1) {
+    const startInText = tpStart[idx]
+    const lastPhoneticIdx = idx + qp.length - 1
+    const lastOrigIdx = tpStart[lastPhoneticIdx]
+    let endInText = lastOrigIdx + 1
+    // Include trailing tone marks (rendered as combining chars after base char)
+    while (endInText < lowerText.length && TONE_TEST.test(lowerText[endInText])) {
+      endInText++
+    }
+    ranges.push([startInText, endInText])
+    idx += qp.length
+  }
+  return ranges
+}
+
+/**
+ * Find ranges in `text` where `query` matches — for highlight rendering.
+ * Returns array of [start, end) indices in the ORIGINAL text (case + tones preserved).
+ *
+ * Match layers (mirror matchesThaiQuery):
+ *   1. Direct substring (case-insensitive)
+ *   2. Phonetic substring (if Thai)
+ *   3. Simple binary split (depth 1) — for compound queries like "ปลอกเล็กชมพู"
+ *
+ * Layer 3 fuzzy (Lev) intentionally skipped — too hard to back-map; if matched only
+ * via Lev, no highlight shown (rare in practice — Layer 2/3 catch most cases).
+ */
+export function findMatchRanges(text: string, query: string): Array<[number, number]> {
+  if (!text || !query) return []
+  const lowerText = text.toLowerCase()
+  const lowerQuery = query.toLowerCase().trim()
+  if (!lowerQuery) return []
+
+  // 1. Direct substring
+  const direct = findDirectRanges(lowerText, lowerQuery)
+  if (direct.length > 0) return direct
+
+  // 2. Phonetic substring
+  if (containsThai(lowerQuery)) {
+    const phon = findPhoneticRanges(lowerText, lowerQuery)
+    if (phon.length > 0) return phon
+  }
+
+  // 3. Binary split fallback (depth 1)
+  if (lowerQuery.length >= 4 && containsThai(lowerQuery)) {
+    const compact = lowerQuery.replace(/\s+/g, '')
+    for (let i = 2; i <= compact.length - 2; i++) {
+      const left = compact.slice(0, i)
+      const right = compact.slice(i)
+      const leftRanges = findDirectRanges(lowerText, left).length > 0
+        ? findDirectRanges(lowerText, left)
+        : findPhoneticRanges(lowerText, left)
+      const rightRanges = findDirectRanges(lowerText, right).length > 0
+        ? findDirectRanges(lowerText, right)
+        : findPhoneticRanges(lowerText, right)
+      if (leftRanges.length > 0 && rightRanges.length > 0) {
+        return mergeRanges([...leftRanges, ...rightRanges])
+      }
+    }
+  }
+
+  return []
+}
+
+/** Merge overlapping/adjacent ranges into a sorted, non-overlapping list */
+function mergeRanges(ranges: Array<[number, number]>): Array<[number, number]> {
+  if (ranges.length === 0) return ranges
+  const sorted = [...ranges].sort((a, b) => a[0] - b[0])
+  const merged: Array<[number, number]> = [[sorted[0][0], sorted[0][1]]]
+  for (let i = 1; i < sorted.length; i++) {
+    const [s, e] = sorted[i]
+    const last = merged[merged.length - 1]
+    if (s <= last[1]) {
+      last[1] = Math.max(last[1], e)
+    } else {
+      merged.push([s, e])
+    }
+  }
+  return merged
 }
 
 /**

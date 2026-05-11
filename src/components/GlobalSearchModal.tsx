@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { Search, X, Building2, ClipboardList, Truck, FileCheck, Receipt, FileText, Package } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { buildSearchIndex, searchResults, KIND_LABEL, KIND_COLOR, type SearchResultKind } from '@/lib/global-search'
+import { findMatchRanges } from '@/lib/thai-search'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -38,6 +39,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   } = useStore()
 
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('') // 248.2: debounce expensive search
   const [selectedIdx, setSelectedIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -46,10 +48,18 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   useEffect(() => {
     if (open) {
       setQuery('')
+      setDebouncedQuery('')
       setSelectedIdx(0)
       setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [open])
+
+  // 248.2: debounce query → searchResults runs over ~9000+ entries × Lev fuzzy,
+  // ~150-300ms per keystroke without debounce → UI freeze. 100ms feels instant.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 100)
+    return () => clearTimeout(t)
+  }, [query])
 
   // Build search index (memo)
   const index = useMemo(() => buildSearchIndex({
@@ -58,7 +68,8 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   }), [customers, linenForms, deliveryNotes, billingStatements, taxInvoices, receipts, quotations, linenCatalog])
 
   // 171.2: รับ unlimited results เพื่อ group ดู เห็นจำนวนจริงต่อ kind
-  const results = useMemo(() => searchResults(index, query, 500), [index, query])
+  // 248.2: use debouncedQuery (not query) — search is O(N × Lev) heavy
+  const results = useMemo(() => searchResults(index, debouncedQuery, 500), [index, debouncedQuery])
 
   // Group by kind (preserve relevance order within each group)
   const grouped = useMemo(() => {
@@ -95,23 +106,39 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
     return out
   }, [grouped, expandedKinds])
 
-  // 147.1: highlight tokens — case-insensitive substring → split text + wrap matches
+  // 147.1 → 248: phonetic-aware highlight — show WHY each result matched
+  // Use findMatchRanges() which handles direct + phonetic + simple split
   const tokens = useMemo(() => {
-    return query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  }, [query])
+    return debouncedQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  }, [debouncedQuery])
 
   const highlight = (text: string): React.ReactNode => {
     if (tokens.length === 0 || !text) return text
-    const sorted = [...tokens].sort((a, b) => b.length - a.length)
-    const pattern = sorted.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
-    if (!pattern) return text
-    const splitRe = new RegExp(`(${pattern})`, 'gi')
-    const tokenSet = new Set(sorted)
-    return text.split(splitRe).map((p, i) =>
-      tokenSet.has(p.toLowerCase())
-        ? <mark key={i} className="bg-yellow-200 text-slate-900 rounded px-0.5">{p}</mark>
-        : <span key={i}>{p}</span>
-    )
+    // Collect ranges from all tokens
+    const allRanges: Array<[number, number]> = []
+    for (const t of tokens) {
+      const r = findMatchRanges(text, t)
+      if (r.length > 0) allRanges.push(...r)
+    }
+    if (allRanges.length === 0) return text
+    // Merge overlapping ranges, then render
+    const sorted = allRanges.sort((a, b) => a[0] - b[0])
+    const merged: Array<[number, number]> = [[sorted[0][0], sorted[0][1]]]
+    for (let i = 1; i < sorted.length; i++) {
+      const [s, e] = sorted[i]
+      const last = merged[merged.length - 1]
+      if (s <= last[1]) last[1] = Math.max(last[1], e)
+      else merged.push([s, e])
+    }
+    const parts: React.ReactNode[] = []
+    let pos = 0
+    merged.forEach(([s, e], i) => {
+      if (s > pos) parts.push(<span key={`t${i}`}>{text.slice(pos, s)}</span>)
+      parts.push(<mark key={`m${i}`} className="bg-yellow-200 text-slate-900 rounded px-0.5">{text.slice(s, e)}</mark>)
+      pos = e
+    })
+    if (pos < text.length) parts.push(<span key="end">{text.slice(pos)}</span>)
+    return parts
   }
 
   // Clamp selected when visible list changes
@@ -200,7 +227,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
           aria-label="ผลลัพธ์การค้นหา"
           className="flex-1 overflow-y-auto"
         >
-          {query.trim() === '' ? (
+          {debouncedQuery.trim() === '' ? (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
               <Search className="w-10 h-10 mx-auto mb-2 text-slate-200" />
               <p>พิมพ์เลขที่เอกสาร, ชื่อลูกค้า, รหัสสินค้า (เช่น H22) หรือชื่อรายการ (เช่น ปลอกหมอน)</p>
@@ -212,7 +239,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
             </div>
           ) : results.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
-              ไม่พบผลลัพธ์สำหรับ &quot;{query}&quot;
+              ไม่พบผลลัพธ์สำหรับ &quot;{debouncedQuery}&quot;
             </div>
           ) : (
             <div className="py-1">
@@ -284,7 +311,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
         {/* Footer */}
         <div className="px-4 py-2 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-500 flex items-center justify-between">
           <span>
-            {query.trim() === ''
+            {debouncedQuery.trim() === ''
               ? `${index.length} รายการพร้อมค้นหา`
               : `${results.length} ผลลัพธ์ · ${flatVisible.length} แสดงอยู่`}
           </span>
