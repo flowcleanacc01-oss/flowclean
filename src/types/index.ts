@@ -44,14 +44,16 @@ export const LINEN_CATEGORIES: Record<string, string> = Object.fromEntries(
  */
 export interface LinenFacets {
   type: string                  // REQUIRED — towel/bed_sheet/pillow_case/...
-  application?: string | null
-  size?: string | null          // standard preset (single/queen) OR custom WxH (30x60)
+  application?: string | null   // subtype within type (e.g., pillow_case+wing, blanket+thin)
+  size?: string | null          // preset (single/queen/12x12) OR custom WxH (30x60)
   sizeUnit?: 'inch' | 'cm' | 'ft' | 'standard' | null
   color?: string | null
   weight?: 'thin' | 'medium' | 'thick' | null
   material?: string | null
   pattern?: string | null
-  variant?: string | null       // free-text fallback (1-2% เคสที่ vocab ครอบไม่ถึง)
+  /** 247 — special treatment: น้ำมัน/อบแห้ง/ถอดซักปลอก */
+  treatment?: string | null
+  variant?: string | null       // free-text fallback (brand/class/edge cases)
 }
 
 export interface LinenItemDef {

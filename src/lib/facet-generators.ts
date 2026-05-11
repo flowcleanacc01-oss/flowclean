@@ -10,12 +10,14 @@ import type { LinenFacets } from '@/types'
 import {
   TYPE_OPTIONS, COLOR_OPTIONS, WEIGHT_OPTIONS, MATERIAL_OPTIONS, PATTERN_OPTIONS,
   BED_SIZE_PRESETS, PILLOW_SIZE_PRESETS, GENERIC_SIZE_PRESETS,
+  TOWEL_SIZE_PRESETS, UNIFORM_SIZE_PRESETS, TREATMENT_OPTIONS,
   APPLICATION_OPTIONS_BY_TYPE, SIZE_UNIT_OPTIONS,
+  getSizePresetsForType,
 } from './linen-vocabulary'
 import type { FacetOption } from './linen-vocabulary'
 
 const FACET_KEYS_ORDERED: (keyof LinenFacets)[] = [
-  'type', 'application', 'size', 'sizeUnit', 'color', 'weight', 'material', 'pattern', 'variant',
+  'type', 'application', 'size', 'sizeUnit', 'color', 'weight', 'material', 'pattern', 'treatment', 'variant',
 ]
 
 /** Normalize facet value for hashing — lowercase, trim, '' for null/undefined */
@@ -46,15 +48,10 @@ function findApplicationOpt(type: string, value: string | null | undefined): Fac
   return list.find(o => o.value === value) || null
 }
 
-/** Get size option (preset by type) */
+/** Get size option (preset by type) — 247: ใช้ helper จาก vocab */
 function findSizeOpt(type: string, value: string | null | undefined): FacetOption | null {
   if (!value) return null
-  const presets =
-    type === 'bed_sheet' || type === 'duvet_cover' || type === 'duvet_insert' || type === 'mattress_pad'
-      ? BED_SIZE_PRESETS
-      : type === 'pillow_case'
-        ? PILLOW_SIZE_PRESETS
-        : GENERIC_SIZE_PRESETS
+  const presets = getSizePresetsForType(type)
   return presets.find(o => o.value === value) || null
 }
 
@@ -103,6 +100,12 @@ export function generateCodeFromFacets(facets: LinenFacets): string {
   if (facets.pattern && facets.pattern !== 'plain') {
     const pOpt = findOpt(PATTERN_OPTIONS, facets.pattern)
     if (pOpt) parts.push(pOpt.codeShort)
+  }
+
+  // 247: treatment (น้ำมัน/อบแห้ง/ถอดซักปลอก)
+  if (facets.treatment && facets.treatment !== 'none') {
+    const tOpt = findOpt(TREATMENT_OPTIONS, facets.treatment)
+    if (tOpt?.codeShort) parts.push(tOpt.codeShort)
   }
 
   if (facets.variant) {
@@ -163,6 +166,12 @@ export function generateNameFromFacets(facets: LinenFacets, lang: 'th' | 'en' = 
   if (facets.material) {
     const mOpt = findOpt(MATERIAL_OPTIONS, facets.material)
     if (mOpt) parts.push(`(${lang === 'th' ? mOpt.labelTh : mOpt.labelEn})`)
+  }
+
+  // 247: treatment — แสดงในวงเล็บท้ายชื่อ (เช่น "(น้ำมัน)")
+  if (facets.treatment && facets.treatment !== 'none') {
+    const tOpt = findOpt(TREATMENT_OPTIONS, facets.treatment)
+    if (tOpt) parts.push(`(${lang === 'th' ? tOpt.labelTh : tOpt.labelEn})`)
   }
 
   if (facets.variant) {

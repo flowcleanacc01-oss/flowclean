@@ -2,15 +2,21 @@
 
 /**
  * 207 — Universal Add-Item Wizard
+ * 247 — Phase 1.4 Wizard 2.0 (faceted picker) added — toggle with classic free-text
  *
  * 1 component, 4 entry points (items / qt / lf / sd)
- * 3 steps: ใส่ชื่อ → รายละเอียด → ยืนยัน
  *
- * Features:
- *  - Live similarity check (กัน duplicates) — Step 1
- *  - Auto-suggest code/category จากชื่อ — Step 2
- *  - "ใช่อันนี้แหละ" shortcut → use existing code (skip ต่อ)
- *  - Auto-add ตาม context: catalog (always) + QT + current doc
+ * Mode: 'faceted' (default, Wizard 2.0) | 'free_text' (Wizard 1.0 backward compat)
+ *
+ * Faceted mode (Wizard 2.0):
+ *  - Step 1: Type picker (33 types in 5 groups)
+ *  - Step 2: Per-type facet pickers (application/size/color/treatment/...)
+ *  - Step 3: Preview generated code+name + dup check via facetKey
+ *
+ * Free-text mode (Wizard 1.0 — legacy):
+ *  - Step 1: ใส่ชื่อ + similarity check
+ *  - Step 2: รายละเอียด (code/category/name)
+ *  - Step 3: ยืนยัน
  */
 import { useEffect, useMemo, useState } from 'react'
 import Modal from '@/components/Modal'
@@ -18,15 +24,29 @@ import { useStore } from '@/lib/store'
 import {
   useSimilarItems, guessCategory, suggestNextCode, isCodeUnique,
 } from '@/lib/use-similar-items'
-import type { LinenItemDef, Quotation } from '@/types'
+import type { LinenItemDef, LinenFacets, Quotation } from '@/types'
 import {
   Sparkles, ArrowRight, ArrowLeft, Check, AlertTriangle,
-  CheckCircle2, Wand2, Layers, ShoppingBag, ListPlus, Search,
+  CheckCircle2, Wand2, Layers, ShoppingBag, ListPlus, Search, Tags,
 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
+import {
+  TYPE_OPTIONS, COLOR_OPTIONS, WEIGHT_OPTIONS, MATERIAL_OPTIONS, PATTERN_OPTIONS,
+  TREATMENT_OPTIONS, getApplicationsForType, getSizePresetsForType,
+} from '@/lib/linen-vocabulary'
+import { generateCodeFromFacets, generateNameFromFacets, buildFacetKey, findItemByFacetKey } from '@/lib/facet-generators'
+
+// Type groups for picker UI (Step 1 faceted)
+const TYPE_GROUPS: Array<{ label: string; types: string[] }> = [
+  { label: 'เครื่องนอน', types: ['bed_sheet', 'massage_bed_sheet', 'pillow_case', 'pillow', 'duvet_cover', 'duvet_insert', 'mattress_pad', 'topper', 'top_sheet', 'bed_skirt', 'blanket', 'bed_cover'] },
+  { label: 'ผ้าขนหนู / อาบน้ำ', types: ['towel', 'foot_massage_towel', 'bath_mat', 'bathrobe', 'pool_towel'] },
+  { label: 'ผ้าคลุม / เฟอร์นิเจอร์', types: ['sofa_cover', 'chair_cover', 'table_cover', 'table_cloth', 'curtain', 'rug'] },
+  { label: 'เครื่องแบบ / ชุด', types: ['uniform_top', 'uniform_bottom', 'uniform_dress', 'apron', 'spa_cover', 'spa_uniform', 'staff_uniform'] },
+  { label: 'อุปกรณ์เสริม', types: ['napkin', 'placemat', 'slipper', 'sock', 'headband', 'other'] },
+]
 
 export type WizardContext = 'items' | 'qt' | 'lf' | 'sd'
 
@@ -69,16 +89,23 @@ export default function AddItemWizard({
     linenForms, deliveryNotes,
   } = useStore()
 
-  // ───── Wizard state ─────────────────────────────────────
+  // ───── Mode toggle (247) ────────────────────────────────
+  const [mode, setMode] = useState<'faceted' | 'free_text'>('faceted')
+
+  // ───── Wizard state (shared) ────────────────────────────
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [nameInput, setNameInput] = useState(initialName)
 
-  // Step 2 fields
+  // Step 2 fields (free-text mode + shared price/QT)
   const [code, setCode] = useState('')
   const [nameEn, setNameEn] = useState('')
   const [category, setCategory] = useState('other')
   const [unit, setUnit] = useState('ชิ้น')
   const [defaultPrice, setDefaultPrice] = useState(0)
+
+  // ───── Faceted mode state (247) ─────────────────────────
+  const [facets, setFacets] = useState<LinenFacets>({ type: '' })
+  const [customSize, setCustomSize] = useState('')
 
   // QT add fields (sd/lf/qt context)
   const [addToQT, setAddToQT] = useState(true)
@@ -89,6 +116,7 @@ export default function AddItemWizard({
   // Reset when modal opens
   useEffect(() => {
     if (!open) return
+    setMode('faceted')
     setStep(1)
     setNameInput(initialName)
     setCode('')
@@ -96,10 +124,26 @@ export default function AddItemWizard({
     setCategory('other')
     setUnit('ชิ้น')
     setDefaultPrice(0)
+    setFacets({ type: '' })
+    setCustomSize('')
     setAddToQT(context !== 'items')
     setCustomerPrice(0)
     setError('')
   }, [open, initialName, context])
+
+  // ───── Faceted derived (247) ────────────────────────────
+  const facetCode = useMemo(() => generateCodeFromFacets(facets), [facets])
+  const facetName = useMemo(() => generateNameFromFacets(facets, 'th'), [facets])
+  const facetNameEn = useMemo(() => generateNameFromFacets(facets, 'en'), [facets])
+  const facetKey = useMemo(() => buildFacetKey(facets), [facets])
+  const facetDup = useMemo(
+    () => findItemByFacetKey(linenCatalog, facets),
+    [linenCatalog, facets],
+  )
+  const codeUnique = useMemo(
+    () => !facetCode || isCodeUnique(facetCode, linenCatalog),
+    [facetCode, linenCatalog],
+  )
 
   // Customer + active QT
   const customer = useMemo(
@@ -171,6 +215,59 @@ export default function AddItemWizard({
     onClose()
   }
 
+  // ───── Faceted: confirm + commit (247) ──────────────────
+  const handleFacetConfirm = () => {
+    if (!facets.type) { setError('กรุณาเลือกประเภทผ้า'); setStep(1); return }
+    if (!facetCode) { setError('โปรดเลือก facets ให้ครบ'); return }
+    if (facetDup) {
+      setError(`มีรายการที่ facets เหมือนกันใน catalog: ${facetDup.code} - ${facetDup.name}`)
+      return
+    }
+    if (!codeUnique) {
+      setError(`รหัส "${facetCode}" ซ้ำใน catalog — ปรับ variant หรือเลือก facet ที่ต่างกัน`)
+      return
+    }
+    if (defaultPrice < 0) { setError('ราคาต้องไม่ติดลบ'); return }
+
+    const newItem: LinenItemDef = {
+      code: facetCode,
+      name: facetName,
+      nameEn: facetNameEn,
+      category: facets.type, // type คือ category (vocab-aligned)
+      unit: unit || 'ผืน',
+      defaultPrice,
+      sortOrder: linenCatalog.length + 1,
+      facets,
+      facetKey,
+    }
+    addLinenItem(newItem)
+
+    // QT integration (เหมือน free-text mode)
+    if ((context === 'lf' || context === 'sd') && addToQT && activeQT && customerId) {
+      const newRow = {
+        code: newItem.code,
+        name: newItem.name,
+        pricePerUnit: customerPrice || defaultPrice,
+      }
+      const exists = activeQT.items.some(it => it.code === newItem.code)
+      if (!exists) updateQuotation(activeQT.id, { items: [...activeQT.items, newRow] })
+    }
+
+    onComplete({
+      code: newItem.code,
+      name: newItem.name,
+      pricePerUnit: addToQT ? (customerPrice || defaultPrice) : defaultPrice,
+      selectedExisting: false,
+    })
+    onClose()
+  }
+
+  /** Faceted: "ใช้รายการที่มีอยู่แล้ว" — ผู้ใช้เห็น dup → ใช้ existing item */
+  const handleFacetUseDup = () => {
+    if (!facetDup) return
+    handleSelectExisting(facetDup, `Same facetKey: ${facetKey}`)
+  }
+
   const handleConfirm = () => {
     const err = validateStep2()
     if (err) { setError(err); setStep(2); return }
@@ -217,6 +314,34 @@ export default function AddItemWizard({
 
   return (
     <Modal open={open} onClose={onClose} title={cfg.title} size="lg" closeLabel="cancel">
+      {/* 247 — Mode toggle: Wizard 2.0 (facet) vs Wizard 1.0 (free-text) */}
+      <div className="flex items-center justify-center mb-4">
+        <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+          <button
+            type="button"
+            onClick={() => { setMode('faceted'); setStep(1); setError('') }}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
+              mode === 'faceted' ? 'bg-[#1B3A5C] text-white shadow-sm' : 'text-slate-600 hover:bg-white',
+            )}
+          >
+            <Tags className="w-3.5 h-3.5" />
+            Wizard 2.0 — Facet picker
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode('free_text'); setStep(1); setError('') }}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
+              mode === 'free_text' ? 'bg-[#1B3A5C] text-white shadow-sm' : 'text-slate-600 hover:bg-white',
+            )}
+          >
+            <Wand2 className="w-3.5 h-3.5" />
+            Wizard 1.0 — Free-text
+          </button>
+        </div>
+      </div>
+
       {/* Step indicator */}
       <div className="flex items-center justify-center gap-2 mb-5">
         {[1, 2, 3].map(n => (
@@ -234,8 +359,126 @@ export default function AddItemWizard({
         ))}
       </div>
 
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {/* FACETED MODE (Wizard 2.0) — 247                  */}
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {mode === 'faceted' && step === 1 && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <Tags className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-blue-900">
+              <div className="font-semibold mb-0.5">เลือกประเภทผ้า</div>
+              <p className="text-xs text-blue-700">เลือก type หลัก — facets อื่นๆ จะเปิดให้เลือกใน step ถัดไป</p>
+            </div>
+          </div>
+
+          {noAcceptedQT && (
+            <div className="flex items-start gap-3 bg-red-50 border-2 border-red-300 rounded-lg p-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-red-900">
+                <div className="font-semibold mb-1">ลูกค้านี้ยังไม่มี QT ที่ "ตกลง"</div>
+                <p className="text-xs text-red-800 leading-relaxed">
+                  สร้าง QT + accept ก่อนเพิ่มรายการใน LF/SD
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {TYPE_GROUPS.map(g => (
+              <div key={g.label}>
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-1.5">{g.label}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {g.types.map(t => {
+                    const opt = TYPE_OPTIONS.find(o => o.value === t)
+                    if (!opt) return null
+                    const selected = facets.type === t
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => { setFacets({ type: t }); setError('') }}
+                        disabled={noAcceptedQT}
+                        className={cn(
+                          'text-left px-3 py-2 rounded-lg border-2 text-xs font-medium transition-colors disabled:opacity-40',
+                          selected
+                            ? 'border-[#3DD8D8] bg-[#3DD8D8]/10 text-[#1B3A5C]'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-[#3DD8D8]/50',
+                        )}
+                      >
+                        {opt.labelTh}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+            <button onClick={onClose}
+              className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">ยกเลิก</button>
+            <button
+              onClick={() => { setStep(2); setError('') }}
+              disabled={!facets.type || noAcceptedQT}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg text-sm font-medium hover:bg-[#122740] disabled:opacity-40 disabled:cursor-not-allowed">
+              ถัดไป<ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'faceted' && step === 2 && (
+        <FacetedFacetsStep
+          facets={facets}
+          setFacets={setFacets}
+          customSize={customSize}
+          setCustomSize={setCustomSize}
+          facetCode={facetCode}
+          facetName={facetName}
+          facetDup={facetDup}
+          codeUnique={codeUnique}
+          onBack={() => setStep(1)}
+          onNext={() => {
+            if (!facetCode) { setError('โปรดเลือก facets ขั้นต่ำ (type + อย่างน้อย 1 facet)'); return }
+            setError('')
+            setStep(3)
+          }}
+          error={error}
+        />
+      )}
+
+      {mode === 'faceted' && step === 3 && (
+        <FacetedConfirmStep
+          facets={facets}
+          facetCode={facetCode}
+          facetName={facetName}
+          facetNameEn={facetNameEn}
+          facetDup={facetDup}
+          unit={unit}
+          setUnit={setUnit}
+          defaultPrice={defaultPrice}
+          setDefaultPrice={setDefaultPrice}
+          context={context}
+          customer={customer}
+          activeQT={activeQT}
+          addToQT={addToQT}
+          setAddToQT={setAddToQT}
+          customerPrice={customerPrice}
+          setCustomerPrice={setCustomerPrice}
+          onBack={() => setStep(2)}
+          onConfirm={handleFacetConfirm}
+          onUseDup={handleFacetUseDup}
+          error={error}
+        />
+      )}
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {/* FREE-TEXT MODE (Wizard 1.0) — เดิม              */}
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+
       {/* ━━━━━━━━━━━━━ STEP 1: ชื่อ + similarity ━━━━━━━━━━━━━ */}
-      {step === 1 && (
+      {mode === 'free_text' && step === 1 && (
         <div className="space-y-4">
           {/* 208.3: blocker เมื่อไม่มี accepted QT (lf/sd context) */}
           {noAcceptedQT && (
@@ -346,7 +589,7 @@ export default function AddItemWizard({
       )}
 
       {/* ━━━━━━━━━━━━━ STEP 2: รายละเอียด ━━━━━━━━━━━━━ */}
-      {step === 2 && (
+      {mode === 'free_text' && step === 2 && (
         <div className="space-y-4">
           <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
             <Layers className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -520,7 +763,7 @@ export default function AddItemWizard({
       )}
 
       {/* ━━━━━━━━━━━━━ STEP 3: ยืนยัน ━━━━━━━━━━━━━ */}
-      {step === 3 && (
+      {mode === 'free_text' && step === 3 && (
         <div className="space-y-4">
           <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
@@ -608,5 +851,385 @@ export default function AddItemWizard({
         </div>
       )}
     </Modal>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// 247 — Faceted Wizard helper components
+// ════════════════════════════════════════════════════════════════
+
+interface FacetPickerProps {
+  label: string
+  value: string | null | undefined
+  options: { value: string; labelTh: string; labelEn: string; codeShort: string }[]
+  onChange: (v: string | null) => void
+  required?: boolean
+  hint?: string
+}
+
+function FacetPicker({ label, value, options, onChange, required, hint }: FacetPickerProps) {
+  return (
+    <div>
+      <label className="text-xs font-medium text-slate-600 block mb-1">
+        {label}{required && <span className="text-red-500"> *</span>}
+        {hint && <span className="text-[10px] text-slate-400 ml-1">{hint}</span>}
+      </label>
+      <div className="flex flex-wrap gap-1">
+        {options.map(o => {
+          const selected = value === o.value
+          return (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onChange(selected ? null : o.value)}
+              className={cn(
+                'px-2.5 py-1 rounded-md text-xs border transition-colors',
+                selected
+                  ? 'bg-[#3DD8D8]/15 border-[#3DD8D8] text-[#1B3A5C] font-medium'
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-[#3DD8D8]/50',
+              )}
+            >
+              {o.labelTh}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+interface FacetedFacetsStepProps {
+  facets: LinenFacets
+  setFacets: (f: LinenFacets) => void
+  customSize: string
+  setCustomSize: (s: string) => void
+  facetCode: string
+  facetName: string
+  facetDup: LinenItemDef | null
+  codeUnique: boolean
+  onBack: () => void
+  onNext: () => void
+  error: string
+}
+
+function FacetedFacetsStep({
+  facets, setFacets, customSize, setCustomSize, facetCode, facetName,
+  facetDup, codeUnique, onBack, onNext, error,
+}: FacetedFacetsStepProps) {
+  const applications = getApplicationsForType(facets.type)
+  const sizes = getSizePresetsForType(facets.type)
+  const typeLabel = TYPE_OPTIONS.find(o => o.value === facets.type)?.labelTh || facets.type
+
+  const update = (patch: Partial<LinenFacets>) => setFacets({ ...facets, ...patch })
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+        <Layers className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+        <div className="text-sm text-amber-900 flex-1">
+          <div className="font-semibold mb-0.5">เลือก facets: <span className="text-[#1B3A5C]">{typeLabel}</span></div>
+          <p className="text-xs text-amber-800">เลือกเท่าที่ใช้จริง — ระบบจะสร้างรหัส + ชื่อให้</p>
+        </div>
+      </div>
+
+      {applications.length > 0 && (
+        <FacetPicker label="ลักษณะ/การใช้งาน" options={applications} value={facets.application}
+          onChange={v => update({ application: v })} />
+      )}
+
+      {sizes.length > 0 && (
+        <FacetPicker label="ขนาด" options={sizes} value={facets.size}
+          onChange={v => update({ size: v, sizeUnit: v ? facets.sizeUnit : null })}
+          hint={facets.type.includes('uniform') ? '(S/M/L/XL)' : ''} />
+      )}
+
+      {/* Custom size fallback */}
+      <div>
+        <label className="text-[11px] text-slate-500 block mb-1">หรือใส่ขนาดเอง (custom)</label>
+        <div className="flex gap-1.5">
+          <input
+            type="text"
+            value={customSize}
+            onChange={e => {
+              setCustomSize(e.target.value)
+              if (e.target.value.trim()) update({ size: e.target.value.trim(), sizeUnit: facets.sizeUnit || 'inch' })
+            }}
+            placeholder="เช่น 30x60, 1.2x1.7m"
+            className="flex-1 px-2.5 py-1 border border-slate-200 rounded-md text-xs focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+          />
+          <select
+            value={facets.sizeUnit || ''}
+            onChange={e => update({ sizeUnit: (e.target.value || null) as LinenFacets['sizeUnit'] })}
+            className="px-2 py-1 border border-slate-200 rounded-md text-xs bg-white"
+          >
+            <option value="">-</option>
+            <option value="inch">นิ้ว</option>
+            <option value="cm">ซม.</option>
+            <option value="ft">ฟุต</option>
+            <option value="standard">มาตรฐาน</option>
+          </select>
+        </div>
+      </div>
+
+      <FacetPicker label="สี" options={COLOR_OPTIONS} value={facets.color}
+        onChange={v => update({ color: v })} />
+
+      <FacetPicker label="พิเศษ (treatment)" options={TREATMENT_OPTIONS} value={facets.treatment}
+        onChange={v => update({ treatment: v })}
+        hint="เช่น น้ำมัน (spa)" />
+
+      <FacetPicker label="ลาย" options={PATTERN_OPTIONS} value={facets.pattern}
+        onChange={v => update({ pattern: v })} />
+
+      <FacetPicker label="วัสดุ" options={MATERIAL_OPTIONS} value={facets.material}
+        onChange={v => update({ material: v })} />
+
+      {(facets.type === 'towel' || facets.type === 'foot_massage_towel' || facets.type === 'bath_mat') && (
+        <FacetPicker label="น้ำหนัก" options={WEIGHT_OPTIONS} value={facets.weight}
+          onChange={v => update({ weight: v as LinenFacets['weight'] })} />
+      )}
+
+      <div>
+        <label className="text-xs font-medium text-slate-600 block mb-1">หมายเหตุ / variant
+          <span className="text-[10px] text-slate-400 ml-1">(brand/class/edge case)</span>
+        </label>
+        <input
+          type="text"
+          value={facets.variant || ''}
+          onChange={e => update({ variant: e.target.value || null })}
+          placeholder="เช่น VATA, VIP, Standard"
+          className="w-full px-3 py-1.5 border border-slate-200 rounded-md text-xs focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+        />
+      </div>
+
+      {/* Live preview */}
+      {facetCode && (
+        <div className={cn(
+          'rounded-lg p-3 border',
+          facetDup || !codeUnique
+            ? 'bg-red-50 border-red-300'
+            : 'bg-emerald-50 border-emerald-200',
+        )}>
+          <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-1">Preview</div>
+          <div className="text-sm font-mono font-semibold text-[#1B3A5C]">{facetCode}</div>
+          <div className="text-xs text-slate-700 mt-0.5">{facetName}</div>
+          {facetDup && (
+            <div className="mt-2 text-xs text-red-700">
+              ⚠️ ซ้ำกับ <strong>{facetDup.code} - {facetDup.name}</strong> (facetKey เหมือนกัน) — ปรับ variant หรือเลือก facet ที่ต่างกัน
+            </div>
+          )}
+          {!facetDup && !codeUnique && (
+            <div className="mt-2 text-xs text-red-700">
+              ⚠️ รหัส {facetCode} ใช้ซ้ำกับ code อื่นใน catalog — เพิ่ม variant
+            </div>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-2 text-xs text-red-700 flex items-center gap-2">
+          <AlertTriangle className="w-3.5 h-3.5" />{error}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+        <button onClick={onBack}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
+          <ArrowLeft className="w-4 h-4" />ย้อนกลับ
+        </button>
+        <button
+          onClick={onNext}
+          disabled={!facetCode || !!facetDup || !codeUnique}
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg text-sm font-medium hover:bg-[#122740] disabled:opacity-40 disabled:cursor-not-allowed">
+          ตรวจสอบ<ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+interface FacetedConfirmStepProps {
+  facets: LinenFacets
+  facetCode: string
+  facetName: string
+  facetNameEn: string
+  facetDup: LinenItemDef | null
+  unit: string
+  setUnit: (s: string) => void
+  defaultPrice: number
+  setDefaultPrice: (n: number) => void
+  context: WizardContext
+  customer: { shortName?: string; name: string } | null | undefined
+  activeQT: Quotation | null
+  addToQT: boolean
+  setAddToQT: (b: boolean) => void
+  customerPrice: number
+  setCustomerPrice: (n: number) => void
+  onBack: () => void
+  onConfirm: () => void
+  onUseDup: () => void
+  error: string
+}
+
+function FacetedConfirmStep({
+  facets, facetCode, facetName, facetNameEn, facetDup, unit, setUnit,
+  defaultPrice, setDefaultPrice, context, customer, activeQT,
+  addToQT, setAddToQT, customerPrice, setCustomerPrice,
+  onBack, onConfirm, onUseDup, error,
+}: FacetedConfirmStepProps) {
+  const typeLabel = TYPE_OPTIONS.find(o => o.value === facets.type)?.labelTh || facets.type
+  const facetSummary: Array<[string, string]> = []
+  if (facets.application) {
+    const app = getApplicationsForType(facets.type).find(o => o.value === facets.application)
+    if (app) facetSummary.push(['ลักษณะ', app.labelTh])
+  }
+  if (facets.size) facetSummary.push(['ขนาด', facets.size])
+  if (facets.color) {
+    const c = COLOR_OPTIONS.find(o => o.value === facets.color)
+    if (c) facetSummary.push(['สี', c.labelTh])
+  }
+  if (facets.treatment && facets.treatment !== 'none') {
+    const t = TREATMENT_OPTIONS.find(o => o.value === facets.treatment)
+    if (t) facetSummary.push(['พิเศษ', t.labelTh])
+  }
+  if (facets.pattern) {
+    const p = PATTERN_OPTIONS.find(o => o.value === facets.pattern)
+    if (p) facetSummary.push(['ลาย', p.labelTh])
+  }
+  if (facets.material) {
+    const m = MATERIAL_OPTIONS.find(o => o.value === facets.material)
+    if (m) facetSummary.push(['วัสดุ', m.labelTh])
+  }
+  if (facets.weight) {
+    const w = WEIGHT_OPTIONS.find(o => o.value === facets.weight)
+    if (w) facetSummary.push(['น้ำหนัก', w.labelTh])
+  }
+  if (facets.variant) facetSummary.push(['หมายเหตุ', facets.variant])
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+        <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+        <div className="text-sm text-emerald-900">
+          <div className="font-semibold mb-0.5">ยืนยันก่อนเพิ่ม</div>
+          <p className="text-xs text-emerald-800">ตรวจ facets + ราคาก่อนกดยืนยัน</p>
+        </div>
+      </div>
+
+      {facetDup && (
+        <div className="bg-red-50 border-2 border-red-300 rounded-lg p-3">
+          <div className="flex items-start gap-2 mb-2">
+            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-red-900 flex-1">
+              <div className="font-semibold mb-0.5">รายการที่มี facets เหมือนกันมีอยู่แล้ว</div>
+              <p className="text-xs">{facetDup.code} - {facetDup.name}</p>
+            </div>
+          </div>
+          <button onClick={onUseDup}
+            className="w-full px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">
+            ใช้รายการนี้แทน (ไม่เพิ่มซ้ำ)
+          </button>
+        </div>
+      )}
+
+      {/* Preview card */}
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2">
+        <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">รายการใหม่</div>
+        <div className="space-y-1 text-sm">
+          <div><span className="text-slate-500">รหัส:</span> <span className="font-mono font-semibold">{facetCode}</span></div>
+          <div><span className="text-slate-500">ประเภท:</span> <span className="font-medium">{typeLabel}</span></div>
+          <div><span className="text-slate-500">ชื่อ:</span> <span className="font-medium">{facetName}</span></div>
+          {facetNameEn && <div className="text-xs text-slate-500">EN: {facetNameEn}</div>}
+        </div>
+        {facetSummary.length > 0 && (
+          <div className="pt-2 border-t border-slate-200">
+            <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-1">Facets</div>
+            <div className="grid grid-cols-2 gap-1 text-xs">
+              {facetSummary.map(([k, v]) => (
+                <div key={k}><span className="text-slate-500">{k}:</span> {v}</div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Unit + price */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-medium text-slate-600 block mb-1">หน่วย *</label>
+          <select value={unit} onChange={e => setUnit(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+            <option value="ผืน">ผืน</option>
+            <option value="ใบ">ใบ</option>
+            <option value="ตัว">ตัว</option>
+            <option value="คู่">คู่</option>
+            <option value="ชิ้น">ชิ้น</option>
+            <option value="กิโลกรัม">กิโลกรัม</option>
+            <option value="เมตร">เมตร</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-slate-600 block mb-1">ราคา default (บาท/{unit})</label>
+          <input type="number" value={defaultPrice}
+            onChange={e => setDefaultPrice(Number(e.target.value) || 0)}
+            onKeyDown={blockNumberArrowKeys}
+            onFocus={e => e.currentTarget.select()}
+            min={0} step={0.5}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-right focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+        </div>
+      </div>
+
+      {/* QT integration (lf/sd context) */}
+      {(context === 'lf' || context === 'sd') && customer && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" checked={addToQT}
+              onChange={e => setAddToQT(e.target.checked)}
+              disabled={!activeQT}
+              className="mt-0.5 rounded" />
+            <div className="flex-1">
+              <div className="text-sm font-medium text-blue-900">
+                เพิ่มใน QT ของลูกค้า &quot;{customer.shortName || customer.name}&quot;
+              </div>
+              <p className="text-[11px] text-blue-700">
+                {activeQT
+                  ? `→ QT ${activeQT.quotationNumber} (accepted)`
+                  : '⚠️ ยังไม่มี QT ที่ accepted'}
+              </p>
+            </div>
+          </label>
+          {addToQT && activeQT && (
+            <div>
+              <label className="text-xs font-medium text-blue-900 block mb-1">ราคาสำหรับลูกค้านี้</label>
+              <input type="number" value={customerPrice || defaultPrice}
+                onChange={e => setCustomerPrice(Number(e.target.value) || 0)}
+                onKeyDown={blockNumberArrowKeys}
+                onFocus={e => e.currentTarget.select()}
+                min={0} step={0.5}
+                className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm text-right bg-white focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-xs text-red-700 flex items-center gap-2">
+          <AlertTriangle className="w-3.5 h-3.5" />{error}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+        <button onClick={onBack}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
+          <ArrowLeft className="w-4 h-4" />แก้ไข
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={!!facetDup}
+          className="inline-flex items-center gap-1.5 px-5 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed">
+          <Check className="w-4 h-4" />ยืนยันเพิ่ม
+        </button>
+      </div>
+    </div>
   )
 }
