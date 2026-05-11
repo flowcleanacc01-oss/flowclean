@@ -136,8 +136,20 @@ export interface Tier23Data {
 // Helpers
 // ────────────────────────────────────────────────────────────────
 
+/**
+ * Extract YYYY-MM from date string · 246: guard Excel epoch quirk
+ *
+ * NeoSME .xls import legacy ที่มี cell ว่าง → Excel serial 0 → date "1899-12-30"
+ * (Lotus 1-2-3 leap year bug compatibility). Slice(0,7) = "1899-12" ทำให้กราฟ
+ * seasonality มีแท่งโผล่ที่ปี 1899. Guard ตัดทุก year < 2010 (ก่อนติ๊ดเริ่ม
+ * ธุรกิจ) หรือ > 2100 (garbage future date).
+ */
 function ymFromDate(d: string): string {
-  return (d || '').slice(0, 7)
+  const ym = (d || '').slice(0, 7)
+  if (ym.length < 7) return ''
+  const year = parseInt(ym.slice(0, 4), 10)
+  if (!Number.isFinite(year) || year < 2010 || year > 2100) return ''
+  return ym
 }
 
 function safeDiv(a: number, b: number): number {
@@ -180,6 +192,7 @@ function buildCombinedMonthlyRevenue(
   const result = new Map<string, Map<string, number>>()
   for (const b of bills) {
     if (!b.customerId) continue
+    if (!ymFromDate(b.billingMonth)) continue // 246: guard Excel 1899-12 quirk
     let m = result.get(b.customerId)
     if (!m) { m = new Map(); result.set(b.customerId, m) }
     m.set(b.billingMonth, (m.get(b.billingMonth) || 0) + b.subtotal)
@@ -264,6 +277,7 @@ function computeSeasonality(filters: Tier23Filters, bills: BillingStatement[], l
   // Aggregate revenue per month (all customers)
   const monthRev = new Map<string, { revenue: number; isLegacy: boolean }>()
   for (const b of bills) {
+    if (!ymFromDate(b.billingMonth)) continue // 246: guard Excel 1899-12 quirk
     const ex = monthRev.get(b.billingMonth) || { revenue: 0, isLegacy: false }
     ex.revenue += b.subtotal
     monthRev.set(b.billingMonth, ex)
