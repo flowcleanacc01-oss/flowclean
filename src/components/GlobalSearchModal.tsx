@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { Search, X, Building2, ClipboardList, Truck, FileCheck, Receipt, FileText, Package } from 'lucide-react'
 import { useStore } from '@/lib/store'
@@ -55,11 +55,15 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   }, [open])
 
   // 248.2: debounce query → searchResults runs over ~9000+ entries × Lev fuzzy,
-  // ~150-300ms per keystroke without debounce → UI freeze. 100ms feels instant.
+  // 250: ปรับเป็น 150ms (เดิม 100ms) — most typists won't notice, big perf win.
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(query), 100)
+    const t = setTimeout(() => setDebouncedQuery(query), 150)
     return () => clearTimeout(t)
   }, [query])
+
+  // 250.1: useDeferredValue lets React deprioritize the (expensive) search
+  // when input/UI updates are pending — keeps typing smooth even if search is slow.
+  const deferredQuery = useDeferredValue(debouncedQuery)
 
   // Build search index (memo)
   const index = useMemo(() => buildSearchIndex({
@@ -68,8 +72,8 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   }), [customers, linenForms, deliveryNotes, billingStatements, taxInvoices, receipts, quotations, linenCatalog])
 
   // 171.2: รับ unlimited results เพื่อ group ดู เห็นจำนวนจริงต่อ kind
-  // 248.2: use debouncedQuery (not query) — search is O(N × Lev) heavy
-  const results = useMemo(() => searchResults(index, debouncedQuery, 500), [index, debouncedQuery])
+  // 248.2 + 250.1: use deferredQuery — React defers search when UI is busy
+  const results = useMemo(() => searchResults(index, deferredQuery, 500), [index, deferredQuery])
 
   // Group by kind (preserve relevance order within each group)
   const grouped = useMemo(() => {
@@ -109,8 +113,8 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   // 147.1 → 248: phonetic-aware highlight — show WHY each result matched
   // Use findMatchRanges() which handles direct + phonetic + simple split
   const tokens = useMemo(() => {
-    return debouncedQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  }, [debouncedQuery])
+    return deferredQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  }, [deferredQuery])
 
   const highlight = (text: string): React.ReactNode => {
     if (tokens.length === 0 || !text) return text
@@ -227,7 +231,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
           aria-label="ผลลัพธ์การค้นหา"
           className="flex-1 overflow-y-auto"
         >
-          {debouncedQuery.trim() === '' ? (
+          {deferredQuery.trim() === '' ? (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
               <Search className="w-10 h-10 mx-auto mb-2 text-slate-200" />
               <p>พิมพ์เลขที่เอกสาร, ชื่อลูกค้า, รหัสสินค้า (เช่น H22) หรือชื่อรายการ (เช่น ปลอกหมอน)</p>
@@ -239,7 +243,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
             </div>
           ) : results.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
-              ไม่พบผลลัพธ์สำหรับ &quot;{debouncedQuery}&quot;
+              ไม่พบผลลัพธ์สำหรับ &quot;{deferredQuery}&quot;
             </div>
           ) : (
             <div className="py-1">
@@ -311,7 +315,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
         {/* Footer */}
         <div className="px-4 py-2 border-t border-slate-100 bg-slate-50 text-[10px] text-slate-500 flex items-center justify-between">
           <span>
-            {debouncedQuery.trim() === ''
+            {deferredQuery.trim() === ''
               ? `${index.length} รายการพร้อมค้นหา`
               : `${results.length} ผลลัพธ์ · ${flatVisible.length} แสดงอยู่`}
           </span>

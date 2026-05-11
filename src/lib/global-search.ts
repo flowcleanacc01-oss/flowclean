@@ -14,11 +14,17 @@ import { matchesThaiQuery, phoneticThai } from './thai-search'
 
 export type SearchResultKind = 'customer' | 'lf' | 'sd' | 'wb' | 'iv' | 'rc' | 'qt' | 'item'
 
-/** 162: Build amount tokens for haystack — supports digit-only queries */
+/**
+ * 162: Build amount tokens for haystack — supports digit-only queries
+ *
+ * 251: removed no-dot variant — `5.00`.replace('.','') = `500` caused false
+ * positives (search "500" matched items priced 5.00 baht).
+ * Kept: rounded integer + 2-decimal form.
+ */
 function amountTokens(...values: number[]): string {
   return values.flatMap(v => {
     if (!Number.isFinite(v) || v === 0) return []
-    return [String(Math.round(v)), v.toFixed(2), v.toFixed(2).replace(/\./g, '')]
+    return [String(Math.round(v)), v.toFixed(2)]
   }).join(' ')
 }
 
@@ -33,6 +39,9 @@ export interface SearchResult {
   haystack: string
   /** 249.1: precomputed phonetic of haystack — avoids per-search recomputation */
   haystackPhonetic: string
+  /** 250: precomputed lowercase versions for relevance scoring */
+  primaryLow: string
+  secondaryLow: string
   href: string
 }
 
@@ -62,9 +71,14 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
     }).join(' ')
 
   const results: SearchResult[] = []
-  // 249.1: helper to push with precomputed haystackPhonetic
-  const push = (r: Omit<SearchResult, 'haystackPhonetic'>) => {
-    results.push({ ...r, haystackPhonetic: phoneticThai(r.haystack) })
+  // 249.1 + 250: helper to push with precomputed phonetic + lowercase fields
+  const push = (r: Omit<SearchResult, 'haystackPhonetic' | 'primaryLow' | 'secondaryLow'>) => {
+    results.push({
+      ...r,
+      haystackPhonetic: phoneticThai(r.haystack),
+      primaryLow: r.primary.toLowerCase(),
+      secondaryLow: r.secondary.toLowerCase(),
+    })
   }
 
   // Customers
@@ -296,30 +310,53 @@ export function searchResults(index: SearchResult[], query: string, limit = 30):
   const tokens = q.split(/\s+/).filter(Boolean)
   if (tokens.length === 0) return []
 
+  // 251: precompute per-token matchers. Digit-only tokens use word-boundary
+  // regex to prevent "500" matching "5000" or "5.00" (via substring/no-dot).
+  type TokenMatcher = {
+    raw: string
+    isDigit: boolean
+    digitRe?: RegExp
+  }
+  const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const matchers: TokenMatcher[] = tokens.map(t => {
+    const isDigit = /^\d+(?:\.\d+)?$/.test(t)
+    return { raw: t, isDigit, digitRe: isDigit ? new RegExp(`\\b${escapeRe(t)}\\b`) : undefined }
+  })
+
   type Scored = { r: SearchResult; score: number }
   const scored: Scored[] = []
 
   for (const r of index) {
     let allMatch = true
     let score = 0
-    const primaryLow = r.primary.toLowerCase()
-    const secondaryLow = r.secondary.toLowerCase()
-    for (const t of tokens) {
-      // Fast path: plain substring → boost relevance
-      if (r.haystack.includes(t)) {
-        if (primaryLow.includes(t)) score += 10
-        else if (secondaryLow.includes(t)) score += 5
-        else score += 1
-        if (primaryLow.startsWith(t)) score += 5
-      } else if (matchesThaiQuery(r.haystack, t, r.haystackPhonetic)) {
-        // 249.1: pass precomputed haystackPhonetic — saves O(text.length) per call
-        // Slow path: Thai tolerant — phonetic / Lev / split
-        if (matchesThaiQuery(r.primary, t)) score += 6
-        else if (matchesThaiQuery(r.secondary, t)) score += 3
-        else score += 1
+    for (const tm of matchers) {
+      if (tm.isDigit && tm.digitRe) {
+        // 251: digit-only query — exact word boundary (prevents 500↔5000/5.00)
+        if (tm.digitRe.test(r.haystack)) {
+          if (tm.digitRe.test(r.primaryLow)) score += 10
+          else if (tm.digitRe.test(r.secondaryLow)) score += 5
+          else score += 1
+        } else {
+          allMatch = false
+          break
+        }
       } else {
-        allMatch = false
-        break
+        const t = tm.raw
+        // Fast path: plain substring → boost relevance
+        if (r.haystack.includes(t)) {
+          if (r.primaryLow.includes(t)) score += 10
+          else if (r.secondaryLow.includes(t)) score += 5
+          else score += 1
+          if (r.primaryLow.startsWith(t)) score += 5
+        } else if (matchesThaiQuery(r.haystack, t, r.haystackPhonetic)) {
+          // Slow path: Thai tolerant (phonetic / Lev / split)
+          if (matchesThaiQuery(r.primary, t)) score += 6
+          else if (matchesThaiQuery(r.secondary, t)) score += 3
+          else score += 1
+        } else {
+          allMatch = false
+          break
+        }
       }
     }
     if (allMatch) scored.push({ r, score })
