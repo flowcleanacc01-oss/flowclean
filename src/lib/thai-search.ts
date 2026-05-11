@@ -96,28 +96,28 @@ export function phoneticDistance(a: string, b: string): number {
 }
 
 /**
- * Phonetic Levenshtein substring — sliding window of length qp.length ± maxDist
- * Returns true if any window has edit distance ≤ maxDist with query phonetic
+ * Phonetic Levenshtein substring — sliding window with edit distance check
  *
- * 248.1: min query phonetic length raised from 3 → 5
- * Why: query "ซิป" (qp "SิP" length 3) with maxDist=1 matched windows like
- * "SP" (length 2, Lev 1 by deleting ิ) → false positives ทั่วระบบ:
- *   - "ผ้าสปามือ" matched ซิป via "SP" window
- *   - "ผ้าคาดศรีษะ" matched ซิป via "SะP" window
- *   - "ไส้ผ้านวม" matched ซิป via "SP" window
- * Short queries (3-4 chars) usually have enough specificity via Layer 2 substring.
- * Real typo-tolerance cases (สครับ↔สคับ) still work because Layer 4 split kicks in.
+ * 249.1: stricter window — minLen = qp.length (was qp.length - maxDist)
+ * Why: window shorter than query allowed query-char-deletion which made
+ * "ซิป" (qp SิP, len 3) match window "SP" (len 2, Lev 1 by deleting ิ).
+ * New rule: window must be at least query-length → no deletions in query allowed.
+ * Insertions in window still allowed (window can be 1 char longer than query).
+ *
+ * 249.1: length cap 3-10 — short queries lack specificity, long queries are
+ * better served by Layer 4 split. Lev is O(qp.length × window.length × text.length),
+ * cubic for long queries.
  */
 function phoneticFuzzyIncludes(textPhonetic: string, queryPhonetic: string, maxDist = 1): boolean {
   const qp = queryPhonetic
   const tp = textPhonetic
   if (!qp || !tp) return false
-  if (qp.length < 5) return false // 248.1: stricter (was 3) — short queries had too many false positives
-  if (tp.length + maxDist < qp.length) return false
+  if (qp.length < 3 || qp.length > 10) return false // 249.1: cap (was ≥ 5)
+  if (tp.length < qp.length) return false
 
-  const minLen = Math.max(1, qp.length - maxDist)
+  const minLen = qp.length // 249.1: was qp.length - maxDist
   const maxLen = qp.length + maxDist
-  for (let i = 0; i <= tp.length - minLen; i++) {
+  for (let i = 0; i + minLen <= tp.length; i++) {
     for (let len = minLen; len <= maxLen; len++) {
       if (i + len > tp.length) break
       const window = tp.slice(i, i + len)
@@ -130,8 +130,11 @@ function phoneticFuzzyIncludes(textPhonetic: string, queryPhonetic: string, maxD
 /**
  * Core match (layers 1-3, no recursion) — used internally by splitAndMatch
  * Layer 1: plain substring · Layer 2: phonetic substring · Layer 3: phonetic Lev ≤ 1
+ *
+ * 249.1: accepts pre-computed tPhonetic (haystack phonetic) to avoid recomputing
+ * across recursive splitAndMatch calls (same text, different queries).
  */
-function matchesThaiQueryCore(text: string, query: string): boolean {
+function matchesThaiQueryCore(text: string, query: string, tPhonetic?: string): boolean {
   const q = norm(query)
   if (!q) return true
   const t = norm(text)
@@ -145,33 +148,58 @@ function matchesThaiQueryCore(text: string, query: string): boolean {
   if (q.length < 2) return false
 
   const qPhonetic = phoneticThai(q)
-  const tPhonetic = phoneticThai(t)
-  if (!qPhonetic || !tPhonetic) return false
+  const tp = tPhonetic ?? phoneticThai(t)
+  if (!qPhonetic || !tp) return false
 
   // Layer 2: phonetic substring
-  if (tPhonetic.includes(qPhonetic)) return true
+  if (tp.includes(qPhonetic)) return true
 
-  // Layer 3: phonetic Levenshtein ≤ 1 (guard inside: qp.length ≥ 5 — 248.1)
-  if (phoneticFuzzyIncludes(tPhonetic, qPhonetic, 1)) return true
+  // Layer 3: phonetic Levenshtein ≤ 1
+  if (phoneticFuzzyIncludes(tp, qPhonetic, 1)) return true
 
   return false
+}
+
+/**
+ * Core match WITHOUT Layer 3 Lev — for use inside splitAndMatch recursion.
+ * Lev is too expensive when called repeatedly on each split slice — and most
+ * compound queries can be resolved via substring + phonetic-substring only.
+ *
+ * 249.1: extracted to make splitAndMatch ~10x cheaper per slice.
+ */
+function matchesThaiQueryCoreNoLev(text: string, query: string, tPhonetic: string): boolean {
+  const q = norm(query)
+  if (!q) return true
+  const t = norm(text)
+  if (!t) return false
+  if (t.includes(q)) return true
+  if (!containsThai(q)) return false
+  if (q.length < 2) return false
+  const qPhonetic = phoneticThai(q)
+  if (!qPhonetic || !tPhonetic) return false
+  return tPhonetic.includes(qPhonetic)
 }
 
 /**
  * Layer 4 — Recursive split-and-match for Thai compound words (no space)
  * เช่น "ปลอกเล็กชมพู" → split เป็น "ปลอก" + "เล็ก" + "ชมพู" → AND ทุก slice
  *
- * Guard: query ≥ 4 chars, each slice ≥ 2 chars, depth ≤ 3
+ * 249.1: stricter to prevent exponential blowup + false positives
+ *   - depth ≤ 2 (was 3) → max 4 slices total
+ *   - min slice 3 chars (was 2) → "เหมอ" (4 chars) no longer splits to "เห"+"มอ"
+ *   - min query 6 chars (was 4) → 4-5 char queries skip Layer 4 entirely
+ *   - slices use core-no-Lev (substring + phonetic-substring only)
+ *   - tPhonetic threaded through recursion (text never changes)
  */
-function splitAndMatch(text: string, query: string, depth = 0): boolean {
-  if (depth >= 3) return false
-  if (query.length < 4) return false
-  for (let i = 2; i <= query.length - 2; i++) {
+function splitAndMatch(text: string, query: string, depth: number, tPhonetic: string): boolean {
+  if (depth >= 2) return false
+  if (query.length < 6) return false
+  for (let i = 3; i <= query.length - 3; i++) {
     const left = query.slice(0, i)
     const right = query.slice(i)
-    if (matchesThaiQueryCore(text, left)) {
-      if (matchesThaiQueryCore(text, right)) return true
-      if (splitAndMatch(text, right, depth + 1)) return true
+    if (matchesThaiQueryCoreNoLev(text, left, tPhonetic)) {
+      if (matchesThaiQueryCoreNoLev(text, right, tPhonetic)) return true
+      if (splitAndMatch(text, right, depth + 1, tPhonetic)) return true
     }
   }
   return false
@@ -181,9 +209,13 @@ function splitAndMatch(text: string, query: string, depth = 0): boolean {
  * Tolerant filter — 4-layer match (each is fallback if prior fails)
  *
  * Layer 1: Plain substring (English/digits/Thai exact)
- * Layer 2: Phonetic substring (ซิป↔ซิบ, ฟ↔ฝ)
- * Layer 3: Phonetic Levenshtein ≤ 1 (สครับ↔สคับ, query ≥ 3)
- * Layer 4: Recursive split (ปลอกเล็กชมพู, no space, query ≥ 4)
+ * Layer 2: Phonetic substring (ซิป↔ซิบ, ฟ↔ฝ — Thai class mapping)
+ * Layer 3: Phonetic Levenshtein ≤ 1 (สครับ↔สคับ, query 3-10 chars)
+ * Layer 4: Recursive split (ปลอกเล็กชมพู → ปลอก+เล็ก+ชมพู, query ≥ 6, slice ≥ 3)
+ *
+ * 249.1: accepts optional pre-computed `tPhonetic` (text phonetic) — caller
+ * can cache it (e.g., at index build time) to avoid recomputation. Reduces
+ * cost of Cmd+K search by ~10x for long queries with many entries.
  *
  * ตัวอย่าง:
  *   matchesThaiQuery("ปลอกหมอน", "ปลอก")        → true (L1 substring)
@@ -192,15 +224,19 @@ function splitAndMatch(text: string, query: string, depth = 0): boolean {
  *   matchesThaiQuery("ปลอกหมอนเล็ก ชมพู", "ปลอกเล็ก") → true (L4 split)
  *   matchesThaiQuery("Hotel Slipper", "slipper") → true (L1, English)
  */
-export function matchesThaiQuery(text: string, query: string): boolean {
-  if (matchesThaiQueryCore(text, query)) return true
+export function matchesThaiQuery(text: string, query: string, tPhonetic?: string): boolean {
+  // 249.1: compute tPhonetic once, share across core + split recursion
+  const t = norm(text)
+  const tp = tPhonetic ?? (t && containsThai(t) ? phoneticThai(t) : '')
 
-  // Layer 4: Recursive split for Thai compounds (no space, ≥ 4 chars)
+  if (matchesThaiQueryCore(text, query, tp)) return true
+
+  // Layer 4: Recursive split for Thai compounds (no space, ≥ 6 chars)
   const q = norm(query)
-  if (containsThai(q) && q.length >= 4) {
+  if (containsThai(q) && q.length >= 6) {
     const compact = q.replace(/\s+/g, '')
-    if (compact.length >= 4) {
-      return splitAndMatch(text, compact)
+    if (compact.length >= 6) {
+      return splitAndMatch(text, compact, 0, tp)
     }
   }
   return false
@@ -210,13 +246,16 @@ export function matchesThaiQuery(text: string, query: string): boolean {
  * Multi-token tolerant filter — split query เป็น tokens แล้วเช็คทุก token ต้อง match
  *
  * ใช้กับ search ที่ user พิมพ์หลายคำ คั่นด้วย space
+ * 249.1: precompute tPhonetic once per text (shared across tokens)
  */
 export function matchesThaiQueryAllTokens(text: string, query: string): boolean {
   const q = norm(query)
   if (!q) return true
   const tokens = q.split(/\s+/).filter(Boolean)
   if (tokens.length === 0) return true
-  return tokens.every(tk => matchesThaiQuery(text, tk))
+  const t = norm(text)
+  const tp = t && containsThai(t) ? phoneticThai(t) : ''
+  return tokens.every(tk => matchesThaiQuery(text, tk, tp))
 }
 
 /**
@@ -325,10 +364,10 @@ export function findMatchRanges(text: string, query: string): Array<[number, num
     if (phon.length > 0) return phon
   }
 
-  // 3. Binary split fallback (depth 1)
-  if (lowerQuery.length >= 4 && containsThai(lowerQuery)) {
+  // 3. Binary split fallback (depth 1) — 249.1: min slice 3, min query 6
+  if (lowerQuery.length >= 6 && containsThai(lowerQuery)) {
     const compact = lowerQuery.replace(/\s+/g, '')
-    for (let i = 2; i <= compact.length - 2; i++) {
+    for (let i = 3; i <= compact.length - 3; i++) {
       const left = compact.slice(0, i)
       const right = compact.slice(i)
       const leftRanges = findDirectRanges(lowerText, left).length > 0

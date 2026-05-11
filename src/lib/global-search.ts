@@ -10,7 +10,7 @@ import type {
   BillingStatement, TaxInvoice, Quotation, LinenItemDef, Receipt,
 } from '@/types'
 import { formatDate } from './utils'
-import { matchesThaiQuery } from './thai-search'
+import { matchesThaiQuery, phoneticThai } from './thai-search'
 
 export type SearchResultKind = 'customer' | 'lf' | 'sd' | 'wb' | 'iv' | 'rc' | 'qt' | 'item'
 
@@ -31,6 +31,8 @@ export interface SearchResult {
   secondary: string
   /** ข้อความที่ใช้ filter */
   haystack: string
+  /** 249.1: precomputed phonetic of haystack — avoids per-search recomputation */
+  haystackPhonetic: string
   href: string
 }
 
@@ -60,11 +62,15 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
     }).join(' ')
 
   const results: SearchResult[] = []
+  // 249.1: helper to push with precomputed haystackPhonetic
+  const push = (r: Omit<SearchResult, 'haystackPhonetic'>) => {
+    results.push({ ...r, haystackPhonetic: phoneticThai(r.haystack) })
+  }
 
   // Customers
   for (const c of store.customers) {
     if (!c.isActive) continue
-    results.push({
+    push({
       kind: 'customer',
       id: c.id,
       primary: c.shortName || c.name,
@@ -78,7 +84,7 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
   for (const f of store.linenForms) {
     const c = custMap.get(f.customerId)
     const custLabel = c?.shortName || c?.name || '-'
-    results.push({
+    push({
       kind: 'lf',
       id: f.id,
       primary: f.formNumber,
@@ -96,7 +102,7 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
       const def = catalogByCode.get(i.code)
       return `${i.code} ${def?.name || ''} ${def?.nameEn || ''} ${i.displayName || ''}`
     }).join(' ')
-    results.push({
+    push({
       kind: 'sd',
       id: d.id,
       primary: d.noteNumber,
@@ -112,7 +118,7 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
     const custLabel = c?.shortName || c?.name || '-'
     const lineHaystack = b.lineItems.map(li => `${li.code} ${li.name}`).join(' ')
     const lineAmounts = b.lineItems.map(li => li.pricePerUnit || 0)
-    results.push({
+    push({
       kind: 'wb',
       id: b.id,
       primary: b.billingNumber,
@@ -128,7 +134,7 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
     const custLabel = c?.shortName || c?.name || '-'
     const lineHaystack = iv.lineItems.map(li => `${li.code} ${li.name}`).join(' ')
     const lineAmounts = iv.lineItems.map(li => li.pricePerUnit || 0)
-    results.push({
+    push({
       kind: 'iv',
       id: iv.id,
       primary: iv.invoiceNumber,
@@ -142,7 +148,7 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
   for (const rc of store.receipts || []) {
     const c = custMap.get(rc.customerId)
     const custLabel = c?.shortName || c?.name || '-'
-    results.push({
+    push({
       kind: 'rc',
       id: rc.id,
       primary: rc.receiptNumber,
@@ -161,7 +167,7 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
       return `${qi.code} ${qi.name || ''} ${def?.name || ''} ${def?.nameEn || ''}`
     }).join(' ')
     const qtAmounts = q.items.map(qi => qi.pricePerUnit || 0)
-    results.push({
+    push({
       kind: 'qt',
       id: q.id,
       primary: q.quotationNumber,
@@ -250,7 +256,7 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
       ? `ใช้ใน ${a.customers.size} ลูกค้า · ${a.qtCount} QT · ${a.sdCount} SD · ${a.lfCount} LF`
       : 'ยังไม่มีการใช้งาน'
     const tag = a.inCatalog ? '' : ' · ⚠ ไม่มีใน catalog'
-    results.push({
+    push({
       kind: 'item',
       id: a.code,
       primary: `${a.code} · ${primaryName}${tag}`,
@@ -305,9 +311,10 @@ export function searchResults(index: SearchResult[], query: string, limit = 30):
         else if (secondaryLow.includes(t)) score += 5
         else score += 1
         if (primaryLow.startsWith(t)) score += 5
-      } else if (matchesThaiQuery(r.haystack, t)) {
+      } else if (matchesThaiQuery(r.haystack, t, r.haystackPhonetic)) {
+        // 249.1: pass precomputed haystackPhonetic — saves O(text.length) per call
         // Slow path: Thai tolerant — phonetic / Lev / split
-        if (matchesThaiQuery(r.primary, t)) score += 6 // less than substring boost
+        if (matchesThaiQuery(r.primary, t)) score += 6
         else if (matchesThaiQuery(r.secondary, t)) score += 3
         else score += 1
       } else {
