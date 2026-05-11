@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, formatExportFilename } from '@/lib/utils'
 import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
+import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { Search, FileDown, Trash2, Printer, FileText, Plus, ExternalLink, Check } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
@@ -88,10 +89,8 @@ export default function ReceiptsPage() {
       if (customerFilter !== 'all' && rc.customerId !== customerFilter) return false
       if (search) {
         const c = getCustomer(rc.customerId)
-        const q = search.toLowerCase()
-        const textMatch = rc.receiptNumber.toLowerCase().includes(q)
-          || (c?.shortName || '').toLowerCase().includes(q)
-          || (c?.name || '').toLowerCase().includes(q)
+        // 245: Thai-aware tolerant (phonetic + Lev + split)
+        const textMatch = matchesThaiQueryAnyField([rc.receiptNumber, c?.shortName, c?.name], search)
         // 162: also match by amount
         const amountMatch = matchesAmountQuery(search, [rc.grandTotal])
         if (!textMatch && !amountMatch) return false

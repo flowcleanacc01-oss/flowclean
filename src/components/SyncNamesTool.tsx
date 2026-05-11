@@ -16,6 +16,7 @@ import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
 import HoverPopover from '@/components/HoverPopover'
 import { CheckCircle2, Loader2, RefreshCcw, AlertTriangle, ArrowRight, Zap, EyeOff, Eye, MoveRight, ExternalLink } from 'lucide-react'
+import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import Link from 'next/link'
 import type { QuotationStatus, LinenItemDef } from '@/types'
 
@@ -1197,10 +1198,10 @@ function ReassignModal({
   const [confirm, setConfirm] = useState(false)
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return catalogCodes.slice(0, 50)
+    if (!search.trim()) return catalogCodes.slice(0, 50)
+    // 245: Thai-aware tolerant
     return catalogCodes.filter(c =>
-      c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+      matchesThaiQueryAnyField([c.code, c.name], search)
     ).slice(0, 100)
   }, [catalogCodes, search])
 

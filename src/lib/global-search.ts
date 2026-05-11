@@ -10,6 +10,7 @@ import type {
   BillingStatement, TaxInvoice, Quotation, LinenItemDef, Receipt,
 } from '@/types'
 import { formatDate } from './utils'
+import { matchesThaiQuery } from './thai-search'
 
 export type SearchResultKind = 'customer' | 'lf' | 'sd' | 'wb' | 'iv' | 'rc' | 'qt' | 'item'
 
@@ -275,8 +276,12 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
 }
 
 /**
- * Filter by query (all tokens must match, case-insensitive, substring)
+ * Filter by query (all tokens must match) — 245: Thai-aware tolerant filter
  * Sort by relevance: primary match > secondary match > haystack
+ *
+ * Match layers (per token):
+ *   - Plain substring (exact match — gets boosted score)
+ *   - Phonetic substring + Lev ≤ 1 + split-and-match (via matchesThaiQuery)
  */
 export function searchResults(index: SearchResult[], query: string, limit = 30): SearchResult[] {
   const q = query.trim().toLowerCase()
@@ -292,12 +297,19 @@ export function searchResults(index: SearchResult[], query: string, limit = 30):
     let allMatch = true
     let score = 0
     const primaryLow = r.primary.toLowerCase()
+    const secondaryLow = r.secondary.toLowerCase()
     for (const t of tokens) {
+      // Fast path: plain substring → boost relevance
       if (r.haystack.includes(t)) {
         if (primaryLow.includes(t)) score += 10
-        else if (r.secondary.toLowerCase().includes(t)) score += 5
+        else if (secondaryLow.includes(t)) score += 5
         else score += 1
         if (primaryLow.startsWith(t)) score += 5
+      } else if (matchesThaiQuery(r.haystack, t)) {
+        // Slow path: Thai tolerant — phonetic / Lev / split
+        if (matchesThaiQuery(r.primary, t)) score += 6 // less than substring boost
+        else if (matchesThaiQuery(r.secondary, t)) score += 3
+        else score += 1
       } else {
         allMatch = false
         break

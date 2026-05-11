@@ -2540,12 +2540,11 @@ export default function BillingPage() {
                     </div>
                     <div className="overflow-y-auto flex-1">
                       {(() => {
-                        const s = quLoadQTSearch.toLowerCase()
+                        // 245: Thai-aware tolerant search (phonetic + Lev + split)
                         const filtered = quotations.filter(q => {
-                          if (!s) return true
+                          if (!quLoadQTSearch) return true
                           const cust = customers.find(c => c.id === q.customerId)
-                          const shortName = cust?.shortName || ''
-                          return q.quotationNumber.toLowerCase().includes(s) || shortName.toLowerCase().includes(s) || q.customerName.toLowerCase().includes(s)
+                          return matchesThaiQueryAnyField([q.quotationNumber, cust?.shortName, q.customerName], quLoadQTSearch)
                         })
                         if (filtered.length === 0) return <div className="px-3 py-2 text-xs text-slate-400">{quotations.length === 0 ? 'ไม่มีใบเสนอราคา' : 'ไม่พบรายการ'}</div>
                         return filtered.map(q => {
@@ -2618,10 +2617,8 @@ export default function BillingPage() {
                 const existingCodes = new Set(quItems.map(i => i.code))
                 const matchesFilter = (item: typeof linenCatalog[number]) => {
                   if (quFilterCat !== 'all' && item.category !== quFilterCat) return false
-                  if (quSearch) {
-                    const s = quSearch.toLowerCase()
-                    if (!item.code.toLowerCase().includes(s) && !item.name.toLowerCase().includes(s) && !(item.nameEn || '').toLowerCase().includes(s)) return false
-                  }
+                  // 245: Thai-aware tolerant
+                  if (quSearch && !matchesThaiQueryAnyField([item.code, item.name, item.nameEn], quSearch)) return false
                   return true
                 }
                 const newItems = [...linenCatalog]
@@ -2640,10 +2637,8 @@ export default function BillingPage() {
                 const matchesFilter = (item: { code: string; name: string }) => {
                   const cat = linenCatalog.find(c => c.code === item.code)
                   if (quFilterCat !== 'all' && cat?.category !== quFilterCat) return false
-                  if (quSearch) {
-                    const s = quSearch.toLowerCase()
-                    if (!item.code.toLowerCase().includes(s) && !item.name.toLowerCase().includes(s) && !(cat?.nameEn || '').toLowerCase().includes(s)) return false
-                  }
+                  // 245: Thai-aware tolerant
+                  if (quSearch && !matchesThaiQueryAnyField([item.code, item.name, cat?.nameEn], quSearch)) return false
                   return true
                 }
                 setQuItems(quItems.filter(i => !matchesFilter(i)))
@@ -2693,10 +2688,8 @@ export default function BillingPage() {
                   {/* Checked items — in quItems order */}
                   {quItems.map((item, idx) => {
                     const catItem = linenCatalog.find(i => i.code === item.code)
-                    if (quSearch) {
-                      const s = quSearch.toLowerCase()
-                      if (!item.code.toLowerCase().includes(s) && !item.name.toLowerCase().includes(s) && !(catItem?.nameEn || '').toLowerCase().includes(s)) return null
-                    }
+                    // 245: Thai-aware tolerant
+                    if (quSearch && !matchesThaiQueryAnyField([item.code, item.name, catItem?.nameEn], quSearch)) return null
                     if (quFilterCat !== 'all' && catItem?.category !== quFilterCat) return null
                     const isDragging = qtDragCode === item.code
                     const isDragOver = qtDragOverCode === item.code && qtDragCode !== item.code
@@ -2790,10 +2783,8 @@ export default function BillingPage() {
                       .filter(cat => !checkedCodes.has(cat.code))
                       .sort((a, b) => a.sortOrder - b.sortOrder)
                       .map(catItem => {
-                        if (quSearch) {
-                          const s = quSearch.toLowerCase()
-                          if (!catItem.code.toLowerCase().includes(s) && !catItem.name.toLowerCase().includes(s) && !(catItem.nameEn || '').toLowerCase().includes(s)) return null
-                        }
+                        // 245: Thai-aware tolerant
+                        if (quSearch && !matchesThaiQueryAnyField([catItem.code, catItem.name, catItem.nameEn], quSearch)) return null
                         if (quFilterCat !== 'all' && catItem.category !== quFilterCat) return null
                         return (
                           <tr key={catItem.code} className="border-t border-slate-100 opacity-40 hover:opacity-70">

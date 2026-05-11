@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatDate, formatCurrency, cn, startOfMonthISO, endOfMonthISO } from '@/lib/utils'
 import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
+import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { Search, Archive, FileCheck, Receipt as ReceiptIcon, Truck, FileText, Info } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DateFilter from '@/components/DateFilter'
@@ -57,12 +58,9 @@ export default function LegacyPage() {
       if (customerFilter !== 'all' && doc.customerId !== customerFilter) return false
       if (!matchesDate(doc.docDate)) return false
       if (search) {
-        const q = search.toLowerCase()
         const c = doc.customerId ? getCustomer(doc.customerId) : null
-        const textMatch = doc.docNumber.toLowerCase().includes(q)
-          || doc.customerName.toLowerCase().includes(q)
-          || doc.customerCode.toLowerCase().includes(q)
-          || (c?.shortName || '').toLowerCase().includes(q)
+        // 245: Thai-aware tolerant
+        const textMatch = matchesThaiQueryAnyField([doc.docNumber, doc.customerName, doc.customerCode, c?.shortName], search)
         // 162: also match by amount
         const amountMatch = matchesAmountQuery(search, [doc.amount, doc.netPayable, doc.outstanding])
         if (!textMatch && !amountMatch) return false

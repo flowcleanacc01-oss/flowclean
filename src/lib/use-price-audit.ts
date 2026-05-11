@@ -11,6 +11,7 @@
 import { useMemo } from 'react'
 import { useStore } from './store'
 import { isFlatRateCustomer } from './customer-pricing'
+import { matchesThaiQueryAnyField } from './thai-search'
 
 export type PriceAuditReason =
   | 'ok'
@@ -208,14 +209,13 @@ export function usePriceAudit(filters: PriceAuditFilters): PriceAuditResult {
       filtered = filtered.filter(r => r.reason !== 'ok')
     }
     if (filters.search && filters.search.trim()) {
-      const s = filters.search.toLowerCase().trim()
+      // 245: Thai-aware tolerant
+      const q = filters.search
       filtered = filtered.filter(r =>
-        r.dnNumber.toLowerCase().includes(s) ||
-        r.customerShortName.toLowerCase().includes(s) ||
-        r.customerName.toLowerCase().includes(s) ||
-        r.itemCode.toLowerCase().includes(s) ||
-        r.itemName.toLowerCase().includes(s) ||
-        (r.qtNumber && r.qtNumber.toLowerCase().includes(s)),
+        matchesThaiQueryAnyField(
+          [r.dnNumber, r.customerShortName, r.customerName, r.itemCode, r.itemName, r.qtNumber],
+          q,
+        ),
       )
     }
 

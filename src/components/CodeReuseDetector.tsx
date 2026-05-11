@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import { useCodeReuse } from '@/lib/use-code-reuse'
 import { AlertTriangle, ChevronDown, ChevronUp, Search, Sparkles, ExternalLink, Shuffle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 
 export default function CodeReuseDetector() {
   const router = useRouter()
@@ -21,12 +22,11 @@ export default function CodeReuseDetector() {
   const [expandedCode, setExpandedCode] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return entries
+    if (!search.trim()) return entries
+    // 245: Thai-aware tolerant
     return entries.filter(e =>
-      e.code.toLowerCase().includes(q) ||
-      e.catalogName.toLowerCase().includes(q) ||
-      e.reuseNames.some(r => r.driftName.toLowerCase().includes(q))
+      matchesThaiQueryAnyField([e.code, e.catalogName], search) ||
+      e.reuseNames.some(r => matchesThaiQuery(r.driftName, search))
     )
   }, [entries, search])
 

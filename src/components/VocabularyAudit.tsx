@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react'
 import { useVocabUsage, VOCAB_STATUS_CONFIG, type VocabStatus, type VocabUsageRow } from '@/lib/use-vocab-usage'
 import { exportCSV } from '@/lib/export'
 import { formatDate, formatNumber, cn } from '@/lib/utils'
+import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import {
   Search, ArrowUpDown, ChevronUp, ChevronDown, BookOpen,
   Activity, AlertTriangle, Package, TrendingUp, Filter, FileSpreadsheet,
@@ -47,11 +48,10 @@ export default function VocabularyAudit() {
       }
     }
     if (search.trim()) {
-      const s = search.toLowerCase().trim()
+      // 245: Thai-aware tolerant
       list = list.filter(r =>
-        r.code.toLowerCase().includes(s) ||
-        r.name.toLowerCase().includes(s) ||
-        r.allNames.some(n => n.toLowerCase().includes(s))
+        matchesThaiQueryAnyField([r.code, r.name], search) ||
+        r.allNames.some(n => matchesThaiQuery(n, search))
       )
     }
     // Sort

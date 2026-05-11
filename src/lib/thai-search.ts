@@ -1,12 +1,15 @@
 /**
- * 241 — Thai-aware search helper (tolerant filter)
+ * 241 / 245 — Thai-aware search helper (tolerant filter)
  *
- * Behavior:
- *   - English/digits only → plain substring match (logic เดิม, ไม่กระทบ performance)
- *   - มี Thai char → ลอง substring ก่อน → fallback phonetic match (ซิป↔ซิบ, ฟ↔ฝ)
+ * 4-layer match (each layer is fallback if prior fails):
+ *   1. Plain substring (English/digits/Thai exact)
+ *   2. Phonetic substring (ซิป↔ซิบ, ฟ↔ฝ — Thai only)
+ *   3. Phonetic Levenshtein ≤ 1 (สครับ↔สคับ — Thai, query ≥ 3)
+ *   4. Recursive split-and-match (ปลอกเล็กชมพู → ปลอก+เล็ก+ชมพู — Thai compound, query ≥ 4)
  *
  * Source of truth ของ phonetic classes — ก่อนหน้า logic นี้อยู่ใน use-similar-items.ts
  * แต่ใช้แค่ใน AddItemWizard เท่านั้น · 241 ย้ายมาที่ shared util เพื่อใช้ใน list filters ทั่วระบบ
+ * · 245 เพิ่ม Levenshtein phonetic + split-and-match
  */
 
 /**
@@ -61,36 +64,136 @@ function norm(s: string): string {
   return (s || '').toLowerCase().trim().replace(/\s+/g, ' ')
 }
 
+/** Levenshtein edit distance (2-row optimization) — used for phonetic fuzzy */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0
+  const al = a.length
+  const bl = b.length
+  if (al === 0) return bl
+  if (bl === 0) return al
+  let prev: number[] = Array.from({ length: bl + 1 }, (_, i) => i)
+  let curr: number[] = Array(bl + 1).fill(0)
+  for (let i = 1; i <= al; i++) {
+    curr[0] = i
+    for (let j = 1; j <= bl; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+    }
+    const swap = prev
+    prev = curr
+    curr = swap
+  }
+  return prev[bl]
+}
+
 /**
- * Tolerant filter — เทียบ query กับ haystack (text)
- *
- * Returns true ถ้า:
- *   1. Plain substring match (logic เดิม) — ใช้กับ English/digits เสมอ
- *   2. (Thai only) Phonetic substring fallback — ถ้า substring ไม่เจอ
- *
- * ตัวอย่าง:
- *   matchesThaiQuery("ปลอกหมอน", "ปลอก")     → true (substring)
- *   matchesThaiQuery("ปลอกหมอนซิบ", "ซิป")   → true (phonetic: ซิป↔ซิบ)
- *   matchesThaiQuery("Hotel Slipper", "slipper") → true (substring, no phonetic needed)
- *   matchesThaiQuery("H17", "h17")            → true (substring, English)
+ * 245 — Edit distance between phonetic representations of 2 strings
+ * Useful for catching typos like "สครับ" vs "สคับ" (1-char drop)
  */
-export function matchesThaiQuery(text: string, query: string): boolean {
+export function phoneticDistance(a: string, b: string): number {
+  return levenshtein(phoneticThai(a), phoneticThai(b))
+}
+
+/**
+ * Phonetic Levenshtein substring — sliding window of length qp.length ± maxDist
+ * Returns true if any window has edit distance ≤ maxDist with query phonetic
+ */
+function phoneticFuzzyIncludes(textPhonetic: string, queryPhonetic: string, maxDist = 1): boolean {
+  const qp = queryPhonetic
+  const tp = textPhonetic
+  if (!qp || !tp) return false
+  if (qp.length < 3) return false // guard short queries (avoid false positives)
+  if (tp.length + maxDist < qp.length) return false
+
+  const minLen = Math.max(1, qp.length - maxDist)
+  const maxLen = qp.length + maxDist
+  for (let i = 0; i <= tp.length - minLen; i++) {
+    for (let len = minLen; len <= maxLen; len++) {
+      if (i + len > tp.length) break
+      const window = tp.slice(i, i + len)
+      if (levenshtein(qp, window) <= maxDist) return true
+    }
+  }
+  return false
+}
+
+/**
+ * Core match (layers 1-3, no recursion) — used internally by splitAndMatch
+ * Layer 1: plain substring · Layer 2: phonetic substring · Layer 3: phonetic Lev ≤ 1
+ */
+function matchesThaiQueryCore(text: string, query: string): boolean {
   const q = norm(query)
   if (!q) return true
   const t = norm(text)
   if (!t) return false
 
-  // 1. Plain substring (case insensitive) — handles English, digits, Thai exact
+  // Layer 1: Plain substring
   if (t.includes(q)) return true
 
-  // 2. Phonetic fallback — เฉพาะเมื่อ query มี Thai char (กัน false positive)
+  // Layer 2 & 3: Thai-only fallback
   if (!containsThai(q)) return false
   if (q.length < 2) return false
 
   const qPhonetic = phoneticThai(q)
   const tPhonetic = phoneticThai(t)
   if (!qPhonetic || !tPhonetic) return false
-  return tPhonetic.includes(qPhonetic)
+
+  // Layer 2: phonetic substring
+  if (tPhonetic.includes(qPhonetic)) return true
+
+  // Layer 3: phonetic Levenshtein ≤ 1 (min query 3 chars)
+  if (q.length >= 3 && phoneticFuzzyIncludes(tPhonetic, qPhonetic, 1)) return true
+
+  return false
+}
+
+/**
+ * Layer 4 — Recursive split-and-match for Thai compound words (no space)
+ * เช่น "ปลอกเล็กชมพู" → split เป็น "ปลอก" + "เล็ก" + "ชมพู" → AND ทุก slice
+ *
+ * Guard: query ≥ 4 chars, each slice ≥ 2 chars, depth ≤ 3
+ */
+function splitAndMatch(text: string, query: string, depth = 0): boolean {
+  if (depth >= 3) return false
+  if (query.length < 4) return false
+  for (let i = 2; i <= query.length - 2; i++) {
+    const left = query.slice(0, i)
+    const right = query.slice(i)
+    if (matchesThaiQueryCore(text, left)) {
+      if (matchesThaiQueryCore(text, right)) return true
+      if (splitAndMatch(text, right, depth + 1)) return true
+    }
+  }
+  return false
+}
+
+/**
+ * Tolerant filter — 4-layer match (each is fallback if prior fails)
+ *
+ * Layer 1: Plain substring (English/digits/Thai exact)
+ * Layer 2: Phonetic substring (ซิป↔ซิบ, ฟ↔ฝ)
+ * Layer 3: Phonetic Levenshtein ≤ 1 (สครับ↔สคับ, query ≥ 3)
+ * Layer 4: Recursive split (ปลอกเล็กชมพู, no space, query ≥ 4)
+ *
+ * ตัวอย่าง:
+ *   matchesThaiQuery("ปลอกหมอน", "ปลอก")        → true (L1 substring)
+ *   matchesThaiQuery("ปลอกหมอนซิบ", "ซิป")      → true (L2 phonetic)
+ *   matchesThaiQuery("ผ้าสครับ", "สคับ")         → true (L3 Lev 1)
+ *   matchesThaiQuery("ปลอกหมอนเล็ก ชมพู", "ปลอกเล็ก") → true (L4 split)
+ *   matchesThaiQuery("Hotel Slipper", "slipper") → true (L1, English)
+ */
+export function matchesThaiQuery(text: string, query: string): boolean {
+  if (matchesThaiQueryCore(text, query)) return true
+
+  // Layer 4: Recursive split for Thai compounds (no space, ≥ 4 chars)
+  const q = norm(query)
+  if (containsThai(q) && q.length >= 4) {
+    const compact = q.replace(/\s+/g, '')
+    if (compact.length >= 4) {
+      return splitAndMatch(text, compact)
+    }
+  }
+  return false
 }
 
 /**

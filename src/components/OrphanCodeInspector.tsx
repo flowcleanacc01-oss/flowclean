@@ -18,6 +18,7 @@ import { useStore } from '@/lib/store'
 import { useOrphanCodes, type OrphanEntry } from '@/lib/use-orphan-codes'
 import { AlertTriangle, ArrowRight, Plus, Trash2, Search, Sparkles, ChevronDown, ChevronUp, Ghost } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 
 interface SuggestedTarget {
   code: string
@@ -81,14 +82,13 @@ export default function OrphanCodeInspector() {
     }
   }
 
-  // Filter by search
+  // Filter by search — 245: Thai-aware tolerant
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return orphans
+    if (!search.trim()) return orphans
     return orphans.filter(e =>
-      e.code.toLowerCase().includes(q) ||
-      e.names.some(n => n.toLowerCase().includes(q)) ||
-      e.customers.some(c => c.shortName.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
+      matchesThaiQuery(e.code, search) ||
+      e.names.some(n => matchesThaiQuery(n, search)) ||
+      e.customers.some(c => matchesThaiQueryAnyField([c.shortName, c.name], search))
     )
   }, [orphans, search])
 

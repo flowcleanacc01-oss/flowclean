@@ -6,6 +6,7 @@ import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { tabularNumberNav } from '@/lib/modal-nav'
 import { getCustomerEnabledCodes } from '@/lib/customer-pricing'
 import { highlightText } from '@/lib/highlight'
+import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import {
   CHECKLIST_TYPE_CONFIG, CHECKLIST_STATUS_CONFIG,
   type ChecklistType, type ChecklistStatus, type ChecklistItem,
@@ -124,9 +125,9 @@ export default function ChecklistPage() {
     return checklists.filter(c => {
       if (typeFilter !== 'all' && c.type !== typeFilter) return false
       if (search) {
-        const q = search.toLowerCase()
+        // 245: Thai-aware tolerant
         const custName = getCustomer(c.customerId)?.name || ''
-        if (!c.checklistNumber.toLowerCase().includes(q) && !custName.toLowerCase().includes(q)) return false
+        if (!matchesThaiQueryAnyField([c.checklistNumber, custName], search)) return false
       }
       return true
     }).sort((a, b) => b.date.localeCompare(a.date))

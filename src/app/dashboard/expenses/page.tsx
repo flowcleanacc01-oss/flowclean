@@ -6,6 +6,7 @@ import { canViewExpenses } from '@/lib/permissions'
 import { formatCurrency, formatDate, todayISO, sanitizeNumber, cn, scrollToActiveRow } from '@/lib/utils'
 import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
+import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type Expense } from '@/types'
 import Modal from '@/components/Modal'
 import {
@@ -31,8 +32,8 @@ export default function ExpensesPage() {
       .filter(e => {
         if (!e.date.startsWith(month)) return false
         if (search) {
-          const q = search.toLowerCase()
-          const textMatch = e.description.toLowerCase().includes(q) || e.reference.toLowerCase().includes(q)
+          // 245: Thai-aware tolerant
+          const textMatch = matchesThaiQueryAnyField([e.description, e.reference], search)
           // 162: also match by amount
           const amountMatch = matchesAmountQuery(search, [e.amount])
           return textMatch || amountMatch
