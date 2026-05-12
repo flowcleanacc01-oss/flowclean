@@ -318,7 +318,25 @@ export default function DeliveryPage() {
     }
     const items: DeliveryNoteItem[] = Object.entries(qtyMap)
       .map(([code, quantity]) => ({ code, quantity, isClaim: false, displayName: 'ค่าบริการซัก ' + (itemNameMap[code] || code) }))
+
+    // 253: Sort by accepted QT order (source of truth) — fallback catalog order
+    // เดิม: sort ตาม linenCatalog ทำให้ลำดับใน SD ไม่ตรงกับ QT ที่ user reorder
+    const latestQT = quotations
+      .filter(q => q.customerId === selCustomerId && q.status === 'accepted')
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0]
+    const qtOrderMap: Record<string, number> = {}
+    if (latestQT) {
+      latestQT.items.forEach((it, idx) => { qtOrderMap[it.code] = idx })
+    }
     items.sort((a, b) => {
+      const qa = qtOrderMap[a.code]
+      const qb = qtOrderMap[b.code]
+      // Both in QT → QT order
+      if (qa !== undefined && qb !== undefined) return qa - qb
+      // Only one in QT → QT items first
+      if (qa !== undefined) return -1
+      if (qb !== undefined) return 1
+      // Neither in QT → fallback catalog order
       const ai = linenCatalog.findIndex(i => i.code === a.code)
       const bi = linenCatalog.findIndex(i => i.code === b.code)
       return ai - bi
