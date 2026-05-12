@@ -39,12 +39,14 @@ import {
 } from '@/lib/linen-vocabulary'
 import { generateCodeFromFacets, generateNameFromFacets, buildFacetKey, findItemByFacetKey } from '@/lib/facet-generators'
 
-// Type groups for picker UI (Step 1 faceted)
+// Type groups for picker UI (Step 1 faceted) · 255: เพิ่ม 7 types ใหม่
 const TYPE_GROUPS: Array<{ label: string; types: string[] }> = [
   { label: 'เครื่องนอน', types: ['bed_sheet', 'massage_bed_sheet', 'pillow_case', 'pillow', 'duvet_cover', 'duvet_insert', 'mattress_pad', 'topper', 'top_sheet', 'bed_skirt', 'blanket', 'bed_cover'] },
   { label: 'ผ้าขนหนู / อาบน้ำ', types: ['towel', 'foot_massage_towel', 'bath_mat', 'bathrobe', 'pool_towel'] },
   { label: 'ผ้าคลุม / เฟอร์นิเจอร์', types: ['sofa_cover', 'chair_cover', 'table_cover', 'table_cloth', 'curtain', 'rug'] },
-  { label: 'เครื่องแบบ / ชุด', types: ['uniform_top', 'uniform_bottom', 'uniform_dress', 'apron', 'spa_cover', 'spa_uniform', 'staff_uniform'] },
+  { label: 'เครื่องแบบพนักงาน', types: ['uniform_top', 'uniform_bottom', 'uniform_dress', 'apron', 'spa_cover', 'spa_uniform', 'staff_uniform'] },
+  { label: 'เสื้อผ้าทั่วไป', types: ['shirt', 'pants'] },
+  { label: 'ผ้าใช้งาน / Utility', types: ['cleaning_cloth', 'bag', 'fabric_roll', 'salon_cloth', 'lamp_cover'] },
   { label: 'อุปกรณ์เสริม', types: ['napkin', 'placemat', 'slipper', 'sock', 'headband', 'other'] },
 ]
 

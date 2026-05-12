@@ -62,6 +62,17 @@ export const TYPE_OPTIONS: FacetOption[] = [
   { value: 'spa_uniform',         labelTh: 'ชุดสปา',            labelEn: 'Spa Uniform',        codeShort: 'SPU' },
   { value: 'staff_uniform',       labelTh: 'เครื่องแบบพนักงาน',     labelEn: 'Staff Uniform',      codeShort: 'UNI' },
 
+  // ── Generic Apparel (255: ไม่ใช่เครื่องแบบพนักงาน) ────────
+  { value: 'shirt',               labelTh: 'เสื้อ (ทั่วไป)',         labelEn: 'Shirt (Generic)',    codeShort: 'SHT' },
+  { value: 'pants',               labelTh: 'กางเกง (ทั่วไป)',       labelEn: 'Pants (Generic)',    codeShort: 'PNT' },
+
+  // ── Specialty / Utility (255: คลุม catalog edge cases) ───
+  { value: 'cleaning_cloth',      labelTh: 'ผ้าทำสะอาด',         labelEn: 'Cleaning Cloth',     codeShort: 'CCL' },
+  { value: 'bag',                 labelTh: 'ถุง',                labelEn: 'Bag',                codeShort: 'BAG' },
+  { value: 'fabric_roll',         labelTh: 'ผ้าหลา/โดยเมตร',      labelEn: 'Fabric Roll',        codeShort: 'FBR' },
+  { value: 'salon_cloth',         labelTh: 'ผ้าซาลอน/ทำเล็บ',    labelEn: 'Salon Cloth',        codeShort: 'SLN' },
+  { value: 'lamp_cover',          labelTh: 'โป๊ะไฟผ้า',           labelEn: 'Lamp Cover',         codeShort: 'LMP' },
+
   // ── Accessories ─────────────────────────────────────────
   { value: 'napkin',              labelTh: 'ผ้าเช็ดปาก',          labelEn: 'Napkin',             codeShort: 'NPK' },
   { value: 'placemat',            labelTh: 'ผ้ารองจาน',          labelEn: 'Placemat',           codeShort: 'PLM' },
@@ -199,6 +210,42 @@ export const APPLICATION_OPTIONS_BY_TYPE: Record<string, FacetOption[]> = {
   bed_skirt: [
     { value: 'small',         labelTh: 'เล็ก',             labelEn: 'Small',        codeShort: 'S' },
     { value: 'large',         labelTh: 'ใหญ่',             labelEn: 'Large',        codeShort: 'L' },
+  ],
+  // 255: Generic apparel (ไม่ใช่เครื่องแบบพนักงาน)
+  shirt: [
+    { value: 'standard',      labelTh: 'มาตรฐาน',         labelEn: 'Standard',     codeShort: 'STD' },
+    { value: 'short_sleeve',  labelTh: 'แขนสั้น',          labelEn: 'Short Sleeve', codeShort: 'SHT' },
+    { value: 'long_sleeve',   labelTh: 'แขนยาว',          labelEn: 'Long Sleeve',  codeShort: 'LNG' },
+    { value: 'inner',         labelTh: 'ตัวใน/ชั้นใน',       labelEn: 'Inner',        codeShort: 'INN' },
+  ],
+  pants: [
+    { value: 'long',          labelTh: 'ขายาว',           labelEn: 'Long',         codeShort: 'LNG' },
+    { value: 'short',         labelTh: 'ขาสั้น',           labelEn: 'Short',        codeShort: 'SHT' },
+    { value: 'medium',        labelTh: 'กลาง',            labelEn: 'Medium',       codeShort: 'MED' },
+    { value: 'outer',         labelTh: 'นอก',              labelEn: 'Outer',        codeShort: 'OUT' },
+    { value: 'inner',         labelTh: 'ตัวใน/ชั้นใน',       labelEn: 'Inner',        codeShort: 'INN' },
+  ],
+  // 255: Specialty / utility
+  cleaning_cloth: [
+    { value: 'rag',           labelTh: 'ขี้ริ้ว',            labelEn: 'Rag',          codeShort: 'RAG' },
+    { value: 'mop',           labelTh: 'ถูพื้น',            labelEn: 'Mop',          codeShort: 'MOP' },
+    { value: 'dishcloth',     labelTh: 'เช็ดจาน',          labelEn: 'Dishcloth',    codeShort: 'DSH' },
+  ],
+  bag: [
+    { value: 'cloth_bag',     labelTh: 'ผ้าถุง',            labelEn: 'Cloth Bag',    codeShort: 'CB' },
+    { value: 'tote',          labelTh: 'ถุงผ้า',            labelEn: 'Tote',         codeShort: 'TOT' },
+    { value: 'saline_cover',  labelTh: 'คลุมน้ำเกลือ',      labelEn: 'Saline Cover', codeShort: 'SAL' },
+  ],
+  fabric_roll: [
+    { value: 'by_meter',      labelTh: 'โดยเมตร',         labelEn: 'By Meter',     codeShort: 'MTR' },
+    { value: 'by_yard',       labelTh: 'โดยหลา',          labelEn: 'By Yard',      codeShort: 'YRD' },
+    { value: 'by_kg',         labelTh: 'โดยกิโลกรัม',      labelEn: 'By Kg',        codeShort: 'KG' },
+  ],
+  salon_cloth: [
+    { value: 'nail',          labelTh: 'ทำเล็บ',           labelEn: 'Nail',         codeShort: 'NL' },
+    { value: 'short_band',    labelTh: 'คาดสั้น',         labelEn: 'Short Band',   codeShort: 'SB' },
+    { value: 'hair_cover',    labelTh: 'คลุมซอย/ผม',     labelEn: 'Hair Cover',   codeShort: 'HC' },
+    { value: 'medium',        labelTh: 'ซาลอนกลาง M',  labelEn: 'Salon M',      codeShort: 'M' },
   ],
 }
 
@@ -384,8 +431,8 @@ export function getSizePresetsForType(type: string): FacetOption[] {
   if (type === 'pillow_case' || type === 'pillow') {
     return PILLOW_SIZE_PRESETS
   }
-  // Uniforms — S/M/L/XL/2XL/3XL
-  if (type === 'uniform_top' || type === 'uniform_bottom' || type === 'uniform_dress' || type === 'apron' || type === 'spa_uniform' || type === 'staff_uniform' || type === 'bathrobe') {
+  // Uniforms + generic apparel — S/M/L/XL/2XL/3XL · 255: + shirt/pants
+  if (type === 'uniform_top' || type === 'uniform_bottom' || type === 'uniform_dress' || type === 'apron' || type === 'spa_uniform' || type === 'staff_uniform' || type === 'bathrobe' || type === 'shirt' || type === 'pants') {
     return UNIFORM_SIZE_PRESETS
   }
   return GENERIC_SIZE_PRESETS
