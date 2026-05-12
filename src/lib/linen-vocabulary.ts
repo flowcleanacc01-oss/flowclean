@@ -437,3 +437,102 @@ export function getSizePresetsForType(type: string): FacetOption[] {
   }
   return GENERIC_SIZE_PRESETS
 }
+
+// ════════════════════════════════════════════════════════════════
+// 255 Phase 1.b — Editable Facet Vocabulary (DB-backed JSON)
+// Store loads from `app_settings` (key='facet_vocab') · seed with
+// DEFAULT_FACET_VOCAB ถ้ายังไม่มี · Admin UI (Phase 2) แก้ผ่าน store
+// ════════════════════════════════════════════════════════════════
+
+export interface FacetVocabGroup {
+  key: string
+  labelTh: string
+  labelEn?: string
+  typeKeys: string[]
+}
+
+export type SizePresetFamily = 'bed' | 'pillow' | 'towel' | 'uniform' | 'generic'
+
+export interface FacetVocab {
+  /** Schema version — bump on breaking changes */
+  version: number
+  /** Type groups for Wizard Step 1 picker (ordered) */
+  groups: FacetVocabGroup[]
+  /** All type options (ordered globally) */
+  types: FacetOption[]
+  /** Applications per type (subtype options) */
+  applicationsByType: Record<string, FacetOption[]>
+  colors: FacetOption[]
+  weights: FacetOption[]
+  materials: FacetOption[]
+  patterns: FacetOption[]
+  treatments: FacetOption[]
+  sizes: Record<SizePresetFamily, FacetOption[]>
+  sizeUnits: FacetOption[]
+  /** Which size family each type uses (admin can edit). Default: convention-based */
+  sizePresetByType: Record<string, SizePresetFamily>
+}
+
+/** Default size family per type — admin can override in DB */
+const DEFAULT_SIZE_PRESET_BY_TYPE: Record<string, SizePresetFamily> = {
+  // Towel family
+  towel: 'towel', foot_massage_towel: 'towel', pool_towel: 'towel',
+  bath_mat: 'towel', napkin: 'towel', placemat: 'towel',
+  // Bed family
+  bed_sheet: 'bed', massage_bed_sheet: 'bed', duvet_cover: 'bed',
+  duvet_insert: 'bed', mattress_pad: 'bed', topper: 'bed', top_sheet: 'bed',
+  bed_cover: 'bed', blanket: 'bed', spa_cover: 'bed',
+  // Pillow
+  pillow_case: 'pillow', pillow: 'pillow',
+  // Uniforms + generic apparel
+  uniform_top: 'uniform', uniform_bottom: 'uniform', uniform_dress: 'uniform',
+  apron: 'uniform', spa_uniform: 'uniform', staff_uniform: 'uniform',
+  bathrobe: 'uniform', shirt: 'uniform', pants: 'uniform',
+}
+
+/**
+ * Default Type groups for Wizard Step 1 picker.
+ * (Source of truth ก่อน admin edit ผ่าน UI)
+ */
+export const DEFAULT_GROUPS: FacetVocabGroup[] = [
+  { key: 'bed', labelTh: 'เครื่องนอน', typeKeys: ['bed_sheet', 'massage_bed_sheet', 'pillow_case', 'pillow', 'duvet_cover', 'duvet_insert', 'mattress_pad', 'topper', 'top_sheet', 'bed_skirt', 'blanket', 'bed_cover'] },
+  { key: 'towel', labelTh: 'ผ้าขนหนู / อาบน้ำ', typeKeys: ['towel', 'foot_massage_towel', 'bath_mat', 'bathrobe', 'pool_towel'] },
+  { key: 'furniture', labelTh: 'ผ้าคลุม / เฟอร์นิเจอร์', typeKeys: ['sofa_cover', 'chair_cover', 'table_cover', 'table_cloth', 'curtain', 'rug'] },
+  { key: 'uniform', labelTh: 'เครื่องแบบพนักงาน', typeKeys: ['uniform_top', 'uniform_bottom', 'uniform_dress', 'apron', 'spa_cover', 'spa_uniform', 'staff_uniform'] },
+  { key: 'apparel', labelTh: 'เสื้อผ้าทั่วไป', typeKeys: ['shirt', 'pants'] },
+  { key: 'utility', labelTh: 'ผ้าใช้งาน / Utility', typeKeys: ['cleaning_cloth', 'bag', 'fabric_roll', 'salon_cloth', 'lamp_cover'] },
+  { key: 'misc', labelTh: 'อุปกรณ์เสริม', typeKeys: ['napkin', 'placemat', 'slipper', 'sock', 'headband', 'other'] },
+]
+
+/** DEFAULT_FACET_VOCAB — snapshot ของ hardcoded vocab, ใช้ seed DB + fallback */
+export const DEFAULT_FACET_VOCAB: FacetVocab = {
+  version: 1,
+  groups: DEFAULT_GROUPS,
+  types: TYPE_OPTIONS,
+  applicationsByType: APPLICATION_OPTIONS_BY_TYPE,
+  colors: COLOR_OPTIONS,
+  weights: WEIGHT_OPTIONS,
+  materials: MATERIAL_OPTIONS,
+  patterns: PATTERN_OPTIONS,
+  treatments: TREATMENT_OPTIONS,
+  sizes: {
+    bed: BED_SIZE_PRESETS,
+    pillow: PILLOW_SIZE_PRESETS,
+    towel: TOWEL_SIZE_PRESETS,
+    uniform: UNIFORM_SIZE_PRESETS,
+    generic: GENERIC_SIZE_PRESETS,
+  },
+  sizeUnits: [...SIZE_UNIT_OPTIONS],
+  sizePresetByType: DEFAULT_SIZE_PRESET_BY_TYPE,
+}
+
+/** Resolve size presets from a (possibly admin-edited) FacetVocab */
+export function getSizePresetsFromVocab(vocab: FacetVocab, type: string): FacetOption[] {
+  const family = vocab.sizePresetByType[type] || 'generic'
+  return vocab.sizes[family] || vocab.sizes.generic || []
+}
+
+/** Resolve applications from a FacetVocab */
+export function getApplicationsFromVocab(vocab: FacetVocab, type: string): FacetOption[] {
+  return vocab.applicationsByType[type] || []
+}

@@ -34,21 +34,10 @@ import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
 import {
-  TYPE_OPTIONS, COLOR_OPTIONS, WEIGHT_OPTIONS, MATERIAL_OPTIONS, PATTERN_OPTIONS,
-  TREATMENT_OPTIONS, getApplicationsForType, getSizePresetsForType,
+  type FacetVocab,
+  getApplicationsFromVocab, getSizePresetsFromVocab,
 } from '@/lib/linen-vocabulary'
 import { generateCodeFromFacets, generateNameFromFacets, buildFacetKey, findItemByFacetKey } from '@/lib/facet-generators'
-
-// Type groups for picker UI (Step 1 faceted) · 255: เพิ่ม 7 types ใหม่
-const TYPE_GROUPS: Array<{ label: string; types: string[] }> = [
-  { label: 'เครื่องนอน', types: ['bed_sheet', 'massage_bed_sheet', 'pillow_case', 'pillow', 'duvet_cover', 'duvet_insert', 'mattress_pad', 'topper', 'top_sheet', 'bed_skirt', 'blanket', 'bed_cover'] },
-  { label: 'ผ้าขนหนู / อาบน้ำ', types: ['towel', 'foot_massage_towel', 'bath_mat', 'bathrobe', 'pool_towel'] },
-  { label: 'ผ้าคลุม / เฟอร์นิเจอร์', types: ['sofa_cover', 'chair_cover', 'table_cover', 'table_cloth', 'curtain', 'rug'] },
-  { label: 'เครื่องแบบพนักงาน', types: ['uniform_top', 'uniform_bottom', 'uniform_dress', 'apron', 'spa_cover', 'spa_uniform', 'staff_uniform'] },
-  { label: 'เสื้อผ้าทั่วไป', types: ['shirt', 'pants'] },
-  { label: 'ผ้าใช้งาน / Utility', types: ['cleaning_cloth', 'bag', 'fabric_roll', 'salon_cloth', 'lamp_cover'] },
-  { label: 'อุปกรณ์เสริม', types: ['napkin', 'placemat', 'slipper', 'sock', 'headband', 'other'] },
-]
 
 export type WizardContext = 'items' | 'qt' | 'lf' | 'sd'
 
@@ -89,6 +78,7 @@ export default function AddItemWizard({
     linenCatalog, addLinenItem, linenCategories,
     customers, quotations, updateQuotation,
     linenForms, deliveryNotes,
+    facetVocab, // 255 Phase 1.b
   } = useStore()
 
   // ───── Mode toggle (247) ────────────────────────────────
@@ -387,12 +377,12 @@ export default function AddItemWizard({
           )}
 
           <div className="space-y-3">
-            {TYPE_GROUPS.map(g => (
-              <div key={g.label}>
-                <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-1.5">{g.label}</div>
+            {facetVocab.groups.map(g => (
+              <div key={g.key}>
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold mb-1.5">{g.labelTh}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                  {g.types.map(t => {
-                    const opt = TYPE_OPTIONS.find(o => o.value === t)
+                  {g.typeKeys.map(t => {
+                    const opt = facetVocab.types.find(o => o.value === t)
                     if (!opt) return null
                     const selected = facets.type === t
                     return (
@@ -432,6 +422,7 @@ export default function AddItemWizard({
 
       {mode === 'faceted' && step === 2 && (
         <FacetedFacetsStep
+          vocab={facetVocab}
           facets={facets}
           setFacets={setFacets}
           customSize={customSize}
@@ -452,6 +443,7 @@ export default function AddItemWizard({
 
       {mode === 'faceted' && step === 3 && (
         <FacetedConfirmStep
+          vocab={facetVocab}
           facets={facets}
           facetCode={facetCode}
           facetName={facetName}
@@ -901,6 +893,7 @@ function FacetPicker({ label, value, options, onChange, required, hint }: FacetP
 }
 
 interface FacetedFacetsStepProps {
+  vocab: FacetVocab
   facets: LinenFacets
   setFacets: (f: LinenFacets) => void
   customSize: string
@@ -915,12 +908,12 @@ interface FacetedFacetsStepProps {
 }
 
 function FacetedFacetsStep({
-  facets, setFacets, customSize, setCustomSize, facetCode, facetName,
+  vocab, facets, setFacets, customSize, setCustomSize, facetCode, facetName,
   facetDup, codeUnique, onBack, onNext, error,
 }: FacetedFacetsStepProps) {
-  const applications = getApplicationsForType(facets.type)
-  const sizes = getSizePresetsForType(facets.type)
-  const typeLabel = TYPE_OPTIONS.find(o => o.value === facets.type)?.labelTh || facets.type
+  const applications = getApplicationsFromVocab(vocab, facets.type)
+  const sizes = getSizePresetsFromVocab(vocab, facets.type)
+  const typeLabel = vocab.types.find(o => o.value === facets.type)?.labelTh || facets.type
 
   const update = (patch: Partial<LinenFacets>) => setFacets({ ...facets, ...patch })
 
@@ -973,21 +966,21 @@ function FacetedFacetsStep({
         </div>
       </div>
 
-      <FacetPicker label="สี" options={COLOR_OPTIONS} value={facets.color}
+      <FacetPicker label="สี" options={vocab.colors} value={facets.color}
         onChange={v => update({ color: v })} />
 
-      <FacetPicker label="พิเศษ (treatment)" options={TREATMENT_OPTIONS} value={facets.treatment}
+      <FacetPicker label="พิเศษ (treatment)" options={vocab.treatments} value={facets.treatment}
         onChange={v => update({ treatment: v })}
         hint="เช่น น้ำมัน (spa)" />
 
-      <FacetPicker label="ลาย" options={PATTERN_OPTIONS} value={facets.pattern}
+      <FacetPicker label="ลาย" options={vocab.patterns} value={facets.pattern}
         onChange={v => update({ pattern: v })} />
 
-      <FacetPicker label="วัสดุ" options={MATERIAL_OPTIONS} value={facets.material}
+      <FacetPicker label="วัสดุ" options={vocab.materials} value={facets.material}
         onChange={v => update({ material: v })} />
 
       {(facets.type === 'towel' || facets.type === 'foot_massage_towel' || facets.type === 'bath_mat') && (
-        <FacetPicker label="น้ำหนัก" options={WEIGHT_OPTIONS} value={facets.weight}
+        <FacetPicker label="น้ำหนัก" options={vocab.weights} value={facets.weight}
           onChange={v => update({ weight: v as LinenFacets['weight'] })} />
       )}
 
@@ -1071,39 +1064,40 @@ interface FacetedConfirmStepProps {
   onConfirm: () => void
   onUseDup: () => void
   error: string
+  vocab: FacetVocab
 }
 
 function FacetedConfirmStep({
-  facets, facetCode, facetName, facetNameEn, facetDup, unit, setUnit,
+  vocab, facets, facetCode, facetName, facetNameEn, facetDup, unit, setUnit,
   defaultPrice, setDefaultPrice, context, customer, activeQT,
   addToQT, setAddToQT, customerPrice, setCustomerPrice,
   onBack, onConfirm, onUseDup, error,
 }: FacetedConfirmStepProps) {
-  const typeLabel = TYPE_OPTIONS.find(o => o.value === facets.type)?.labelTh || facets.type
+  const typeLabel = vocab.types.find(o => o.value === facets.type)?.labelTh || facets.type
   const facetSummary: Array<[string, string]> = []
   if (facets.application) {
-    const app = getApplicationsForType(facets.type).find(o => o.value === facets.application)
+    const app = getApplicationsFromVocab(vocab, facets.type).find(o => o.value === facets.application)
     if (app) facetSummary.push(['ลักษณะ', app.labelTh])
   }
   if (facets.size) facetSummary.push(['ขนาด', facets.size])
   if (facets.color) {
-    const c = COLOR_OPTIONS.find(o => o.value === facets.color)
+    const c = vocab.colors.find(o => o.value === facets.color)
     if (c) facetSummary.push(['สี', c.labelTh])
   }
   if (facets.treatment && facets.treatment !== 'none') {
-    const t = TREATMENT_OPTIONS.find(o => o.value === facets.treatment)
+    const t = vocab.treatments.find(o => o.value === facets.treatment)
     if (t) facetSummary.push(['พิเศษ', t.labelTh])
   }
   if (facets.pattern) {
-    const p = PATTERN_OPTIONS.find(o => o.value === facets.pattern)
+    const p = vocab.patterns.find(o => o.value === facets.pattern)
     if (p) facetSummary.push(['ลาย', p.labelTh])
   }
   if (facets.material) {
-    const m = MATERIAL_OPTIONS.find(o => o.value === facets.material)
+    const m = vocab.materials.find(o => o.value === facets.material)
     if (m) facetSummary.push(['วัสดุ', m.labelTh])
   }
   if (facets.weight) {
-    const w = WEIGHT_OPTIONS.find(o => o.value === facets.weight)
+    const w = vocab.weights.find(o => o.value === facets.weight)
     if (w) facetSummary.push(['น้ำหนัก', w.labelTh])
   }
   if (facets.variant) facetSummary.push(['หมายเหตุ', facets.variant])

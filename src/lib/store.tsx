@@ -22,6 +22,8 @@ import {
 } from './utils'
 import { verifyPassword, hashPassword, createSession, getSession, clearSession } from './auth'
 import * as db from './supabase-service'
+import { DEFAULT_FACET_VOCAB, type FacetVocab } from './linen-vocabulary'
+import { getOrSeedFacetVocab, saveFacetVocab } from './facet-vocab-service'
 
 // ============================================================
 // Store Interface
@@ -133,6 +135,11 @@ interface StoreContextType {
   updateCarryOverAdjustment: (id: string, updates: Partial<Omit<CarryOverAdjustment, 'id' | 'createdAt' | 'createdBy'>>, changeNote?: string) => void
   deleteCarryOverAdjustment: (id: string) => void
 
+  // 255: Facet Vocabulary (Wizard 2.0 — admin-editable)
+  facetVocab: FacetVocab
+  updateFacetVocab: (vocab: FacetVocab) => Promise<void>
+  resetFacetVocab: () => Promise<void>
+
   // Computed helpers
   getCarryOver: (customerId: string, beforeDate: string, mode?: CarryOverMode, includeHidden?: boolean) => Record<string, number>
   getDiscrepancies: (formId: string) => Record<string, number>
@@ -190,6 +197,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [customerCategories, setCustomerCategories] = useState<CustomerCategoryDef[]>(DEFAULT_CUSTOMER_CATEGORIES)
   const [checklists, setChecklists] = useState<ProductChecklist[]>([])
   const [carryOverAdjustments, setCarryOverAdjustments] = useState<CarryOverAdjustment[]>([])
+  // 255: Facet Vocabulary — start with defaults, replaced after DB load
+  const [facetVocab, setFacetVocab] = useState<FacetVocab>(DEFAULT_FACET_VOCAB)
   const [loaded, setLoaded] = useState(false)
   const seeded = useRef(false)
   const currentUserRef = useRef<AppUser | null>(null)
@@ -273,6 +282,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           isActive: true,
         })
       }
+      // 255 Phase 1.b: load facet vocab from DB (seed if missing)
+      try {
+        const vocab = await getOrSeedFacetVocab()
+        if (!cancelled) setFacetVocab(vocab)
+      } catch (err) {
+        console.error('[facet vocab] load failed (using defaults):', err)
+      }
+
       if (!cancelled) setLoaded(true)
     }
 
@@ -901,6 +918,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // ---- Computed Helpers ----
 
+  // 255 Phase 1.b: Facet Vocabulary update / reset
+  const updateFacetVocab = useCallback(async (vocab: FacetVocab) => {
+    setFacetVocab(vocab)
+    try {
+      await saveFacetVocab(vocab)
+    } catch (err) {
+      console.error('[facet vocab] save failed:', err)
+      throw err
+    }
+  }, [])
+
+  const resetFacetVocab = useCallback(async () => {
+    setFacetVocab(DEFAULT_FACET_VOCAB)
+    try {
+      await saveFacetVocab(DEFAULT_FACET_VOCAB)
+    } catch (err) {
+      console.error('[facet vocab] reset failed:', err)
+      throw err
+    }
+  }, [])
+
   /**
    * คำนวณ carry-over (ค้าง/คืน) สะสมของลูกค้า ก่อนวันที่ที่กำหนด
    *
@@ -1035,6 +1073,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       customerCategories, addCustomerCategory, updateCustomerCategory, deleteCustomerCategory, getCustomerCategoryLabel,
       checklists, addChecklist, updateChecklist, updateChecklistStatus, deleteChecklist,
       carryOverAdjustments, addCarryOverAdjustment, updateCarryOverAdjustment, deleteCarryOverAdjustment,
+      facetVocab, updateFacetVocab, resetFacetVocab,
       getCarryOver, getDiscrepancies,
     }}>
       {children}

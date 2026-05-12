@@ -9,6 +9,7 @@ const ALLOWED_TABLES = new Set([
   'carry_over_adjustments',
   'receipts', // 152 fix: ใบเสร็จรับเงิน (Feature 148)
   'legacy_documents', // Feature 161: archive of old NeoSME documents
+  'app_settings', // 255: Facet vocabulary (admin-editable)
 ])
 
 interface DbRequest {
