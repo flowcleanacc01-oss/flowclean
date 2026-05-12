@@ -31,9 +31,10 @@ import { useCodeReuse } from '@/lib/use-code-reuse'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { tabularNumberNav, blockNumberArrowKeys } from '@/lib/modal-nav'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
-import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle, Shuffle, Ghost } from 'lucide-react'
+import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle, Shuffle, Ghost, Tags } from 'lucide-react'
+import FacetVocabEditor from '@/components/FacetVocabEditor'
 
-type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse' | 'ghost'
+type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse' | 'ghost' | 'facets'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
 type SortDir = 'asc' | 'desc'
 
@@ -73,7 +74,7 @@ export default function ItemsPage() {
   // 240.3: เพิ่ม tab 'reuse' — Code Reuse Detector
   // 242: เพิ่ม tab 'ghost' — Ghost LF Cleanup (per-LF row.code rewrite ไม่กระทบ catalog)
   const [tab, setTab] = useTabUrlSync<TabKey>(
-    ['hygiene', 'items', 'categories', 'merge', 'sync', 'vocab', 'orphan', 'reuse', 'ghost'] as const,
+    ['hygiene', 'items', 'categories', 'merge', 'sync', 'vocab', 'orphan', 'reuse', 'ghost', 'facets'] as const,
     'items',
   )
   // 180: scroll to first <mark> when arriving from global search with ?q=
@@ -350,6 +351,7 @@ export default function ItemsPage() {
       { key: 'reuse' as TabKey, label: 'Reuse Detector', badge: reuseCodeCount, icon: <Shuffle className="w-3.5 h-3.5" /> },
       { key: 'ghost' as TabKey, label: 'Ghost LF Cleanup', icon: <Ghost className="w-3.5 h-3.5" /> },
       { key: 'vocab' as TabKey, label: 'Vocabulary Audit', icon: <BookOpen className="w-3.5 h-3.5" /> },
+      { key: 'facets' as TabKey, label: 'Facet Picker Editor', icon: <Tags className="w-3.5 h-3.5" /> },
     ] : []),
   ]
 
@@ -919,6 +921,11 @@ export default function ItemsPage() {
       {/* 205: Vocabulary Audit tab — usage frequency across QT/LF/DN */}
       {tab === 'vocab' && (
         <VocabularyAudit />
+      )}
+
+      {/* 255 Phase 2: Facet Picker Editor — edit DB-backed vocab */}
+      {tab === 'facets' && (
+        <FacetVocabEditor />
       )}
 
       {/* 207: Universal Add-Item Wizard */}
