@@ -124,9 +124,10 @@ export default function AddItemWizard({
   }, [open, initialName, context])
 
   // ───── Faceted derived (247) ────────────────────────────
-  const facetCode = useMemo(() => generateCodeFromFacets(facets), [facets])
-  const facetName = useMemo(() => generateNameFromFacets(facets, 'th'), [facets])
-  const facetNameEn = useMemo(() => generateNameFromFacets(facets, 'en'), [facets])
+  // 256: pass store-loaded vocab → admin edits propagate to new code/name generation
+  const facetCode = useMemo(() => generateCodeFromFacets(facets, facetVocab), [facets, facetVocab])
+  const facetName = useMemo(() => generateNameFromFacets(facets, 'th', facetVocab), [facets, facetVocab])
+  const facetNameEn = useMemo(() => generateNameFromFacets(facets, 'en', facetVocab), [facets, facetVocab])
   const facetKey = useMemo(() => buildFacetKey(facets), [facets])
   const facetDup = useMemo(
     () => findItemByFacetKey(linenCatalog, facets),

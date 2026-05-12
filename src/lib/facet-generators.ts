@@ -8,13 +8,11 @@
  */
 import type { LinenFacets } from '@/types'
 import {
-  TYPE_OPTIONS, COLOR_OPTIONS, WEIGHT_OPTIONS, MATERIAL_OPTIONS, PATTERN_OPTIONS,
-  BED_SIZE_PRESETS, PILLOW_SIZE_PRESETS, GENERIC_SIZE_PRESETS,
-  TOWEL_SIZE_PRESETS, UNIFORM_SIZE_PRESETS, TREATMENT_OPTIONS,
-  APPLICATION_OPTIONS_BY_TYPE, SIZE_UNIT_OPTIONS,
-  getSizePresetsForType,
+  DEFAULT_FACET_VOCAB,
+  getSizePresetsFromVocab,
+  getApplicationsFromVocab,
 } from './linen-vocabulary'
-import type { FacetOption } from './linen-vocabulary'
+import type { FacetOption, FacetVocab } from './linen-vocabulary'
 
 const FACET_KEYS_ORDERED: (keyof LinenFacets)[] = [
   'type', 'application', 'size', 'sizeUnit', 'color', 'weight', 'material', 'pattern', 'treatment', 'variant',
@@ -41,22 +39,15 @@ function findOpt(list: FacetOption[], value: string | null | undefined): FacetOp
   return list.find(o => o.value === value) || null
 }
 
-/** Get application option for type+value */
-function findApplicationOpt(type: string, value: string | null | undefined): FacetOption | null {
+/** Get size option (preset by type) — 256: uses vocab.sizes + sizePresetByType */
+function findSizeOpt(vocab: FacetVocab, type: string, value: string | null | undefined): FacetOption | null {
   if (!value) return null
-  const list = APPLICATION_OPTIONS_BY_TYPE[type] || []
-  return list.find(o => o.value === value) || null
-}
-
-/** Get size option (preset by type) — 247: ใช้ helper จาก vocab */
-function findSizeOpt(type: string, value: string | null | undefined): FacetOption | null {
-  if (!value) return null
-  const presets = getSizePresetsForType(type)
+  const presets = getSizePresetsFromVocab(vocab, type)
   return presets.find(o => o.value === value) || null
 }
 
 /**
- * Generate code from facets
+ * Generate code from facets — 256: accepts optional vocab (default = DEFAULT_FACET_VOCAB)
  * Pattern: TYPE-APP-SIZE+UNIT-COLOR[-VARIANT]
  * Example:
  *   {type:towel, application:bath, size:'30x60', sizeUnit:inch, color:white}
@@ -64,47 +55,47 @@ function findSizeOpt(type: string, value: string | null | undefined): FacetOptio
  *   {type:towel, size:small, application:foot_massage, color:tan, variant:'oil'}
  *   → TWL-FTM-S-TN-OIL
  */
-export function generateCodeFromFacets(facets: LinenFacets): string {
+export function generateCodeFromFacets(facets: LinenFacets, vocab: FacetVocab = DEFAULT_FACET_VOCAB): string {
   if (!facets || !facets.type) return ''
   const parts: string[] = []
 
-  const typeOpt = findOpt(TYPE_OPTIONS, facets.type)
+  const typeOpt = findOpt(vocab.types, facets.type)
   parts.push(typeOpt?.codeShort || facets.type.toUpperCase().slice(0, 3))
 
   if (facets.application) {
-    const appOpt = findApplicationOpt(facets.type, facets.application)
+    const appOpt = findOpt(getApplicationsFromVocab(vocab, facets.type), facets.application)
     parts.push(appOpt?.codeShort || facets.application.toUpperCase().slice(0, 3))
   }
 
   if (facets.size) {
     // ถ้าเป็น preset → ใช้ codeShort, ถ้าเป็น custom (e.g., 30x60) → ใช้ตรงๆ
-    const sizeOpt = findSizeOpt(facets.type, facets.size)
+    const sizeOpt = findSizeOpt(vocab, facets.type, facets.size)
     let sizeStr = sizeOpt?.codeShort || facets.size.replace(/\s+/g, '').toUpperCase()
     if (facets.sizeUnit && facets.sizeUnit !== 'standard') {
-      const unitOpt = SIZE_UNIT_OPTIONS.find(u => u.value === facets.sizeUnit)
+      const unitOpt = vocab.sizeUnits.find(u => u.value === facets.sizeUnit)
       if (unitOpt?.codeShort) sizeStr += unitOpt.codeShort
     }
     parts.push(sizeStr)
   }
 
   if (facets.color) {
-    const colorOpt = findOpt(COLOR_OPTIONS, facets.color)
+    const colorOpt = findOpt(vocab.colors, facets.color)
     parts.push(colorOpt?.codeShort || facets.color.toUpperCase().slice(0, 3))
   }
 
   if (facets.weight) {
-    const wOpt = findOpt(WEIGHT_OPTIONS, facets.weight)
+    const wOpt = findOpt(vocab.weights, facets.weight)
     if (wOpt) parts.push(wOpt.codeShort)
   }
 
   if (facets.pattern && facets.pattern !== 'plain') {
-    const pOpt = findOpt(PATTERN_OPTIONS, facets.pattern)
+    const pOpt = findOpt(vocab.patterns, facets.pattern)
     if (pOpt) parts.push(pOpt.codeShort)
   }
 
   // 247: treatment (น้ำมัน/อบแห้ง/ถอดซักปลอก)
   if (facets.treatment && facets.treatment !== 'none') {
-    const tOpt = findOpt(TREATMENT_OPTIONS, facets.treatment)
+    const tOpt = findOpt(vocab.treatments, facets.treatment)
     if (tOpt?.codeShort) parts.push(tOpt.codeShort)
   }
 
@@ -117,24 +108,24 @@ export function generateCodeFromFacets(facets: LinenFacets): string {
 }
 
 /**
- * Generate canonical Thai name from facets
+ * Generate canonical Thai name from facets — 256: vocab param
  * Pattern: {type} {application} {size}{unit} {color} ({variant})
  */
-export function generateNameFromFacets(facets: LinenFacets, lang: 'th' | 'en' = 'th'): string {
+export function generateNameFromFacets(facets: LinenFacets, lang: 'th' | 'en' = 'th', vocab: FacetVocab = DEFAULT_FACET_VOCAB): string {
   if (!facets || !facets.type) return ''
 
-  const typeOpt = findOpt(TYPE_OPTIONS, facets.type)
+  const typeOpt = findOpt(vocab.types, facets.type)
   const typeLabel = typeOpt ? (lang === 'th' ? typeOpt.labelTh : typeOpt.labelEn) : facets.type
 
   const parts: string[] = [typeLabel]
 
   if (facets.application) {
-    const appOpt = findApplicationOpt(facets.type, facets.application)
+    const appOpt = findOpt(getApplicationsFromVocab(vocab, facets.type), facets.application)
     if (appOpt) parts.push(lang === 'th' ? appOpt.labelTh : appOpt.labelEn)
   }
 
   if (facets.size) {
-    const sizeOpt = findSizeOpt(facets.type, facets.size)
+    const sizeOpt = findSizeOpt(vocab, facets.type, facets.size)
     let sizeStr = sizeOpt
       ? (lang === 'th' ? sizeOpt.labelTh : sizeOpt.labelEn)
       : facets.size
@@ -147,30 +138,30 @@ export function generateNameFromFacets(facets: LinenFacets, lang: 'th' | 'en' = 
   }
 
   if (facets.color && facets.color !== 'pattern') {
-    const colorOpt = findOpt(COLOR_OPTIONS, facets.color)
+    const colorOpt = findOpt(vocab.colors, facets.color)
     if (colorOpt) {
       parts.push(lang === 'th' ? `สี${colorOpt.labelTh}` : colorOpt.labelEn)
     }
   }
 
   if (facets.weight) {
-    const wOpt = findOpt(WEIGHT_OPTIONS, facets.weight)
+    const wOpt = findOpt(vocab.weights, facets.weight)
     if (wOpt) parts.push(lang === 'th' ? wOpt.labelTh : wOpt.labelEn)
   }
 
   if (facets.pattern && facets.pattern !== 'plain') {
-    const pOpt = findOpt(PATTERN_OPTIONS, facets.pattern)
+    const pOpt = findOpt(vocab.patterns, facets.pattern)
     if (pOpt) parts.push(lang === 'th' ? `ลาย${pOpt.labelTh}` : pOpt.labelEn)
   }
 
   if (facets.material) {
-    const mOpt = findOpt(MATERIAL_OPTIONS, facets.material)
+    const mOpt = findOpt(vocab.materials, facets.material)
     if (mOpt) parts.push(`(${lang === 'th' ? mOpt.labelTh : mOpt.labelEn})`)
   }
 
   // 247: treatment — แสดงในวงเล็บท้ายชื่อ (เช่น "(น้ำมัน)")
   if (facets.treatment && facets.treatment !== 'none') {
-    const tOpt = findOpt(TREATMENT_OPTIONS, facets.treatment)
+    const tOpt = findOpt(vocab.treatments, facets.treatment)
     if (tOpt) parts.push(`(${lang === 'th' ? tOpt.labelTh : tOpt.labelEn})`)
   }
 
