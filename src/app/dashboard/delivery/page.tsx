@@ -11,7 +11,7 @@ import { tabularNumberNav, blockNumberArrowKeys } from '@/lib/modal-nav'
 import FindableText from '@/components/FindableText'
 import { type DeliveryNoteItem, type DeliveryNote, type LinenForm, LINEN_FORM_STATUS_CONFIG } from '@/types'
 import { calculateTransportFeeTrip, calculateDNSubtotal } from '@/lib/transport-fee'
-import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
+import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2, ArrowUpDown } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
@@ -680,6 +680,57 @@ export default function DeliveryPage() {
     if (detailNote && !detailNote.isExported) {
       updateDeliveryNote(detailNote.id, { isExported: true })
     }
+  }
+
+  /**
+   * 260: Re-sort items ใน SD detail ตามลำดับ accepted QT ล่าสุด
+   * — สำหรับ SDs ที่สร้างก่อน Fix 253 ที่ items ยังเรียงตาม catalog
+   */
+  const handleResortItemsByQT = () => {
+    if (!detailNote || !detailCustomer) return
+    if (detailNote.isBilled) {
+      alert('SD ใบนี้ถูก lock (วางบิลแล้ว) — แก้ลำดับไม่ได้')
+      return
+    }
+    const latestQT = quotations
+      .filter(q => q.customerId === detailNote.customerId && q.status === 'accepted')
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0]
+    if (!latestQT) {
+      alert('ลูกค้านี้ไม่มี QT ที่สถานะ "ตกลง" — ไม่สามารถ re-sort ได้\n\nกรุณาสร้าง/accept QT ก่อน')
+      return
+    }
+    const qtOrderMap: Record<string, number> = {}
+    latestQT.items.forEach((it, idx) => { qtOrderMap[it.code] = idx })
+
+    const sorted = [...detailNote.items].sort((a, b) => {
+      const qa = qtOrderMap[a.code]
+      const qb = qtOrderMap[b.code]
+      if (qa !== undefined && qb !== undefined) return qa - qb
+      if (qa !== undefined) return -1
+      if (qb !== undefined) return 1
+      const ai = linenCatalog.findIndex(i => i.code === a.code)
+      const bi = linenCatalog.findIndex(i => i.code === b.code)
+      return ai - bi
+    })
+
+    const sameOrder = sorted.every((item, idx) => item.code === detailNote.items[idx].code)
+    if (sameOrder) {
+      alert(`ลำดับ items ใน SD ${detailNote.noteNumber} ตรงกับ QT ${latestQT.quotationNumber} แล้ว — ไม่ต้อง re-sort`)
+      return
+    }
+
+    // Build preview of changes
+    const preview = sorted.slice(0, 8).map((item, idx) => {
+      const oldIdx = detailNote.items.findIndex(i => i.code === item.code && i.adhocName === item.adhocName)
+      const changed = oldIdx !== idx
+      const name = item.isAdhoc ? item.adhocName : (itemNameMap[item.code] || item.code)
+      return `${idx + 1}. ${changed ? '↻' : '  '} ${item.code} · ${name}`
+    }).join('\n')
+    const overflow = sorted.length > 8 ? `\n... + อีก ${sorted.length - 8} รายการ` : ''
+
+    if (!confirm(`Re-sort items ใน SD ${detailNote.noteNumber} ตามลำดับ QT ${latestQT.quotationNumber}?\n\nลำดับใหม่ (8 รายการแรก):\n${preview}${overflow}\n\n— เปลี่ยนเฉพาะลำดับ ไม่กระทบจำนวน / ราคา / priceSnapshot —`)) return
+
+    updateDeliveryNote(detailNote.id, { items: sorted })
   }
 
   const handleDnListCSV = (items: typeof filtered) => {
@@ -1404,6 +1455,23 @@ export default function DeliveryPage() {
               const dnExtraCharge = detailNote.extraCharge || 0
               const grandTotal = itemSubtotal + tripFee + monthFee + dnExtraCharge - dnDiscount
               return (
+                <div>
+                  {/* 260: Items section header + Re-sort by QT button */}
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-slate-600">
+                      รายการผ้า <span className="text-slate-400 font-normal">({detailNote.items.length} รายการ)</span>
+                    </label>
+                    {!detailNote.isBilled && detailNote.items.length > 1 && (
+                      <button
+                        onClick={handleResortItemsByQT}
+                        title="จัดเรียง items ใหม่ตามลำดับ QT ล่าสุดที่ตกลงแล้ว (สำหรับ SD เก่าที่ items ยังเรียงตาม catalog)"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-[#1B3A5C] hover:bg-[#3DD8D8]/15 rounded-md border border-[#3DD8D8]/40"
+                      >
+                        <ArrowUpDown className="w-3.5 h-3.5" />
+                        Re-sort by QT
+                      </button>
+                    )}
+                  </div>
                 <div className="border border-[#3DD8D8] rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
@@ -1647,6 +1715,7 @@ export default function DeliveryPage() {
                       )}
                     </tbody>
                   </table>
+                </div>
                 </div>
               )
             })()}
