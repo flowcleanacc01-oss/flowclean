@@ -19,6 +19,7 @@ import {
   type FacetVocab, type FacetVocabGroup, type FacetOption, type SizePresetFamily,
   DEFAULT_FACET_VOCAB,
 } from '@/lib/linen-vocabulary'
+import type { LinenItemDef } from '@/types'
 import { cn } from '@/lib/utils'
 import Modal from '@/components/Modal'
 import {
@@ -26,10 +27,11 @@ import {
   ChevronDown, ChevronRight, GripVertical, Check, X,
 } from 'lucide-react'
 
-type SubTab = 'types' | 'apps' | 'color' | 'pattern' | 'material' | 'weight' | 'treatment' | 'sizes'
+type SubTab = 'types' | 'apps' | 'color' | 'pattern' | 'material' | 'weight' | 'treatment' | 'sizes' | 'suggest'
 
 const SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'types', label: 'ประเภทผ้า + กลุ่ม' },
+  { key: 'suggest', label: '🔍 Auto-Suggest' },
   { key: 'apps', label: 'ลักษณะ (per type)' },
   { key: 'color', label: 'สี' },
   { key: 'pattern', label: 'ลาย' },
@@ -117,6 +119,9 @@ export default function FacetVocabEditor() {
       <div className="min-h-[400px]">
         {subTab === 'types' && (
           <TypesEditor vocab={local} setVocab={markDirty} usage={typeUsage} />
+        )}
+        {subTab === 'suggest' && (
+          <SuggestTypesTab vocab={local} setVocab={markDirty} catalog={linenCatalog} />
         )}
         {subTab === 'apps' && (
           <ApplicationsEditor vocab={local} setVocab={markDirty} />
@@ -681,5 +686,155 @@ function GroupEditModal({ initial, isNew, onSave, onClose }: {
         </div>
       </div>
     </Modal>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// 257 — Auto-Suggest types from catalog
+// Scan catalog items, identify those whose names don't match any
+// existing vocab type's labelTh (substring heuristic). Group by
+// leading Thai word → show patterns → button creates new type.
+// ════════════════════════════════════════════════════════════════
+
+function SuggestTypesTab({ vocab, setVocab, catalog }: {
+  vocab: FacetVocab
+  setVocab: (u: (v: FacetVocab) => FacetVocab) => void
+  catalog: LinenItemDef[]
+}) {
+  const [addingForPattern, setAddingForPattern] = useState<string | null>(null)
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string>(vocab.groups[0]?.key || '')
+
+  const analysis = useMemo(() => {
+    const knownLabels = vocab.types
+      .map(t => t.labelTh)
+      .filter(l => l.length >= 2)
+      .map(l => l.toLowerCase())
+    const unmatched: LinenItemDef[] = []
+    let matchedCount = 0
+
+    for (const item of catalog) {
+      if (item.facets?.type && vocab.types.some(t => t.value === item.facets!.type)) {
+        matchedCount++
+        continue
+      }
+      const nameLow = item.name.toLowerCase()
+      const isMatched = knownLabels.some(l => nameLow.includes(l))
+      if (isMatched) matchedCount++
+      else unmatched.push(item)
+    }
+
+    const groups: Record<string, LinenItemDef[]> = {}
+    for (const item of unmatched) {
+      const m = item.name.match(/^[ก-๙]+/)
+      const prefix = m ? m[0] : item.name.slice(0, 10).trim()
+      const key = prefix.length >= 2 ? prefix : '(อื่นๆ)'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(item)
+    }
+
+    return {
+      total: catalog.length,
+      matchedCount,
+      unmatchedCount: unmatched.length,
+      groups: Object.entries(groups)
+        .map(([prefix, items]) => ({ prefix, items, count: items.length }))
+        .sort((a, b) => b.count - a.count),
+    }
+  }, [catalog, vocab.types])
+
+  const buildPrefill = (prefix: string): FacetOption => ({
+    value: prefix
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_ก-๙]/g, '')
+      .slice(0, 24) || 'new_type',
+    labelTh: prefix,
+    labelEn: '',
+    codeShort: prefix.slice(0, 3).toUpperCase() || 'NEW',
+  })
+
+  const handleSaveNewType = (opt: FacetOption) => {
+    setVocab(v => {
+      const types = [...v.types, opt]
+      const groups = v.groups.map(g => g.key === selectedGroupKey
+        ? { ...g, typeKeys: [...g.typeKeys, opt.value] }
+        : g,
+      )
+      return { ...v, types, groups }
+    })
+    setAddingForPattern(null)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
+        <div className="font-semibold mb-1">🔍 Auto-Suggest จาก catalog ({analysis.total} items)</div>
+        <div>
+          <span className="text-emerald-700 font-medium">✓ Matched: {analysis.matchedCount}</span>
+          {' · '}
+          <span className="text-amber-700 font-medium">⚠ Unmatched: {analysis.unmatchedCount}</span>
+        </div>
+        <p className="text-blue-700 mt-1.5 leading-relaxed">
+          แยกตามคำขึ้นต้น (Thai-only prefix) — แต่ละ pattern ที่ไม่ตรงกับ vocab type ใดๆ
+          คลิก <strong>&quot;สร้าง type&quot;</strong> เพื่อเพิ่ม. ค่า value/codeShort prefill ให้ — แก้ได้ในกล่อง edit
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-slate-500">เพิ่ม type ใหม่ลงในกลุ่ม:</span>
+        <select value={selectedGroupKey} onChange={e => setSelectedGroupKey(e.target.value)}
+          className="px-2 py-1 border border-slate-200 rounded-md bg-white text-xs">
+          {vocab.groups.map(g => (
+            <option key={g.key} value={g.key}>{g.labelTh}</option>
+          ))}
+        </select>
+      </div>
+
+      {analysis.groups.length === 0 ? (
+        <div className="text-center py-12 text-sm text-slate-400">
+          ✨ ทุก items ใน catalog match กับ vocab types แล้ว — ไม่มี pattern ใหม่ให้แนะนำ
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {analysis.groups.map(g => (
+            <div key={g.prefix} className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200">
+                <span className="text-sm font-medium text-slate-800 flex-1">
+                  &quot;{g.prefix}&quot; <span className="text-xs text-slate-400 ml-1">({g.count} items)</span>
+                </span>
+                <button onClick={() => setAddingForPattern(g.prefix)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-[#3DD8D8] text-[#1B3A5C] rounded hover:bg-[#2bb8b8] font-medium">
+                  <Plus className="w-3 h-3" /> สร้าง type
+                </button>
+              </div>
+              <div className="px-3 py-1.5 space-y-0.5">
+                {g.items.slice(0, 5).map(item => (
+                  <div key={item.code} className="flex items-center gap-2 text-xs">
+                    <span className="font-mono text-slate-400 w-12">{item.code}</span>
+                    <span className="text-slate-600 truncate">{item.name}</span>
+                  </div>
+                ))}
+                {g.items.length > 5 && (
+                  <div className="text-[11px] text-slate-400 italic">
+                    + อีก {g.items.length - 5} items...
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {addingForPattern && (
+        <OptionEditModal
+          initial={buildPrefill(addingForPattern)}
+          isNew={true}
+          onSave={handleSaveNewType}
+          onClose={() => setAddingForPattern(null)}
+          title={`สร้าง type ใหม่จาก pattern "${addingForPattern}"`}
+          existingValues={vocab.types.map(t => t.value)}
+        />
+      )}
+    </div>
   )
 }
