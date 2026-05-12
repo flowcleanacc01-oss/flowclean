@@ -386,11 +386,11 @@ export default function ItemsPage() {
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-slate-200">
+      {/* Tabs — 263: flex-wrap so tabs ห่อบรรทัดเมื่อจอแคบ (pattern เดียวกับหน้ารายงาน) */}
+      <div className="flex flex-wrap gap-x-1 gap-y-1 mb-6 border-b border-slate-200">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={cn('px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap inline-flex items-center gap-1.5',
+            className={cn('px-3 sm:px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap inline-flex items-center gap-1.5',
               tab === t.key ? 'border-[#1B3A5C] text-[#1B3A5C]' : 'border-transparent text-slate-500 hover:text-slate-700')}>
             {t.icon}
             {t.label}
