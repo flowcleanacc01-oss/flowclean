@@ -9,7 +9,7 @@ import { highlightText, matchesAmountQuery } from '@/lib/highlight'
 import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { tabularNumberNav, blockNumberArrowKeys } from '@/lib/modal-nav'
 import FindableText from '@/components/FindableText'
-import { type DeliveryNoteItem, LINEN_FORM_STATUS_CONFIG } from '@/types'
+import { type DeliveryNoteItem, type DeliveryNote, type LinenForm, LINEN_FORM_STATUS_CONFIG } from '@/types'
 import { calculateTransportFeeTrip, calculateDNSubtotal } from '@/lib/transport-fee'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2 } from 'lucide-react'
 import Modal from '@/components/Modal'
@@ -112,6 +112,8 @@ export default function DeliveryPage() {
   const [dnDiscountNote, setDnDiscountNote] = useState('')
   const [dnExtraCharge, setDnExtraCharge] = useState(0)
   const [dnExtraChargeNote, setDnExtraChargeNote] = useState('')
+  // 254: batch mode — select หลาย LF แล้ว auto-create 1 SD ต่อ LF (1:1)
+  const [batchMode, setBatchMode] = useState(false)
 
   // 84: SD edit sync confirmation modal — แก้ quantity → recalc transport fees
   const [pendingSdSync, setPendingSdSync] = useState<{
@@ -293,6 +295,12 @@ export default function DeliveryPage() {
   }
 
   const handleFormToggle = (formId: string) => {
+    // 254: batch mode — toggle in/out (multi-select), no items extraction (per-LF at save)
+    if (batchMode) {
+      setSelFormIds(prev => prev.includes(formId) ? prev.filter(id => id !== formId) : [...prev, formId])
+      return
+    }
+
     // 122.4(a): Enforce 1:1 LF→SD — ใช้ radio pattern (เลือกแล้วเลือกใหม่แทน ไม่ใช่ toggle)
     const isCurrentlySelected = selFormIds.includes(formId)
     const updated = isCurrentlySelected ? [] : [formId]
@@ -342,6 +350,155 @@ export default function DeliveryPage() {
       return ai - bi
     })
     setDeliveryItems(items)
+  }
+
+  // 254: Batch mode helpers
+  const handleSwitchMode = (newBatchMode: boolean) => {
+    setBatchMode(newBatchMode)
+    setSelFormIds([])
+    setDeliveryItems([])
+  }
+  const handleSelectAllAvailableLFs = () => {
+    setSelFormIds(availableForms.map(f => f.id))
+  }
+  const handleClearLFSelection = () => {
+    setSelFormIds([])
+  }
+
+  /**
+   * 254: Batch SD creation — 1 SD ต่อ 1 LF (1:1) สำหรับ LFs ที่เลือกหลายใบ
+   *
+   * Per LF:
+   *   - SD.date = LF.date
+   *   - SD.items = LF.col6 (sort by QT order — Fix 253)
+   *   - SD.transportFeeTrip = calculated per-SD
+   *   - SD.discount/extraCharge = 0
+   *   - shared: driver, vehicle, receiver, notes
+   *
+   * Single post-process for month fees across all months affected.
+   */
+  const handleCreateBatch = () => {
+    if (!selCustomerId || selFormIds.length === 0) return
+    const customer = getCustomer(selCustomerId)
+
+    const hasAcceptedQT = quotations.some(q => q.customerId === selCustomerId && q.status === 'accepted')
+    if (!hasAcceptedQT) {
+      if (!confirm(`⚠ ลูกค้านี้ไม่มีใบเสนอราคาที่ตกลงแล้ว — ราคาทุกรายการจะเป็น 0\n\nกรุณาสร้างและกดตกลง QT ก่อน\n\nยืนยันสร้าง ${selFormIds.length} SD ต่อหรือไม่?`)) return
+    }
+
+    // QT order map (for item sorting per SD — same logic as Fix 253)
+    const latestQT = quotations
+      .filter(q => q.customerId === selCustomerId && q.status === 'accepted')
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0]
+    const qtOrderMap: Record<string, number> = {}
+    if (latestQT) {
+      latestQT.items.forEach((it, idx) => { qtOrderMap[it.code] = idx })
+    }
+
+    const priceMap = buildPriceMapFromQT(selCustomerId, quotations)
+    const newDNs: DeliveryNote[] = []
+
+    // Sort selected LFs by date (oldest first) — natural sequence for SD numbering
+    const selectedLFs: LinenForm[] = selFormIds
+      .map(id => linenForms.find(f => f.id === id))
+      .filter((f): f is LinenForm => !!f)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.formNumber.localeCompare(b.formNumber))
+
+    for (const lf of selectedLFs) {
+      // Build items from LF.col6 (= แพคส่ง)
+      const qtyMap: Record<string, number> = {}
+      for (const row of lf.rows) {
+        const packSend = row.col6_factoryPackSend || 0
+        if (packSend > 0) {
+          qtyMap[row.code] = (qtyMap[row.code] || 0) + packSend
+        }
+      }
+      const items: DeliveryNoteItem[] = Object.entries(qtyMap)
+        .map(([code, quantity]) => ({ code, quantity, isClaim: false, displayName: 'ค่าบริการซัก ' + (itemNameMap[code] || code) }))
+
+      // Sort by QT order (Fix 253)
+      items.sort((a, b) => {
+        const qa = qtOrderMap[a.code]
+        const qb = qtOrderMap[b.code]
+        if (qa !== undefined && qb !== undefined) return qa - qb
+        if (qa !== undefined) return -1
+        if (qb !== undefined) return 1
+        const ai = linenCatalog.findIndex(i => i.code === a.code)
+        const bi = linenCatalog.findIndex(i => i.code === b.code)
+        return ai - bi
+      })
+
+      if (items.length === 0) continue // skip LF with no items
+
+      // Trip fee per SD
+      let tripFee = 0
+      if (customer) {
+        const itemSubtotal = items.reduce((s, i) => s + i.quantity * (priceMap[i.code] || 0), 0)
+        tripFee = calculateTransportFeeTrip(itemSubtotal, customer)
+      }
+
+      const newDN = addDeliveryNote({
+        customerId: selCustomerId,
+        linenFormIds: [lf.id],
+        date: lf.date,
+        items,
+        driverName,
+        vehiclePlate,
+        receiverName,
+        status: 'pending',
+        isPrinted: false,
+        isExported: false,
+        isBilled: false,
+        transportFeeTrip: tripFee,
+        transportFeeMonth: 0,
+        discount: 0,
+        discountNote: '',
+        extraCharge: 0,
+        extraChargeNote: '',
+        priceSnapshot: priceMap,
+        notes: dnNotes,
+      })
+      newDNs.push(newDN)
+    }
+
+    // Single post-process for month fees across all months affected by batch
+    if (customer && customer.enableMinPerMonth && customer.monthlyFlatRate > 0 && newDNs.length > 0) {
+      const monthsAffected = new Set(newDNs.map(d => d.date.slice(0, 7)))
+      for (const month of monthsAffected) {
+        const monthDNsBefore = deliveryNotes.filter(d => d.customerId === selCustomerId && d.date.startsWith(month))
+        const newDNsInMonth = newDNs.filter(d => d.date.startsWith(month))
+        const allDNsInMonth = [...monthDNsBefore, ...newDNsInMonth]
+
+        // Clear stale month fees
+        for (const d of monthDNsBefore) {
+          if ((d.transportFeeMonth || 0) > 0) {
+            updateDeliveryNote(d.id, { transportFeeMonth: 0 })
+          }
+        }
+
+        // True last-of-month
+        const lastDN = [...allDNsInMonth].sort(createDNLastOfMonthCompare(linenForms))[0]
+        const monthTotal = allDNsInMonth.reduce((s, d) => {
+          const dPriceMap = d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0
+            ? d.priceSnapshot
+            : buildPriceMapFromQT(d.customerId, quotations)
+          return s + calculateDNSubtotal(d, customer, dPriceMap) + (d.transportFeeTrip || 0)
+        }, 0)
+        const computedMonthFee = monthTotal < customer.monthlyFlatRate
+          ? Math.max(0, customer.monthlyFlatRate - monthTotal)
+          : 0
+
+        if (computedMonthFee > 0) {
+          updateDeliveryNote(lastDN.id, { transportFeeMonth: computedMonthFee })
+        }
+      }
+    }
+
+    if (newDNs.length > 0) {
+      setActiveRowId(newDNs[0].id)
+      scrollToActiveRow(newDNs[0].id)
+    }
+    setShowCreate(false)
   }
 
   const handleCreate = () => {
@@ -628,7 +785,7 @@ export default function DeliveryPage() {
             <Printer className="w-4 h-4" />
             พิมพ์/ส่งออกเอกสารรายการ
           </button>
-          <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()); setDnDiscount(0); setDnDiscountNote(''); setDnExtraCharge(0); setDnExtraChargeNote('') }}
+          <button onClick={() => { setShowCreate(true); setBatchMode(false); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()); setDnDiscount(0); setDnDiscountNote(''); setDnExtraCharge(0); setDnExtraChargeNote('') }}
             className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />
             สร้างใบส่งของชั่วคราว
@@ -801,8 +958,60 @@ export default function DeliveryPage() {
 
           {selCustomerId && (
             <div>
+              {/* 254: Mode toggle — single vs batch create */}
+              <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
+                <span className="text-xs font-medium text-slate-500 mr-1">โหมด:</span>
+                <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode(false)}
+                    className={cn(
+                      'px-3 py-1 text-xs font-medium rounded-md transition-colors',
+                      !batchMode ? 'bg-[#1B3A5C] text-white shadow-sm' : 'text-slate-600 hover:bg-white',
+                    )}
+                  >
+                    สร้าง 1 ใบ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode(true)}
+                    className={cn(
+                      'px-3 py-1 text-xs font-medium rounded-md transition-colors',
+                      batchMode ? 'bg-[#1B3A5C] text-white shadow-sm' : 'text-slate-600 hover:bg-white',
+                    )}
+                  >
+                    สร้างหลายใบ (Batch)
+                  </button>
+                </div>
+                {batchMode && availableForms.length > 0 && (
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <button type="button" onClick={handleSelectAllAvailableLFs}
+                      className="text-xs px-2 py-1 rounded bg-[#3DD8D8]/15 text-[#1B3A5C] hover:bg-[#3DD8D8]/25 font-medium">
+                      เลือกทั้งหมด ({availableForms.length})
+                    </button>
+                    {selFormIds.length > 0 && (
+                      <button type="button" onClick={handleClearLFSelection}
+                        className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200">
+                        ยกเลิก
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               <label className="block text-sm font-medium text-slate-600 mb-1">
-                เลือกใบส่งรับผ้า <span className="text-slate-400 font-normal">(1 LF → 1 SD · เลือกได้ 1 ใบ · LF สีเทา = ยังไม่พร้อม)</span>
+                เลือกใบส่งรับผ้า{' '}
+                {batchMode ? (
+                  <span className="text-slate-400 font-normal">
+                    (เลือกหลายใบ → auto-create 1 SD ต่อ 1 LF, ใช้วันที่ของ LF)
+                    {selFormIds.length > 0 && (
+                      <span className="ml-2 text-[#1B3A5C] font-medium">
+                        — เลือก {selFormIds.length} ใบ
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-slate-400 font-normal">(1 LF → 1 SD · เลือกได้ 1 ใบ · LF สีเทา = ยังไม่พร้อม)</span>
+                )}
               </label>
               {allFormsForSelect.length > 0 ? (
                 <div className="space-y-1.5">
@@ -843,7 +1052,10 @@ export default function DeliveryPage() {
                         isSelected ? 'border-[#3DD8D8] bg-[#3DD8D8]/5' : 'border-transparent hover:bg-slate-50',
                         isSkippedOlder && 'bg-amber-50 border-amber-200',
                       )}>
-                        <input type="radio" name="lfSelect" checked={isSelected}
+                        <input
+                          type={batchMode ? 'checkbox' : 'radio'}
+                          name={batchMode ? undefined : 'lfSelect'}
+                          checked={isSelected}
                           onChange={() => handleFormToggle(f.id)}
                           className="text-[#1B3A5C]" />
                         <span className="text-sm flex-1">
@@ -864,8 +1076,9 @@ export default function DeliveryPage() {
                 </div>
               )}
 
-              {/* 122.4(b): Warn if user picked non-oldest confirmed LF */}
+              {/* 122.4(b): Warn if user picked non-oldest confirmed LF · 254: skip in batch mode (multi-LF picked intentionally) */}
               {(() => {
+                if (batchMode) return null
                 if (selFormIds.length === 0) return null
                 const selLf = linenForms.find(lf => lf.id === selFormIds[0])
                 if (!selLf) return null
@@ -945,11 +1158,14 @@ export default function DeliveryPage() {
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">วันที่</label>
-            <input type="date" value={dnDate} onChange={e => setDnDate(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
-          </div>
+          {/* 254: hide date in batch mode — each SD uses its LF.date */}
+          {!batchMode && (
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">วันที่</label>
+              <input type="date" value={dnDate} onChange={e => setDnDate(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -975,7 +1191,8 @@ export default function DeliveryPage() {
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
           </div>
 
-          {/* ค่าใช้จ่ายเพิ่มเติม + ส่วนลด */}
+          {/* ค่าใช้จ่ายเพิ่มเติม + ส่วนลด · 254: ซ่อนใน batch mode (per-SD edit ทำใน detail หลัง create ได้) */}
+          {!batchMode && (
           <div className="border border-slate-200 rounded-lg p-3 space-y-3 bg-slate-50">
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">การปรับยอด (ถ้ามี)</p>
             <div className="grid grid-cols-2 gap-3">
@@ -1013,14 +1230,24 @@ export default function DeliveryPage() {
               </div>
             </div>
           </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setShowCreate(false)}
               className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-            <button onClick={handleCreate} disabled={!selCustomerId || deliveryItems.length === 0}
-              className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors font-medium">
-              บันทึก
-            </button>
+            {batchMode ? (
+              <button onClick={handleCreateBatch}
+                disabled={!selCustomerId || selFormIds.length === 0}
+                className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors font-medium">
+                สร้าง SD ทั้งหมด {selFormIds.length > 0 ? `(${selFormIds.length} ใบ)` : ''}
+              </button>
+            ) : (
+              <button onClick={handleCreate}
+                disabled={!selCustomerId || deliveryItems.length === 0}
+                className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] disabled:opacity-50 transition-colors font-medium">
+                บันทึก
+              </button>
+            )}
           </div>
         </div>
       </Modal>
