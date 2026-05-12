@@ -213,7 +213,16 @@ function splitAndMatchNormalized(t: string, q: string, depth: number, tPhonetic:
  *   matchesThaiQuery("ปลอกหมอนเล็ก ชมพู", "ปลอกเล็ก") → true (L4 split)
  *   matchesThaiQuery("Hotel Slipper", "slipper") → true (L1, English)
  */
-export function matchesThaiQuery(text: string, query: string, tPhonetic?: string): boolean {
+export interface MatchOptions {
+  /**
+   * 252: Disable Layer 4 split. ใช้กับ multi-item haystacks (LF/SD/QT/WB/IV/RC)
+   * เพื่อป้องกัน cross-item false positives — เช่น query "ปลอกเล็กชมพู" splits เป็น
+   * ["ปลอก", "เล็ก", "ชมพู"] อาจ match ได้ถ้า 3 slices อยู่ใน 3 items ต่างกัน
+   */
+  noSplit?: boolean
+}
+
+export function matchesThaiQuery(text: string, query: string, tPhonetic?: string, options?: MatchOptions): boolean {
   // 250: normalize ONCE at top — passed through all internal calls
   const t = norm(text)
   const q = norm(query)
@@ -225,6 +234,9 @@ export function matchesThaiQuery(text: string, query: string, tPhonetic?: string
   const tp = tPhonetic ?? (t && containsThai(t) ? phoneticThai(t) : '')
 
   if (coreNormalized(t, q, qPhonetic, tp)) return true
+
+  // 252: short-circuit if caller disabled Layer 4 (multi-item haystacks)
+  if (options?.noSplit) return false
 
   // Layer 4: Recursive split for Thai compounds (no space, ≥ 6 chars)
   if (hasThaiQ && q.length >= 6) {

@@ -116,15 +116,25 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
     return deferredQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
   }, [deferredQuery])
 
+  // 250.2: cache highlight results per (tokens, text) — avoids recomputing on
+  // every re-render (hover sets selectedIdx → all 40 buttons re-render).
+  // Cache resets when tokens change.
+  const highlightCache = useMemo(() => new Map<string, React.ReactNode>(), [tokens])
+
   const highlight = (text: string): React.ReactNode => {
     if (tokens.length === 0 || !text) return text
+    const cached = highlightCache.get(text)
+    if (cached !== undefined) return cached
     // Collect ranges from all tokens
     const allRanges: Array<[number, number]> = []
     for (const t of tokens) {
       const r = findMatchRanges(text, t)
       if (r.length > 0) allRanges.push(...r)
     }
-    if (allRanges.length === 0) return text
+    if (allRanges.length === 0) {
+      highlightCache.set(text, text)
+      return text
+    }
     // Merge overlapping ranges, then render
     const sorted = allRanges.sort((a, b) => a[0] - b[0])
     const merged: Array<[number, number]> = [[sorted[0][0], sorted[0][1]]]
@@ -142,6 +152,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
       pos = e
     })
     if (pos < text.length) parts.push(<span key="end">{text.slice(pos)}</span>)
+    highlightCache.set(text, parts)
     return parts
   }
 
