@@ -14,6 +14,7 @@ import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, aggregateDelivery
 import { calculateTransportFeeTrip } from '@/lib/transport-fee'
 import { isFlatRateCustomer } from '@/lib/customer-pricing'
 import { Plus, Search, FileText, FileDown, X, ChevronRight, ChevronUp, ChevronDown, Printer, Check, ExternalLink, Trash2, Edit2, Sparkles, Target, GripVertical, ArrowUpDown } from 'lucide-react'
+import { sortWBLineItemsByQT } from '@/lib/sort-by-qt'
 import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
@@ -848,6 +849,41 @@ export default function BillingPage() {
   const detailInvoiceCustomer = detailInvoice ? getCustomer(detailInvoice.customerId) : null
 
   const detailQuotation = showQuDetail ? quotations.find(q => q.id === showQuDetail) : null
+
+  /**
+   * 261: Re-sort WB lineItems ตามลำดับ accepted QT ล่าสุด (by_item only)
+   * — สำหรับ WBs ที่ออกก่อน QT reorder
+   * Special codes (TRANSPORT_TRIP, TRANSPORT_MONTH, EXTRA_CHARGE, DISCOUNT)
+   * คงท้ายตามเดิม (ไม่ถูก re-sort)
+   */
+  const handleResortBillingByQT = () => {
+    if (!detailBilling || !detailCustomer) return
+    if (detailBilling.status === 'paid' || detailBilling.paidAmount > 0) {
+      alert('WB นี้ชำระแล้ว — แก้ลำดับไม่ได้\n\nต้องการแก้ → revert status ก่อน')
+      return
+    }
+    if (detailBilling.billingMode !== 'by_item') {
+      alert('Re-sort ใช้กับ by_item mode เท่านั้น (by_date / by_total ไม่มี per-item ordering)')
+      return
+    }
+    const { sorted, latestQT, sameOrder } = sortWBLineItemsByQT(detailBilling.lineItems, detailBilling.customerId, quotations, linenCatalog)
+    if (!latestQT) {
+      alert('ลูกค้านี้ไม่มี QT ที่สถานะ "ตกลง" — ไม่สามารถ re-sort ได้')
+      return
+    }
+    if (sameOrder) {
+      alert(`ลำดับ lineItems ใน WB ${detailBilling.billingNumber} ตรงกับ QT ${latestQT.quotationNumber} แล้ว — ไม่ต้อง re-sort`)
+      return
+    }
+    const preview = sorted.slice(0, 8).map((li, idx) => {
+      const oldIdx = detailBilling.lineItems.findIndex(l => l.code === li.code)
+      const changed = oldIdx !== idx
+      return `${idx + 1}. ${changed ? '↻' : '  '} ${li.code} · ${li.name}`
+    }).join('\n')
+    const overflow = sorted.length > 8 ? `\n... + อีก ${sorted.length - 8} รายการ` : ''
+    if (!confirm(`Re-sort lineItems ใน WB ${detailBilling.billingNumber} ตามลำดับ QT ${latestQT.quotationNumber}?\n\nลำดับใหม่ (8 รายการแรก):\n${preview}${overflow}\n\n— เปลี่ยนเฉพาะลำดับ ไม่กระทบจำนวน/ราคา/ยอดรวม · special lines (ค่ารถ/ส่วนลด) คงท้ายตามเดิม —`)) return
+    updateBillingStatement(detailBilling.id, { lineItems: sorted })
+  }
 
   const handleBillingCSV = () => {
     if (!detailBilling || !detailCustomer) return
@@ -2054,6 +2090,25 @@ export default function BillingPage() {
               )
             })()}
 
+            {/* 261: Items section header + Re-sort by QT (by_item mode only) */}
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-slate-600">
+                รายการในใบวางบิล <span className="text-slate-400 font-normal">({detailBilling.lineItems.length} รายการ)</span>
+              </label>
+              {detailBilling.billingMode === 'by_item' &&
+               detailBilling.status !== 'paid' &&
+               !(detailBilling.paidAmount > 0) &&
+               detailBilling.lineItems.length > 1 && (
+                <button
+                  onClick={handleResortBillingByQT}
+                  title="จัดเรียง lineItems ใหม่ตามลำดับ QT ล่าสุด (เฉพาะ by_item · special lines คงท้าย)"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-[#1B3A5C] hover:bg-[#3DD8D8]/15 rounded-md border border-[#3DD8D8]/40"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                  Re-sort by QT
+                </button>
+              )}
+            </div>
             <div className="border border-[#3DD8D8] rounded-lg overflow-hidden">
               <table className="w-full text-sm">
                 <thead>

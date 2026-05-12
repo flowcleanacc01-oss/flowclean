@@ -11,6 +11,7 @@ import { tabularNumberNav, blockNumberArrowKeys } from '@/lib/modal-nav'
 import FindableText from '@/components/FindableText'
 import { type DeliveryNoteItem, type DeliveryNote, type LinenForm, LINEN_FORM_STATUS_CONFIG } from '@/types'
 import { calculateTransportFeeTrip, calculateDNSubtotal } from '@/lib/transport-fee'
+import { sortByQTOrder } from '@/lib/sort-by-qt'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2, ArrowUpDown } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
@@ -684,7 +685,7 @@ export default function DeliveryPage() {
 
   /**
    * 260: Re-sort items ใน SD detail ตามลำดับ accepted QT ล่าสุด
-   * — สำหรับ SDs ที่สร้างก่อน Fix 253 ที่ items ยังเรียงตาม catalog
+   * 261: ใช้ shared util sortByQTOrder
    */
   const handleResortItemsByQT = () => {
     if (!detailNote || !detailCustomer) return
@@ -692,34 +693,16 @@ export default function DeliveryPage() {
       alert('SD ใบนี้ถูก lock (วางบิลแล้ว) — แก้ลำดับไม่ได้')
       return
     }
-    const latestQT = quotations
-      .filter(q => q.customerId === detailNote.customerId && q.status === 'accepted')
-      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0]
+    const { sorted, latestQT, sameOrder } = sortByQTOrder(detailNote.items, detailNote.customerId, quotations, linenCatalog)
     if (!latestQT) {
       alert('ลูกค้านี้ไม่มี QT ที่สถานะ "ตกลง" — ไม่สามารถ re-sort ได้\n\nกรุณาสร้าง/accept QT ก่อน')
       return
     }
-    const qtOrderMap: Record<string, number> = {}
-    latestQT.items.forEach((it, idx) => { qtOrderMap[it.code] = idx })
-
-    const sorted = [...detailNote.items].sort((a, b) => {
-      const qa = qtOrderMap[a.code]
-      const qb = qtOrderMap[b.code]
-      if (qa !== undefined && qb !== undefined) return qa - qb
-      if (qa !== undefined) return -1
-      if (qb !== undefined) return 1
-      const ai = linenCatalog.findIndex(i => i.code === a.code)
-      const bi = linenCatalog.findIndex(i => i.code === b.code)
-      return ai - bi
-    })
-
-    const sameOrder = sorted.every((item, idx) => item.code === detailNote.items[idx].code)
     if (sameOrder) {
       alert(`ลำดับ items ใน SD ${detailNote.noteNumber} ตรงกับ QT ${latestQT.quotationNumber} แล้ว — ไม่ต้อง re-sort`)
       return
     }
 
-    // Build preview of changes
     const preview = sorted.slice(0, 8).map((item, idx) => {
       const oldIdx = detailNote.items.findIndex(i => i.code === item.code && i.adhocName === item.adhocName)
       const changed = oldIdx !== idx

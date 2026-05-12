@@ -11,7 +11,8 @@ import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LIN
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer } from '@/lib/recent-customers'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink, Sparkles } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink, Sparkles, ArrowUpDown } from 'lucide-react'
+import { sortByQTOrder } from '@/lib/sort-by-qt'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
@@ -309,6 +310,33 @@ export default function LinenFormsPage() {
   const nextDetailStatus = detailForm ? NEXT_LINEN_STATUS[detailForm.status] : null
   const linkedDN = detailForm ? deliveryNotes.find(dn => dn.linenFormIds.includes(detailForm.id)) : null
   const isLockedByDN = !!linkedDN && detailForm?.status === 'confirmed'
+
+  /**
+   * 261: Re-sort LF rows ตามลำดับ accepted QT ล่าสุด
+   * — สำหรับ LFs ที่สร้างก่อน QT reorder
+   */
+  const handleResortLFByQT = () => {
+    if (!detailForm || !detailCustomer) return
+    const { sorted, latestQT, sameOrder } = sortByQTOrder(detailForm.rows, detailForm.customerId, quotations, linenCatalog)
+    if (!latestQT) {
+      alert('ลูกค้านี้ไม่มี QT ที่สถานะ "ตกลง" — ไม่สามารถ re-sort ได้\n\nกรุณาสร้าง/accept QT ก่อน')
+      return
+    }
+    if (sameOrder) {
+      alert(`ลำดับ rows ใน LF ${detailForm.formNumber} ตรงกับ QT ${latestQT.quotationNumber} แล้ว — ไม่ต้อง re-sort`)
+      return
+    }
+    const itemNameMap = Object.fromEntries(linenCatalog.map(i => [i.code, i.name]))
+    const preview = sorted.slice(0, 8).map((row, idx) => {
+      const oldIdx = detailForm.rows.findIndex(r => r.code === row.code)
+      const changed = oldIdx !== idx
+      const name = itemNameMap[row.code] || row.code
+      return `${idx + 1}. ${changed ? '↻' : '  '} ${row.code} · ${name}`
+    }).join('\n')
+    const overflow = sorted.length > 8 ? `\n... + อีก ${sorted.length - 8} รายการ` : ''
+    if (!confirm(`Re-sort rows ใน LF ${detailForm.formNumber} ตามลำดับ QT ${latestQT.quotationNumber}?\n\nลำดับใหม่ (8 รายการแรก):\n${preview}${overflow}\n\n— เปลี่ยนเฉพาะลำดับ ไม่กระทบจำนวน col1-col6 / note —`)) return
+    updateLinenForm(detailForm.id, { rows: sorted })
+  }
 
   const handleAdvanceStatus = (formId: string) => {
     const form = linenForms.find(f => f.id === formId)
@@ -913,7 +941,19 @@ export default function LinenFormsPage() {
               )
             })()}
 
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-end gap-2">
+              {/* 261: Re-sort by QT (สำหรับ LFs ที่สร้างก่อน QT reorder) */}
+              {detailForm.rows.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleResortLFByQT}
+                  title="จัดเรียง rows ใหม่ตามลำดับ QT ล่าสุดที่ตกลงแล้ว (ลำดับเท่านั้น ไม่กระทบจำนวน)"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-[#1B3A5C] hover:bg-[#3DD8D8]/15 rounded-lg border border-[#3DD8D8]/40"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                  Re-sort by QT
+                </button>
+              )}
               {(() => {
                 // 209: status guard
                 const hasSD = !!linkedDN
