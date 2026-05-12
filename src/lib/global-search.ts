@@ -292,8 +292,9 @@ export function buildSearchIndex(store: SearchStore): SearchResult[] {
         cat?.unit,
       ].filter(Boolean).join(' ').toLowerCase(),
       // 238: orphan code → เปิด Hygiene Center พร้อม prefill MergeCodesTool
+      // 258: in-catalog → focusCode → catalog page scrolls to row + activates
       href: a.inCatalog
-        ? `/dashboard/items`
+        ? `/dashboard/items?tab=items&focusCode=${encodeURIComponent(a.code)}`
         : `/dashboard/items?tab=merge&mergeSource=${encodeURIComponent(a.code)}`,
     })
   }

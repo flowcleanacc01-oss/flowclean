@@ -1,28 +1,52 @@
 /**
- * Highlight helper (Feature 147.2)
+ * Highlight helper (Feature 147.2 → 258 phonetic-aware)
  *
  * ใช้กับหน้าที่ link มาจาก Global Search เพื่อ highlight keyword
  * - URL param: ?q=<query>
  * - Wrap matched substrings ด้วย <mark> สีเหลือง
  * - Multi-token support (split by whitespace)
+ *
+ * 258: ใช้ findMatchRanges (จาก thai-search) แทน regex —
+ *   query "เสื้อหมอ" จะ highlight "เสื้อ" + "หมอ" แยก
+ *   (Cmd+K Layer 4 split → catalog page highlight ก็ต้องตรงกัน)
  */
 import type { ReactNode } from 'react'
 import React from 'react'
+import { findMatchRanges } from './thai-search'
 
 export function highlightText(text: string, query: string): ReactNode {
   if (!query || !query.trim() || !text) return text
   const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   if (tokens.length === 0) return text
-  const sorted = [...tokens].sort((a, b) => b.length - a.length)
-  const pattern = sorted.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
-  if (!pattern) return text
-  const splitRe = new RegExp(`(${pattern})`, 'gi')
-  const tokenSet = new Set(sorted)
-  return text.split(splitRe).map((p, i) =>
-    tokenSet.has(p.toLowerCase())
-      ? React.createElement('mark', { key: i, className: 'bg-yellow-200 text-slate-900 rounded px-0.5' }, p)
-      : React.createElement(React.Fragment, { key: i }, p)
-  )
+
+  // 258: collect ranges from all tokens via findMatchRanges (direct + phonetic + split)
+  const allRanges: Array<[number, number]> = []
+  for (const t of tokens) {
+    const ranges = findMatchRanges(text, t)
+    if (ranges.length > 0) allRanges.push(...ranges)
+  }
+  if (allRanges.length === 0) return text
+
+  // Merge overlapping ranges
+  const sorted = allRanges.sort((a, b) => a[0] - b[0])
+  const merged: Array<[number, number]> = [[sorted[0][0], sorted[0][1]]]
+  for (let i = 1; i < sorted.length; i++) {
+    const [s, e] = sorted[i]
+    const last = merged[merged.length - 1]
+    if (s <= last[1]) last[1] = Math.max(last[1], e)
+    else merged.push([s, e])
+  }
+
+  // Render
+  const parts: ReactNode[] = []
+  let pos = 0
+  merged.forEach(([s, e], i) => {
+    if (s > pos) parts.push(React.createElement(React.Fragment, { key: `t${i}` }, text.slice(pos, s)))
+    parts.push(React.createElement('mark', { key: `m${i}`, className: 'bg-yellow-200 text-slate-900 rounded px-0.5' }, text.slice(s, e)))
+    pos = e
+  })
+  if (pos < text.length) parts.push(React.createElement(React.Fragment, { key: 'end' }, text.slice(pos)))
+  return parts
 }
 
 /**

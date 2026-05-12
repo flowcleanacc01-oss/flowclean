@@ -126,6 +126,22 @@ export default function ItemsPage() {
     addCodeHandledRef.current = urlAddCode
   }, [urlAddCode, linenCatalog, setTab])
 
+  // 258: ?focusCode= → from Cmd+K (item kind) → setActiveCode + scroll to row
+  const urlFocusCode = sp.get('focusCode') || ''
+  const focusCodeHandledRef = useRef<string>('')
+  useEffect(() => {
+    if (!urlFocusCode || focusCodeHandledRef.current === urlFocusCode) return
+    if (!linenCatalog.some(i => i.code === urlFocusCode)) return // not in catalog (orphan-style edge case)
+    focusCodeHandledRef.current = urlFocusCode
+    setTab('items')
+    setActiveCode(urlFocusCode)
+    // Scroll row into view (next frame so render completes)
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`[data-row-id="${CSS.escape(urlFocusCode)}"]`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [urlFocusCode, linenCatalog, setTab])
+
   // 188: name drift detection — used for inline badge + Sync tab
   const { driftMap, totalCodes: driftCodeCount } = useNameDrift()
   // 240: orphan code count for tab badge
