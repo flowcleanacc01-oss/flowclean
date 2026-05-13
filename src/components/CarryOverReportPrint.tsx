@@ -91,9 +91,9 @@ export default function CarryOverReportPrint(props: Props) {
         if (r.code !== code) continue
         switch (m) {
           case 1: diff += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
-          case 2: diff += (r.col6_factoryPackSend || 0) - r.col2_hotelCountIn; break
+          case 2: diff += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
           case 3: diff += r.col4_factoryApproved - r.col5_factoryClaimApproved; break
-          case 4: diff += r.col4_factoryApproved - r.col2_hotelCountIn; break
+          case 4: diff += r.col4_factoryApproved - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
         }
       }
     }
@@ -115,9 +115,9 @@ export default function CarryOverReportPrint(props: Props) {
         if (r.code !== code) continue
         switch (m) {
           case 1: sum += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
-          case 2: sum += (r.col6_factoryPackSend || 0) - r.col2_hotelCountIn; break
+          case 2: sum += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
           case 3: sum += r.col4_factoryApproved - r.col5_factoryClaimApproved; break
-          case 4: sum += r.col4_factoryApproved - r.col2_hotelCountIn; break
+          case 4: sum += r.col4_factoryApproved - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
         }
       }
     }

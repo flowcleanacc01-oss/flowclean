@@ -991,9 +991,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         let diff = 0
         switch (mode) {
           case 1: diff = (row.col6_factoryPackSend || 0) - row.col5_factoryClaimApproved; break
-          case 2: diff = (row.col6_factoryPackSend || 0) - row.col2_hotelCountIn; break
+          case 2: diff = (row.col6_factoryPackSend || 0) - (row.col2_hotelCountIn + row.col3_hotelClaimCount); break
           case 3: diff = row.col4_factoryApproved - row.col5_factoryClaimApproved; break
-          case 4: diff = row.col4_factoryApproved - row.col2_hotelCountIn; break
+          case 4: diff = row.col4_factoryApproved - (row.col2_hotelCountIn + row.col3_hotelClaimCount); break
         }
         if (diff !== 0) {
           result[row.code] = (result[row.code] || 0) + diff

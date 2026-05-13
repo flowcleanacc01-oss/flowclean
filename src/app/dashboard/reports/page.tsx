@@ -183,9 +183,9 @@ export default function ReportsPage() {
         if (r.code !== code) continue
         switch (mode) {
           case 1: diff += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
-          case 2: diff += (r.col6_factoryPackSend || 0) - r.col2_hotelCountIn; break
+          case 2: diff += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
           case 3: diff += r.col4_factoryApproved - r.col5_factoryClaimApproved; break
-          case 4: diff += r.col4_factoryApproved - r.col2_hotelCountIn; break
+          case 4: diff += r.col4_factoryApproved - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
         }
       }
     }
@@ -883,9 +883,9 @@ export default function ReportsPage() {
                               const m = coMode as CarryOverMode
                               switch (m) {
                                 case 1: monthSum += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
-                                case 2: monthSum += (r.col6_factoryPackSend || 0) - r.col2_hotelCountIn; break
+                                case 2: monthSum += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
                                 case 3: monthSum += r.col4_factoryApproved - r.col5_factoryClaimApproved; break
-                                case 4: monthSum += r.col4_factoryApproved - r.col2_hotelCountIn; break
+                                case 4: monthSum += r.col4_factoryApproved - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
                               }
                             }
                           }
