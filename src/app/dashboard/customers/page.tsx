@@ -6,7 +6,8 @@ import { cn, formatCurrency, sanitizeNumber, scrollToActiveRow } from '@/lib/uti
 import { highlightText } from '@/lib/highlight'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
-import type { Customer, CustomerCategoryDef } from '@/types'
+import type { Customer, CustomerCategoryDef, CarryOverMode } from '@/types'
+import { CARRY_OVER_MODE_CONFIG, WORKFLOW_MODE_CONFIG } from '@/types'
 import { Plus, Search, Edit2, Trash2, Check, FileText, X, Link2, Printer, FileDown } from 'lucide-react'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
@@ -30,6 +31,7 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   enabledItems: [], priceList: [], priceHistory: [],
   notes: '', isActive: true,
   enableVat: true, enableWithholding: true,
+  workflowMode: 'cross_check',
 }
 
 export default function CustomersPage() {
@@ -143,6 +145,8 @@ export default function CustomersPage() {
       notes: c.notes, isActive: c.isActive,
       enableVat: c.enableVat !== false, enableWithholding: c.enableWithholding !== false,
       itemNicknames: c.itemNicknames ? { ...c.itemNicknames } : {},
+      workflowMode: c.workflowMode ?? 'cross_check',
+      defaultCarryOverMode: c.defaultCarryOverMode,
     })
     setShowForm(true)
   }
@@ -740,6 +744,46 @@ export default function CustomersPage() {
                   className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                 <span className="text-slate-700">หัก ณ ที่จ่าย</span>
               </label>
+            </div>
+          </div>
+
+          {/* 265 — Workflow Mode & Carry-Over Default */}
+          <div className="bg-slate-50 rounded-lg p-4 space-y-3">
+            <span className="font-medium text-slate-700 block">ระบบการนับ + รายงานผ้าค้าง</span>
+            <div>
+              <label className="block text-xs text-slate-600 mb-1">รูปแบบการนับผ้า</label>
+              <div className="flex flex-wrap gap-2">
+                {(['cross_check', 'trust_customer'] as const).map(m => (
+                  <label key={m} className={cn(
+                    'flex items-start gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors flex-1 min-w-[240px]',
+                    (form.workflowMode || 'cross_check') === m
+                      ? 'border-[#1B3A5C] bg-[#1B3A5C]/5'
+                      : 'border-slate-200 bg-white hover:border-slate-300',
+                  )}>
+                    <input type="radio" name="workflowMode" checked={(form.workflowMode || 'cross_check') === m}
+                      onChange={() => setForm({ ...form, workflowMode: m })}
+                      className="mt-0.5" />
+                    <div className="text-sm">
+                      <div className="font-medium text-slate-700">
+                        {WORKFLOW_MODE_CONFIG[m].icon} {WORKFLOW_MODE_CONFIG[m].label}
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5">{WORKFLOW_MODE_CONFIG[m].description}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-600 mb-1">โหมดคำนวณผ้าค้าง default (ใช้เปิด report)</label>
+              <select
+                value={form.defaultCarryOverMode ?? ''}
+                onChange={e => setForm({ ...form, defaultCarryOverMode: e.target.value === '' ? undefined : Number(e.target.value) as CarryOverMode })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none">
+                <option value="">— Auto (Cross Check→Mode 1, Trust Customer→Mode 2)</option>
+                {([1, 2, 3, 4] as CarryOverMode[]).map(m => (
+                  <option key={m} value={m}>เคส {m}: {CARRY_OVER_MODE_CONFIG[m].formula}</option>
+                ))}
+              </select>
             </div>
           </div>
 

@@ -61,6 +61,8 @@ const FIELD_MAP: Record<string, string> = {
   isActive: 'is_active',
   enableVat: 'enable_vat',
   enableWithholding: 'enable_withholding',
+  workflowMode: 'workflow_mode',                  // 265
+  defaultCarryOverMode: 'default_carry_over_mode', // 265
   vatRate: 'vat_rate',
   withholdingRate: 'withholding_rate',
   formNumber: 'form_number',

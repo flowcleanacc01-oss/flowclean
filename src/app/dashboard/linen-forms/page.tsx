@@ -291,6 +291,8 @@ export default function LinenFormsPage() {
 
   const handleCreate = () => {
     if (!newCustomerId || newRows.length === 0) return
+    // 265 — snapshot workflowMode ตอนสร้าง (กัน drift เมื่อ customer toggle ภายหลัง)
+    const cust = getCustomer(newCustomerId)
     const newLF = addLinenForm({
       customerId: newCustomerId,
       date: newDate,
@@ -298,6 +300,7 @@ export default function LinenFormsPage() {
       rows: newRows,
       notes: newNotes,
       bagsSentCount: newBagsSent,
+      workflowMode: cust?.workflowMode ?? 'cross_check',
     })
     setActiveRowId(newLF.id)
     scrollToActiveRow(newLF.id)
@@ -732,7 +735,8 @@ export default function LinenFormsPage() {
               </button>
               <button onClick={() => {
                 if (!newCustomerId || newRows.length === 0 || !getLinkedQT(getCustomer(newCustomerId)?.name || '', newCustomerId)) return
-                const newLF = addLinenForm({ customerId: newCustomerId, date: newDate, status: 'draft', rows: newRows, notes: newNotes, bagsSentCount: newBagsSent })
+                const cust = getCustomer(newCustomerId)
+                const newLF = addLinenForm({ customerId: newCustomerId, date: newDate, status: 'draft', rows: newRows, notes: newNotes, bagsSentCount: newBagsSent, workflowMode: cust?.workflowMode ?? 'cross_check' })
                 setActiveRowId(newLF.id)
                 setShowCreate(false)
                 setShowDetail(newLF.id)

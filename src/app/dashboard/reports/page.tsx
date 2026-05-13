@@ -41,6 +41,7 @@ export default function ReportsPage() {
   })
 
   // ---- Carry-over (51-53) state ----
+  // 265: default = 1 — reset เมื่อเปลี่ยนลูกค้า ใช้ customer.defaultCarryOverMode (ดู useEffect ด้านล่าง)
   const [coMode, setCoMode] = useState<CarryOverMode | 'compare'>(1)
   const [coView, setCoView] = useState<'monthly' | 'yearly'>('monthly')
   const [coStartDate, setCoStartDate] = useState(() => startOfMonthISO())
@@ -89,6 +90,16 @@ export default function ReportsPage() {
   ]
 
   const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
+
+  // 265 — เมื่อเปลี่ยนลูกค้า → ใช้ customer.defaultCarryOverMode (ถ้ามี) หรือ derive จาก workflowMode
+  // - trust_customer ปกติใช้ Mode 2 (col6 − (col2+col3))
+  // - cross_check ปกติใช้ Mode 1 (col6 − col5)
+  useEffect(() => {
+    if (!selCustomer) return
+    const def = selCustomer.defaultCarryOverMode
+      ?? (selCustomer.workflowMode === 'trust_customer' ? 2 : 1)
+    setCoMode(def)
+  }, [selCustomerId, selCustomer?.defaultCarryOverMode, selCustomer?.workflowMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Revenue by customer
   const revenueByCustomer = useMemo(() => {

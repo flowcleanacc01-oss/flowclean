@@ -186,6 +186,31 @@ export interface Customer {
   // ใช้ตอน render ใน LF/SD/QT/print ของลูกค้านี้
   // Reports/audit/Cmd+K ใช้ canonical เสมอ
   itemNicknames?: Record<string, string>
+  // 265 — Workflow + Carry-over preferences
+  // workflowMode: 'cross_check' (default) ใช้ครบ 6 cols / 'trust_customer' ข้าม col4+col5
+  // defaultCarryOverMode: default mode สำหรับ reports หน้าลูกค้านี้
+  //   - trust_customer ปกติใช้ Mode 2 (col6 − (col2+col3))
+  //   - cross_check ปกติใช้ Mode 1 (col6 − col5)
+  workflowMode?: WorkflowMode
+  defaultCarryOverMode?: CarryOverMode
+}
+
+// 265 — Workflow mode สำหรับลูกค้า + LF
+export type WorkflowMode = 'cross_check' | 'trust_customer'
+
+export const WORKFLOW_MODE_CONFIG: Record<WorkflowMode, { label: string; short: string; description: string; icon: string }> = {
+  cross_check: {
+    label: 'Cross Check (โรงงานนับเข้า)',
+    short: 'ตรวจซ้ำ',
+    description: 'โรงงานนับซ้ำเพื่อตรวจสอบ — ใช้ครบ 6 columns',
+    icon: '🔄',
+  },
+  trust_customer: {
+    label: 'Trust Customer (ไม่นับเข้า)',
+    short: 'ไม่ตรวจซ้ำ',
+    description: 'เชื่อยอดลูกค้านับส่ง — ข้ามขั้นตอนนับเข้า ไม่กรอก col4/col5',
+    icon: '✅',
+  },
 }
 
 // ============================================================
@@ -286,6 +311,8 @@ export interface LinenForm {
   deptQc: boolean
   isPrinted?: boolean   // auto-set when user clicks print
   isExported?: boolean  // auto-set when user exports JPG/PDF/CSV
+  // 265 — snapshot ตอนสร้าง LF (กัน drift เมื่อ customer toggle ภายหลัง)
+  workflowMode?: WorkflowMode
 }
 
 // ============================================================
