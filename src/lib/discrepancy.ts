@@ -1,11 +1,20 @@
 import type { LinenForm } from '@/types'
 
 /**
+ * 265: ถ้า LF เป็น trust_customer → ไม่มี Type 1 / Type 2 (ไม่นับเข้า + ไม่นับกลับ)
+ *      LF.workflowMode snapshot ตอนสร้าง = source of truth
+ */
+function isTrustForm(form: LinenForm): boolean {
+  return form.workflowMode === 'trust_customer'
+}
+
+/**
  * Discrepancy Type 1: โรงซักนับเข้า ≠ (ลูกค้านับส่ง + เคลม)
  * col5 (นับเข้า) vs col2 + col3 (นับส่ง + เคลม)
  * แสดง ⚠ ที่ Col4 (UI: โรงซักนับเข้า)
  */
 export function calculateCountInDiscrepancies(form: LinenForm): Record<string, number> {
+  if (isTrustForm(form)) return {} // 265: trust mode → no col5 → no Type 1
   const result: Record<string, number> = {}
   for (const row of form.rows) {
     const expected = row.col2_hotelCountIn + row.col3_hotelClaimCount
@@ -23,6 +32,7 @@ export function calculateCountInDiscrepancies(form: LinenForm): Record<string, n
  * แสดง ⚠ ที่ Col8 (UI: ลูกค้านับกลับ)
  */
 export function calculateCountBackDiscrepancies(form: LinenForm): Record<string, number> {
+  if (isTrustForm(form)) return {} // 265: trust mode → no col4 → no Type 2
   const result: Record<string, number> = {}
   for (const row of form.rows) {
     const packSend = row.col6_factoryPackSend || 0

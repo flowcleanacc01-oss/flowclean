@@ -190,9 +190,11 @@ export default function ReportsPage() {
     let diff = 0
     for (const f of linenForms) {
       if (f.customerId !== customerId || f.date !== day) continue
+      // 265: trust LF บังคับ Mode 2
+      const effectiveMode: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : mode
       for (const r of f.rows) {
         if (r.code !== code) continue
-        switch (mode) {
+        switch (effectiveMode) {
           case 1: diff += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
           case 2: diff += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
           case 3: diff += r.col4_factoryApproved - r.col5_factoryClaimApproved; break
@@ -889,9 +891,10 @@ export default function ReportsPage() {
                           let monthSum = 0
                           for (const f of linenForms) {
                             if (f.customerId !== selCustomerId || !f.date.startsWith(month)) continue
+                            // 265: trust LF บังคับ Mode 2
+                            const m: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : (coMode as CarryOverMode)
                             for (const r of f.rows) {
                               if (r.code !== code) continue
-                              const m = coMode as CarryOverMode
                               switch (m) {
                                 case 1: monthSum += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
                                 case 2: monthSum += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break

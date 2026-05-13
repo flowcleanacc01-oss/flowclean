@@ -986,10 +986,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .filter(f => f.customerId === customerId && f.date < beforeDate)
       .sort((a, b) => a.date.localeCompare(b.date))
     for (const form of forms) {
+      // 265: ถ้า LF snapshot = trust_customer → บังคับใช้ Mode 2 ไม่ว่า caller จะเลือก mode ใด
+      //      เหตุผล: trust LF ไม่มี col4 + col5 → mode 1/3 จะคำนวณผิด
+      const effectiveMode: CarryOverMode = form.workflowMode === 'trust_customer' ? 2 : mode
       for (const row of form.rows) {
         if (resetDateMap[row.code] && form.date < resetDateMap[row.code]) continue
         let diff = 0
-        switch (mode) {
+        switch (effectiveMode) {
           case 1: diff = (row.col6_factoryPackSend || 0) - row.col5_factoryClaimApproved; break
           case 2: diff = (row.col6_factoryPackSend || 0) - (row.col2_hotelCountIn + row.col3_hotelClaimCount); break
           case 3: diff = row.col4_factoryApproved - row.col5_factoryClaimApproved; break

@@ -59,6 +59,11 @@ export default function LinenFormGrid({
   onApproveSync,
   highlightQ = '',
 }: LinenFormGridProps) {
+  // 265 — workflowMode: trust_customer → ไม่นับเข้า (col4/col5 disabled + แสดง "—")
+  // carry-over คำนวณจาก col6 − (col2+col3) แทน col6 − col5
+  const workflowMode = customer.workflowMode ?? 'cross_check'
+  const isTrustCustomer = workflowMode === 'trust_customer'
+
   // ถ้ามี qtItems → ใช้ลำดับ + ชื่อจาก QT, fallback ไป catalog
   // 213.2 Phase 1.2 — apply customer.itemNicknames เป็น display alias (override ชื่อ)
   const enabledItems: LinenItemDef[] = qtItems
@@ -205,7 +210,12 @@ export default function LinenFormGrid({
     }
   }
 
-  const isEditable = (colKey: string) => !readOnly && editableColumns.includes(colKey as typeof editableColumns[number])
+  const isEditable = (colKey: string) => {
+    if (readOnly) return false
+    // 265 — trust_customer: col4 + col5 ไม่ editable (ไม่นับเข้า)
+    if (isTrustCustomer && (colKey === 'col4' || colKey === 'col5')) return false
+    return editableColumns.includes(colKey as typeof editableColumns[number])
+  }
 
   const hasCarryOver = Object.keys(carryOver).some(k => carryOver[k] !== 0)
 
@@ -363,8 +373,11 @@ export default function LinenFormGrid({
                   </td>
 
                   {/* Col 5 - โรงซักนับเข้า */}
-                  <td className={cn('px-1 py-1 text-center', hasCountInDisc && 'bg-amber-50')}>
-                    {isEditable('col5') ? (
+                  <td className={cn('px-1 py-1 text-center', !isTrustCustomer && hasCountInDisc && 'bg-amber-50')}>
+                    {isTrustCustomer ? (
+                      // 265 — trust mode: ไม่นับเข้า แสดง "—"
+                      <span className="text-slate-300" title="ลูกค้า Trust Customer — ไม่นับเข้า">—</span>
+                    ) : isEditable('col5') ? (
                       <input
                         type="text" inputMode="numeric" pattern="[0-9]*"
                         data-row={rowIndex} data-col={COL_NAV_INDEX.col5}
@@ -411,9 +424,13 @@ export default function LinenFormGrid({
                   </td>
 
                   {/* Calculated - ค้าง(-)/คืน(+) */}
+                  {/* 265 — trust_customer: ใช้ col6 − (col2+col3) แทน col6 − col5 */}
                   <td className="px-1 py-1 text-center">
                     {(() => {
-                      const val = (row.col6_factoryPackSend || 0) - row.col5_factoryClaimApproved
+                      const baseline = isTrustCustomer
+                        ? (row.col2_hotelCountIn + row.col3_hotelClaimCount)
+                        : row.col5_factoryClaimApproved
+                      const val = (row.col6_factoryPackSend || 0) - baseline
                       if (val === 0) return <span className="text-slate-400">-</span>
                       return (
                         <span className={cn(val < 0 ? 'text-red-600 font-medium' : 'text-emerald-600 font-medium')}>
@@ -442,9 +459,12 @@ export default function LinenFormGrid({
                   </td>
 
                   {/* Col 4 - ลูกค้านับกลับ */}
-                  <td className={cn('px-1 py-1 text-center', hasCountBackDisc && 'bg-red-50')}>
+                  <td className={cn('px-1 py-1 text-center', !isTrustCustomer && hasCountBackDisc && 'bg-red-50')}>
                     <div className="flex items-center justify-center gap-1">
-                      {isEditable('col4') ? (
+                      {isTrustCustomer ? (
+                        // 265 — trust mode: ไม่นับกลับ
+                        <span className="text-slate-300" title="ลูกค้า Trust Customer — ไม่นับกลับ">—</span>
+                      ) : isEditable('col4') ? (
                         <input
                           type="text" inputMode="numeric" pattern="[0-9]*"
                           data-row={rowIndex} data-col={COL_NAV_INDEX.col4}
