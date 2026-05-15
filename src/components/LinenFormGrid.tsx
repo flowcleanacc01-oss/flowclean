@@ -59,7 +59,8 @@ export default function LinenFormGrid({
   onApproveSync,
   highlightQ = '',
 }: LinenFormGridProps) {
-  // 265 — workflowMode: trust_customer → ไม่นับเข้า (col4/col5 disabled + แสดง "—")
+  // 268 — workflowMode: trust_customer → ไม่นับเข้า (col5 disabled แสดง "—")
+  // col4 (ลูกค้านับกลับ) ยัง editable ปกติ — ลูกค้าอาจแย้งกรณีนับกลับ
   // carry-over คำนวณจาก col6 − (col2+col3) แทน col6 − col5
   const workflowMode = customer.workflowMode ?? 'cross_check'
   const isTrustCustomer = workflowMode === 'trust_customer'
@@ -212,8 +213,9 @@ export default function LinenFormGrid({
 
   const isEditable = (colKey: string) => {
     if (readOnly) return false
-    // 265 — trust_customer: col4 + col5 ไม่ editable (ไม่นับเข้า)
-    if (isTrustCustomer && (colKey === 'col4' || colKey === 'col5')) return false
+    // 268 — trust_customer: col5 (โรงซักนับเข้า) ไม่ editable
+    //   col4 (ลูกค้านับกลับ) ยัง editable เพื่อ cross-check ครั้งที่ 2
+    if (isTrustCustomer && colKey === 'col5') return false
     return editableColumns.includes(colKey as typeof editableColumns[number])
   }
 
@@ -458,13 +460,10 @@ export default function LinenFormGrid({
                     )}
                   </td>
 
-                  {/* Col 4 - ลูกค้านับกลับ */}
-                  <td className={cn('px-1 py-1 text-center', !isTrustCustomer && hasCountBackDisc && 'bg-red-50')}>
+                  {/* Col 4 - ลูกค้านับกลับ — 268: ยัง editable ใน trust mode */}
+                  <td className={cn('px-1 py-1 text-center', hasCountBackDisc && 'bg-red-50')}>
                     <div className="flex items-center justify-center gap-1">
-                      {isTrustCustomer ? (
-                        // 265 — trust mode: ไม่นับกลับ
-                        <span className="text-slate-300" title="ลูกค้า Trust Customer — ไม่นับกลับ">—</span>
-                      ) : isEditable('col4') ? (
+                      {isEditable('col4') ? (
                         <input
                           type="text" inputMode="numeric" pattern="[0-9]*"
                           data-row={rowIndex} data-col={COL_NAV_INDEX.col4}

@@ -8,7 +8,6 @@ import { formatDate, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumbe
 import { highlightText } from '@/lib/highlight'
 import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
-import { getNextLinenStatus, getPrevLinenStatus } from '@/lib/workflow-mode'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer } from '@/lib/recent-customers'
@@ -311,7 +310,7 @@ export default function LinenFormsPage() {
   const detailForm = showDetail ? linenForms.find(f => f.id === showDetail) : null
   const detailCustomer = detailForm ? getCustomer(detailForm.customerId) : null
   const detailCarryOver = detailForm ? getCarryOver(detailForm.customerId, detailForm.date) : {}
-  const nextDetailStatus = detailForm ? getNextLinenStatus(detailForm) : null
+  const nextDetailStatus = detailForm ? NEXT_LINEN_STATUS[detailForm.status] : null
   const linkedDN = detailForm ? deliveryNotes.find(dn => dn.linenFormIds.includes(detailForm.id)) : null
   const isLockedByDN = !!linkedDN && detailForm?.status === 'confirmed'
 
@@ -345,7 +344,7 @@ export default function LinenFormsPage() {
   const handleAdvanceStatus = (formId: string) => {
     const form = linenForms.find(f => f.id === formId)
     if (!form) return
-    const next = getNextLinenStatus(form)
+    const next = NEXT_LINEN_STATUS[form.status]
     if (!next) return
 
     // Per-step validation (draft + received ไม่บังคับ — ข้ามได้เลย)
@@ -371,7 +370,7 @@ export default function LinenFormsPage() {
   const handleRevertStatus = (formId: string) => {
     const form = linenForms.find(f => f.id === formId)
     if (!form) return
-    const prev = getPrevLinenStatus(form)
+    const prev = PREV_LINEN_STATUS[form.status]
     if (prev) updateLinenFormStatus(formId, prev)
   }
 
@@ -532,7 +531,7 @@ export default function LinenFormsPage() {
                 const disc1 = hasType1Discrepancy(form)
                 const disc2 = hasType2Discrepancy(form)
                 const cfg = LINEN_FORM_STATUS_CONFIG[form.status] || LINEN_FORM_STATUS_CONFIG.draft
-                const nextStatus = getNextLinenStatus(form)
+                const nextStatus = NEXT_LINEN_STATUS[form.status]
                 const linkedDNInfo = linkedLFMap.get(form.id)
 
                 return (
@@ -606,7 +605,7 @@ export default function LinenFormsPage() {
                     <td className="px-2 py-3 text-right w-[130px]" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         {(() => {
-                          const prevSt = getPrevLinenStatus(form)
+                          const prevSt = PREV_LINEN_STATUS[form.status]
                           return prevSt && (
                             <button onClick={() => handleRevertStatus(form.id)}
                               className="h-7 px-2 text-[11px] bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors flex items-center gap-0.5 font-medium flex-shrink-0"
@@ -1124,7 +1123,7 @@ export default function LinenFormsPage() {
                 ) : (
                   <div className="flex items-center gap-2">
                     {(() => {
-                      const prevSt = getPrevLinenStatus(detailForm)
+                      const prevSt = PREV_LINEN_STATUS[detailForm.status]
                       return prevSt ? (
                         <button onClick={() => { handleRevertStatus(detailForm.id); scrollAndFocusGrid(false, prevSt) }}
                           className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors flex items-center gap-1">
@@ -1141,7 +1140,7 @@ export default function LinenFormsPage() {
                     })()}
 
                     {(() => {
-                      const nextSt = getNextLinenStatus(detailForm)
+                      const nextSt = NEXT_LINEN_STATUS[detailForm.status]
                       return nextSt ? (
                         <button onClick={() => {
                           handleAdvanceStatus(detailForm.id)

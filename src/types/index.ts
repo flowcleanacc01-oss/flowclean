@@ -208,7 +208,7 @@ export const WORKFLOW_MODE_CONFIG: Record<WorkflowMode, { label: string; short: 
   trust_customer: {
     label: 'Trust Customer (ไม่นับเข้า)',
     short: 'ไม่ตรวจซ้ำ',
-    description: 'เชื่อยอดลูกค้านับส่ง — ข้ามขั้นตอนนับเข้า ไม่กรอก col4/col5',
+    description: 'เชื่อยอดลูกค้านับส่ง — ข้ามนับเข้า (col5) แต่ยังกรอก col4 (ลูกค้านับกลับ) เพื่อ cross check ครั้งที่ 2',
     icon: '✅',
   },
 }

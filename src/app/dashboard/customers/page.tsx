@@ -18,8 +18,9 @@ import CustomerSearchInline from '@/components/CustomerSearchInline'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
 import { isFlatRateCustomer } from '@/lib/customer-pricing'
 import { blockNumberArrowKeys } from '@/lib/modal-nav'
+import { listTrustCandidates } from '@/lib/trust-candidate'
 
-type PageTab = 'customers' | 'categories'
+type PageTab = 'customers' | 'categories' | 'workflow'
 type SortKey = 'shortName' | 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'tax' | 'qt' | 'contact' | 'isActive'
 
 const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
@@ -195,11 +196,11 @@ export default function CustomersPage() {
           <p className="text-sm text-slate-500 mt-0.5">{customers.length} ราย</p>
         </div>
         <div className="flex gap-2">
-          {(['customers', 'categories'] as const).map(t => (
+          {(['customers', 'categories', 'workflow'] as const).map(t => (
             <button key={t} onClick={() => setPageTab(t)}
               className={cn('px-4 py-2 text-sm font-medium rounded-lg transition-colors',
                 pageTab === t ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
-              {t === 'customers' ? 'ลูกค้า' : 'หมวด'}
+              {t === 'customers' ? 'ลูกค้า' : t === 'categories' ? 'หมวด' : 'Workflow'}
             </button>
           ))}
           {pageTab === 'customers' && (
@@ -489,6 +490,205 @@ export default function CustomersPage() {
           </table>
         </div>
       )}
+
+      {/* ===== Workflow Tab (268) ===== */}
+      {pageTab === 'workflow' && (() => {
+        const activeCustomers = customers.filter(c => c.isActive)
+        const trustList = activeCustomers.filter(c => c.workflowMode === 'trust_customer')
+        const crossList = activeCustomers.filter(c => (c.workflowMode ?? 'cross_check') === 'cross_check')
+        const candidates = listTrustCandidates(crossList.map(c => c.id), linenForms)
+        const candidateMap = new Map(candidates.map(s => [s.customerId, s]))
+        const trustIdSet = new Set(trustList.map(c => c.id))
+        const candidateCusts = crossList.filter(c => candidateMap.has(c.id))
+          .sort((a, b) => (candidateMap.get(b.id)!.score) - (candidateMap.get(a.id)!.score))
+
+        const applyTrust = (custId: string) => {
+          const c = customers.find(x => x.id === custId)
+          if (!c) return
+          if (!confirm(`Set "${c.shortName || c.name}" → Trust Customer?\n\nผลกระทบ:\n• LF ใหม่จะไม่มี col5 (โรงซักนับเข้า)\n• ยังกรอก col4 (ลูกค้านับกลับ) ได้ปกติ\n• carry-over default = Mode 2 (col6 − (col2+col3))\n\n(LF เก่ายังคง snapshot mode เดิม ไม่กระทบ)`)) return
+          updateCustomer(custId, { workflowMode: 'trust_customer' })
+        }
+        const revertCross = (custId: string) => {
+          const c = customers.find(x => x.id === custId)
+          if (!c) return
+          if (!confirm(`Revert "${c.shortName || c.name}" → Cross Check?\n\nLF ใหม่จะกลับมาใช้ครบ 6 columns รวม col5 (โรงซักนับเข้า)\n(LF เก่าที่ snapshot trust mode ไม่กระทบ)`)) return
+          updateCustomer(custId, { workflowMode: 'cross_check' })
+        }
+
+        return (
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <h2 className="text-lg font-bold text-[#1B3A5C] mb-1">Workflow Mode Management</h2>
+              <p className="text-sm text-slate-500">
+                จัดการลูกค้าตาม workflow mode — <strong>Trust Customer</strong>: โรงงานไม่นับเข้า (skip col5),
+                ลูกค้านับกลับยังกรอกได้ (col4) เพื่อ cross check ครั้งที่ 2
+              </p>
+              <div className="grid grid-cols-3 gap-3 mt-4">
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3">
+                  <p className="text-xs text-emerald-700 font-medium">✅ Trust Customer</p>
+                  <p className="text-2xl font-bold text-emerald-800">{trustList.length}</p>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3">
+                  <p className="text-xs text-amber-700 font-medium">⚠ Candidates (auto-detect)</p>
+                  <p className="text-2xl font-bold text-amber-800">{candidateCusts.length}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs text-slate-600 font-medium">🔄 Cross Check (default)</p>
+                  <p className="text-2xl font-bold text-slate-700">{crossList.length}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Section A — Trust Customers (current) */}
+            <div className="bg-white rounded-xl border border-emerald-200 overflow-hidden">
+              <div className="px-5 py-3 bg-emerald-50/60 border-b border-emerald-200">
+                <h3 className="text-sm font-bold text-emerald-800">
+                  ✅ Trust Customers ({trustList.length} ราย)
+                </h3>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  ลูกค้าที่ set workflowMode = trust_customer แล้ว
+                </p>
+              </div>
+              {trustList.length === 0 ? (
+                <p className="px-5 py-6 text-center text-slate-400 text-sm">ยังไม่มีลูกค้าที่ใช้ Trust mode</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium text-slate-600">ชื่อย่อ</th>
+                      <th className="text-left px-4 py-2 font-medium text-slate-600">ชื่อบริษัท</th>
+                      <th className="text-right px-4 py-2 font-medium text-slate-600">LF (รวม)</th>
+                      <th className="text-right px-4 py-2 font-medium text-slate-600 w-32"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trustList.map(c => {
+                      const lfCount = linenForms.filter(lf => lf.customerId === c.id).length
+                      return (
+                        <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="px-4 py-2">
+                            <Link href={`/dashboard/customers/${c.id}`} className="font-bold text-[#1B3A5C] hover:underline tracking-wide">
+                              {c.shortName || '-'}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-2 text-slate-700">{c.name}</td>
+                          <td className="px-4 py-2 text-right text-slate-500">{lfCount}</td>
+                          <td className="px-4 py-2 text-right">
+                            <button onClick={() => revertCross(c.id)}
+                              className="px-3 py-1 text-xs border border-slate-200 text-slate-600 rounded hover:bg-slate-50">
+                              Revert → Cross Check
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Section B — Candidates (heuristic) */}
+            <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
+              <div className="px-5 py-3 bg-amber-50/60 border-b border-amber-200">
+                <h3 className="text-sm font-bold text-amber-800">
+                  ⚠ Candidates ({candidateCusts.length} ราย)
+                </h3>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  ลูกค้าที่ LFs ปัจจุบันมี pattern คล้าย trust — col5 ว่างหรือเท่ากับ (col2+col3) ส่วนใหญ่
+                  · ตรวจสอบก่อน apply
+                </p>
+              </div>
+              {candidateCusts.length === 0 ? (
+                <p className="px-5 py-6 text-center text-slate-400 text-sm">ไม่มี candidate (LF น้อย หรือ pattern ไม่เข้าเกณฑ์)</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium text-slate-600">ชื่อย่อ</th>
+                      <th className="text-left px-4 py-2 font-medium text-slate-600">ชื่อบริษัท</th>
+                      <th className="text-right px-4 py-2 font-medium text-slate-600">LF (assess)</th>
+                      <th className="text-right px-4 py-2 font-medium text-slate-600">col5 ว่าง</th>
+                      <th className="text-right px-4 py-2 font-medium text-slate-600">col5 = ส่ง+เคลม</th>
+                      <th className="text-right px-4 py-2 font-medium text-slate-600">Score</th>
+                      <th className="text-right px-4 py-2 font-medium text-slate-600 w-32"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {candidateCusts.map(c => {
+                      const s = candidateMap.get(c.id)!
+                      return (
+                        <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="px-4 py-2">
+                            <Link href={`/dashboard/customers/${c.id}`} className="font-bold text-[#1B3A5C] hover:underline tracking-wide">
+                              {c.shortName || '-'}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-2 text-slate-700">{c.name}</td>
+                          <td className="px-4 py-2 text-right text-slate-500">{s.totalLFs}</td>
+                          <td className="px-4 py-2 text-right text-slate-600">{(s.emptyCol5Pct * 100).toFixed(0)}%</td>
+                          <td className="px-4 py-2 text-right text-slate-600">{(s.matchCol5Pct * 100).toFixed(0)}%</td>
+                          <td className="px-4 py-2 text-right">
+                            <span className={cn(
+                              'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                              s.score >= 0.8 ? 'bg-red-100 text-red-700' :
+                              s.score >= 0.65 ? 'bg-amber-100 text-amber-700' :
+                              'bg-slate-100 text-slate-600',
+                            )}>{s.score.toFixed(2)}</span>
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            <button onClick={() => applyTrust(c.id)}
+                              className="px-3 py-1 text-xs bg-emerald-100 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-200 font-medium">
+                              Apply Trust
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Section C — All Cross Check (collapsible) */}
+            <details className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <summary className="px-5 py-3 bg-slate-50 border-b border-slate-200 cursor-pointer hover:bg-slate-100">
+                <span className="text-sm font-bold text-slate-700">🔄 Cross Check ({crossList.length} ราย)</span>
+                <span className="ml-2 text-xs text-slate-500">— click to expand</span>
+              </summary>
+              <div className="max-h-96 overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium text-slate-600">ชื่อย่อ</th>
+                      <th className="text-left px-4 py-2 font-medium text-slate-600">ชื่อบริษัท</th>
+                      <th className="text-right px-4 py-2 font-medium text-slate-600 w-32"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {crossList.filter(c => !candidateMap.has(c.id) && !trustIdSet.has(c.id)).map(c => (
+                      <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="px-4 py-2">
+                          <Link href={`/dashboard/customers/${c.id}`} className="font-bold text-[#1B3A5C] hover:underline tracking-wide">
+                            {c.shortName || '-'}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-2 text-slate-700">{c.name}</td>
+                        <td className="px-4 py-2 text-right">
+                          <button onClick={() => applyTrust(c.id)}
+                            className="px-3 py-1 text-xs border border-emerald-200 text-emerald-700 rounded hover:bg-emerald-50">
+                            Apply Trust
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          </div>
+        )
+      })()}
 
       {/* Form Modal */}
       <Modal open={showForm} onClose={() => setShowForm(false)} title={editId ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า'} size="xl" closeLabel="cancel">
