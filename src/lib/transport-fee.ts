@@ -54,6 +54,75 @@ export function createDNLastOfMonthCompare(linenForms: LinenForm[]) {
 }
 
 /**
+ * Feature 267: Recalc month fee สำหรับ customer ในเดือนหนึ่ง — ใช้หลังจาก SD ถูกลบหรือเปลี่ยนแปลง
+ *
+ * Logic (idempotent):
+ * 1. Sort remaining DNs in month by LF-based operational order
+ * 2. Identify true last-of-month DN
+ * 3. Clear stale month fee จาก non-last DNs
+ * 4. Compute newMonthFee for lastDN จาก monthTotal vs monthlyFlatRate
+ *
+ * Returns: list of updates to apply (caller ใช้ updateDeliveryNote)
+ * Skip lastDN update ถ้า isBilled (WB ออกแล้ว — แตะไม่ได้)
+ */
+export function recalcMonthFeeForCustomerMonth(
+  customerId: string,
+  month: string,
+  customer: Customer,
+  remainingDeliveryNotes: DeliveryNote[],
+  linenForms: LinenForm[],
+  getPriceMapForDN: (dn: DeliveryNote) => Record<string, number>,
+): Array<{ dnId: string; transportFeeMonth: number }> {
+  const updates: Array<{ dnId: string; transportFeeMonth: number }> = []
+
+  if (!customer.enableMinPerMonth || customer.monthlyFlatRate <= 0) {
+    // ลูกค้าไม่ใช้ month fee — clear ทุกใบในเดือนถ้ามี stale
+    const monthDNs = remainingDeliveryNotes.filter(d => d.customerId === customerId && d.date.startsWith(month))
+    for (const d of monthDNs) {
+      if ((d.transportFeeMonth || 0) > 0) {
+        updates.push({ dnId: d.id, transportFeeMonth: 0 })
+      }
+    }
+    return updates
+  }
+
+  const monthDNs = remainingDeliveryNotes
+    .filter(d => d.customerId === customerId && d.date.startsWith(month))
+    .sort(createDNLastOfMonthCompare(linenForms))
+
+  if (monthDNs.length === 0) return updates
+
+  const lastDN = monthDNs[0]
+
+  // Step 1: Clear stale month fee จาก non-last DNs
+  for (const d of monthDNs) {
+    if (d.id === lastDN.id) continue
+    if ((d.transportFeeMonth || 0) > 0) {
+      updates.push({ dnId: d.id, transportFeeMonth: 0 })
+    }
+  }
+
+  // Step 2: ถ้า lastDN billed → skip update (WB ออกแล้ว แตะไม่ได้)
+  if (lastDN.isBilled) return updates
+
+  // Step 3: Recalc month total + apply newMonthFee
+  const monthTotal = monthDNs.reduce((s, d) => {
+    const pm = getPriceMapForDN(d)
+    return s + calculateDNSubtotal(d, customer, pm) + (d.transportFeeTrip || 0)
+  }, 0)
+
+  const newMonthFee = monthTotal < customer.monthlyFlatRate
+    ? Math.max(0, customer.monthlyFlatRate - monthTotal)
+    : 0
+
+  if ((lastDN.transportFeeMonth || 0) !== newMonthFee) {
+    updates.push({ dnId: lastDN.id, transportFeeMonth: newMonthFee })
+  }
+
+  return updates
+}
+
+/**
  * Calculate DN item subtotal (before VAT, excluding transport fees)
  *
  * Feature 266: isClaim = discount line (ส่วนลดทางบัญชี)

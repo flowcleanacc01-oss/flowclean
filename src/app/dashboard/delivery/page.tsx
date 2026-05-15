@@ -10,7 +10,7 @@ import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { tabularNumberNav, blockNumberArrowKeys } from '@/lib/modal-nav'
 import FindableText from '@/components/FindableText'
 import { type DeliveryNoteItem, type DeliveryNote, type LinenForm, LINEN_FORM_STATUS_CONFIG } from '@/types'
-import { calculateTransportFeeTrip, calculateDNSubtotal } from '@/lib/transport-fee'
+import { calculateTransportFeeTrip, calculateDNSubtotal, recalcMonthFeeForCustomerMonth } from '@/lib/transport-fee'
 import { sortByQTOrder } from '@/lib/sort-by-qt'
 import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2, ArrowUpDown } from 'lucide-react'
 import Modal from '@/components/Modal'
@@ -767,6 +767,31 @@ export default function DeliveryPage() {
    * - ถ้ามี linked LFs → redirect ไป LF page ใน focus mode
    * - ถ้าไม่มี → stay บน SD page
    */
+  // Feat 267: helper — recalc month fee สำหรับทุก (customer, month) ที่ถูกกระทบจากการลบ SD
+  const recalcAfterDelete = (deletedIds: string[]) => {
+    const idSet = new Set(deletedIds)
+    // group deleted DNs by (customerId, month)
+    const affectedKeys = new Set<string>()
+    for (const id of deletedIds) {
+      const dn = deliveryNotes.find(d => d.id === id)
+      if (!dn) continue
+      affectedKeys.add(`${dn.customerId}|${dn.date.slice(0, 7)}`)
+    }
+    const remaining = deliveryNotes.filter(d => !idSet.has(d.id))
+    for (const key of affectedKeys) {
+      const [customerId, month] = key.split('|')
+      const customer = getCustomer(customerId)
+      if (!customer) continue
+      const updates = recalcMonthFeeForCustomerMonth(
+        customerId, month, customer, remaining, linenForms,
+        (dn) => (dn.priceSnapshot && Object.keys(dn.priceSnapshot).length > 0)
+          ? dn.priceSnapshot
+          : buildPriceMapFromQT(dn.customerId, quotations),
+      )
+      for (const u of updates) updateDeliveryNote(u.dnId, { transportFeeMonth: u.transportFeeMonth })
+    }
+  }
+
   const handleBulkDeleteAndStay = () => {
     const billedCount = selectedDnIds.filter(id =>
       billingStatements.some(b => b.deliveryNoteIds.includes(id))
@@ -775,9 +800,11 @@ export default function DeliveryPage() {
       alert(`ไม่สามารถลบได้ — มี SD ที่วางบิลแล้ว ${billedCount} ใบ\nกรุณายกเลิกการเลือก SD ที่วางบิลแล้วก่อน`)
       return
     }
-    for (const id of selectedDnIds) {
+    const ids = [...selectedDnIds]
+    for (const id of ids) {
       deleteDeliveryNote(id)
     }
+    recalcAfterDelete(ids) // Feat 267: recalc month fee สำหรับทุก (customer, month) ที่กระทบ
     setSelectedDnIds([])
     setConfirmBulkDeleteOpen(false)
   }
@@ -796,10 +823,12 @@ export default function DeliveryPage() {
       const dn = deliveryNotes.find(d => d.id === id)
       if (dn) for (const lfId of dn.linenFormIds) linkedLfIds.add(lfId)
     }
+    const ids = [...selectedDnIds]
     // Delete
-    for (const id of selectedDnIds) {
+    for (const id of ids) {
       deleteDeliveryNote(id)
     }
+    recalcAfterDelete(ids) // Feat 267: recalc month fee สำหรับทุก (customer, month) ที่กระทบ
     setSelectedDnIds([])
     setConfirmBulkDeleteOpen(false)
     // Redirect to LF page in focus mode
@@ -1879,25 +1908,8 @@ export default function DeliveryPage() {
         const doDelete = () => {
           if (!confirmDeleteId || !dnToDelete) return
           deleteDeliveryNote(confirmDeleteId)
-          // Reassign monthly fee if deleted DN had one
-          if (dnToDelete.transportFeeMonth > 0) {
-            const month = dnToDelete.date.slice(0, 7)
-            const customer = getCustomer(dnToDelete.customerId)
-            const remainingDNs = deliveryNotes
-              .filter(d => d.id !== confirmDeleteId && d.customerId === dnToDelete.customerId && d.date.startsWith(month))
-              .sort(createDNLastOfMonthCompare(linenForms))
-            if (remainingDNs.length > 0 && customer && customer.enableMinPerMonth) {
-              const newLastDN = remainingDNs[0]
-              const otherDNs = remainingDNs.filter(d => d.id !== newLastDN.id)
-              const existingTotal = otherDNs.reduce((s, d) => {
-                return s + calculateDNSubtotal(d, customer) + (d.transportFeeTrip || 0)
-              }, 0)
-              const lastDNSubtotal = calculateDNSubtotal(newLastDN, customer) + (newLastDN.transportFeeTrip || 0)
-              const monthTotal = existingTotal + lastDNSubtotal
-              const newMonthFee = monthTotal < customer.monthlyFlatRate ? customer.monthlyFlatRate - monthTotal : 0
-              updateDeliveryNote(newLastDN.id, { transportFeeMonth: newMonthFee })
-            }
-          }
+          // Feat 267: full recalc month fee (ครอบคลุมเคสที่ deletedDN ไม่มี monthFee แต่ remaining ต้องปรับ)
+          recalcAfterDelete([confirmDeleteId])
         }
 
         const handleDeleteAndStay = () => {
@@ -2013,25 +2025,8 @@ export default function DeliveryPage() {
                     if (confirm(`ยืนยันการลบใบส่งของ ${detailNote.noteNumber}?\n\nLF ที่จะย้อนสถานะกลับ:\n${lfNumbers}\n\nSD badge และ link ใน LF จะหายไปด้วย`)) {
                       const deletedDN = detailNote
                       deleteDeliveryNote(deletedDN.id)
-                      // Reassign monthly fee if deleted DN had one
-                      if (deletedDN.transportFeeMonth > 0) {
-                        const month = deletedDN.date.slice(0, 7)
-                        const customer = getCustomer(deletedDN.customerId)
-                        const remainingDNs = deliveryNotes
-                          .filter(d => d.id !== deletedDN.id && d.customerId === deletedDN.customerId && d.date.startsWith(month))
-                          .sort(createDNLastOfMonthCompare(linenForms))
-                        if (remainingDNs.length > 0 && customer && customer.enableMinPerMonth) {
-                          const newLastDN = remainingDNs[0]
-                          const otherDNs = remainingDNs.filter(d => d.id !== newLastDN.id)
-                          const existingTotal = otherDNs.reduce((s, d) => {
-                            return s + calculateDNSubtotal(d, customer) + (d.transportFeeTrip || 0)
-                          }, 0)
-                          const lastDNSubtotal = calculateDNSubtotal(newLastDN, customer) + (newLastDN.transportFeeTrip || 0)
-                          const monthTotal = existingTotal + lastDNSubtotal
-                          const newMonthFee = monthTotal < customer.monthlyFlatRate ? customer.monthlyFlatRate - monthTotal : 0
-                          updateDeliveryNote(newLastDN.id, { transportFeeMonth: newMonthFee })
-                        }
-                      }
+                      // Feat 267: full recalc month fee (ครอบคลุมทุกเคส ไม่เฉพาะ deletedDN ที่มี monthFee)
+                      recalcAfterDelete([deletedDN.id])
                       setShowPrint(false)
                       setShowDetail(null)
                     }
