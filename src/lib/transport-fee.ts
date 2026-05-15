@@ -55,15 +55,20 @@ export function createDNLastOfMonthCompare(linenForms: LinenForm[]) {
 
 /**
  * Calculate DN item subtotal (before VAT, excluding transport fees)
+ *
+ * Feature 266: isClaim = discount line (ส่วนลดทางบัญชี)
+ *   - billable item (isClaim=false): +qty × price
+ *   - claim item    (isClaim=true) : −qty × price  (ส่วนลด)
+ * Pre-266 SDs (no claim items): behavior unchanged.
  */
 export function calculateDNSubtotal(dn: DeliveryNote, _customer: Customer, priceMap?: Record<string, number>): number {
   // 226.B: priceMap ต้องมาจาก caller (DN snapshot หรือ QT) — ไม่ fallback ไป customer.priceList
   const pm = priceMap ?? {}
   return dn.items.reduce((sum, item) => {
-    if (item.isClaim) return sum
     // Layer 3: Ad-hoc รายการพิเศษ ใช้ราคาที่กรอกเอง ไม่อ้างอิง priceMap
-    if (item.isAdhoc) return sum + item.quantity * (item.adhocPrice || 0)
-    return sum + item.quantity * (pm[item.code] || 0)
+    const price = item.isAdhoc ? (item.adhocPrice || 0) : (pm[item.code] || 0)
+    const amount = item.quantity * price
+    return item.isClaim ? sum - amount : sum + amount
   }, 0)
 }
 

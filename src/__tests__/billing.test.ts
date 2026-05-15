@@ -121,24 +121,41 @@ describe('aggregateDeliveryItems', () => {
     expect(sk.amount).toBe(240) // 20 * 12
   })
 
-  it('excludes claim items (isClaim = true)', () => {
+  it('Feat 266: claim items become discount lines (negative amount)', () => {
     const customer = makeCustomer()
+    // Pass qtItems so prices flow through (226.B: aggregateDeliveryItems doesn't read customer.priceList)
+    const qtItems = customer.priceList.map(p => ({
+      code: p.code,
+      name: CATALOG.find(c => c.code === p.code)?.name || p.code,
+      pricePerUnit: p.price,
+    }))
     const notes = [
       makeDeliveryNote({
         items: [
           { code: 'B/T', quantity: 100, isClaim: false },
-          { code: 'B/T', quantity: 10, isClaim: true }, // claim — should be excluded
-          { code: 'P/C', quantity: 20, isClaim: true },  // all claim — should not appear
+          { code: 'B/T', quantity: 10, isClaim: true }, // claim → discount line
+          { code: 'P/C', quantity: 20, isClaim: true }, // all-claim → still produces discount line
         ],
       }),
     ]
 
-    const result = aggregateDeliveryItems(notes, customer, CATALOG)
+    const result = aggregateDeliveryItems(notes, customer, CATALOG, qtItems)
 
-    expect(result).toHaveLength(1) // Only B/T non-claim
-    expect(result[0].code).toBe('B/T')
-    expect(result[0].quantity).toBe(100)
-    expect(result[0].amount).toBe(800)
+    // 1 billable B/T + 1 claim B/T + 1 claim P/C = 3 lines
+    expect(result).toHaveLength(3)
+
+    const bt = result.find(r => r.code === 'B/T')!
+    expect(bt.quantity).toBe(100)
+    expect(bt.amount).toBe(800)
+
+    const btClaim = result.find(r => r.code.startsWith('CLAIM:B/T'))!
+    expect(btClaim.quantity).toBe(10)
+    expect(btClaim.amount).toBe(-80) // discount line
+    expect(btClaim.name).toContain('ส่วนลด')
+
+    const pcClaim = result.find(r => r.code.startsWith('CLAIM:P/C'))!
+    expect(pcClaim.quantity).toBe(20)
+    expect(pcClaim.amount).toBe(-100)
   })
 
   it('uses price 0 for items not in customer priceList', () => {
@@ -165,8 +182,13 @@ describe('aggregateDeliveryItems', () => {
     expect(result).toEqual([])
   })
 
-  it('returns empty array when all items are claims', () => {
+  it('Feat 266: all-claim notes produce only discount lines (no billable)', () => {
     const customer = makeCustomer()
+    const qtItems = customer.priceList.map(p => ({
+      code: p.code,
+      name: CATALOG.find(c => c.code === p.code)?.name || p.code,
+      pricePerUnit: p.price,
+    }))
     const notes = [
       makeDeliveryNote({
         items: [
@@ -176,8 +198,11 @@ describe('aggregateDeliveryItems', () => {
       }),
     ]
 
-    const result = aggregateDeliveryItems(notes, customer, CATALOG)
-    expect(result).toEqual([])
+    const result = aggregateDeliveryItems(notes, customer, CATALOG, qtItems)
+    // both lines are discount (negative amount) — no billable
+    expect(result).toHaveLength(2)
+    expect(result.every(r => r.code.startsWith('CLAIM:'))).toBe(true)
+    expect(result.every(r => r.amount < 0)).toBe(true)
   })
 
   it('sorts results by catalog sortOrder', () => {

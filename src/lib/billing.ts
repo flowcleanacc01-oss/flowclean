@@ -37,13 +37,15 @@ export function aggregateDeliveryItems(
     ? Object.fromEntries(qtItems.map(i => [i.code, i.pricePerUnit]))
     : {}
 
+  // Feat 266: aggregate billable + claim แยก (claim = ส่วนลดทางบัญชี = negative line)
   // Aggregate by (code, price) — handles price changes mid-month
   // Layer 3: Ad-hoc items aggregate by (adhoc-{name}, price) แยกจาก code ปกติ
-  const tierMap: Record<string, { code: string; qty: number; price: number; displayName?: string }> = {}
+  type Tier = { code: string; qty: number; price: number; displayName?: string }
+  const billableTierMap: Record<string, Tier> = {}
+  const claimTierMap: Record<string, Tier> = {}
   for (const note of notes) {
     const pm = getDNPriceMap(note, fallbackPriceMap)
     for (const item of note.items) {
-      if (item.isClaim) continue
       let key: string, code: string, price: number, displayName: string | undefined
       if (item.isAdhoc) {
         const adhocName = item.adhocName || '(รายการพิเศษ)'
@@ -56,18 +58,25 @@ export function aggregateDeliveryItems(
         code = item.code
         key = `${code}@${price}`
       }
-      if (!tierMap[key]) tierMap[key] = { code, qty: 0, price, displayName }
-      tierMap[key].qty += item.quantity
+      const target = item.isClaim ? claimTierMap : billableTierMap
+      if (!target[key]) target[key] = { code, qty: 0, price, displayName }
+      target[key].qty += item.quantity
     }
   }
 
-  // Check which codes have multiple price tiers
+  // Check which codes have multiple price tiers (across billable+claim, same code)
   const codePriceCount: Record<string, number> = {}
-  for (const t of Object.values(tierMap)) {
-    codePriceCount[t.code] = (codePriceCount[t.code] || 0) + 1
+  for (const t of [...Object.values(billableTierMap), ...Object.values(claimTierMap)]) {
+    const seenKey = `${t.code}@${t.price}`
+    codePriceCount[t.code] = (codePriceCount[t.code] || 0)
+    // count distinct prices per code (across billable+claim)
+    if (!codePriceCount[seenKey]) {
+      codePriceCount[seenKey] = 1
+      codePriceCount[t.code] += 1
+    }
   }
 
-  const result: BillingLineItem[] = Object.values(tierMap)
+  const billableLines: BillingLineItem[] = Object.values(billableTierMap)
     .filter(t => t.qty > 0)
     .map(t => {
       // Layer 3: Ad-hoc items ใช้ adhocName ตรงๆ ไม่อ้าง itemNameMap
@@ -91,14 +100,47 @@ export function aggregateDeliveryItems(
         amount: t.qty * t.price,
       }
     })
+
+  // Feat 266: claim → negative line "ส่วนลด {item} (เคลม)"
+  const claimLines: BillingLineItem[] = Object.values(claimTierMap)
+    .filter(t => t.qty > 0)
+    .map(t => {
+      if (t.code.startsWith('ADHOC:')) {
+        return {
+          code: `CLAIM:${t.code}`,
+          name: 'ส่วนลด ' + (t.displayName || '(รายการพิเศษ)') + ' (เคลม)',
+          quantity: t.qty,
+          pricePerUnit: t.price,
+          amount: -(t.qty * t.price),
+        }
+      }
+      const hasTiers = codePriceCount[t.code] > 1
+      const name = 'ส่วนลด ' + (itemNameMap[t.code] || t.code) + ' (เคลม)'
+        + (hasTiers ? ` (@${t.price.toLocaleString()})` : '')
+      return {
+        code: `CLAIM:${hasTiers ? `${t.code}@${t.price}` : t.code}`,
+        name,
+        quantity: t.qty,
+        pricePerUnit: t.price,
+        amount: -(t.qty * t.price),
+      }
+    })
+
+  const result: BillingLineItem[] = [...billableLines, ...claimLines]
     .sort((a, b) => {
       const orderSource = qtItems || catalog
-      const aCode = a.code.split('@')[0]
-      const bCode = b.code.split('@')[0]
+      const isClaimA = a.code.startsWith('CLAIM:')
+      const isClaimB = b.code.startsWith('CLAIM:')
+      const aRaw = isClaimA ? a.code.slice('CLAIM:'.length) : a.code
+      const bRaw = isClaimB ? b.code.slice('CLAIM:'.length) : b.code
+      const aCode = aRaw.split('@')[0]
+      const bCode = bRaw.split('@')[0]
       const aIdx = orderSource.findIndex(i => i.code === aCode)
       const bIdx = orderSource.findIndex(i => i.code === bCode)
       if (aIdx !== bIdx) return aIdx - bIdx
-      return a.pricePerUnit - b.pricePerUnit // same item → sort by price asc
+      if (a.pricePerUnit !== b.pricePerUnit) return a.pricePerUnit - b.pricePerUnit
+      // same item+price: billable ก่อน claim (Feat 266)
+      return (isClaimA ? 1 : 0) - (isClaimB ? 1 : 0)
     })
 
   // Aggregate transport fees + adjustments from delivery notes
@@ -161,8 +203,9 @@ export function aggregateDeliveryItemsByDate(
     const pm = getDNPriceMap(note, fallbackPriceMap)
     let total = 0
     for (const item of note.items) {
-      if (item.isClaim) continue
-      total += item.quantity * (pm[item.code] ?? 0)
+      // Feat 266: claim = discount (subtract)
+      const amt = item.quantity * (pm[item.code] ?? 0)
+      total += item.isClaim ? -amt : amt
     }
     // ค่ารถถูก add ไปใน SD แต่ละวันแล้ว → รวมใน DATE_xxx total
     total += note.transportFeeTrip || 0
@@ -218,8 +261,9 @@ export function aggregateDeliveryItemsByTotal(
   for (const note of notes) {
     const pm = getDNPriceMap(note, fallbackPriceMap)
     for (const item of note.items) {
-      if (item.isClaim) continue
-      serviceTotal += item.quantity * (pm[item.code] ?? 0)
+      // Feat 266: claim = discount (subtract)
+      const amt = item.quantity * (pm[item.code] ?? 0)
+      serviceTotal += item.isClaim ? -amt : amt
     }
     serviceTotal += note.transportFeeTrip || 0
     serviceTotal += note.transportFeeMonth || 0

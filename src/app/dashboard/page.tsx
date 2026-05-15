@@ -99,8 +99,12 @@ export default function DashboardPage() {
       const priceMap = (dn.priceSnapshot && Object.keys(dn.priceSnapshot).length > 0)
         ? dn.priceSnapshot
         : buildPriceMapFromQT(dn.customerId, quotations)
+      // Feat 266: claim = discount (subtract instead of skip)
       const itemSubtotal = isPer
-        ? dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
+        ? dn.items.reduce((s, i) => {
+            const amt = i.quantity * (priceMap[i.code] || 0)
+            return i.isClaim ? s - amt : s + amt
+          }, 0)
         : 0
       return sum + itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0) + (dn.extraCharge || 0) - (dn.discount || 0)
     }, 0)

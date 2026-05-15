@@ -767,7 +767,11 @@ export default function BillingPage() {
       // (transportFeeTrip uses enableWaive + minPerTripThreshold inside calculateTransportFeeTrip)
       const targetIds = new Set(targetDNs.map(d => d.id))
       for (const dn of targetDNs) {
-        const newSubtotal = dn.items.reduce((s, item) => item.isClaim ? s : s + item.quantity * (newSnapshot[item.code] || 0), 0)
+        // Feat 266: claim = discount (subtract)
+        const newSubtotal = dn.items.reduce((s, item) => {
+          const amt = item.quantity * (newSnapshot[item.code] || 0)
+          return item.isClaim ? s - amt : s + amt
+        }, 0)
         const newTripFee = calculateTransportFeeTrip(newSubtotal, updatedCust)
         updateDeliveryNote(dn.id, { priceSnapshot: newSnapshot, transportFeeTrip: newTripFee })
       }
@@ -792,7 +796,11 @@ export default function BillingPage() {
           const calcDN = (d: typeof lastDN) => {
             const isTarget = targetIds.has(d.id)
             const pm = isTarget ? newSnapshot : (d.priceSnapshot || fallbackPriceMap)
-            const subtotal = d.items.reduce((s, item) => item.isClaim ? s : s + item.quantity * (pm[item.code] || 0), 0)
+            // Feat 266: claim = discount (subtract)
+            const subtotal = d.items.reduce((s, item) => {
+              const amt = item.quantity * (pm[item.code] || 0)
+              return item.isClaim ? s - amt : s + amt
+            }, 0)
             const tripFee = isTarget ? calculateTransportFeeTrip(subtotal, updatedCust) : (d.transportFeeTrip || 0)
             return { subtotal, tripFee }
           }

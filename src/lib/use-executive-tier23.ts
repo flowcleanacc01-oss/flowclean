@@ -234,16 +234,21 @@ export function useExecutiveTier23(filters: Tier23Filters): Tier23Data {
 // ────────────────────────────────────────────────────────────────
 
 function computeItemMix(filters: Tier23Filters, deliveryNotes: DeliveryNote[], linenCatalog: LinenItemDef[]): ItemMixRow[] {
+  // Feat 266: claim = discount (subtract revenue) — qty/customers ยังนับเฉพาะ billable
   const itemMap = new Map<string, { qty: number; revenue: number; customers: Set<string> }>()
   for (const dn of deliveryNotes) {
     if (dn.date < filters.dateFrom || dn.date > filters.dateTo) continue
     for (const item of dn.items || []) {
-      if (item.isClaim) continue
       const ex = itemMap.get(item.code) || { qty: 0, revenue: 0, customers: new Set() }
-      ex.qty += item.quantity || 0
       const price = dn.priceSnapshot?.[item.code] ?? 0
-      ex.revenue += (item.quantity || 0) * price
-      ex.customers.add(dn.customerId)
+      const amt = (item.quantity || 0) * price
+      if (item.isClaim) {
+        ex.revenue -= amt
+      } else {
+        ex.qty += item.quantity || 0
+        ex.revenue += amt
+        ex.customers.add(dn.customerId)
+      }
       itemMap.set(item.code, ex)
     }
   }

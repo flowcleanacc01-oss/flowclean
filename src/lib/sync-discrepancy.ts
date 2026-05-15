@@ -147,8 +147,12 @@ export function recalcTransportAfterSync(
     : fallbackPriceMap
 
   // Recalc trip fee for affected DN — use effectiveSubtotal (respects existing extra/discount)
+  // Feat 266: claim = discount (subtract)
   const itemSubtotal = affectedDn.items.reduce(
-    (s, i) => i.isClaim ? s : s + i.quantity * (pm[i.code] || 0),
+    (s, i) => {
+      const amt = i.quantity * (pm[i.code] || 0)
+      return i.isClaim ? s - amt : s + amt
+    },
     0,
   )
   const effectiveSubtotal = Math.max(0, itemSubtotal + adjExtra - adjDiscount)
@@ -168,7 +172,11 @@ export function recalcTransportAfterSync(
       for (const d of monthDNs) {
         const isAffected = d.id === affectedDn.id
         const dPm = isAffected ? pm : (d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0 ? d.priceSnapshot : fallbackPriceMap)
-        const dSubtotal = d.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (dPm[i.code] || 0), 0)
+        // Feat 266: claim = discount (subtract)
+        const dSubtotal = d.items.reduce((s, i) => {
+          const amt = i.quantity * (dPm[i.code] || 0)
+          return i.isClaim ? s - amt : s + amt
+        }, 0)
         const dEffective = isAffected ? effectiveSubtotal : dSubtotal
         const dTripFee = isAffected ? newTripFee : (d.transportFeeTrip || 0)
         monthTotal += dEffective + dTripFee
@@ -220,8 +228,12 @@ export function recalcTransportAfterAdj(
     ? affectedDn.priceSnapshot
     : fallbackPriceMap
 
+  // Feat 266: claim = discount (subtract)
   const itemSubtotal = affectedDn.items.reduce(
-    (s, i) => i.isClaim ? s : s + i.quantity * (pm[i.code] || 0),
+    (s, i) => {
+      const amt = i.quantity * (pm[i.code] || 0)
+      return i.isClaim ? s - amt : s + amt
+    },
     0,
   )
   // ใช้ effective subtotal (รวม extra/discount) สำหรับ threshold check
@@ -241,7 +253,11 @@ export function recalcTransportAfterAdj(
       for (const d of monthDNs) {
         const isAffected = d.id === affectedDn.id
         const dPm = isAffected ? pm : (d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0 ? d.priceSnapshot : fallbackPriceMap)
-        const dSubtotal = d.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (dPm[i.code] || 0), 0)
+        // Feat 266: claim = discount (subtract)
+        const dSubtotal = d.items.reduce((s, i) => {
+          const amt = i.quantity * (dPm[i.code] || 0)
+          return i.isClaim ? s - amt : s + amt
+        }, 0)
         // affectedDn ใช้ effectiveSubtotal (รวม adj), DN อื่นใช้ subtotal ปกติ
         const dEffective = isAffected ? effectiveSubtotal : dSubtotal
         const dTripFee = isAffected ? newTripFee : (d.transportFeeTrip || 0)

@@ -19,9 +19,14 @@ export default function DeliveryNotePrint({ note, customer, company, catalog, pr
   const priceMap = (note.priceSnapshot && Object.keys(note.priceSnapshot).length > 0)
     ? note.priceSnapshot
     : priceMapProp ?? {}
-  const totalItems = note.items.reduce((s, i) => s + i.quantity, 0)
+  // Feat 266: claim = discount line (negative amount, ส่วนลดทางบัญชี)
+  // totalItems = sum ของ billable qty เท่านั้น (claim เป็น discount → ไม่ใช่ "ผ้าที่ส่ง")
+  const totalItems = note.items.reduce((s, i) => i.isClaim ? s : s + i.quantity, 0)
   const isPer = (customer.enablePerPiece ?? true)
-  const itemSubtotal = isPer ? note.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0) : 0
+  const itemSubtotal = isPer ? note.items.reduce((s, i) => {
+    const amt = i.quantity * (priceMap[i.code] || 0)
+    return i.isClaim ? s - amt : s + amt
+  }, 0) : 0
   const tripFee = note.transportFeeTrip || 0
   const monthFee = note.transportFeeMonth || 0
   const extraCharge = note.extraCharge || 0
@@ -79,19 +84,22 @@ export default function DeliveryNotePrint({ note, customer, company, catalog, pr
         </thead>
         <tbody>
           {note.items.map((item, idx) => {
+            // Feat 266: claim line = ส่วนลด (negative amount, orange row)
             const price = priceMap[item.code] || 0
-            const amount = item.quantity * price
+            const rawAmount = item.quantity * price
+            const amount = item.isClaim ? -rawAmount : rawAmount
+            const defaultName = (item.isClaim ? 'ส่วนลด ' : 'ค่าบริการซัก ') + (itemNameMap[item.code] || item.code) + (item.isClaim ? ' (เคลม)' : '')
             return (
-              <tr key={`${item.code}-${idx}`}>
+              <tr key={`${item.code}-${idx}`} className={item.isClaim ? 'bg-orange-50/40' : ''}>
                 <td className="text-center px-3 py-1.5 border border-slate-300">{idx + 1}</td>
                 <td className="px-3 py-1.5 border border-slate-300 font-mono text-xs">{item.code}</td>
                 <td className="px-3 py-1.5 border border-slate-300">
-                  {item.displayName ?? ('ค่าบริการซัก ' + (itemNameMap[item.code] || item.code))}
-                  {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
+                  {item.displayName ?? defaultName}
+                  {item.isClaim && <span className="ml-1 text-[10px] text-orange-600">[ส่วนลดทางบัญชี]</span>}
                 </td>
                 <td className="text-right px-3 py-1.5 border border-slate-300">{formatNumber(item.quantity)}</td>
                 {isPer && <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(price)}</td>}
-                {isPer && <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(amount)}</td>}
+                {isPer && <td className={`text-right px-3 py-1.5 border border-slate-300 ${item.isClaim ? 'text-orange-700' : ''}`}>{item.isClaim ? `-${formatCurrency(rawAmount)}` : formatCurrency(amount)}</td>}
               </tr>
             )
           })}

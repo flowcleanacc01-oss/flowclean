@@ -55,14 +55,16 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
   const getPrice = (code: string): number =>
     resolvedPriceMap[code] ?? catalog.find(i => i.code === code)?.defaultPrice ?? 0
 
-  // Build matrix: code → dnId → qty (non-claim items only)
+  // Build matrix: code → dnId → net qty
+  // Feat 266: claim items = discount line → subtract qty for accurate net per-cell amount
+  // (consolidation print shows what's billed, matching WB/IV totals)
   const matrix: Record<string, Record<string, number>> = {}
   for (const item of items) matrix[item.code] = {}
   for (const dn of notes) {
     for (const di of dn.items) {
-      if (di.isClaim) continue
       if (matrix[di.code] !== undefined) {
-        matrix[di.code][dn.id] = (matrix[di.code][dn.id] || 0) + di.quantity
+        const delta = di.isClaim ? -di.quantity : di.quantity
+        matrix[di.code][dn.id] = (matrix[di.code][dn.id] || 0) + delta
       }
     }
   }

@@ -496,14 +496,21 @@ function computeExecutive(
     const qt = qtByCustomer.get(dn.customerId)
     if (!qt) continue
     const qtMap = new Map(qt.items.map(it => [it.code, it.pricePerUnit]))
+    // Feat 266: claim = discount (subtract from both expected + actual)
     let expected = 0, actual = 0
     for (const item of dn.items) {
       const qty = item.quantity || 0
-      if (item.isClaim) continue
       const expPrice = qtMap.get(item.code) ?? 0
       const actPrice = dn.priceSnapshot?.[item.code] ?? expPrice
-      expected += qty * expPrice
-      actual += qty * actPrice
+      const expAmt = qty * expPrice
+      const actAmt = qty * actPrice
+      if (item.isClaim) {
+        expected -= expAmt
+        actual -= actAmt
+      } else {
+        expected += expAmt
+        actual += actAmt
+      }
     }
     const ex = realByCustomer.get(dn.customerId) || { expected: 0, actual: 0 }
     ex.expected += expected

@@ -29,6 +29,7 @@ export default function MonthlySummaryGrid({ customer, month, linenForms, delive
     }
 
     // Primary: use linen forms col6 (packed & sent) — only forms that reached packed/delivered/confirmed
+    // Feat 266: billing qty = col6 − col3 (claim = discount, not billed)
     const monthForms = linenForms.filter(f =>
       f.customerId === customer.id && f.date.startsWith(month)
       && ['packed', 'delivered', 'confirmed'].includes(f.status)
@@ -37,8 +38,8 @@ export default function MonthlySummaryGrid({ customer, month, linenForms, delive
       const day = parseInt(form.date.split('-')[2])
       for (const row of form.rows) {
         const packSend = row.col6_factoryPackSend || 0
-        // Billing qty = all packed items (col6) — ตรงกับ core logic / test
-        const qty = packSend
+        const claim = row.col3_hotelClaimCount || 0
+        const qty = Math.max(0, packSend - claim)
         if (grid[row.code] && qty > 0) {
           grid[row.code][day] = (grid[row.code][day] || 0) + qty
         }
@@ -46,16 +47,16 @@ export default function MonthlySummaryGrid({ customer, month, linenForms, delive
     }
 
     // Fallback: delivery notes (only for days with no linen form data)
+    // Feat 266: net qty = billable − claim (claim items have isClaim=true)
     const monthNotes = deliveryNotes.filter(dn =>
       dn.customerId === customer.id && dn.date.startsWith(month)
     )
     for (const dn of monthNotes) {
       const day = parseInt(dn.date.split('-')[2])
       for (const item of dn.items) {
-        // Skip claim items — they're not revenue
-        if (item.isClaim) continue
         if (grid[item.code] && !grid[item.code][day]) {
-          grid[item.code][day] = (grid[item.code][day] || 0) + item.quantity
+          const delta = item.isClaim ? -item.quantity : item.quantity
+          grid[item.code][day] = (grid[item.code][day] || 0) + delta
         }
       }
     }

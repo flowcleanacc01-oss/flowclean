@@ -357,7 +357,12 @@ describe('S3: Claim Items — Free, Not Billed', () => {
     isActive: true,
   }
 
-  it('claim items in delivery note are excluded from billing', () => {
+  it('Feat 266: claim items appear as discount lines (negative amount)', () => {
+    const qtItems = customer.priceList.map(p => ({
+      code: p.code,
+      name: CATALOG.find(c => c.code === p.code)?.name || p.code,
+      pricePerUnit: p.price,
+    }))
     const note: DeliveryNote = {
       id: 'dn-claim-1',
       noteNumber: 'SD-20260305-001',
@@ -366,9 +371,9 @@ describe('S3: Claim Items — Free, Not Billed', () => {
       date: '2026-03-05',
       items: [
         { code: 'B/T', quantity: 100, isClaim: false }, // billable
-        { code: 'B/T', quantity: 5, isClaim: true },    // claim — free
+        { code: 'B/T', quantity: 5, isClaim: true },    // claim → discount
         { code: 'B/H', quantity: 50, isClaim: false },  // billable
-        { code: 'P/C', quantity: 10, isClaim: true },   // claim — free
+        { code: 'P/C', quantity: 10, isClaim: true },   // claim → discount
       ],
       driverName: 'Driver',
       vehiclePlate: 'XYZ-9999',
@@ -379,20 +384,28 @@ describe('S3: Claim Items — Free, Not Billed', () => {
       updatedAt: '2026-03-05',
     }
 
-    const lineItems = aggregateDeliveryItems([note], customer, CATALOG)
+    const lineItems = aggregateDeliveryItems([note], customer, CATALOG, qtItems)
 
-    // Only non-claim items
-    expect(lineItems).toHaveLength(2) // B/T (100) + B/H (50), P/C was all-claim
+    // 2 billable + 2 claim discount = 4 lines
+    expect(lineItems).toHaveLength(4)
+
     const bt = lineItems.find(i => i.code === 'B/T')!
-    expect(bt.quantity).toBe(100) // only non-claim B/T
-    expect(bt.amount).toBe(1000)  // 100 * 10
+    expect(bt.quantity).toBe(100)
+    expect(bt.amount).toBe(1000) // 100 * 10
+
+    const btClaim = lineItems.find(i => i.code.startsWith('CLAIM:B/T'))!
+    expect(btClaim.quantity).toBe(5)
+    expect(btClaim.amount).toBe(-50) // -(5 * 10) — discount
 
     const bh = lineItems.find(i => i.code === 'B/H')!
-    expect(bh.quantity).toBe(50)
-    expect(bh.amount).toBe(300) // 50 * 6
+    expect(bh.amount).toBe(300)
 
-    // P/C should NOT appear (only had claim items)
-    expect(lineItems.find(i => i.code === 'P/C')).toBeUndefined()
+    const pcClaim = lineItems.find(i => i.code.startsWith('CLAIM:P/C'))!
+    expect(pcClaim.amount).toBe(-50) // -(10 * 5)
+
+    // Net subtotal = 1000 - 50 + 300 - 50 = 1200
+    const subtotal = lineItems.reduce((s, i) => s + i.amount, 0)
+    expect(subtotal).toBe(1200)
   })
 
   it('linen form row: billing qty = col6 (all packed items billable)', () => {

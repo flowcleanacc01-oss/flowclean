@@ -184,14 +184,12 @@ export default function DeliveryPage() {
   }
 
   // Calculate total amount for a DN (items subtotal + transport fees + adjustments)
+  // Feat 266: claim = discount (handled inside calculateDNSubtotal)
   const getDNTotalAmount = (dn: typeof deliveryNotes[number]): number => {
     const customer = getCustomer(dn.customerId)
     if (!customer) return 0
     const isPer = customer.enablePerPiece ?? true
-    const itemSubtotal = isPer ? (() => {
-      const priceMap = getDNPrices(dn)
-      return dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
-    })() : 0
+    const itemSubtotal = isPer ? calculateDNSubtotal(dn, customer, getDNPrices(dn)) : 0
     return itemSubtotal + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0) + (dn.extraCharge || 0) - (dn.discount || 0)
   }
 
@@ -239,7 +237,7 @@ export default function DeliveryPage() {
         case 'noteNumber': va = a.noteNumber; vb = b.noteNumber; break
         case 'customer': { const ca = getCustomer(a.customerId); va = ca?.shortName || ca?.name || ''; const cb = getCustomer(b.customerId); vb = cb?.shortName || cb?.name || ''; break }
         case 'date': va = a.date; vb = b.date; break
-        case 'items': va = a.items.reduce((s, i) => s + i.quantity, 0); vb = b.items.reduce((s, i) => s + i.quantity, 0); break
+        case 'items': va = a.items.reduce((s, i) => i.isClaim ? s : s + i.quantity, 0); vb = b.items.reduce((s, i) => i.isClaim ? s : s + i.quantity, 0); break
         case 'amount': va = getDNTotalAmount(a); vb = getDNTotalAmount(b); break
         case 'driver': va = a.driverName || ''; vb = b.driverName || ''; break
         case 'isPrinted': va = a.isPrinted ? 1 : 0; vb = b.isPrinted ? 1 : 0; break
@@ -313,20 +311,31 @@ export default function DeliveryPage() {
       if (firstForm) setDnDate(firstForm.date)
     }
 
-    // Billing = Col5 (UI: แพคส่ง) = code col6_factoryPackSend ทั้งหมด
-    const qtyMap: Record<string, number> = {}
+    // Feat 266: SD = billable line (col6 ทั้งหมด) + claim discount line (col3)
+    //   - billable (isClaim=false): qty = col6_factoryPackSend  → amount = +qty × price
+    //   - claim    (isClaim=true) : qty = col3_hotelClaimCount → amount = −qty × price (ส่วนลดทางบัญชี)
+    const billableMap: Record<string, number> = {}
+    const claimMap: Record<string, number> = {}
     for (const fId of updated) {
       const form = linenForms.find(f => f.id === fId)
       if (!form) continue
       for (const row of form.rows) {
         const packSend = row.col6_factoryPackSend || 0
+        const claim = row.col3_hotelClaimCount || 0
         if (packSend > 0) {
-          qtyMap[row.code] = (qtyMap[row.code] || 0) + packSend
+          billableMap[row.code] = (billableMap[row.code] || 0) + packSend
+        }
+        if (claim > 0) {
+          claimMap[row.code] = (claimMap[row.code] || 0) + claim
         }
       }
     }
-    const items: DeliveryNoteItem[] = Object.entries(qtyMap)
-      .map(([code, quantity]) => ({ code, quantity, isClaim: false, displayName: 'ค่าบริการซัก ' + (itemNameMap[code] || code) }))
+    const items: DeliveryNoteItem[] = [
+      ...Object.entries(billableMap)
+        .map(([code, quantity]) => ({ code, quantity, isClaim: false, displayName: 'ค่าบริการซัก ' + (itemNameMap[code] || code) })),
+      ...Object.entries(claimMap)
+        .map(([code, quantity]) => ({ code, quantity, isClaim: true, displayName: 'ส่วนลด ' + (itemNameMap[code] || code) + ' (เคลม)' })),
+    ]
 
     // 253: Sort by accepted QT order (source of truth) — fallback catalog order
     // เดิม: sort ตาม linenCatalog ทำให้ลำดับใน SD ไม่ตรงกับ QT ที่ user reorder
@@ -340,15 +349,21 @@ export default function DeliveryPage() {
     items.sort((a, b) => {
       const qa = qtOrderMap[a.code]
       const qb = qtOrderMap[b.code]
+      let cmp = 0
       // Both in QT → QT order
-      if (qa !== undefined && qb !== undefined) return qa - qb
+      if (qa !== undefined && qb !== undefined) cmp = qa - qb
       // Only one in QT → QT items first
-      if (qa !== undefined) return -1
-      if (qb !== undefined) return 1
-      // Neither in QT → fallback catalog order
-      const ai = linenCatalog.findIndex(i => i.code === a.code)
-      const bi = linenCatalog.findIndex(i => i.code === b.code)
-      return ai - bi
+      else if (qa !== undefined) cmp = -1
+      else if (qb !== undefined) cmp = 1
+      else {
+        // Neither in QT → fallback catalog order
+        const ai = linenCatalog.findIndex(i => i.code === a.code)
+        const bi = linenCatalog.findIndex(i => i.code === b.code)
+        cmp = ai - bi
+      }
+      // Feat 266: billable ก่อน claim ของ code เดียวกัน
+      if (cmp === 0) return (a.isClaim ? 1 : 0) - (b.isClaim ? 1 : 0)
+      return cmp
     })
     setDeliveryItems(items)
   }
@@ -406,35 +421,52 @@ export default function DeliveryPage() {
       .sort((a, b) => a.date.localeCompare(b.date) || a.formNumber.localeCompare(b.formNumber))
 
     for (const lf of selectedLFs) {
-      // Build items from LF.col6 (= แพคส่ง)
-      const qtyMap: Record<string, number> = {}
+      // Feat 266: billable (col6) + claim discount (col3) per LF
+      const billableMap: Record<string, number> = {}
+      const claimMap: Record<string, number> = {}
       for (const row of lf.rows) {
         const packSend = row.col6_factoryPackSend || 0
+        const claim = row.col3_hotelClaimCount || 0
         if (packSend > 0) {
-          qtyMap[row.code] = (qtyMap[row.code] || 0) + packSend
+          billableMap[row.code] = (billableMap[row.code] || 0) + packSend
+        }
+        if (claim > 0) {
+          claimMap[row.code] = (claimMap[row.code] || 0) + claim
         }
       }
-      const items: DeliveryNoteItem[] = Object.entries(qtyMap)
-        .map(([code, quantity]) => ({ code, quantity, isClaim: false, displayName: 'ค่าบริการซัก ' + (itemNameMap[code] || code) }))
+      const items: DeliveryNoteItem[] = [
+        ...Object.entries(billableMap)
+          .map(([code, quantity]) => ({ code, quantity, isClaim: false, displayName: 'ค่าบริการซัก ' + (itemNameMap[code] || code) })),
+        ...Object.entries(claimMap)
+          .map(([code, quantity]) => ({ code, quantity, isClaim: true, displayName: 'ส่วนลด ' + (itemNameMap[code] || code) + ' (เคลม)' })),
+      ]
 
-      // Sort by QT order (Fix 253)
+      // Sort by QT order (Fix 253) + billable-before-claim tiebreak (Feat 266)
       items.sort((a, b) => {
         const qa = qtOrderMap[a.code]
         const qb = qtOrderMap[b.code]
-        if (qa !== undefined && qb !== undefined) return qa - qb
-        if (qa !== undefined) return -1
-        if (qb !== undefined) return 1
-        const ai = linenCatalog.findIndex(i => i.code === a.code)
-        const bi = linenCatalog.findIndex(i => i.code === b.code)
-        return ai - bi
+        let cmp = 0
+        if (qa !== undefined && qb !== undefined) cmp = qa - qb
+        else if (qa !== undefined) cmp = -1
+        else if (qb !== undefined) cmp = 1
+        else {
+          const ai = linenCatalog.findIndex(i => i.code === a.code)
+          const bi = linenCatalog.findIndex(i => i.code === b.code)
+          cmp = ai - bi
+        }
+        if (cmp === 0) return (a.isClaim ? 1 : 0) - (b.isClaim ? 1 : 0)
+        return cmp
       })
 
       if (items.length === 0) continue // skip LF with no items
 
-      // Trip fee per SD
+      // Trip fee per SD — Feat 266: claim = discount (subtract)
       let tripFee = 0
       if (customer) {
-        const itemSubtotal = items.reduce((s, i) => s + i.quantity * (priceMap[i.code] || 0), 0)
+        const itemSubtotal = items.reduce((s, i) => {
+          const amt = i.quantity * (priceMap[i.code] || 0)
+          return i.isClaim ? s - amt : s + amt
+        }, 0)
         tripFee = calculateTransportFeeTrip(itemSubtotal, customer)
       }
 
@@ -566,11 +598,14 @@ export default function DeliveryPage() {
       }
     }
 
-    // Calculate item subtotal for trip fee
+    // Calculate item subtotal for trip fee — Feat 266: claim = discount
     let tripFee = 0
     if (customer) {
       const priceMap = buildPriceMapFromQT(selCustomerId, quotations)
-      const itemSubtotal = deliveryItems.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
+      const itemSubtotal = deliveryItems.reduce((s, i) => {
+        const amt = i.quantity * (priceMap[i.code] || 0)
+        return i.isClaim ? s - amt : s + amt
+      }, 0)
       tripFee = calculateTransportFeeTrip(itemSubtotal, customer)
     }
 
@@ -1169,11 +1204,14 @@ export default function DeliveryPage() {
                   </thead>
                   <tbody>
                     {deliveryItems.map((item, idx) => (
-                      <tr key={`${item.code}-${item.isClaim}`} className="border-t border-slate-100">
+                      // Feat 266: claim line = ส่วนลดทางบัญชี (orange row, prefix ส่วนลด, suffix เคลม)
+                      <tr key={`${item.code}-${item.isClaim}`} className={cn('border-t border-slate-100', item.isClaim && 'bg-orange-50/40')}>
                         <td className="px-3 py-1.5 font-mono text-xs">{highlightText(item.code, highlightQ)}</td>
                         <td className="px-3 py-1.5">
+                          {item.isClaim && <span className="text-orange-700">ส่วนลด </span>}
                           {highlightText(itemNameMap[item.code] || item.code, highlightQ)}
-                          {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
+                          {item.isClaim && <span className="text-orange-700"> (เคลม)</span>}
+                          {item.isClaim && <span className="ml-1 text-[10px] text-orange-600">[ส่วนลดทางบัญชี]</span>}
                         </td>
                         <td className="px-3 py-1.5 text-right">
                           {/* 243: arrow ↑↓/Enter เลื่อน row + onFocus auto-select */}
@@ -1431,7 +1469,8 @@ export default function DeliveryPage() {
             {(() => {
               const isPer = (detailCustomer.enablePerPiece ?? true)
               const priceMap = getDNPrices(detailNote)
-              const itemSubtotal = isPer ? detailNote.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0) : 0
+              // Feat 266: claim = discount (handled in calculateDNSubtotal)
+              const itemSubtotal = isPer ? calculateDNSubtotal(detailNote, detailCustomer, priceMap) : 0
               const tripFee = detailNote.transportFeeTrip || 0
               const monthFee = detailNote.transportFeeMonth || 0
               const dnDiscount = detailNote.discount || 0
@@ -1472,10 +1511,15 @@ export default function DeliveryPage() {
                         const isAdhoc = !!item.isAdhoc
                         const price = isAdhoc ? (item.adhocPrice ?? 0) : (priceMap[item.code] || 0)
                         const isBilled = !!detailNote.isBilled
+                        // Feat 266: claim → ส่วนลด default name + orange row + negative amount
+                        const defaultBillableName = 'ค่าบริการซัก ' + (itemNameMap[item.code] || item.code)
+                        const defaultClaimName = 'ส่วนลด ' + (itemNameMap[item.code] || item.code) + ' (เคลม)'
+                        const defaultName = item.isClaim ? defaultClaimName : defaultBillableName
                         return (
                           <tr key={`${item.code}-${idx}`} className={cn(
                             'border-t border-slate-100',
                             isAdhoc && 'bg-orange-50/40',
+                            item.isClaim && !isAdhoc && 'bg-orange-50/40',
                           )}>
                             <td className="px-3 py-1.5 font-mono text-xs">
                               {isAdhoc ? <span className="text-orange-700 font-semibold">★ พิเศษ</span> : highlightText(item.code, highlightQ)}
@@ -1494,7 +1538,7 @@ export default function DeliveryPage() {
                                 />
                               ) : (
                                 <input
-                                  value={item.displayName ?? ('ค่าบริการซัก ' + (itemNameMap[item.code] || item.code))}
+                                  value={item.displayName ?? defaultName}
                                   title="ชื่อในเอกสารใบนี้ (รหัส+ราคาถูก lock จาก QT)"
                                   onChange={e => {
                                     const updated = detailNote.items.map((di, i) => i === idx ? { ...di, displayName: e.target.value } : di)
@@ -1507,10 +1551,10 @@ export default function DeliveryPage() {
                               <FindableText
                                 value={isAdhoc
                                   ? (item.adhocName || '')
-                                  : (item.displayName ?? ('ค่าบริการซัก ' + (itemNameMap[item.code] || item.code)))}
+                                  : (item.displayName ?? defaultName)}
                                 highlightQ={highlightQ}
                               />
-                              {item.isClaim && <span className="ml-1 text-xs text-orange-600">(เคลม)</span>}
+                              {item.isClaim && <span className="ml-1 text-[10px] text-orange-600">[ส่วนลดทางบัญชี]</span>}
                             </td>
                             <td className="px-3 py-1.5 text-right">
                               {(() => {
@@ -1578,7 +1622,11 @@ export default function DeliveryPage() {
                                 )}
                               </td>
                             )}
-                            {isPer && <td className="px-3 py-1.5 text-right">{formatCurrency(item.quantity * price)}</td>}
+                            {isPer && (
+                              <td className={`px-3 py-1.5 text-right ${item.isClaim ? 'text-orange-700' : ''}`}>
+                                {item.isClaim ? `-${formatCurrency(item.quantity * price)}` : formatCurrency(item.quantity * price)}
+                              </td>
+                            )}
                             <td className="px-2 py-1.5 text-center">
                               {isAdhoc && !isBilled && (
                                 <button
@@ -1596,10 +1644,10 @@ export default function DeliveryPage() {
                           </tr>
                         )
                       })}
-                      {/* รวมค่าซัก */}
+                      {/* รวมค่าซัก — Feat 266: นับเฉพาะ billable qty (claim = discount line) */}
                       <tr className="bg-slate-50 font-medium">
                         <td className="px-3 py-2" colSpan={2}>รวมค่าซัก</td>
-                        <td className="px-3 py-2 text-right">{formatNumber(detailNote.items.reduce((s, i) => s + i.quantity, 0))}</td>
+                        <td className="px-3 py-2 text-right">{formatNumber(detailNote.items.reduce((s, i) => i.isClaim ? s : s + i.quantity, 0))}</td>
                         {isPer && <td className="px-3 py-2"></td>}
                         {isPer && <td className="px-3 py-2 text-right">{formatCurrency(itemSubtotal)}</td>}
                         <td></td>
@@ -2109,7 +2157,8 @@ export default function DeliveryPage() {
           const effectiveMonthFee = adjRecalcMonth && monthFeeWillChange ? (newMonthFeeCalc ?? init.monthFee) : init.monthFee
 
           const priceMap = getDNPrices(dn)
-          const itemSubtotal = dn.items.reduce((s, i) => i.isClaim ? s : s + i.quantity * (priceMap[i.code] || 0), 0)
+          // Feat 266: claim = discount (handled in calculateDNSubtotal)
+          const itemSubtotal = calculateDNSubtotal(dn, cust, priceMap)
           const oldTotal = itemSubtotal + init.tripFee + init.monthFee + init.extra - init.discount
           const newTotal = itemSubtotal + effectiveTripFee + effectiveMonthFee + adjExtra - adjDiscount
 
