@@ -309,7 +309,12 @@ export default function CustomersPage() {
                           className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                       </td>
                       <td className={cn("px-4 py-3", sortedBg('shortName'))}>
-                        <Link href={`/dashboard/customers/${c.id}`} className="font-bold text-[#1B3A5C] hover:underline tracking-wide">{highlightText(c.shortName || '-', highlightQ)}</Link>
+                        <span className="inline-flex items-center gap-1">
+                          <Link href={`/dashboard/customers/${c.id}`} className="font-bold text-[#1B3A5C] hover:underline tracking-wide">{highlightText(c.shortName || '-', highlightQ)}</Link>
+                          {c.workflowMode === 'trust_customer' && (
+                            <span title="Trust Customer — โรงงานไม่นับเข้า" className="text-emerald-600 text-sm">✅</span>
+                          )}
+                        </span>
                       </td>
                       <td className={cn("px-4 py-3", sortedBg('name'))}>
                         <span className="text-slate-800">{highlightText(c.name, highlightQ)}</span>

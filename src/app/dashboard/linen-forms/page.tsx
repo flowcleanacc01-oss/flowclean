@@ -547,7 +547,14 @@ export default function LinenFormsPage() {
                     {/* 135.4: date + customer = เด่น, formNumber = muted */}
                     {/* 147.2: highlight keyword จาก Global Search ?q= */}
                     <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(form.date)}</td>
-                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}><span className="truncate block max-w-[120px]">{highlightText(customer?.shortName || customer?.name || '-', highlightQ)}</span></td>
+                    <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>
+                      <span className="truncate block max-w-[120px]">
+                        {highlightText(customer?.shortName || customer?.name || '-', highlightQ)}
+                        {form.workflowMode === 'trust_customer' && (
+                          <span title="Trust Customer — LF snapshot ไม่มี col5" className="ml-1 text-emerald-600">✅</span>
+                        )}
+                      </span>
+                    </td>
                     <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('formNumber'))}>
                       <span className="inline-flex items-center gap-1">
                         {highlightText(form.formNumber, highlightQ)}
@@ -759,8 +766,18 @@ export default function LinenFormsPage() {
         {detailForm && detailCustomer && (
           <div className="space-y-4">
             <div id="linen-form-detail" className="space-y-4 bg-white p-2">
-            <div className="flex flex-wrap gap-4 text-sm">
-              <div><span className="text-slate-500">ลูกค้า:</span> <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
+            <div className="flex flex-wrap gap-4 text-sm items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">ลูกค้า:</span>
+                <strong>{detailCustomer.shortName || detailCustomer.name}</strong>
+                {detailForm.workflowMode === 'trust_customer' && (
+                  <span
+                    title="LF นี้ snapshot โหมด Trust Customer ตอนสร้าง — col5 (โรงซักนับเข้า) ไม่มี · col4 (ลูกค้านับกลับ) ยังกรอกได้"
+                    className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                    ✅ Trust Customer
+                  </span>
+                )}
+              </div>
               <div><span className="text-slate-500">วันที่:</span> {formatDate(detailForm.date)}</div>
             </div>
             {/* Top stepper — แผนที่สถานี (train station map) */}

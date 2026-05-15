@@ -151,7 +151,15 @@ export default function CustomerDetailPage() {
               <Building2 className="w-5 h-5 text-[#1B3A5C]" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg font-bold text-slate-800 truncate">{customer.shortName || customer.name}</h1>
+              <h1 className="text-lg font-bold text-slate-800 truncate flex items-center gap-2">
+                <span className="truncate">{customer.shortName || customer.name}</span>
+                {customer.workflowMode === 'trust_customer' && (
+                  <span title="Trust Customer — โรงงานไม่นับเข้า (col5 ว่าง) · col4 ลูกค้านับกลับ ยังกรอกได้"
+                    className="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                    ✅ Trust
+                  </span>
+                )}
+              </h1>
               <p className="text-xs text-slate-400 truncate">
                 {customer.shortName ? customer.name : customer.nameEn}
                 {customer.customerCode && ` • ${customer.customerCode}`}
