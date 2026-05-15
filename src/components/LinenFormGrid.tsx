@@ -67,7 +67,7 @@ export default function LinenFormGrid({
 
   // ถ้ามี qtItems → ใช้ลำดับ + ชื่อจาก QT, fallback ไป catalog
   // 213.2 Phase 1.2 — apply customer.itemNicknames เป็น display alias (override ชื่อ)
-  const enabledItems: LinenItemDef[] = qtItems
+  const baseItems: LinenItemDef[] = qtItems
     ? qtItems.map(qi => {
         const catItem = catalog.find(c => c.code === qi.code)
         return {
@@ -87,6 +87,30 @@ export default function LinenFormGrid({
           ...item,
           name: resolveDisplayName(item.code, item.name, customer.itemNicknames),
         }))
+
+  // 269: Orphan-safe — append rows ที่มีข้อมูลกรอกไว้แต่ code ไม่อยู่ใน baseItems
+  //   เคส: customer ไม่มี accepted QT → baseItems = [] → grid ว่าง แม้ rows มีข้อมูล
+  //   หรือ LF เก่ามี item code ที่ QT ปัจจุบันถอดออกแล้ว → orphan
+  //   Append ตอนท้าย กรอกต่อ/ดู/แก้ได้ ไม่เสียข้อมูล
+  const baseCodes = new Set(baseItems.map(i => i.code))
+  const orphanItems: LinenItemDef[] = rows
+    .filter(r => !baseCodes.has(r.code))
+    .filter(r => (r.col2_hotelCountIn || 0) || (r.col3_hotelClaimCount || 0)
+      || (r.col4_factoryApproved || 0) || (r.col5_factoryClaimApproved || 0)
+      || (r.col6_factoryPackSend || 0) || r.note)
+    .map(r => {
+      const catItem = catalog.find(c => c.code === r.code)
+      return {
+        code: r.code,
+        name: resolveDisplayName(r.code, catItem?.name || r.code, customer.itemNicknames),
+        nameEn: catItem?.nameEn || '',
+        category: catItem?.category || 'other',
+        unit: catItem?.unit || 'ชิ้น',
+        defaultPrice: 0,
+        sortOrder: 999,
+      }
+    })
+  const enabledItems: LinenItemDef[] = [...baseItems, ...orphanItems]
 
   const [localRows, setLocalRows] = useState<LinenFormRow[]>(rows)
   const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null)
