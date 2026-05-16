@@ -1024,6 +1024,7 @@ export default function LinenFormsPage() {
               headerLabel={`ลูกค้า: ${detailCustomer.shortName || detailCustomer.name}  |  วันที่: ${formatDate(detailForm.date)}`}
               formStatus={detailForm.status}
               highlightQ={highlightQ}
+              workflowModeOverride={detailForm.workflowMode}
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
                 detailForm.status === 'received' ? ['col2', 'col3', 'col5', 'note'] :

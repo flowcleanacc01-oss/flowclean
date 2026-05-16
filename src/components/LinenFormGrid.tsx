@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Trash2, Zap, Check } from 'lucide-react'
-import type { LinenFormRow, Customer, LinenItemDef, LinenFormStatus, QuotationItem } from '@/types'
+import type { LinenFormRow, Customer, LinenItemDef, LinenFormStatus, QuotationItem, WorkflowMode } from '@/types'
 import { cn } from '@/lib/utils'
 import { wasSynced } from '@/lib/sync-discrepancy'
 import { resolveDisplayName } from '@/lib/facet-generators'
@@ -25,6 +25,8 @@ interface LinenFormGridProps {
   onApproveSync?: (code: string) => void
   /** 233: highlight query — wrap matches in <mark> ใน item.code/name (ใช้กับ Cmd+K + FindBar) */
   highlightQ?: string
+  /** 270: override workflowMode — caller (LF detail) ส่ง LF snapshot ป้องกัน drift เมื่อ customer toggle */
+  workflowModeOverride?: WorkflowMode
 }
 
 const COL_LABELS = [
@@ -58,11 +60,14 @@ export default function LinenFormGrid({
   formStatus,
   onApproveSync,
   highlightQ = '',
+  workflowModeOverride,
 }: LinenFormGridProps) {
-  // 268 — workflowMode: trust_customer → ไม่นับเข้า (col5 disabled แสดง "—")
-  // col4 (ลูกค้านับกลับ) ยัง editable ปกติ — ลูกค้าอาจแย้งกรณีนับกลับ
-  // carry-over คำนวณจาก col6 − (col2+col3) แทน col6 − col5
-  const workflowMode = customer.workflowMode ?? 'cross_check'
+  // 270 — workflowMode: ใช้ override (LF snapshot) ก่อน, fallback ไป customer.workflowMode
+  //   ป้องกัน drift: LF เก่าที่ snapshot 'cross_check' ไว้ต้องคงพฤติกรรม cross_check
+  //   แม้ customer.workflowMode ถูก toggle เป็น trust_customer ภายหลัง
+  // 268 — trust_customer: col5 disabled แสดง "—" / col4 (ลูกค้านับกลับ) ยัง editable
+  //   carry-over คำนวณจาก col6 − (col2+col3) แทน col6 − col5
+  const workflowMode = workflowModeOverride ?? customer.workflowMode ?? 'cross_check'
   const isTrustCustomer = workflowMode === 'trust_customer'
 
   // ถ้ามี qtItems → ใช้ลำดับ + ชื่อจาก QT, fallback ไป catalog
