@@ -38,7 +38,7 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
 export default function CustomersPage() {
   const {
     customers, addCustomer, updateCustomer, deleteCustomer,
-    quotations, linenForms, deliveryNotes, billingStatements, checklists, taxInvoices, companyInfo, linenCatalog,
+    quotations, linenForms, updateLinenForm, deliveryNotes, billingStatements, checklists, taxInvoices, companyInfo, linenCatalog,
     customerCategories, addCustomerCategory, updateCustomerCategory, deleteCustomerCategory, getCustomerCategoryLabel,
   } = useStore()
   const sp = useSearchParams()
@@ -59,6 +59,13 @@ export default function CustomersPage() {
   }
 
   const [pageTab, setPageTab] = useState<PageTab>('customers')
+  // 270.1: Pending workflow change modal (apply trust / revert cross)
+  const [pendingTrustChange, setPendingTrustChange] = useState<{
+    customerId: string
+    targetMode: 'trust_customer' | 'cross_check'
+  } | null>(null)
+  const [applyScope, setApplyScope] = useState<'none' | 'all' | 'fromDate'>('none')
+  const [applyFromDate, setApplyFromDate] = useState<string>('')
   const [search, setSearch] = useState('')
   // 162.1: combine local search + URL ?q so live typing also highlights
   const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
@@ -507,17 +514,16 @@ export default function CustomersPage() {
         const candidateCusts = crossList.filter(c => candidateMap.has(c.id))
           .sort((a, b) => (candidateMap.get(b.id)!.score) - (candidateMap.get(a.id)!.score))
 
+        // 270.1: เปิด Modal เลือก scope แทน confirm dialog
         const applyTrust = (custId: string) => {
-          const c = customers.find(x => x.id === custId)
-          if (!c) return
-          if (!confirm(`Set "${c.shortName || c.name}" → Trust Customer?\n\nผลกระทบ:\n• LF ใหม่จะไม่มี col5 (โรงซักนับเข้า)\n• ยังกรอก col4 (ลูกค้านับกลับ) ได้ปกติ\n• carry-over default = Mode 2 (col6 − (col2+col3))\n\n(LF เก่ายังคง snapshot mode เดิม ไม่กระทบ)`)) return
-          updateCustomer(custId, { workflowMode: 'trust_customer' })
+          setPendingTrustChange({ customerId: custId, targetMode: 'trust_customer' })
+          setApplyScope('none')
+          setApplyFromDate('')
         }
         const revertCross = (custId: string) => {
-          const c = customers.find(x => x.id === custId)
-          if (!c) return
-          if (!confirm(`Revert "${c.shortName || c.name}" → Cross Check?\n\nLF ใหม่จะกลับมาใช้ครบ 6 columns รวม col5 (โรงซักนับเข้า)\n(LF เก่าที่ snapshot trust mode ไม่กระทบ)`)) return
-          updateCustomer(custId, { workflowMode: 'cross_check' })
+          setPendingTrustChange({ customerId: custId, targetMode: 'cross_check' })
+          setApplyScope('none')
+          setApplyFromDate('')
         }
 
         return (
@@ -694,6 +700,179 @@ export default function CustomersPage() {
           </div>
         )
       })()}
+
+      {/* 270.1: Apply Trust / Revert Cross — Scope Modal */}
+      <Modal
+        open={!!pendingTrustChange}
+        onClose={() => setPendingTrustChange(null)}
+        title={pendingTrustChange?.targetMode === 'trust_customer' ? 'Apply Trust Customer — เลือกขอบเขต' : 'Revert → Cross Check — เลือกขอบเขต'}
+        size="lg"
+        closeLabel="cancel"
+      >
+        {pendingTrustChange && (() => {
+          const cust = customers.find(c => c.id === pendingTrustChange.customerId)
+          if (!cust) return null
+          const targetMode = pendingTrustChange.targetMode
+          const isTrust = targetMode === 'trust_customer'
+          const custLFs = linenForms.filter(lf => lf.customerId === cust.id)
+          const matchingLFs = custLFs.filter(lf => (lf.workflowMode ?? 'cross_check') === targetMode)
+          const mismatchLFs = custLFs.filter(lf => (lf.workflowMode ?? 'cross_check') !== targetMode)
+          const fromDateMatches = applyFromDate
+            ? mismatchLFs.filter(lf => lf.date >= applyFromDate)
+            : []
+
+          const handleSubmit = () => {
+            updateCustomer(cust.id, { workflowMode: targetMode })
+            let updatedCount = 0
+            if (applyScope === 'all') {
+              for (const lf of mismatchLFs) {
+                updateLinenForm(lf.id, { workflowMode: targetMode })
+                updatedCount++
+              }
+            } else if (applyScope === 'fromDate' && applyFromDate) {
+              for (const lf of fromDateMatches) {
+                updateLinenForm(lf.id, { workflowMode: targetMode })
+                updatedCount++
+              }
+            }
+            setPendingTrustChange(null)
+            if (updatedCount > 0) {
+              alert(`✅ Set ${cust.shortName || cust.name} → ${isTrust ? 'Trust Customer' : 'Cross Check'}\n\nLFs ที่ apply ย้อนหลัง: ${updatedCount} ใบ`)
+            }
+          }
+
+          return (
+            <div className="space-y-4 text-sm">
+              {/* Customer + Stats */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <div className="flex items-baseline gap-2 mb-2">
+                  <span className="text-slate-500 text-xs">ลูกค้า:</span>
+                  <strong className="text-[#1B3A5C]">{cust.shortName || '-'}</strong>
+                  <span className="text-slate-500 text-xs">— {cust.name}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div><span className="text-slate-500">LFs ทั้งหมด:</span> <strong>{custLFs.length}</strong> ใบ</div>
+                  <div>
+                    <span className="text-slate-500">Snapshot {isTrust ? 'Trust' : 'Cross Check'} แล้ว:</span>{' '}
+                    <strong className="text-emerald-700">{matchingLFs.length}</strong> ใบ
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Snapshot {isTrust ? 'Cross Check' : 'Trust'}:</span>{' '}
+                    <strong className="text-amber-700">{mismatchLFs.length}</strong> ใบ
+                  </div>
+                </div>
+              </div>
+
+              {/* Impact info */}
+              <div className={cn('rounded-lg border px-3 py-2 text-xs',
+                isTrust ? 'border-emerald-200 bg-emerald-50/40 text-emerald-800' : 'border-blue-200 bg-blue-50/40 text-blue-800')}>
+                <p className="font-medium mb-1">{isTrust ? '✅ Trust Customer Mode' : '🔄 Cross Check Mode'}</p>
+                {isTrust ? (
+                  <ul className="list-disc list-inside space-y-0.5">
+                    <li>col5 (โรงซักนับเข้า) จะซ่อนจาก grid (data preserved)</li>
+                    <li>col4 (ลูกค้านับกลับ) ยังกรอก/แก้ไขได้ปกติ</li>
+                    <li>carry-over default = Mode 2 (col6 − (col2+col3))</li>
+                    <li>Type 1 discrepancy ไม่แสดง · Type 2 ยังแสดง</li>
+                  </ul>
+                ) : (
+                  <ul className="list-disc list-inside space-y-0.5">
+                    <li>กลับมาใช้ครบ 6 columns รวม col5</li>
+                    <li>carry-over default = Mode 1 (col6 − col5)</li>
+                    <li>Type 1 + Type 2 discrepancy ทำงานเต็ม</li>
+                  </ul>
+                )}
+              </div>
+
+              {/* Scope options */}
+              <div>
+                <p className="font-medium text-slate-700 mb-2">ขอบเขตการ apply กับ LF เดิม:</p>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="scope" value="none" checked={applyScope === 'none'}
+                      onChange={() => setApplyScope('none')} className="mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-700">ไม่ apply ย้อนหลัง</p>
+                      <p className="text-xs text-slate-500">ตั้งค่า customer.workflowMode เท่านั้น · LF เก่าคง snapshot เดิม · LF ใหม่จะใช้ mode ใหม่</p>
+                    </div>
+                  </label>
+
+                  <label className={cn('flex items-start gap-2 p-3 border rounded-lg cursor-pointer',
+                    mismatchLFs.length === 0 ? 'opacity-50 cursor-not-allowed border-slate-200' : 'border-slate-200 hover:bg-slate-50')}>
+                    <input type="radio" name="scope" value="all" checked={applyScope === 'all'}
+                      disabled={mismatchLFs.length === 0}
+                      onChange={() => setApplyScope('all')} className="mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-700">
+                        Apply ย้อนหลังทั้งหมด ({mismatchLFs.length} ใบ)
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        เปลี่ยน snapshot ของ LF ที่ยังไม่ตรง mode → {isTrust ? 'trust_customer' : 'cross_check'} ทุกใบ
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className={cn('flex items-start gap-2 p-3 border rounded-lg cursor-pointer',
+                    mismatchLFs.length === 0 ? 'opacity-50 cursor-not-allowed border-slate-200' : 'border-slate-200 hover:bg-slate-50')}>
+                    <input type="radio" name="scope" value="fromDate" checked={applyScope === 'fromDate'}
+                      disabled={mismatchLFs.length === 0}
+                      onChange={() => setApplyScope('fromDate')} className="mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-700">Apply ตั้งแต่วันที่...</p>
+                      <p className="text-xs text-slate-500 mb-2">
+                        เปลี่ยน snapshot ของ LF ที่ date ≥ วันที่กำหนด (และยังไม่ตรง mode)
+                      </p>
+                      {applyScope === 'fromDate' && (
+                        <div className="flex items-center gap-2">
+                          <input type="date" value={applyFromDate}
+                            onChange={e => setApplyFromDate(e.target.value)}
+                            className="px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                          {applyFromDate && (
+                            <span className="text-xs text-slate-600">→ {fromDateMatches.length} ใบ จะถูก update</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Warning if billed LFs in scope */}
+              {(() => {
+                const targetsToUpdate = applyScope === 'all' ? mismatchLFs :
+                  applyScope === 'fromDate' && applyFromDate ? fromDateMatches : []
+                const billedCount = targetsToUpdate.filter(lf =>
+                  deliveryNotes.some(dn => dn.linenFormIds.includes(lf.id))
+                ).length
+                if (billedCount === 0) return null
+                return (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    ⚠ มี LFs ที่มี SD ผูกอยู่แล้ว: <strong>{billedCount}</strong> ใบ
+                    — เปลี่ยน snapshot จะกระทบ carry-over reports + discrepancy display ของรอบที่ผ่านมา
+                  </div>
+                )
+              })()}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+                <button onClick={() => setPendingTrustChange(null)}
+                  className="px-4 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium">
+                  ยกเลิก
+                </button>
+                <button onClick={handleSubmit}
+                  disabled={applyScope === 'fromDate' && !applyFromDate}
+                  className={cn('px-4 py-2 text-sm rounded-lg font-medium transition-colors',
+                    applyScope === 'fromDate' && !applyFromDate
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      : isTrust
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        : 'bg-blue-600 text-white hover:bg-blue-700')}>
+                  {isTrust ? 'Apply Trust' : 'Revert → Cross Check'}
+                </button>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
 
       {/* Form Modal */}
       <Modal open={showForm} onClose={() => setShowForm(false)} title={editId ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า'} size="xl" closeLabel="cancel">
