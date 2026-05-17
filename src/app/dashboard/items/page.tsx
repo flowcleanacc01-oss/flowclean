@@ -8,6 +8,7 @@ import { highlightText } from '@/lib/highlight'
 import { useSearchParams } from 'next/navigation'
 import type { LinenItemDef, LinenCategoryDef } from '@/types'
 import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown, Printer, GripVertical } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
 import { exportCSV } from '@/lib/export'
@@ -57,6 +58,7 @@ export default function ItemsPage() {
     quotations, linenForms, deliveryNotes, customers,
   } = useStore()
   const sp = useSearchParams()
+  const router = useRouter()
   const urlHighlightQ = sp.get('q') || '' // 147.2
   // 238: prefill MergeCodesTool source code (เปิดจาก carry-over orphan badge)
   const urlMergeSource = sp.get('mergeSource') || ''
@@ -93,6 +95,8 @@ export default function ItemsPage() {
   const [editItem, setEditItem] = useState<Partial<LinenItemDef>>({})
   const [selectedCodes, setSelectedCodes] = useState<string[]>([])
   const [activeCode, setActiveCode] = useState<string | null>(null)
+  // 278: catalog item delete modal — replaces native confirm() with reference count + Merge suggest
+  const [deleteConfirmCode, setDeleteConfirmCode] = useState<string | null>(null)
   // 173.1: reorder mode + drag tracking
   const [reorderMode, setReorderMode] = useState(false)
   const [dragCode, setDragCode] = useState<string | null>(null)
@@ -239,16 +243,41 @@ export default function ItemsPage() {
     setEditItem({})
   }
 
-  const handleDeleteItem = (code: string, name: string) => {
-    if (confirm(`ลบรายการ "${name}" (${code})?\nรายการที่ถูกใช้ในฟอร์มเดิมจะยังอยู่ แต่จะไม่แสดงในรายการเลือกใหม่`)) {
-      deleteLinenItem(code)
-      if (activeCode === code) setActiveCode(null)
-      setSelectedCodes(prev => prev.filter(c => c !== code))
-    }
+  // 278: Open Modal showing reference counts + Merge-vs-Delete choice
+  const handleDeleteItem = (code: string, _name: string) => {
+    setDeleteConfirmCode(code)
   }
 
+  // 278: Reference count helper — count usages across all docs that reference catalog codes
+  //   Used to warn user before delete + bias toward "Merge" (clean) over "Delete" (ghost)
+  const getReferenceCount = useCallback((code: string) => {
+    let qt = 0
+    for (const q of quotations) {
+      if (q.items.some(i => i.code === code)) qt++
+    }
+    let lf = 0
+    for (const f of linenForms) {
+      if (f.rows.some(r => r.code === code)) lf++
+    }
+    let sd = 0
+    let sdSnapshot = 0
+    for (const d of deliveryNotes) {
+      if (d.items.some(i => i.code === code)) sd++
+      if (d.priceSnapshot && code in d.priceSnapshot) sdSnapshot++
+    }
+    let cust = 0
+    for (const c of customers) {
+      const inEnabled = c.enabledItems?.includes(code) ?? false
+      const inPriceList = c.priceList?.some(p => p.code === code) ?? false
+      const inNicknames = c.itemNicknames && code in c.itemNicknames
+      if (inEnabled || inPriceList || inNicknames) cust++
+    }
+    const total = qt + lf + sd + sdSnapshot + cust
+    return { qt, lf, sd, sdSnapshot, cust, total }
+  }, [quotations, linenForms, deliveryNotes, customers])
+
   const handleBulkDeleteItems = () => {
-    if (!confirm(`ลบรายการผ้าที่เลือกทั้งหมด ${selectedCodes.length} รายการ?\nรายการที่ถูกใช้ในฟอร์มเดิมจะยังอยู่ แต่จะไม่แสดงในรายการเลือกใหม่`)) return
+    if (!confirm(`ลบรายการผ้าที่เลือกทั้งหมด ${selectedCodes.length} รายการ?\n\n⚠ ถ้ารายการใดถูกใช้ในเอกสารเดิม จะกลายเป็น ghost data\nแนะนำใช้ Merge แทน (กดลบทีละตัวเพื่อดู reference count)\n\nยืนยัน bulk delete?`)) return
     for (const code of selectedCodes) {
       deleteLinenItem(code)
     }
@@ -997,6 +1026,101 @@ export default function ItemsPage() {
               </div>
               <div className="flex justify-end mt-4">
                 <ExportButtons targetId="print-item-list" filename="รายการผ้า" onExportCSV={handleCSV} />
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* 278: Delete catalog item — reference count + Merge-suggest modal */}
+      <Modal
+        open={!!deleteConfirmCode}
+        onClose={() => setDeleteConfirmCode(null)}
+        title="ลบรายการผ้าออกจาก Catalog"
+        size="lg"
+        closeLabel="cancel"
+      >
+        {deleteConfirmCode && (() => {
+          const item = linenCatalog.find(i => i.code === deleteConfirmCode)
+          if (!item) return null
+          const refs = getReferenceCount(deleteConfirmCode)
+          const hasRefs = refs.total > 0
+
+          const handleMerge = () => {
+            router.push(`/dashboard/items?tab=merge&mergeSource=${encodeURIComponent(deleteConfirmCode)}&deleteAfter=1`)
+            setDeleteConfirmCode(null)
+          }
+          const handleDelete = () => {
+            const code = deleteConfirmCode
+            if (hasRefs && !confirm(`⚠ ยืนยันลบรายการ "${item.name}" (${code})\n\nรายการนี้ถูกใช้ใน ${refs.total} ที่ — จะกลายเป็น ghost data\nแนะนำ Merge มากกว่า\n\nลบอย่างไรก็ตาม?`)) return
+            deleteLinenItem(code)
+            if (activeCode === code) setActiveCode(null)
+            setSelectedCodes(prev => prev.filter(c => c !== code))
+            setDeleteConfirmCode(null)
+          }
+
+          return (
+            <div className="space-y-4 text-sm">
+              {/* Item info */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono text-xs text-slate-500">{item.code}</span>
+                  <strong className="text-[#1B3A5C]">{item.name}</strong>
+                  {item.nameEn && <span className="text-xs text-slate-400">({item.nameEn})</span>}
+                </div>
+              </div>
+
+              {/* Reference breakdown */}
+              {hasRefs ? (
+                <div className="border border-amber-300 bg-amber-50 rounded-lg p-3">
+                  <p className="text-sm font-semibold text-amber-800 mb-2">
+                    ⚠ รหัสนี้ถูกใช้ใน {refs.total} ที่
+                  </p>
+                  <ul className="text-xs text-amber-700 space-y-0.5 ml-4 list-disc">
+                    {refs.qt > 0 && <li>ใบเสนอราคา (QT): <strong>{refs.qt}</strong> ใบ</li>}
+                    {refs.lf > 0 && <li>ใบรับส่งผ้า (LF): <strong>{refs.lf}</strong> ใบ</li>}
+                    {refs.sd > 0 && <li>ใบส่งของชั่วคราว (SD): <strong>{refs.sd}</strong> ใบ</li>}
+                    {refs.sdSnapshot > 0 && refs.sdSnapshot !== refs.sd && (
+                      <li>SD priceSnapshot: <strong>{refs.sdSnapshot}</strong> ใบ</li>
+                    )}
+                    {refs.cust > 0 && <li>ลูกค้า (enabledItems / priceList / nicknames): <strong>{refs.cust}</strong> ราย</li>}
+                  </ul>
+                  <p className="text-xs text-amber-800 mt-2 font-medium">
+                    ถ้าลบ — ข้อมูลในเอกสารยังคงอยู่ (ghost) ต้องใช้ Orphan Inspector ตามเก็บอีกหลายขั้น
+                  </p>
+                </div>
+              ) : (
+                <div className="border border-emerald-200 bg-emerald-50/60 rounded-lg p-3 text-xs text-emerald-800">
+                  ✅ ไม่พบการใช้งานในเอกสารใดๆ — ลบได้ปลอดภัย ไม่เกิด ghost data
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="space-y-2 pt-2">
+                {hasRefs && (
+                  <button
+                    onClick={handleMerge}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg font-medium hover:bg-[#2bb8b8] transition-colors"
+                  >
+                    🔀 Merge ไปรายการอื่น (แนะนำ — clean, ไม่มี ghost)
+                  </button>
+                )}
+                <button
+                  onClick={handleDelete}
+                  className={cn('w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors',
+                    hasRefs
+                      ? 'bg-white text-red-600 border border-red-200 hover:bg-red-50'
+                      : 'bg-red-600 text-white hover:bg-red-700')}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {hasRefs ? `ลบไม่ merge (${refs.total} อ้างอิงจะค้าง)` : 'ลบรายการ'}
+                </button>
+                <button
+                  onClick={() => setDeleteConfirmCode(null)}
+                  className="w-full inline-flex items-center justify-center px-4 py-2 text-slate-500 hover:text-slate-700 text-sm"
+                >
+                  ยกเลิก
+                </button>
               </div>
             </div>
           )
