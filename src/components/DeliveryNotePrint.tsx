@@ -35,7 +35,7 @@ export default function DeliveryNotePrint({ note, customer, company, catalog, pr
   const hasAdjustments = tripFee > 0 || monthFee > 0 || extraCharge > 0 || discount > 0
 
   return (
-    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-4 print:shadow-none print:max-w-none print:w-full print:mx-0" id="print-delivery">
+    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-delivery">
       {/* Header */}
       <div className="flex justify-between items-start mb-4 border-b border-slate-300 pb-3 print:mb-3 print:pb-2">
         <div className="flex items-start gap-3">

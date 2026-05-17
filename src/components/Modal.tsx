@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -107,9 +108,16 @@ export default function Modal({ open, onClose, title, children, size = 'md', cla
     return () => document.removeEventListener('keydown', handler)
   }, [open])
 
-  if (!open) return null
+  // 271: SSR guard — portal needs document
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
 
-  return (
+  if (!open || !mounted) return null
+
+  // 271: createPortal → render at body level so .print-target becomes a
+  //   direct body child → CSS `body > *:not(.print-target) { display:none }`
+  //   can isolate it for print (prevents blank page 2 from hidden siblings)
+  return createPortal(
     <div className={cn("fixed inset-0 z-50 flex items-start justify-center pt-[3vh] px-4 animate-fadeIn", className)}>
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
       <div
@@ -142,6 +150,7 @@ export default function Modal({ open, onClose, title, children, size = 'md', cla
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

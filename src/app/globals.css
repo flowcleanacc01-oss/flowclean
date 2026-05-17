@@ -69,40 +69,55 @@ input[type="number"] {
   aside { display: none !important; }
   nav { display: none !important; }
 
-  /* Reset print modal: position at page top, remove viewport constraints */
+  /* 271: Hide non-print body content STRUCTURALLY (display:none) — prevents
+   * hidden-but-occupying-space siblings from pushing print content to page 2
+   * visibility:hidden alone keeps layout space → causes blank page after content */
+  body > *:not(.print-target) { display: none !important; }
+
+  /* Reset print modal: remove all viewport / size constraints */
   .print-target {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
+    position: static !important;
     display: block !important;
     overflow: visible !important;
     height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
-    z-index: 9999 !important;
+    inset: auto !important;
   }
   /* Remove modal backdrop */
   .print-target > .fixed.inset-0.bg-black\/40 { display: none !important; }
-  /* Modal card: remove shadow, border, max-height, make full-width */
+  /* Modal card: remove flex/shadow/border/size constraints, make page-flow */
   .print-target > .relative {
     position: static !important;
+    display: block !important;
     max-width: 100% !important;
+    max-height: none !important;
+    height: auto !important;
     width: 100% !important;
     box-shadow: none !important;
     border-radius: 0 !important;
     border: none !important;
+    overflow: visible !important;
   }
   /* Modal header: hide */
   .print-target > .relative > .flex.items-center.justify-between {
     display: none !important;
   }
-  /* Modal body: remove max-height/overflow */
-  .print-target > .relative > .max-h-\[70vh\] {
+  /* Modal body: remove max-height/overflow/padding (matches Modal max-h-[94vh] body) */
+  .print-target > .relative > .overflow-auto,
+  .print-target > .relative > [class*="max-h-"] {
     max-height: none !important;
     overflow: visible !important;
     padding: 0 !important;
+    flex: none !important;
+  }
+  /* Force all descendants visible flow (no internal scroll, no fixed heights) */
+  .print-target * {
+    overflow: visible !important;
+    max-height: none !important;
   }
 
   /* Dashboard layout: remove padding/margin for print */

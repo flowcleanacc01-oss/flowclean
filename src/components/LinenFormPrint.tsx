@@ -26,7 +26,7 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
   const totalCol4 = form.rows.reduce((s, r) => s + r.col4_factoryApproved, 0)
 
   return (
-    <div className="bg-white p-6 max-w-[210mm] mx-auto text-xs print:p-4 print:shadow-none print:max-w-none print:w-full print:mx-0" id="print-lf" style={{ breakInside: 'avoid-page' }}>
+    <div className="bg-white p-6 max-w-[210mm] mx-auto text-xs print:p-0 print:shadow-none" id="print-lf" style={{ breakInside: 'avoid-page' }}>
       {/* Header */}
       <div className="flex justify-between items-start mb-3 border-b border-slate-300 pb-2 print:mb-2 print:pb-1">
         <div className="flex items-start gap-2">
