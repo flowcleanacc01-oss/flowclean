@@ -34,25 +34,53 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',')
 
+// 272.1: Module-level modal stack — coordinates ESC + body scroll + focus trap
+//   across stacked modals so only the topmost handles ESC + Tab cycling
+//   and body scroll unlocks only when ALL modals close
+const modalStack: string[] = []
+let modalIdCounter = 0
+
+function pushModal(id: string) {
+  modalStack.push(id)
+  if (modalStack.length === 1) {
+    document.body.style.overflow = 'hidden'
+  }
+}
+
+function popModal(id: string) {
+  const idx = modalStack.indexOf(id)
+  if (idx !== -1) modalStack.splice(idx, 1)
+  if (modalStack.length === 0) {
+    document.body.style.overflow = ''
+  }
+}
+
+function isTopModal(id: string): boolean {
+  return modalStack[modalStack.length - 1] === id
+}
+
 export default function Modal({ open, onClose, title, children, size = 'md', className, closeLabel = 'close' }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null)
   const openerRef = useRef<HTMLElement | null>(null)
   const titleId = useId()
+  const idRef = useRef<string>('')
+  if (idRef.current === '') idRef.current = `modal-${++modalIdCounter}`
 
+  // 272.1: Modal stack registration — body scroll lock managed by stack count
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
-    return () => { document.body.style.overflow = '' }
+    if (!open) return
+    const id = idRef.current
+    pushModal(id)
+    return () => popModal(id)
   }, [open])
 
+  // 272.1: ESC handler — only the topmost modal closes on ESC
   useEffect(() => {
+    if (!open) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && isTopModal(idRef.current)) onClose()
     }
-    if (open) window.addEventListener('keydown', handler)
+    window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose])
 
@@ -74,11 +102,12 @@ export default function Modal({ open, onClose, title, children, size = 'md', cla
     }
   }, [open])
 
-  // F1: Focus trap — keep Tab cycling within the modal
+  // F1 + 272.1: Focus trap — only topmost modal traps Tab; background modals pass through
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return
+      if (!isTopModal(idRef.current)) return // 272.1: skip if not topmost
       const node = ref.current
       if (!node) return
       const focusables = Array.from(

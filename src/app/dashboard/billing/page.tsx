@@ -2244,12 +2244,14 @@ export default function BillingPage() {
                   <span>— มีใบกำกับภาษี (IV) อยู่แล้ว กรุณาย้อน IV ก่อน</span>
                 </div>
               ) : (
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" checked={true}
-                    onChange={() => setConfirmDeleteId(detailBilling.id)}
-                    className="w-4 h-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500" />
-                  <span className="text-sm font-medium text-emerald-700">สถานะเปลี่ยนผ่านใบวางบิล WB</span>
-                </label>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteId(detailBilling.id)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                  title="ลบใบวางบิลและย้อนสถานะ SD กลับ">
+                  <Trash2 className="w-3.5 h-3.5" />
+                  ลบ WB + ย้อน SD
+                </button>
               )}
             </div>
             <div className="flex items-center gap-6 mb-4 no-print">
@@ -2411,12 +2413,14 @@ export default function BillingPage() {
         {detailInvoice && detailInvoiceCustomer && (
           <div>
             <div className="flex items-center mb-2 no-print">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={true}
-                  onChange={() => openReverseIVConfirm(detailInvoice.id)}
-                  className="w-4 h-4 rounded border-purple-300 text-purple-600 focus:ring-purple-500" />
-                <span className="text-sm font-medium text-purple-700">สถานะเปลี่ยนผ่านใบกำกับภาษี IV</span>
-              </label>
+              <button
+                type="button"
+                onClick={() => openReverseIVConfirm(detailInvoice.id)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                title="ลบใบกำกับภาษีและย้อนสถานะ WB กลับ">
+                <Trash2 className="w-3.5 h-3.5" />
+                ลบ IV + ย้อน WB
+              </button>
             </div>
             <div className="flex items-center gap-6 mb-4 no-print">
               <label className="flex items-center gap-2 cursor-pointer select-none">

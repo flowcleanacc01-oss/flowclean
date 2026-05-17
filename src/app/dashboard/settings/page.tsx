@@ -10,7 +10,7 @@ import { validatePassword } from '@/lib/auth'
 import { fetchAuditLogs } from '@/lib/supabase-service'
 import type { AuditLog, BankAccount, UserRole } from '@/types'
 import { USER_ROLE_CONFIG } from '@/types'
-import { Plus, Trash2, RotateCcw, Check, KeyRound, X, Eye, EyeOff, Info, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, Check, KeyRound, X, Eye, EyeOff, Info, ChevronDown, UserX } from 'lucide-react'
 import { genId } from '@/lib/utils'
 import { blockNumberArrowKeys } from '@/lib/modal-nav'
 
@@ -298,10 +298,16 @@ export default function SettingsPage() {
                           className="text-slate-400 hover:text-amber-600 p-1">
                           <KeyRound className="w-4 h-4" />
                         </button>
-                        {u.id !== currentUser?.id && (
-                          <button onClick={() => updateUser(u.id, { isActive: false })}
-                            className="text-slate-400 hover:text-red-500 p-1">
-                            <Trash2 className="w-4 h-4" />
+                        {u.id !== currentUser?.id && u.isActive && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`ปิดใช้งาน user "${u.name}"?\n\n• User จะ login ไม่ได้\n• ข้อมูลในเอกสารยังคงอยู่ (เก็บ audit trail)\n• เปิดใช้งานกลับได้จากปุ่ม Active/Inactive`)) {
+                                updateUser(u.id, { isActive: false })
+                              }
+                            }}
+                            title="ปิดใช้งาน user (ไม่ลบจริง — กลับมา activate ได้)"
+                            className="text-slate-400 hover:text-amber-600 p-1">
+                            <UserX className="w-4 h-4" />
                           </button>
                         )}
                       </div>

@@ -2093,26 +2093,25 @@ export default function DeliveryPage() {
                   <span>— SD นี้วางบิลแล้ว กรุณาย้อน WB ก่อน</span>
                 </div>
               ) : (
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={true}
-                  onChange={() => {
-                    const linkedLFs = detailNote.linenFormIds.map(id => linenForms.find(f => f.id === id)).filter(Boolean)
-                    const lfNumbers = linkedLFs.map(f => f!.formNumber).join(', ')
-                    if (confirm(`ยืนยันการลบใบส่งของ ${detailNote.noteNumber}?\n\nLF ที่จะย้อนสถานะกลับ:\n${lfNumbers}\n\nSD badge และ link ใน LF จะหายไปด้วย`)) {
-                      const deletedDN = detailNote
-                      deleteDeliveryNote(deletedDN.id)
-                      // Feat 267: full recalc month fee (ครอบคลุมทุกเคส ไม่เฉพาะ deletedDN ที่มี monthFee)
-                      recalcAfterDelete([deletedDN.id])
-                      setShowPrint(false)
-                      setShowDetail(null)
-                    }
-                  }}
-                  className="w-4 h-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="text-sm font-medium text-emerald-700">สถานะเปลี่ยนผ่านใบส่งของ SD</span>
-              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const linkedLFs = detailNote.linenFormIds.map(id => linenForms.find(f => f.id === id)).filter(Boolean)
+                  const lfNumbers = linkedLFs.map(f => f!.formNumber).join(', ')
+                  if (confirm(`ยืนยันการลบใบส่งของ ${detailNote.noteNumber}?\n\nLF ที่จะย้อนสถานะกลับ:\n${lfNumbers}\n\nSD badge และ link ใน LF จะหายไปด้วย`)) {
+                    const deletedDN = detailNote
+                    deleteDeliveryNote(deletedDN.id)
+                    // Feat 267: full recalc month fee (ครอบคลุมทุกเคส ไม่เฉพาะ deletedDN ที่มี monthFee)
+                    recalcAfterDelete([deletedDN.id])
+                    setShowPrint(false)
+                    setShowDetail(null)
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                title="ลบใบส่งของและย้อนสถานะ LF กลับ">
+                <Trash2 className="w-3.5 h-3.5" />
+                ลบ SD + ย้อน LF
+              </button>
               )}
             </div>
 

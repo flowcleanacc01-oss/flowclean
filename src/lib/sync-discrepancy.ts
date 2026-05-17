@@ -148,9 +148,11 @@ export function recalcTransportAfterSync(
 
   // Recalc trip fee for affected DN — use effectiveSubtotal (respects existing extra/discount)
   // Feat 266: claim = discount (subtract)
+  // 272.4: adhoc-aware — match calculateDNSubtotal helper (transport-fee.ts)
   const itemSubtotal = affectedDn.items.reduce(
     (s, i) => {
-      const amt = i.quantity * (pm[i.code] || 0)
+      const price = i.isAdhoc ? (i.adhocPrice || 0) : (pm[i.code] || 0)
+      const amt = i.quantity * price
       return i.isClaim ? s - amt : s + amt
     },
     0,
@@ -172,9 +174,10 @@ export function recalcTransportAfterSync(
       for (const d of monthDNs) {
         const isAffected = d.id === affectedDn.id
         const dPm = isAffected ? pm : (d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0 ? d.priceSnapshot : fallbackPriceMap)
-        // Feat 266: claim = discount (subtract)
+        // Feat 266: claim = discount (subtract) · 272.4: adhoc-aware
         const dSubtotal = d.items.reduce((s, i) => {
-          const amt = i.quantity * (dPm[i.code] || 0)
+          const price = i.isAdhoc ? (i.adhocPrice || 0) : (dPm[i.code] || 0)
+          const amt = i.quantity * price
           return i.isClaim ? s - amt : s + amt
         }, 0)
         const dEffective = isAffected ? effectiveSubtotal : dSubtotal
@@ -229,9 +232,11 @@ export function recalcTransportAfterAdj(
     : fallbackPriceMap
 
   // Feat 266: claim = discount (subtract)
+  // 272.4: adhoc-aware — match calculateDNSubtotal helper (transport-fee.ts)
   const itemSubtotal = affectedDn.items.reduce(
     (s, i) => {
-      const amt = i.quantity * (pm[i.code] || 0)
+      const price = i.isAdhoc ? (i.adhocPrice || 0) : (pm[i.code] || 0)
+      const amt = i.quantity * price
       return i.isClaim ? s - amt : s + amt
     },
     0,
@@ -253,9 +258,10 @@ export function recalcTransportAfterAdj(
       for (const d of monthDNs) {
         const isAffected = d.id === affectedDn.id
         const dPm = isAffected ? pm : (d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0 ? d.priceSnapshot : fallbackPriceMap)
-        // Feat 266: claim = discount (subtract)
+        // Feat 266: claim = discount (subtract) · 272.4: adhoc-aware
         const dSubtotal = d.items.reduce((s, i) => {
-          const amt = i.quantity * (dPm[i.code] || 0)
+          const price = i.isAdhoc ? (i.adhocPrice || 0) : (dPm[i.code] || 0)
+          const amt = i.quantity * price
           return i.isClaim ? s - amt : s + amt
         }, 0)
         // affectedDn ใช้ effectiveSubtotal (รวม adj), DN อื่นใช้ subtotal ปกติ
