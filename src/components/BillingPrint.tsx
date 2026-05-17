@@ -8,11 +8,13 @@ interface BillingPrintProps {
   billing: BillingStatement
   customer: Customer
   company: CompanyInfo
+  /** 275.3: bulk print — set idSuffix per row to avoid duplicate DOM IDs */
+  idSuffix?: string
 }
 
-export default function BillingPrint({ billing, customer, company }: BillingPrintProps) {
+export default function BillingPrint({ billing, customer, company, idSuffix }: BillingPrintProps) {
   return (
-    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-billing">
+    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id={`print-billing${idSuffix ? `-${idSuffix}` : ''}`}>
       {/* Header */}
       <div className="flex justify-between items-start mb-6 border-b border-slate-300 pb-4">
         <div className="flex items-start gap-3">

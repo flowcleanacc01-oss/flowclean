@@ -10,13 +10,15 @@ interface TaxInvoicePrintProps {
   company: CompanyInfo
   withholdingTax?: number
   netPayable?: number
+  /** 275.3: bulk print — set idSuffix per row to avoid duplicate DOM IDs */
+  idSuffix?: string
 }
 
-export default function TaxInvoicePrint({ invoice, customer, company, withholdingTax, netPayable }: TaxInvoicePrintProps) {
+export default function TaxInvoicePrint({ invoice, customer, company, withholdingTax, netPayable, idSuffix }: TaxInvoicePrintProps) {
   const wht = withholdingTax ?? (invoice.subtotal * 0.03)
   const net = netPayable ?? (invoice.grandTotal - wht)
   return (
-    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-tax-invoice">
+    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id={`print-tax-invoice${idSuffix ? `-${idSuffix}` : ''}`}>
       {/* Header */}
       <div className="flex justify-between items-start mb-4 border-b border-slate-300 pb-3 print:mb-3 print:pb-2">
         <div className="flex items-start gap-3">

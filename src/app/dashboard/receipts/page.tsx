@@ -437,7 +437,7 @@ export default function ReceiptsPage() {
             if (!rc || !c) return null
             return (
               <div key={id} className="border border-slate-200 rounded-lg overflow-hidden break-after-page">
-                <ReceiptPrint receipt={rc} customer={c} />
+                <ReceiptPrint receipt={rc} customer={c} idSuffix={rc.id} />
               </div>
             )
           })}

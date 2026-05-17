@@ -27,7 +27,9 @@ export function scoreTrustCandidate(
     lf.customerId === customerId &&
     (ELIGIBLE_STATUSES as readonly string[]).includes(lf.status),
   )
-  if (customerLFs.length < 5) return null // ต้องมี ≥5 LFs ถึงจะ confidence
+  // 275.2: Threshold ลดจาก 5 → 3 — allow newer customers with strong signal
+  //   (assessedLFs check at line ~53 ยังต้อง ≥3 อยู่ → ป้องกัน 0-data false positive)
+  if (customerLFs.length < 3) return null
 
   let emptyCol5Count = 0
   let matchCol5Count = 0

@@ -10,12 +10,14 @@ interface QuotationPrintProps {
   customerShortName?: string
   /** 213.2 Phase 1.2 — per-customer item nickname override */
   itemNicknames?: Record<string, string>
+  /** 275.3: bulk print — set idSuffix per row to avoid duplicate DOM IDs */
+  idSuffix?: string
 }
 
-export default function QuotationPrint({ quotation, company, customerShortName, itemNicknames }: QuotationPrintProps) {
+export default function QuotationPrint({ quotation, company, customerShortName, itemNicknames, idSuffix }: QuotationPrintProps) {
   const displayName = customerShortName || quotation.customerName
   return (
-    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-quotation">
+    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id={`print-quotation${idSuffix ? `-${idSuffix}` : ''}`}>
       {/* Header */}
       <div className="flex justify-between items-start mb-4 border-b border-slate-300 pb-3 print:mb-3 print:pb-2">
         <div className="flex items-start gap-3">

@@ -10,9 +10,11 @@ interface DeliveryNotePrintProps {
   company: CompanyInfo
   catalog: LinenItemDef[]
   priceMap?: Record<string, number>
+  /** 275.3: bulk print — set idSuffix per row to avoid duplicate DOM IDs */
+  idSuffix?: string
 }
 
-export default function DeliveryNotePrint({ note, customer, company, catalog, priceMap: priceMapProp }: DeliveryNotePrintProps) {
+export default function DeliveryNotePrint({ note, customer, company, catalog, priceMap: priceMapProp, idSuffix }: DeliveryNotePrintProps) {
   // 213.2 Phase 1.2 — Apply customer.itemNicknames (override catalog name for this customer)
   const itemNameMap = Object.fromEntries(catalog.map(i => [i.code, customer.itemNicknames?.[i.code] || i.name]))
   // 226.B: Priority: DN.priceSnapshot (locked at creation) → priceMapProp (from QT) — legacy customer.priceList ตัดออก
@@ -35,7 +37,7 @@ export default function DeliveryNotePrint({ note, customer, company, catalog, pr
   const hasAdjustments = tripFee > 0 || monthFee > 0 || extraCharge > 0 || discount > 0
 
   return (
-    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-delivery">
+    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id={`print-delivery${idSuffix ? `-${idSuffix}` : ''}`}>
       {/* Header */}
       <div className="flex justify-between items-start mb-4 border-b border-slate-300 pb-3 print:mb-3 print:pb-2">
         <div className="flex items-start gap-3">

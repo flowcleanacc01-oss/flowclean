@@ -7,6 +7,8 @@ import type { Receipt, Customer } from '@/types'
 interface Props {
   receipt: Receipt
   customer: Customer
+  /** 275.3: bulk print — set idSuffix per row to avoid duplicate DOM IDs */
+  idSuffix?: string
 }
 
 /**
@@ -19,11 +21,11 @@ interface Props {
  * - ✅ ลูกค้าใช้ชื่อย่อ (ไม่เอาที่อยู่/taxId ลูกค้า)
  * - ❌ ไม่มี VAT 7% / หัก ณ ที่จ่าย 3% (เพราะไม่คิด VAT)
  */
-export default function ReceiptPrint({ receipt, customer }: Props) {
+export default function ReceiptPrint({ receipt, customer, idSuffix }: Props) {
   const total = receipt.grandTotal
 
   return (
-    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id="print-receipt">
+    <div className="bg-white p-8 max-w-[210mm] mx-auto text-sm print:p-0 print:shadow-none" id={`print-receipt${idSuffix ? `-${idSuffix}` : ''}`}>
       {/* Header — brand only, no legal company info */}
       <div className="flex justify-between items-start mb-4 border-b-2 border-slate-300 pb-3">
         <div className="flex items-start gap-3">

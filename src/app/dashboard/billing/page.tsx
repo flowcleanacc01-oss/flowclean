@@ -3234,7 +3234,7 @@ export default function BillingPage() {
                     <span className="text-xs font-medium text-violet-700">ส่งออกเอกสารแล้ว</span>
                   </label>
                 </div>
-                <BillingPrint billing={b} customer={cust} company={companyInfo} />
+                <BillingPrint billing={b} customer={cust} company={companyInfo} idSuffix={b.id} />
               </div>
             )
           })}
@@ -3297,7 +3297,7 @@ export default function BillingPage() {
                     <span className="text-xs font-medium text-violet-700">ส่งออกเอกสารแล้ว</span>
                   </label>
                 </div>
-                <TaxInvoicePrint invoice={inv} customer={cust} company={companyInfo} withholdingTax={wb?.withholdingTax} netPayable={wb?.netPayable} />
+                <TaxInvoicePrint invoice={inv} customer={cust} company={companyInfo} withholdingTax={wb?.withholdingTax} netPayable={wb?.netPayable} idSuffix={inv.id} />
               </div>
             )
           })}
@@ -3496,7 +3496,7 @@ export default function BillingPage() {
             if (!qt) return null
             return (
               <div key={id} className="border border-slate-200 rounded-lg overflow-hidden break-after-page">
-                <QuotationPrint quotation={qt} company={companyInfo} customerShortName={getCustomer(qt.customerId)?.shortName} itemNicknames={getCustomer(qt.customerId)?.itemNicknames} />
+                <QuotationPrint quotation={qt} company={companyInfo} customerShortName={getCustomer(qt.customerId)?.shortName} itemNicknames={getCustomer(qt.customerId)?.itemNicknames} idSuffix={qt.id} />
               </div>
             )
           })}

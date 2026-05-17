@@ -2159,7 +2159,7 @@ export default function DeliveryPage() {
             return (
               <div key={dnId}>
                 {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6" style={{ pageBreakBefore: 'always' }} />}
-                <DeliveryNotePrint note={dn} customer={cust} company={companyInfo} catalog={linenCatalog} priceMap={buildPriceMapFromQT(cust.id, quotations)} />
+                <DeliveryNotePrint note={dn} customer={cust} company={companyInfo} catalog={linenCatalog} priceMap={buildPriceMapFromQT(cust.id, quotations)} idSuffix={dn.id} />
               </div>
             )
           })}

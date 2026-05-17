@@ -1,6 +1,7 @@
 'use client'
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter, usePathname } from 'next/navigation'
 import { Search, X, Building2, ClipboardList, Truck, FileCheck, Receipt, FileText, Package } from 'lucide-react'
 import { useStore } from '@/lib/store'
@@ -204,9 +205,13 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
     }
   }
 
-  if (!open) return null
+  // 275.1: SSR guard + portal — consistent with Modal post-Fix 271
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
 
-  return (
+  if (!open || !mounted) return null
+
+  return createPortal(
     <div data-find-skip className="fixed inset-0 z-[60] flex items-start justify-center pt-[10vh] px-4 animate-fadeIn">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
       <div
@@ -335,6 +340,7 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
           </span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
