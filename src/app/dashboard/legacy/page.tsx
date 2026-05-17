@@ -218,7 +218,7 @@ export default function LegacyPage() {
         const totalAmount = filtered.reduce((s, d) => s + d.amount, 0)
         return (
           <FloatingTotalBar>
-            <span>รวม {filtered.length} เอกสาร{filtered.length > 1000 && ` (แสดง 1,000 แรก)`}</span>
+            <span>รวม {filtered.length} เอกสาร{filtered.length > 6000 && ` (แสดง 6,000 แรก)`}</span>
             <span className="ml-auto">ยอดรวม <span className="text-[#1B3A5C]">{formatCurrency(totalAmount)}</span></span>
           </FloatingTotalBar>
         )

@@ -140,6 +140,23 @@ export default function CustomersPage() {
     })
   }, [customers, filterCat, filterStatus, search, sortKey, sortDir, getCustomerCategoryLabel, linkedQTMap])
 
+  // 274.1: Workflow tab data — memoize O(N×M) heuristic + LF count map
+  const workflowData = useMemo(() => {
+    const activeCustomers = customers.filter(c => c.isActive)
+    const trustList = activeCustomers.filter(c => c.workflowMode === 'trust_customer')
+    const crossList = activeCustomers.filter(c => (c.workflowMode ?? 'cross_check') === 'cross_check')
+    const candidates = listTrustCandidates(crossList.map(c => c.id), linenForms)
+    const candidateMap = new Map(candidates.map(s => [s.customerId, s]))
+    const candidateCusts = crossList.filter(c => candidateMap.has(c.id))
+      .sort((a, b) => (candidateMap.get(b.id)!.score) - (candidateMap.get(a.id)!.score))
+    // LF count per customer — single pass O(N) instead of O(C×N) on render
+    const lfCountByCustomer = new Map<string, number>()
+    for (const lf of linenForms) {
+      lfCountByCustomer.set(lf.customerId, (lfCountByCustomer.get(lf.customerId) || 0) + 1)
+    }
+    return { activeCustomers, trustList, crossList, candidateMap, candidateCusts, lfCountByCustomer }
+  }, [customers, linenForms])
+
   const handleEdit = (c: Customer) => {
     setEditId(c.id)
     setForm({
@@ -505,14 +522,9 @@ export default function CustomersPage() {
 
       {/* ===== Workflow Tab (268) ===== */}
       {pageTab === 'workflow' && (() => {
-        const activeCustomers = customers.filter(c => c.isActive)
-        const trustList = activeCustomers.filter(c => c.workflowMode === 'trust_customer')
-        const crossList = activeCustomers.filter(c => (c.workflowMode ?? 'cross_check') === 'cross_check')
-        const candidates = listTrustCandidates(crossList.map(c => c.id), linenForms)
-        const candidateMap = new Map(candidates.map(s => [s.customerId, s]))
+        // 274.1: pull memoized data — avoids O(N×M) recompute on every render
+        const { trustList, crossList, candidateMap, candidateCusts, lfCountByCustomer } = workflowData
         const trustIdSet = new Set(trustList.map(c => c.id))
-        const candidateCusts = crossList.filter(c => candidateMap.has(c.id))
-          .sort((a, b) => (candidateMap.get(b.id)!.score) - (candidateMap.get(a.id)!.score))
 
         // 270.1: เปิด Modal เลือก scope แทน confirm dialog
         const applyTrust = (custId: string) => {
@@ -575,7 +587,7 @@ export default function CustomersPage() {
                   </thead>
                   <tbody>
                     {trustList.map(c => {
-                      const lfCount = linenForms.filter(lf => lf.customerId === c.id).length
+                      const lfCount = lfCountByCustomer.get(c.id) || 0
                       return (
                         <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
                           <td className="px-4 py-2">

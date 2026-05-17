@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import {
-  LINEN_FORM_STATUS_CONFIG, BILLING_STATUS_CONFIG,
+  LINEN_FORM_STATUS_CONFIG, BILLING_STATUS_CONFIG, CARRY_OVER_MODE_CONFIG,
 } from '@/types'
 import type { LinenFormStatus, BillingStatus } from '@/types'
 import RevenueTrendChart from '@/components/RevenueTrendChart'
@@ -201,6 +201,19 @@ export default function CustomerDetailPage() {
         )}
         {customer.enableMinPerMonth && (
           <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">ขั้นต่ำ/ด. {formatCurrency(customer.monthlyFlatRate)}</span>
+        )}
+        {/* 274.3: Workflow mode + default carry-over mode badges */}
+        {customer.workflowMode === 'trust_customer' && (
+          <span title="Trust Customer — โรงงานไม่นับเข้า (col5 ว่าง) · col4 ลูกค้านับกลับ ยังกรอกได้"
+            className="text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+            ✅ Trust
+          </span>
+        )}
+        {customer.defaultCarryOverMode && (
+          <span title="Default carry-over mode (สำหรับ reports)"
+            className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+            Mode {customer.defaultCarryOverMode}: {CARRY_OVER_MODE_CONFIG[customer.defaultCarryOverMode]?.short ?? ''}
+          </span>
         )}
         {linkedQT ? (
           <Link href={`/dashboard/billing?tab=quotation&openqt=${linkedQT.id}`}

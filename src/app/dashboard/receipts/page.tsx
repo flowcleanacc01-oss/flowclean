@@ -127,12 +127,7 @@ export default function ReceiptsPage() {
   const detailCustomer = detailRC ? getCustomer(detailRC.customerId) : null
   const linkedWB = detailRC ? billingStatements.find(b => b.id === detailRC.billingStatementId) : null
 
-  // Mark as printed when print modal opens
-  useEffect(() => {
-    if (showPrint && detailRC && !detailRC.isPrinted) {
-      updateReceipt(detailRC.id, { isPrinted: true })
-    }
-  }, [showPrint, detailRC, updateReceipt])
+  // 274.2: isPrinted set on actual print click (was: fired on preview open — false positive)
 
   return (
     <div>
@@ -357,6 +352,7 @@ export default function ReceiptsPage() {
             <ExportButtons
               targetId="print-receipt"
               filename={formatExportFilename(detailRC.receiptNumber, detailCustomer.shortName || detailCustomer.name, detailRC.issueDate)}
+              onPrint={() => { if (!detailRC.isPrinted) updateReceipt(detailRC.id, { isPrinted: true }) }}
             />
             <div className="border border-slate-200 rounded-lg overflow-auto max-h-[70vh]">
               <ReceiptPrint receipt={detailRC} customer={detailCustomer} />

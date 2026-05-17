@@ -30,11 +30,17 @@ export default function LoginPage() {
 
     setLoading(true)
 
-    const ok = await login(email, password)
-    if (ok) {
-      router.push('/dashboard')
-    } else {
+    // 274.5: try/catch — กัน loading ค้างถ้า login throws (network error etc.)
+    try {
+      const ok = await login(email, password)
+      if (ok) {
+        router.push('/dashboard')
+        return // keep loading=true during route transition
+      }
       setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง')
+      setLoading(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง')
       setLoading(false)
     }
   }
