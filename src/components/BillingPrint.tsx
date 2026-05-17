@@ -59,20 +59,30 @@ export default function BillingPrint({ billing, customer, company }: BillingPrin
           </tr>
         </thead>
         <tbody>
-          {billing.lineItems.map((item, idx) => (
-            <tr key={item.code}>
-              <td className="text-center px-3 py-1.5 border border-slate-300">{idx + 1}</td>
-              <td className="px-3 py-1.5 border border-slate-300">
-                {!item.code.startsWith('DATE_') && !item.code.startsWith('TRANSPORT_') && item.code !== 'FLAT' && item.code !== 'DISCOUNT' && item.code !== 'EXTRA_CHARGE' && item.code !== 'SERVICE' && (
-                  <span className="font-mono text-xs text-slate-400 mr-1">{item.code}</span>
-                )}
-                {item.name}
-              </td>
-              <td className="text-right px-3 py-1.5 border border-slate-300">{item.quantity}</td>
-              <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(item.pricePerUnit)}</td>
-              <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(item.amount)}</td>
-            </tr>
-          ))}
+          {billing.lineItems.map((item, idx) => {
+            // 273.1: Feat 266 claim discount line = orange row + hide CLAIM:* code prefix
+            const isClaim = item.code.startsWith('CLAIM:')
+            const isSystemCode = item.code.startsWith('DATE_') || item.code.startsWith('TRANSPORT_')
+              || item.code === 'FLAT' || item.code === 'DISCOUNT' || item.code === 'EXTRA_CHARGE' || item.code === 'SERVICE'
+              || isClaim
+            const displayCode = isClaim ? item.code.slice('CLAIM:'.length).split('@')[0] : item.code
+            return (
+              <tr key={item.code} className={isClaim ? 'bg-orange-50/40' : ''}>
+                <td className="text-center px-3 py-1.5 border border-slate-300">{idx + 1}</td>
+                <td className="px-3 py-1.5 border border-slate-300">
+                  {!isSystemCode && (
+                    <span className="font-mono text-xs text-slate-400 mr-1">{displayCode}</span>
+                  )}
+                  {isClaim && <span className="font-mono text-xs text-orange-400 mr-1">{displayCode}</span>}
+                  {item.name}
+                  {isClaim && <span className="ml-1 text-[10px] text-orange-600">[ส่วนลดทางบัญชี]</span>}
+                </td>
+                <td className="text-right px-3 py-1.5 border border-slate-300">{item.quantity}</td>
+                <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(item.pricePerUnit)}</td>
+                <td className={`text-right px-3 py-1.5 border border-slate-300 ${isClaim ? 'text-orange-700' : ''}`}>{formatCurrency(item.amount)}</td>
+              </tr>
+            )
+          })}
         </tbody>
         <tfoot>
           <tr className="bg-slate-50">

@@ -549,11 +549,16 @@ export default function LinenFormGrid({
               </td>
               <td className="px-3 py-2 text-center">{totals.col2}</td>
               <td className="px-3 py-2 text-center">{totals.col3}</td>
-              <td className="px-3 py-2 text-center">{totals.col5}</td>
+              <td className="px-3 py-2 text-center">
+                {/* 273: trust mode → col5 blank; cross_check → show total */}
+                {isTrustCustomer ? <span className="text-slate-300">—</span> : totals.col5}
+              </td>
               <td className="px-3 py-2 text-center">{totals.col6}</td>
               <td className="px-3 py-2 text-center">
                 {(() => {
-                  const val = totals.col6 - totals.col5
+                  // 273: trust-aware baseline (col6 − (col2+col3) when trust, else col6 − col5)
+                  const baseline = isTrustCustomer ? (totals.col2 + totals.col3) : totals.col5
+                  const val = totals.col6 - baseline
                   if (val === 0) return '-'
                   return (
                     <span className={cn(val < 0 ? 'text-red-600' : 'text-emerald-600')}>

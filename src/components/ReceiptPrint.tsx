@@ -60,15 +60,22 @@ export default function ReceiptPrint({ receipt, customer }: Props) {
           </tr>
         </thead>
         <tbody>
-          {receipt.lineItems.map((item, idx) => (
-            <tr key={idx}>
-              <td className="text-center px-3 py-1.5 border border-slate-300">{idx + 1}</td>
-              <td className="px-3 py-1.5 border border-slate-300">{item.name}</td>
-              <td className="text-right px-3 py-1.5 border border-slate-300">{item.quantity}</td>
-              <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(item.pricePerUnit)}</td>
-              <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(item.amount)}</td>
-            </tr>
-          ))}
+          {receipt.lineItems.map((item, idx) => {
+            // 273.1: Feat 266 claim discount line — orange row + [ส่วนลดทางบัญชี] tag
+            const isClaim = item.code.startsWith('CLAIM:')
+            return (
+              <tr key={idx} className={isClaim ? 'bg-orange-50/40' : ''}>
+                <td className="text-center px-3 py-1.5 border border-slate-300">{idx + 1}</td>
+                <td className="px-3 py-1.5 border border-slate-300">
+                  {item.name}
+                  {isClaim && <span className="ml-1 text-[10px] text-orange-600">[ส่วนลดทางบัญชี]</span>}
+                </td>
+                <td className="text-right px-3 py-1.5 border border-slate-300">{item.quantity}</td>
+                <td className="text-right px-3 py-1.5 border border-slate-300">{formatCurrency(item.pricePerUnit)}</td>
+                <td className={`text-right px-3 py-1.5 border border-slate-300 ${isClaim ? 'text-orange-700' : ''}`}>{formatCurrency(item.amount)}</td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
 

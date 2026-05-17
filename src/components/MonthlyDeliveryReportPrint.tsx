@@ -44,7 +44,10 @@ export default function MonthlyDeliveryReportPrint({
     const day = parseInt(dn.date.split('-')[2])
     for (const item of dn.items) {
       if (matrix[item.code]) {
-        matrix[item.code][day] = (matrix[item.code][day] || 0) + item.quantity
+        // 273.2: Feat 266 claim = subtract (net qty = billable − claim)
+        //   ตรงกับ MonthlySummaryGrid + MonthlyConsolidationPrint
+        const delta = item.isClaim ? -item.quantity : item.quantity
+        matrix[item.code][day] = (matrix[item.code][day] || 0) + delta
       }
     }
   }
