@@ -51,15 +51,22 @@ export default function DashboardPage() {
 
   // Stats
   const stats = useMemo(() => {
-    // 2.1 จำนวนผ้านับเข้าแล้วรอซัก (3/7) — LF status=sorting → sum col5
+    // 276: Trust mode ไม่มี col5 → ใช้ col2+col3 (baseline ฝั่งลูกค้านับ) แทน
+    //   เป็น baseline เดียวที่ทำให้สถิติทุกอย่างถูกต้องโดยไม่ over/under-state
+    const baselineCountIn = (f: typeof linenForms[number], r: typeof f.rows[number]) =>
+      f.workflowMode === 'trust_customer'
+        ? (r.col2_hotelCountIn || 0) + (r.col3_hotelClaimCount || 0)
+        : (r.col5_factoryClaimApproved || 0)
+
+    // 2.1 จำนวนผ้านับเข้าแล้วรอซัก (3/7) — LF status=sorting
     const sortingForms = linenForms.filter(f => f.status === 'sorting')
     const countedInWaiting = sortingForms.reduce((s, f) =>
-      s + f.rows.reduce((rs, r) => rs + r.col5_factoryClaimApproved, 0), 0)
+      s + f.rows.reduce((rs, r) => rs + baselineCountIn(f, r), 0), 0)
 
-    // 2.2 จำนวนผ้าซักอบแล้วรอส่ง (4/7) — LF status=washing → sum col5
+    // 2.2 จำนวนผ้าซักอบแล้วรอส่ง (4/7) — LF status=washing
     const washingForms = linenForms.filter(f => f.status === 'washing')
     const washedWaiting = washingForms.reduce((s, f) =>
-      s + f.rows.reduce((rs, r) => rs + r.col5_factoryClaimApproved, 0), 0)
+      s + f.rows.reduce((rs, r) => rs + baselineCountIn(f, r), 0), 0)
 
     // 2.3 จำนวนผ้าเช็คส่งออกวันนี้ (7/7) — LF status=confirmed วันนี้ → sum col6
     const confirmedForms = linenForms.filter(f => f.status === 'confirmed')
@@ -67,10 +74,10 @@ export default function DashboardPage() {
     const checkedOut = confirmedFormsToday.reduce((s, f) =>
       s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0), 0), 0)
 
-    // 2.4 ผ้าค้าง/คืนสะสม — LF status=confirmed ทุกใบ → sum (col6 - col5)
-    // 242.5: เพิ่ม `|| 0` defensive — กัน NaN ถ้า col5 undefined (legacy data ที่ field ใหม่)
+    // 2.4 ผ้าค้าง/คืนสะสม — LF status=confirmed → sum (col6 − baseline)
+    //   Trust mode: col6 − (col2+col3), Cross-check: col6 − col5
     const carryOverAll = confirmedForms.reduce((s, f) =>
-      s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0) - (r.col5_factoryClaimApproved || 0), 0), 0)
+      s + f.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0) - baselineCountIn(f, r), 0), 0)
 
     return { countedInWaiting, washedWaiting, checkedOut, carryOverAll }
   }, [linenForms, today])
