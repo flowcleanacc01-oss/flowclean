@@ -420,6 +420,11 @@ export default function DeliveryPage() {
       .filter((f): f is LinenForm => !!f)
       .sort((a, b) => a.date.localeCompare(b.date) || a.formNumber.localeCompare(b.formNumber))
 
+    // 277: Pass 1 — pre-build all newDN data (items, subtotal, tripFee) WITHOUT inserting
+    //   Need this to compute month fees pre-insert to avoid race with same-row update
+    type Prepared = { lf: LinenForm; items: DeliveryNoteItem[]; subtotal: number; tripFee: number; monthFee: number }
+    const prepared: Prepared[] = []
+
     for (const lf of selectedLFs) {
       // Feat 266: billable (col6) + claim discount (col3) per LF
       const billableMap: Record<string, number> = {}
@@ -461,20 +466,87 @@ export default function DeliveryPage() {
       if (items.length === 0) continue // skip LF with no items
 
       // Trip fee per SD — Feat 266: claim = discount (subtract)
+      let subtotal = 0
       let tripFee = 0
       if (customer) {
-        const itemSubtotal = items.reduce((s, i) => {
+        subtotal = items.reduce((s, i) => {
           const amt = i.quantity * (priceMap[i.code] || 0)
           return i.isClaim ? s - amt : s + amt
         }, 0)
-        tripFee = calculateTransportFeeTrip(itemSubtotal, customer)
+        tripFee = calculateTransportFeeTrip(subtotal, customer)
       }
 
+      prepared.push({ lf, items, subtotal, tripFee, monthFee: 0 })
+    }
+
+    // 277: Pass 2 — compute month fees per month group (pre-insert)
+    //   So newDN that's last-of-month embeds fee in insert (no race with same-row update)
+    const externalUpdates: Array<{ dnId: string; transportFeeMonth: number }> = []
+
+    if (customer && customer.enableMinPerMonth && customer.monthlyFlatRate > 0 && prepared.length > 0) {
+      const monthsAffected = new Set(prepared.map(p => p.lf.date.slice(0, 7)))
+      for (const m of monthsAffected) {
+        const monthExisting = deliveryNotes.filter(d => d.customerId === selCustomerId && d.date.startsWith(m))
+        const monthPrepared = prepared.filter(p => p.lf.date.startsWith(m))
+
+        // Tentative new DNs for last-of-month sort
+        const tempNew = monthPrepared.map((p, i) => ({
+          id: `__new_${i}__`,
+          linenFormIds: [p.lf.id],
+          date: p.lf.date,
+          noteNumber: 'SD-NEW',
+          customerId: selCustomerId,
+          items: p.items,
+          priceSnapshot: priceMap,
+          transportFeeTrip: p.tripFee,
+          transportFeeMonth: 0,
+          isBilled: false,
+        } as DeliveryNote))
+        const allDNs: DeliveryNote[] = [...monthExisting, ...tempNew]
+        const lastDN = [...allDNs].sort(createDNLastOfMonthCompare(linenForms))[0]
+
+        const monthTotal = allDNs.reduce((s, d) => {
+          if (d.id.startsWith('__new_')) {
+            const idx = parseInt(d.id.slice('__new_'.length, -2), 10)
+            const p = monthPrepared[idx]
+            return s + p.subtotal + p.tripFee
+          }
+          const dPm = d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0
+            ? d.priceSnapshot
+            : buildPriceMapFromQT(d.customerId, quotations)
+          return s + calculateDNSubtotal(d, customer, dPm) + (d.transportFeeTrip || 0)
+        }, 0)
+        const feeAmount = monthTotal < customer.monthlyFlatRate
+          ? Math.max(0, customer.monthlyFlatRate - monthTotal)
+          : 0
+
+        let lastIsNew = false
+        if (lastDN.id.startsWith('__new_')) {
+          const idx = parseInt(lastDN.id.slice('__new_'.length, -2), 10)
+          monthPrepared[idx].monthFee = feeAmount
+          lastIsNew = true
+        } else if (feeAmount > 0) {
+          externalUpdates.push({ dnId: lastDN.id, transportFeeMonth: feeAmount })
+        }
+
+        // Clear stale on non-last existing DNs
+        const externalLastId = lastIsNew ? null : lastDN.id
+        for (const d of monthExisting) {
+          if (d.id === externalLastId) continue
+          if ((d.transportFeeMonth || 0) > 0) {
+            externalUpdates.push({ dnId: d.id, transportFeeMonth: 0 })
+          }
+        }
+      }
+    }
+
+    // Pass 3 — insert all newDNs with month fee already embedded
+    for (const p of prepared) {
       const newDN = addDeliveryNote({
         customerId: selCustomerId,
-        linenFormIds: [lf.id],
-        date: lf.date,
-        items,
+        linenFormIds: [p.lf.id],
+        date: p.lf.date,
+        items: p.items,
         driverName,
         vehiclePlate,
         receiverName,
@@ -482,8 +554,8 @@ export default function DeliveryPage() {
         isPrinted: false,
         isExported: false,
         isBilled: false,
-        transportFeeTrip: tripFee,
-        transportFeeMonth: 0,
+        transportFeeTrip: p.tripFee,
+        transportFeeMonth: p.monthFee,
         discount: 0,
         discountNote: '',
         extraCharge: 0,
@@ -494,37 +566,9 @@ export default function DeliveryPage() {
       newDNs.push(newDN)
     }
 
-    // Single post-process for month fees across all months affected by batch
-    if (customer && customer.enableMinPerMonth && customer.monthlyFlatRate > 0 && newDNs.length > 0) {
-      const monthsAffected = new Set(newDNs.map(d => d.date.slice(0, 7)))
-      for (const month of monthsAffected) {
-        const monthDNsBefore = deliveryNotes.filter(d => d.customerId === selCustomerId && d.date.startsWith(month))
-        const newDNsInMonth = newDNs.filter(d => d.date.startsWith(month))
-        const allDNsInMonth = [...monthDNsBefore, ...newDNsInMonth]
-
-        // Clear stale month fees
-        for (const d of monthDNsBefore) {
-          if ((d.transportFeeMonth || 0) > 0) {
-            updateDeliveryNote(d.id, { transportFeeMonth: 0 })
-          }
-        }
-
-        // True last-of-month
-        const lastDN = [...allDNsInMonth].sort(createDNLastOfMonthCompare(linenForms))[0]
-        const monthTotal = allDNsInMonth.reduce((s, d) => {
-          const dPriceMap = d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0
-            ? d.priceSnapshot
-            : buildPriceMapFromQT(d.customerId, quotations)
-          return s + calculateDNSubtotal(d, customer, dPriceMap) + (d.transportFeeTrip || 0)
-        }, 0)
-        const computedMonthFee = monthTotal < customer.monthlyFlatRate
-          ? Math.max(0, customer.monthlyFlatRate - monthTotal)
-          : 0
-
-        if (computedMonthFee > 0) {
-          updateDeliveryNote(lastDN.id, { transportFeeMonth: computedMonthFee })
-        }
-      }
+    // Pass 4 — apply external updates (existing DNs only — different rows, no race)
+    for (const u of externalUpdates) {
+      updateDeliveryNote(u.dnId, { transportFeeMonth: u.transportFeeMonth })
     }
 
     if (newDNs.length > 0) {
@@ -600,16 +644,75 @@ export default function DeliveryPage() {
 
     // Calculate item subtotal for trip fee — Feat 266: claim = discount
     let tripFee = 0
+    let newDnSubtotal = 0
+    const priceSnapshot = buildPriceMapFromQT(selCustomerId, quotations)
     if (customer) {
-      const priceMap = buildPriceMapFromQT(selCustomerId, quotations)
-      const itemSubtotal = deliveryItems.reduce((s, i) => {
-        const amt = i.quantity * (priceMap[i.code] || 0)
+      newDnSubtotal = deliveryItems.reduce((s, i) => {
+        const amt = i.quantity * (priceSnapshot[i.code] || 0)
         return i.isClaim ? s - amt : s + amt
       }, 0)
-      tripFee = calculateTransportFeeTrip(itemSubtotal, customer)
+      tripFee = calculateTransportFeeTrip(newDnSubtotal, customer)
     }
 
-    // 133: Create SD first (month fee = 0 initially) — post-process จะกำหนดค่ารถเดือนใบที่ถูกต้อง
+    // 277: Compute month fee BEFORE insert (avoid race: insert+update same row
+    //   in fire-and-forget DB writes → update may hit before insert commits →
+    //   silent fail → UI shows fee, refresh from DB loses it)
+    let newDnMonthFee = 0
+    const stalesToClear: string[] = []
+    let externalLastDnId: string | null = null
+    let externalLastDnFee = 0
+    if (customer && customer.enableMinPerMonth && customer.monthlyFlatRate > 0) {
+      const monthDNsBeforeNew = deliveryNotes.filter(d => d.customerId === selCustomerId && d.date.startsWith(month))
+
+      // Tentative newDN representation for last-of-month sort comparison
+      // (Use linked LF's date+formNumber when available — matches createDNLastOfMonthCompare logic)
+      const tempNewDN = {
+        id: '__new__',
+        linenFormIds: selFormIds,
+        date: dnDate,
+        noteNumber: 'SD-NEW',
+        customerId: selCustomerId,
+        items: deliveryItems,
+        priceSnapshot,
+        transportFeeTrip: tripFee,
+        transportFeeMonth: 0,
+        discount: dnDiscount,
+        extraCharge: dnExtraCharge,
+        isBilled: false,
+      } as DeliveryNote
+
+      const allDNs: DeliveryNote[] = [...monthDNsBeforeNew, tempNewDN]
+      const lastDN = [...allDNs].sort(createDNLastOfMonthCompare(linenForms))[0]
+
+      // Month total = sum of (subtotal + trip) for all DNs in month
+      const monthTotal = allDNs.reduce((s, d) => {
+        if (d.id === '__new__') return s + newDnSubtotal + tripFee
+        const dPm = d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0
+          ? d.priceSnapshot
+          : buildPriceMapFromQT(d.customerId, quotations)
+        return s + calculateDNSubtotal(d, customer, dPm) + (d.transportFeeTrip || 0)
+      }, 0)
+      const feeAmount = monthTotal < customer.monthlyFlatRate
+        ? Math.max(0, customer.monthlyFlatRate - monthTotal)
+        : 0
+
+      if (lastDN.id === '__new__') {
+        // newDN is the last-of-month — embed fee in insert (no race)
+        newDnMonthFee = feeAmount
+      } else if (feeAmount > 0) {
+        // External existing DN is the last — update it (different row, no race with newDN insert)
+        externalLastDnId = lastDN.id
+        externalLastDnFee = feeAmount
+      }
+
+      // Stale: any non-last existing DN that has a month fee → clear
+      for (const d of monthDNsBeforeNew) {
+        if (d.id === externalLastDnId) continue
+        if ((d.transportFeeMonth || 0) > 0) stalesToClear.push(d.id)
+      }
+    }
+
+    // Insert with month fee already embedded → 1 DB call, no race
     const newDN = addDeliveryNote({
       customerId: selCustomerId,
       linenFormIds: selFormIds,
@@ -623,46 +726,21 @@ export default function DeliveryPage() {
       isExported: false,
       isBilled: false,
       transportFeeTrip: tripFee,
-      transportFeeMonth: 0,
+      transportFeeMonth: newDnMonthFee,
       discount: dnDiscount,
       discountNote: dnDiscountNote,
       extraCharge: dnExtraCharge,
       extraChargeNote: dnExtraChargeNote,
-      priceSnapshot: buildPriceMapFromQT(selCustomerId, quotations),
+      priceSnapshot,
       notes: dnNotes,
     })
 
-    // 133: Month fee post-process — robust against out-of-order SD creation
-    // เดิม: สมมติว่า SD ใหม่จะเป็นใบสุดท้ายเสมอ → เมื่อ user สร้าง SD สลับวัน, fee ค้างที่ใบผิด
-    // ใหม่: สร้าง SD ก่อน แล้ว (1) clear ALL stale month fees ในเดือน (2) re-sort หา true last (3) apply ครั้งเดียว
-    if (customer && customer.enableMinPerMonth && customer.monthlyFlatRate > 0) {
-      const monthDNsBeforeNew = deliveryNotes.filter(d => d.customerId === selCustomerId && d.date.startsWith(month))
-      const allDNsInMonth = [...monthDNsBeforeNew, newDN]
-
-      // (1) Clear ทุก stale month fee ในเดือน (defensive — กัน bug เก่า)
-      for (const d of monthDNsBeforeNew) {
-        if ((d.transportFeeMonth || 0) > 0) {
-          updateDeliveryNote(d.id, { transportFeeMonth: 0 })
-        }
-      }
-
-      // (2) หา true last-of-month โดยใช้ LF-based sort (รวม SD ใหม่ด้วย)
-      const lastDN = [...allDNsInMonth].sort(createDNLastOfMonthCompare(linenForms))[0]
-
-      // (3) คำนวณ month fee จากยอดรวมทั้งเดือน แล้ว apply ให้ใบที่ถูกต้อง
-      const monthTotal = allDNsInMonth.reduce((s, d) => {
-        const dPriceMap = d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0
-          ? d.priceSnapshot
-          : buildPriceMapFromQT(d.customerId, quotations)
-        return s + calculateDNSubtotal(d, customer, dPriceMap) + (d.transportFeeTrip || 0)
-      }, 0)
-      const computedMonthFee = monthTotal < customer.monthlyFlatRate
-        ? Math.max(0, customer.monthlyFlatRate - monthTotal)
-        : 0
-
-      if (computedMonthFee > 0) {
-        updateDeliveryNote(lastDN.id, { transportFeeMonth: computedMonthFee })
-      }
+    // Post-process: existing DNs only (different rows from newDN — safe from race)
+    for (const dnId of stalesToClear) {
+      updateDeliveryNote(dnId, { transportFeeMonth: 0 })
+    }
+    if (externalLastDnId !== null) {
+      updateDeliveryNote(externalLastDnId, { transportFeeMonth: externalLastDnFee })
     }
     setActiveRowId(newDN.id)
     scrollToActiveRow(newDN.id)
