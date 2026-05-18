@@ -2191,6 +2191,8 @@ export default function BillingPage() {
       {(() => {
         const wbToDelete = billingStatements.find(b => b.id === confirmDeleteId)
         const hasLinkedIV = taxInvoices.some(ti => ti.billingStatementId === confirmDeleteId)
+        // 284: WB ที่ออก RC แล้วก็ลบไม่ได้ — เหมือนกรณี IV
+        const hasLinkedRC = receipts.some(rc => rc.billingStatementId === confirmDeleteId)
         const linkedDnIds = wbToDelete?.deliveryNoteIds || []
 
         const doDelete = () => {
@@ -2216,6 +2218,12 @@ export default function BillingPage() {
           }
         }
 
+        const blockedReason = hasLinkedIV
+          ? 'มีใบกำกับภาษี (IV) อยู่แล้ว — กรุณาย้อน IV ก่อน แล้วค่อยลบ WB'
+          : hasLinkedRC
+            ? 'มีใบเสร็จรับเงิน (RC) อยู่แล้ว — กรุณาย้อน RC ก่อน แล้วค่อยลบ WB'
+            : ''
+
         return (
           <DeleteWithRedirectModal
             open={!!confirmDeleteId}
@@ -2226,8 +2234,8 @@ export default function BillingPage() {
             redirectLabel={linkedDnIds.length > 0 ? 'ไปแก้ SD' : undefined}
             onDeleteAndStay={handleDeleteAndStay}
             onDeleteAndRedirect={linkedDnIds.length > 0 ? handleDeleteAndRedirect : undefined}
-            blocked={hasLinkedIV}
-            blockedReason="มีใบกำกับภาษี (IV) อยู่แล้ว — กรุณาย้อน IV ก่อน แล้วค่อยลบ WB"
+            blocked={hasLinkedIV || hasLinkedRC}
+            blockedReason={blockedReason}
           />
         )
       })()}
@@ -2236,24 +2244,35 @@ export default function BillingPage() {
       <Modal open={showPrint && !!detailBilling} onClose={() => setShowPrint(false)} title="ตรวจสอบข้อมูลก่อนพิมพ์" size="xl" className="print-target">
         {detailBilling && detailCustomer && (
           <div>
-            {/* Reverse WB checkbox */}
-            <div className="flex items-center mb-2 no-print">
-              {taxInvoices.some(ti => ti.billingStatementId === detailBilling.id) ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-700">
-                  <span className="font-medium">⚠ ไม่สามารถย้อน WB ได้</span>
-                  <span>— มีใบกำกับภาษี (IV) อยู่แล้ว กรุณาย้อน IV ก่อน</span>
+            {/* Reverse WB — 284: block ถ้ามี IV หรือ RC */}
+            {(() => {
+              const hasIV = taxInvoices.some(ti => ti.billingStatementId === detailBilling.id)
+              const hasRC = receipts.some(rc => rc.billingStatementId === detailBilling.id)
+              return (
+                <div className="flex items-center mb-2 no-print">
+                  {hasIV ? (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-700">
+                      <span className="font-medium">⚠ ไม่สามารถย้อน WB ได้</span>
+                      <span>— มีใบกำกับภาษี (IV) อยู่แล้ว กรุณาย้อน IV ก่อน</span>
+                    </div>
+                  ) : hasRC ? (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-700">
+                      <span className="font-medium">⚠ ไม่สามารถย้อน WB ได้</span>
+                      <span>— มีใบเสร็จรับเงิน (RC) อยู่แล้ว กรุณาย้อน RC ก่อน</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(detailBilling.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                      title="ลบใบวางบิลและย้อนสถานะ SD กลับ">
+                      <Trash2 className="w-3.5 h-3.5" />
+                      ลบ WB + ย้อน SD
+                    </button>
+                  )}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmDeleteId(detailBilling.id)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
-                  title="ลบใบวางบิลและย้อนสถานะ SD กลับ">
-                  <Trash2 className="w-3.5 h-3.5" />
-                  ลบ WB + ย้อน SD
-                </button>
-              )}
-            </div>
+              )
+            })()}
             <div className="flex items-center gap-6 mb-4 no-print">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input type="checkbox" checked={!!detailBilling.isPrinted}
