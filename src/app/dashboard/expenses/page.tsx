@@ -90,13 +90,13 @@ export default function ExpensesPage() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3DD8D8]" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="ค้นหารายละเอียด..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]"
+            className="w-full pl-10 pr-4 py-2.5 bg-white border-2 border-[#3DD8D8] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]"
           />
         </div>
         <div className="flex items-center gap-2">

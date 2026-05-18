@@ -207,7 +207,7 @@ export default function CustomerPicker({
 
   return (
     <div className={cn('relative', fullWidth ? 'block w-full' : 'inline-block', className)}>
-      {/* Trigger */}
+      {/* Trigger — 281: theme accent เสมอ (visibility ดีขึ้น ทั้งสถานะ idle + active) */}
       <button
         ref={triggerRef}
         type="button"
@@ -216,8 +216,8 @@ export default function CustomerPicker({
           'flex items-center gap-2 px-3 py-2 border rounded-lg text-sm font-medium transition-colors',
           fullWidth ? 'w-full' : 'min-w-[180px] max-w-[260px]',
           'focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
-          themed && isActive
-            ? 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C]'
+          themed
+            ? 'bg-[#3DD8D8] border-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8]'
             : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300',
         )}
       >

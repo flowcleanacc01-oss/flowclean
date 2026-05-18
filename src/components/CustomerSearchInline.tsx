@@ -29,6 +29,8 @@ interface Props {
   /** Highlight ลูกค้าปัจจุบัน (ใช้ในหน้า detail) */
   currentCustomerId?: string
   className?: string
+  /** 281.2: accent color — 'orange' for jump-to-customer, 'teal' for general filter */
+  accent?: 'orange' | 'teal'
 }
 
 export default function CustomerSearchInline({
@@ -38,6 +40,7 @@ export default function CustomerSearchInline({
   placeholder = 'ค้นหาลูกค้า — ชื่อ / รหัส / เลขประจำตัวผู้เสียภาษี',
   currentCustomerId,
   className,
+  accent = 'orange',
 }: Props) {
   const router = useRouter()
   const { customers } = useStore()
@@ -135,13 +138,19 @@ export default function CustomerSearchInline({
     }
   }
 
+  // 281.2: accent-aware border + icon color
+  const accentBorder = accent === 'orange' ? 'border-orange-400' : 'border-[#3DD8D8]'
+  const accentRing = accent === 'orange' ? 'ring-orange-400' : 'ring-[#3DD8D8]'
+  const accentHover = accent === 'orange' ? 'hover:border-orange-500' : 'hover:border-[#3DD8D8]'
+  const accentIcon = accent === 'orange' ? 'text-orange-500' : 'text-[#3DD8D8]'
+
   return (
     <div ref={wrapRef} className={cn('relative w-full max-w-md', className)}>
       <div className={cn(
-        'flex items-center gap-2 h-10 px-3 bg-white border rounded-lg transition-colors',
-        open ? 'border-[#3DD8D8] ring-1 ring-[#3DD8D8]' : 'border-slate-200 hover:border-slate-300',
+        'flex items-center gap-2 h-10 px-3 bg-white border-2 rounded-lg transition-colors',
+        open ? `${accentBorder} ring-1 ${accentRing}` : `${accentBorder} ${accentHover}`,
       )}>
-        <Search className="w-4 h-4 text-slate-400 flex-shrink-0" aria-hidden="true" />
+        <Search className={cn('w-4 h-4 flex-shrink-0', accentIcon)} aria-hidden="true" />
         <input
           ref={inputRef}
           value={query}

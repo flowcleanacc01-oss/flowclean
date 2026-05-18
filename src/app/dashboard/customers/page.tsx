@@ -260,32 +260,44 @@ export default function CustomersPage() {
             />
           </div>
 
-          {/* Search & Category Filter (filter ตารางในหน้านี้) */}
+          {/* Search & Category Filter (filter ตารางในหน้านี้) — 281.2 theme pass */}
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3DD8D8]" />
               <input value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="กรองตาราง — ชื่อลูกค้า / รหัส"
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                className="w-full pl-10 pr-4 py-2 border-2 border-[#3DD8D8] rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
+            {/* 281.2.1: ทุกลูกค้า toggle — accent when active filter */}
             <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none bg-white">
+              className={cn(
+                'px-3 py-2 border rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]',
+                filterCat === 'all'
+                  ? 'bg-[#3DD8D8] text-[#1B3A5C] border-[#3DD8D8] hover:bg-[#2bb8b8]'
+                  : 'bg-white border-slate-200 text-slate-700 hover:border-[#3DD8D8]',
+              )}>
               <option value="all">ทุกลูกค้า</option>
               {customerCategories.sort((a, b) => a.sortOrder - b.sortOrder).map(cat => (
                 <option key={cat.key} value={cat.key}>{cat.label}</option>
               ))}
             </select>
-            {/* 177.1: active/inactive filter */}
+            {/* 281.2.2-4: active/inactive/all filter — theme */}
             <div className="flex items-center gap-1">
               {([
-                { v: 'active' as const, label: 'ใช้งาน', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-                { v: 'inactive' as const, label: 'ปิด', cls: 'bg-red-100 text-red-700 border-red-200' },
-                { v: 'all' as const, label: 'ทั้งหมด', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+                { v: 'active' as const, label: 'ใช้งาน',
+                  active: 'bg-[#3DD8D8] text-[#1B3A5C] border-[#3DD8D8] hover:bg-[#2bb8b8]',
+                  inactive: 'bg-white border-slate-200 text-slate-500 hover:border-[#3DD8D8] hover:text-[#1B3A5C]' },
+                { v: 'inactive' as const, label: 'ปิด',
+                  active: 'bg-red-500 text-white border-red-500 hover:bg-red-600',
+                  inactive: 'bg-white border-slate-200 text-slate-500 hover:border-red-400 hover:text-red-600' },
+                { v: 'all' as const, label: 'ทั้งหมด',
+                  active: 'bg-[#3DD8D8] text-[#1B3A5C] border-[#3DD8D8] hover:bg-[#2bb8b8]',
+                  inactive: 'bg-white border-slate-200 text-slate-500 hover:border-[#3DD8D8] hover:text-[#1B3A5C]' },
               ]).map(opt => (
                 <button key={opt.v} onClick={() => setFilterStatus(opt.v)}
                   className={cn(
                     'px-3 py-2 border rounded-lg text-sm font-medium transition-colors',
-                    filterStatus === opt.v ? opt.cls : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300',
+                    filterStatus === opt.v ? opt.active : opt.inactive,
                   )}>
                   {opt.label}
                 </button>

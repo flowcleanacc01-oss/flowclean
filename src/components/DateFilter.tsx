@@ -78,10 +78,10 @@ export default function DateFilter({
         <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
         <span className="text-xs text-slate-500 font-medium">เปลี่ยนวันที่:</span>
 
-        {/* Presets dropdown */}
+        {/* Presets dropdown — 281: theme accent (visibility) */}
         <div className="relative">
           <button onClick={() => setShowPresets(!showPresets)}
-            className="px-3 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1">
+            className="px-3 py-1.5 text-xs font-medium bg-[#3DD8D8] text-[#1B3A5C] border border-[#3DD8D8] rounded-lg hover:bg-[#2bb8b8] transition-colors flex items-center gap-1">
             เลือกช่วงเวลา <ChevronDown className={cn('w-3 h-3 transition-transform', showPresets && 'rotate-180')} />
           </button>
           {showPresets && (
@@ -151,7 +151,8 @@ export default function DateFilter({
             }
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-md px-2.5 py-1">
+          /* 281.3.3: เป็น theme เดียวกับ hasFilter (consistency) — teal accent */
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#1B3A5C] bg-[#3DD8D8]/15 border border-[#3DD8D8]/40 rounded-md px-2.5 py-1">
             <Calendar className="w-3 h-3" />
             กำลังแสดง: ข้อมูลทั้งหมด (ไม่กำหนดวันที่)
           </span>

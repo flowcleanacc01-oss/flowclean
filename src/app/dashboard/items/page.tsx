@@ -442,12 +442,12 @@ export default function ItemsPage() {
                 <p className="text-xs text-slate-400 mt-0.5">เพิ่ม/แก้ไข/ลบรายการผ้า และตั้งราคา default</p>
               </div>
               <div className="flex-1" />
-              {/* Search */}
+              {/* Search — 281.1: accent teal border for visibility */}
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3DD8D8]" />
                 <input value={search} onChange={e => setSearch(e.target.value)}
                   placeholder="ค้นหา..."
-                  className="pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-sm w-48 focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  className="pl-8 pr-3 py-1.5 border-2 border-[#3DD8D8] rounded-lg text-sm w-48 focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
               </div>
               {/* Filter category */}
               <select value={filterCat} onChange={e => setFilterCat(e.target.value)}

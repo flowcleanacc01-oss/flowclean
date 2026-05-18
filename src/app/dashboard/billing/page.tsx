@@ -1204,17 +1204,17 @@ export default function BillingPage() {
 
       {/* Tab buttons removed — sidebar handles navigation */}
 
-      {/* Search */}
+      {/* Search — 281.3 theme pass (accent teal border + icon) */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3DD8D8]" />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder={
               tab === 'quotation' ? 'ค้นหาเลขที่ใบเสนอราคา, ชื่อลูกค้า, รหัสสินค้า, รายการสินค้า, จำนวนเงิน'
               : tab === 'billing' ? 'ค้นหาเลขที่ใบวางบิล, ชื่อลูกค้า, รหัสสินค้า, รายการสินค้า, จำนวนเงิน'
               : 'ค้นหาเลขที่ใบกำกับภาษี, ชื่อลูกค้า, รหัสสินค้า, รายการสินค้า, จำนวนเงิน'
             }
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+            className="w-full pl-10 pr-4 py-2 border-2 border-[#3DD8D8] rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
         </div>
         {/* 162.2.1: searchable CustomerPicker (filter by customerId) */}
         {tab === 'quotation' && (
