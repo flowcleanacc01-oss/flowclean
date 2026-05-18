@@ -114,6 +114,23 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
 
   const fmtN = (n: number) => (n === 0 ? '' : n.toLocaleString('en-US'))
   const fmtM = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  // 294: compact format สำหรับ per-SD col แคบ (KAYA case: 16 SDs/page ≈ 12px col)
+  //   - 0-9,999  → "1,234"   (integer + thousands sep, ไม่มี .00)
+  //   - ≥10K     → "12K", "123K"
+  //   - ≥1M      → "1.2M"
+  //   ใช้คู่กับ overflow:hidden + title=<full value> เพื่อ hover ดูเลขเต็มได้
+  const fmtCellCompact = (n: number): string => {
+    if (n === 0) return ''
+    const abs = Math.abs(n)
+    const sign = n < 0 ? '-' : ''
+    if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M`
+    if (abs >= 10_000) return `${sign}${Math.round(abs / 1000)}K`
+    return `${sign}${Math.round(abs).toLocaleString('en-US')}`
+  }
+  // 294: narrow cell style — fontSize 5pt + clip overflow (table-layout: fixed กับ col แคบ)
+  const tdCompact: React.CSSProperties = {
+    ...tdR, fontSize: '5pt', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'clip',
+  }
 
   // 123: Split SDs into pages — max 16 per page, distribute evenly (smaller pages first)
   // e.g. N=30 → 15+15, N=31 → 15+16, N=47 → 15+16+16
@@ -217,11 +234,14 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                     <td style={tdC}></td>
                     <td style={tdR}></td>
                     <td style={tdR}>{totalTransportTrip ? fmtM(totalTransportTrip) : ''}</td>
-                    {chunk.map(dn => (
-                      <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
-                        {(dn.transportFeeTrip || 0) > 0 ? fmtM(dn.transportFeeTrip) : ''}
-                      </td>
-                    ))}
+                    {chunk.map(dn => {
+                      const v = dn.transportFeeTrip || 0
+                      return (
+                        <td key={dn.id} style={tdCompact} title={v > 0 ? fmtM(v) : ''}>
+                          {fmtCellCompact(v)}
+                        </td>
+                      )
+                    })}
                   </tr>
                 )}
 
@@ -233,11 +253,14 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                     <td style={tdC}></td>
                     <td style={tdR}></td>
                     <td style={tdR}>{totalTransportMonth ? fmtM(totalTransportMonth) : ''}</td>
-                    {chunk.map(dn => (
-                      <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
-                        {(dn.transportFeeMonth || 0) > 0 ? fmtM(dn.transportFeeMonth) : ''}
-                      </td>
-                    ))}
+                    {chunk.map(dn => {
+                      const v = dn.transportFeeMonth || 0
+                      return (
+                        <td key={dn.id} style={tdCompact} title={v > 0 ? fmtM(v) : ''}>
+                          {fmtCellCompact(v)}
+                        </td>
+                      )
+                    })}
                   </tr>
                 )}
 
@@ -249,11 +272,14 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                     <td style={tdC}></td>
                     <td style={tdR}></td>
                     <td style={tdR}>{totalExtraCharge ? fmtM(totalExtraCharge) : ''}</td>
-                    {chunk.map(dn => (
-                      <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
-                        {(dn.extraCharge || 0) > 0 ? fmtM(dn.extraCharge!) : ''}
-                      </td>
-                    ))}
+                    {chunk.map(dn => {
+                      const v = dn.extraCharge || 0
+                      return (
+                        <td key={dn.id} style={tdCompact} title={v > 0 ? fmtM(v) : ''}>
+                          {fmtCellCompact(v)}
+                        </td>
+                      )
+                    })}
                   </tr>
                 )}
 
@@ -265,11 +291,14 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                     <td style={tdC}></td>
                     <td style={tdR}></td>
                     <td style={tdR}>{totalDiscount ? `-${fmtM(totalDiscount)}` : ''}</td>
-                    {chunk.map(dn => (
-                      <td key={dn.id} style={{ ...tdR, fontSize: '6pt' }}>
-                        {(dn.discount || 0) > 0 ? `-${fmtM(dn.discount!)}` : ''}
-                      </td>
-                    ))}
+                    {chunk.map(dn => {
+                      const v = dn.discount || 0
+                      return (
+                        <td key={dn.id} style={tdCompact} title={v > 0 ? `-${fmtM(v)}` : ''}>
+                          {v > 0 ? `-${fmtCellCompact(v)}` : ''}
+                        </td>
+                      )
+                    })}
                   </tr>
                 )}
 
@@ -281,11 +310,14 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                   <td style={{ ...tdC, backgroundColor: '#f0f0f0' }}></td>
                   <td style={{ ...tdR, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}></td>
                   <td style={{ ...tdR, fontWeight: 'bold', backgroundColor: '#f0f0f0' }}>{fmtM(subtotal)}</td>
-                  {chunk.map(dn => (
-                    <td key={dn.id} style={{ ...tdR, fontWeight: 'bold', fontSize: '6pt', backgroundColor: '#f0f0f0' }}>
-                      {fmtM(dnTotals[dn.id] ?? 0)}
-                    </td>
-                  ))}
+                  {chunk.map(dn => {
+                    const v = dnTotals[dn.id] ?? 0
+                    return (
+                      <td key={dn.id} style={{ ...tdCompact, fontWeight: 'bold', backgroundColor: '#f0f0f0' }} title={fmtM(v)}>
+                        {fmtCellCompact(v)}
+                      </td>
+                    )
+                  })}
                 </tr>
               </tbody>
             </table>
