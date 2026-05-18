@@ -287,6 +287,19 @@ export default function DeliveryPage() {
     return map
   }, [linenForms, deliveryNotes])
 
+  // 291.1: Stuck LF count per customer — LF ที่ยังไม่ถึง 7/7 + ยังไม่ผูก SD
+  //   ใช้เตือนใน Quick Batch ว่า "สร้างได้เฉพาะ 7/7 · ค้างไม่ถึงจะตกหล่น"
+  const stuckCountByCustomer = useMemo(() => {
+    const linkedFormIds = new Set(deliveryNotes.flatMap(dn => dn.linenFormIds))
+    const map = new Map<string, number>()
+    for (const f of linenForms) {
+      if (f.status === 'confirmed') continue
+      if (linkedFormIds.has(f.id)) continue
+      map.set(f.customerId, (map.get(f.customerId) || 0) + 1)
+    }
+    return map
+  }, [linenForms, deliveryNotes])
+
   // 122.4.1: Stuck LFs — ยังไม่ถึง 7/7 + customer เดียวกัน (ไม่มี SD ผูกแล้ว)
   const stuckFormsForCustomer = useMemo(() => {
     if (!selCustomerId) return []
@@ -609,6 +622,9 @@ export default function DeliveryPage() {
     const allNewDNs: DeliveryNote[] = []
     const itemNameMap = Object.fromEntries(linenCatalog.map(i => [i.code, i.name]))
     let customersWithoutQT = 0
+    // 291.1: นับ LF ค้าง (ไม่ถึง 7/7) ของลูกค้าที่อยู่ใน batch — เตือน user หลังสร้าง
+    let stuckLFsTotal = 0
+    let stuckCustCount = 0
 
     for (const customerId of qbSelectedCusts) {
       const customer = getCustomer(customerId)
@@ -618,6 +634,9 @@ export default function DeliveryPage() {
 
       const hasAcceptedQT = quotations.some(q => q.customerId === customerId && q.status === 'accepted')
       if (!hasAcceptedQT) customersWithoutQT++
+
+      const stuckN = stuckCountByCustomer.get(customerId) || 0
+      if (stuckN > 0) { stuckLFsTotal += stuckN; stuckCustCount++ }
 
       const priceMap = buildPriceMapFromQT(customerId, quotations)
       const latestQT = quotations
@@ -756,6 +775,7 @@ export default function DeliveryPage() {
     }
     const msg = `สร้าง SD เสร็จแล้ว ${allNewDNs.length} ใบ (${qbSelectedCusts.size} ลูกค้า)`
       + (customersWithoutQT > 0 ? `\n\n⚠ ${customersWithoutQT} ลูกค้าไม่มี QT — ราคาจะเป็น 0 จนกว่าจะสร้าง QT` : '')
+      + (stuckLFsTotal > 0 ? `\n\n⚠ พบ LF ค้าง ${stuckLFsTotal} ใบ ใน ${stuckCustCount} ลูกค้า ที่สถานะยังไม่ถึง 7/7 — ไม่ถูกสร้างในรอบนี้\n   กรุณาตรวจสอบที่หน้า LF อีกครั้ง` : '')
     setShowQuickBatch(false)
     setQbSelectedCusts(new Set())
     setQbDriver(''); setQbVehicle(''); setQbReceiver('')
@@ -2291,6 +2311,7 @@ export default function DeliveryPage() {
                       {entries.map(({ custId, customer, lfs, totalPieces }) => {
                         const checked = qbSelectedCusts.has(custId)
                         const hasQT = quotations.some(q => q.customerId === custId && q.status === 'accepted')
+                        const stuckCount = stuckCountByCustomer.get(custId) || 0
                         return (
                           <tr key={custId} className={cn('border-t border-slate-100 cursor-pointer hover:bg-slate-50',
                             checked && 'bg-[#3DD8D8]/10')}
@@ -2303,6 +2324,11 @@ export default function DeliveryPage() {
                               <span className="font-bold text-[#1B3A5C] tracking-wide">{customer!.shortName || '-'}</span>
                               <span className="text-slate-500 text-xs ml-2">{customer!.name}</span>
                               {!hasQT && <span className="ml-2 text-[10px] text-amber-600 font-medium">⚠ ไม่มี QT</span>}
+                              {stuckCount > 0 && (
+                                <span className="ml-2 text-[10px] text-amber-600 font-medium" title="LF ที่สถานะยังไม่ถึง 7/7 จะไม่ถูกสร้าง SD ในรอบนี้">
+                                  ⚠ ค้าง {stuckCount} ใบ (ไม่ใช่ 7/7)
+                                </span>
+                              )}
                             </td>
                             <td className="px-3 py-2 text-right text-slate-700">{lfs.length}</td>
                             <td className="px-3 py-2 text-right text-slate-700">{formatNumber(totalPieces)}</td>
