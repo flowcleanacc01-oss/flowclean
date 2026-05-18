@@ -168,7 +168,7 @@ export default function CustomerDetailPage() {
             <h1 className="text-lg font-bold text-slate-800 truncate flex items-center gap-2">
               <span className="truncate">{customer.shortName || customer.name}</span>
               <button
-                onClick={() => router.push(`/dashboard/customers?edit=${id}`)}
+                onClick={() => router.push(`/dashboard/customers?edit=${id}&returnTo=/dashboard/customers/${id}`)}
                 title="แก้ไขข้อมูลลูกค้า"
                 className="flex-shrink-0 p-1 rounded-lg text-slate-400 hover:text-[#1B3A5C] hover:bg-[#3DD8D8]/10 transition-colors">
                 <Edit2 className="w-4 h-4" />

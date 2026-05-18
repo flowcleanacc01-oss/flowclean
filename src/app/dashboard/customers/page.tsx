@@ -45,6 +45,7 @@ export default function CustomersPage() {
   const router = useRouter()
   const urlHighlightQ = sp.get('q') || '' // 147.2
   const urlEditId = sp.get('edit') // 286.2: ?edit=<id> → open edit modal directly
+  const urlReturnTo = sp.get('returnTo') // 289: ?returnTo=<path> → after save, navigate back there
   // 180: scroll to first <mark> on arrival from global search
   useScrollToMark()
   const [showCustPrintList, setShowCustPrintList] = useState(false) // 154.2
@@ -203,6 +204,7 @@ export default function CustomersPage() {
       ...form,
       billingModel: isFlatRateCustomer(form) ? 'monthly_flat' as const : 'per_piece' as const,
     }
+    const savedId = editId
     if (editId) {
       updateCustomer(editId, derived)
     } else {
@@ -211,6 +213,10 @@ export default function CustomersPage() {
       scrollToActiveRow(newCust.id)
     }
     setShowForm(false)
+    // 289: ถ้าเปิดจาก customer detail (returnTo=/dashboard/customers/<id>) → กลับไปที่ detail
+    if (savedId && urlReturnTo) {
+      router.push(urlReturnTo)
+    }
   }
 
   // Category CRUD
@@ -911,7 +917,11 @@ export default function CustomersPage() {
       </Modal>
 
       {/* Form Modal */}
-      <Modal open={showForm} onClose={() => setShowForm(false)} title={editId ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า'} size="xl" closeLabel="cancel">
+      <Modal open={showForm} onClose={() => {
+        setShowForm(false)
+        // 289: ถ้าเปิดจาก customer detail (returnTo) → กลับไปแม้ user กด cancel/close
+        if (urlReturnTo && editId) router.push(urlReturnTo)
+      }} title={editId ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า'} size="xl" closeLabel="cancel">
         <div className="space-y-4 text-sm">
           <div>
             <label className="block font-medium text-slate-600 mb-1">ชื่อย่อลูกค้า * <span className="text-xs text-slate-400 font-normal">(ใช้ในงานประจำวัน เช่น WOV, Bell, SWD)</span></label>
