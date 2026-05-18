@@ -346,6 +346,12 @@ export default function BillingPage() {
         case 'grandTotal': va = a.grandTotal; vb = b.grandTotal; break
         case 'netPayable': va = a.netPayable; vb = b.netPayable; break
         case 'isPrinted': va = a.isPrinted ? 1 : 0; vb = b.isPrinted ? 1 : 0; break
+        // 289 (v2): overdue = unpaid + dueDate < today — sort overdue ขึ้นก่อน (desc)
+        case 'overdue': {
+          const todayStr = todayISO()
+          const isOverdue = (d: typeof a) => (d.status === 'sent' && d.dueDate < todayStr) ? 1 : 0
+          va = isOverdue(a); vb = isOverdue(b); break
+        }
         case 'iv': va = taxInvoices.find(ti => ti.billingStatementId === a.id)?.invoiceNumber || ''; vb = taxInvoices.find(ti => ti.billingStatementId === b.id)?.invoiceNumber || ''; break
         case 'paid': va = a.status === 'paid' ? 1 : 0; vb = b.status === 'paid' ? 1 : 0; break
         default: va = a.issueDate; vb = b.issueDate
@@ -1381,6 +1387,8 @@ export default function BillingPage() {
                   <SortableHeader label="ยอดรวม" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <SortableHeader label="จ่ายสุทธิ" sortKey="netPayable" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
+                  {/* 289 (v2): col เกินกำหนด — sortable */}
+                  <SortableHeader label="เกินกำหนด" sortKey="overdue" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                   {/* 163.1: rename "IV" → "IV / RC" */}
                   <SortableHeader label="IV / RC" sortKey="iv" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
                   <SortableHeader label="ชำระ" sortKey="paid" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
@@ -1416,6 +1424,27 @@ export default function BillingPage() {
                           b.isPrinted ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400')}>
                           {b.isPrinted ? 'พิมพ์แล้ว' : 'ยังไม่พิมพ์'}
                         </span>
+                      </td>
+                      {/* 289 (v2): col สถานะเกินกำหนด */}
+                      <td className={cn("px-3 py-3 text-center", sortedBg('overdue'))}>
+                        {(() => {
+                          const todayStr = todayISO()
+                          const isOverdue = b.status === 'sent' && b.dueDate < todayStr
+                          const isPaid = b.status === 'paid'
+                          if (isPaid) {
+                            return <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">ชำระแล้ว</span>
+                          }
+                          if (isOverdue) {
+                            const days = Math.floor((new Date(todayStr).getTime() - new Date(b.dueDate).getTime()) / (1000 * 60 * 60 * 24))
+                            return (
+                              <span title={`ครบกำหนด ${formatDate(b.dueDate)} — เกิน ${days} วัน`}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                                ⚠ เกินกำหนด {days}d
+                              </span>
+                            )
+                          }
+                          return <span className="text-xs text-slate-400">-</span>
+                        })()}
                       </td>
                       <td className={cn("px-4 py-3 text-center", sortedBg('iv'))} onClick={e => e.stopPropagation()}>
                         {(() => {
