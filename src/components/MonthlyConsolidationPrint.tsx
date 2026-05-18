@@ -178,12 +178,18 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                   <th style={thS}>ราคา</th>
                   <th style={thS}>จำนวน</th>
                   <th style={thS}>เป็นเงิน</th>
-                  {chunk.map(dn => (
-                    <th key={dn.id} style={{ ...thS, fontSize: '6pt', lineHeight: '1.3' }}>
-                      <div>{parseInt(dn.date.split('-')[2])}</div>
-                      <div style={{ fontSize: '5pt', color: '#888', fontWeight: 'normal' }}>{dn.noteNumber}</div>
-                    </th>
-                  ))}
+                  {chunk.map(dn => {
+                    // 290: abbreviate noteNumber to #NNN (last running number) — กัน overflow
+                    //   Full format: SD-YYYYMMDD-NNN → ดึง 3 หลักท้าย
+                    //   วันที่+เดือนแสดงในแถวบน → user reverse-lookup ได้
+                    const runningNo = dn.noteNumber.split('-').pop() || dn.noteNumber
+                    return (
+                      <th key={dn.id} style={{ ...thS, fontSize: '6pt', lineHeight: '1.3' }}>
+                        <div>{parseInt(dn.date.split('-')[2])}</div>
+                        <div style={{ fontSize: '5pt', color: '#888', fontWeight: 'normal' }} title={dn.noteNumber}>#{runningNo}</div>
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
