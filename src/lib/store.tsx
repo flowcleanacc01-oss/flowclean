@@ -204,6 +204,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false)
   const seeded = useRef(false)
   const currentUserRef = useRef<AppUser | null>(null)
+  // 295: deliveryNotes ref — sync update ใน batch loop กัน closure stale
+  //   (functional setState ของ Fix 293 ไม่พอ — React 18 defer updater เมื่อ queue ไม่ว่าง
+  //    ทำให้ assign-inside-updater pattern อ่านค่า [] เมื่อ caller return)
+  const deliveryNotesRef = useRef<DeliveryNote[]>([])
+  deliveryNotesRef.current = deliveryNotes
 
   // Keep ref in sync for use in callbacks without dependency
   useEffect(() => { currentUserRef.current = currentUser }, [currentUser])
@@ -491,27 +496,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   //   ก่อน: addDeliveryNote ใน loop = N concurrent HTTP fire-and-forget
   //   → browser concurrency cap + Supabase rate limit → "fail to fetch"
   //   ตอนนี้: เตรียม IDs+noteNumbers ทีละตัว (running counter), 1 HTTP insert batch
-  // 293: functional setState — กัน noteNumber ซ้ำเมื่อ caller เรียกซ้อนกันใน render cycle เดียว
-  //   (Quick Batch loop ต่อ customer → state ยัง async ไม่ update → closure stale)
+  // 295: ใช้ deliveryNotesRef แทน functional setState — กัน 2 bugs พร้อมกัน:
+  //   (1) noteNumber ซ้ำเมื่อ caller เรียกซ้อน (Fix 293's goal — แต่ assign-inside-updater
+  //       ไม่ work เพราะ React 18 defer updater เมื่อ queue ไม่ว่าง)
+  //   (2) return [] จาก call ที่ 2+ ใน loop (Fix 293's side-effect — assign ใน deferred
+  //       updater = caller อ่านก่อน assigned)
+  //   Ref update = sync, ไม่ผ่าน React batching → ทุก call อ่าน fresh state ได้ทันที
   const addDeliveryNotesBatch = useCallback((items: Omit<DeliveryNote, 'id' | 'noteNumber' | 'createdBy' | 'updatedAt'>[]): DeliveryNote[] => {
     if (items.length === 0) return []
     const userId = currentUserRef.current?.id || 'unknown'
     const now = todayISO()
-    let newDNs: DeliveryNote[] = []
-    setDeliveryNotes(prev => {
-      // อ่าน existing จาก prev (ล่าสุดเสมอ) ไม่ใช่ closure ที่อาจ stale
-      const existingNumbers = prev.map(x => x.noteNumber)
-      const newNumbers: string[] = []
-      newDNs = items.map(d => {
-        const noteNumber = genDeliveryNoteNumber([...existingNumbers, ...newNumbers])
-        newNumbers.push(noteNumber)
-        return { ...d, id: genId(), noteNumber, createdBy: userId, updatedAt: now }
-      })
-      return [...newDNs, ...prev]
+    // อ่าน state ล่าสุดจาก ref (sync, ไม่ stale ใน loop)
+    const current = deliveryNotesRef.current
+    const existingNumbers = current.map(x => x.noteNumber)
+    const newNumbers: string[] = []
+    const newDNs: DeliveryNote[] = items.map(d => {
+      const noteNumber = genDeliveryNoteNumber([...existingNumbers, ...newNumbers])
+      newNumbers.push(noteNumber)
+      return { ...d, id: genId(), noteNumber, createdBy: userId, updatedAt: now }
     })
+    // อัปเดต ref ทันที (sync) ก่อน setState — call ถัดไปใน loop อ่าน ref เห็นของใหม่
+    deliveryNotesRef.current = [...newDNs, ...current]
+    setDeliveryNotes(prev => [...newDNs, ...prev])
     dbSave(db.insertDeliveryNotesBatch(newDNs), () => {
-      // Rollback ทุก newDN ถ้า batch insert fail
+      // Rollback ทุก newDN ถ้า batch insert fail — sync ทั้ง ref + state
       const failedIds = new Set(newDNs.map(d => d.id))
+      deliveryNotesRef.current = deliveryNotesRef.current.filter(x => !failedIds.has(x.id))
       setDeliveryNotes(prev => prev.filter(x => !failedIds.has(x.id)))
     })
     // Audit ทุก DN — fire-and-forget OK (auditLogs ไม่ critical)
