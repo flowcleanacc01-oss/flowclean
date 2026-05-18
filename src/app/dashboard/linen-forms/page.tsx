@@ -47,6 +47,8 @@ export default function LinenFormsPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  // 292: LF ที่ user กดย้อนแต่มี SD ผูกอยู่ — block + แสดง modal ขอให้ลบ SD ก่อน
+  const [revertBlockedFor, setRevertBlockedFor] = useState<string | null>(null)
   // 171.1: scroll to <mark> on arrival from global search
   useScrollToMark([showDetail])
   // 236: watch ?detail= URL changes — เปิด modal เมื่อ Cmd+K ส่ง link มาจาก same page
@@ -370,6 +372,11 @@ export default function LinenFormsPage() {
   const handleRevertStatus = (formId: string) => {
     const form = linenForms.find(f => f.id === formId)
     if (!form) return
+    // 292: ถ้ามี SD ผูกอยู่ → ห้ามย้อน (ป้องกันข้อมูล LF/SD ไม่ตรงกัน) — แจ้ง user ลบ SD ก่อน
+    if (linkedLFMap.has(formId)) {
+      setRevertBlockedFor(formId)
+      return
+    }
     const prev = PREV_LINEN_STATUS[form.status]
     if (prev) updateLinenFormStatus(formId, prev)
   }
@@ -1234,6 +1241,36 @@ export default function LinenFormsPage() {
                 {!hasLinkedSD && (
                   <button onClick={() => { if (confirmDeleteId) { deleteLinenForm(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
                     className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* 292: Revert Blocked Modal — แจ้งว่ามี SD ผูกอยู่ ต้องลบ SD ก่อนถึงจะย้อน LF ได้ */}
+      <Modal open={!!revertBlockedFor} onClose={() => setRevertBlockedFor(null)} title="ย้อนสถานะเอกสาร" closeLabel="cancel">
+        {(() => {
+          if (!revertBlockedFor) return null
+          const form = linenForms.find(f => f.id === revertBlockedFor)
+          const linkedSD = linkedLFMap.get(revertBlockedFor)
+          return (
+            <div className="space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                <p className="text-sm font-medium text-red-800">ไม่สามารถย้อนได้</p>
+                <p className="text-sm text-red-700 mt-1">
+                  LF <strong className="font-mono">{form?.formNumber}</strong> นี้มีใบส่งของชั่วคราว (SD) อยู่: <strong>{linkedSD?.noteNumber}</strong>
+                </p>
+                <p className="text-xs text-red-600 mt-1">กรุณาลบ SD ก่อน แล้วค่อยย้อน LF</p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setRevertBlockedFor(null)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+                {linkedSD && (
+                  <button onClick={() => { setRevertBlockedFor(null); router.push(`/dashboard/delivery?detail=${linkedSD.dnId}`) }}
+                    className="px-4 py-2 text-sm bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors font-medium flex items-center gap-1.5">
+                    ไปที่ SD <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
                 )}
               </div>
             </div>
