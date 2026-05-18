@@ -114,22 +114,14 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
 
   const fmtN = (n: number) => (n === 0 ? '' : n.toLocaleString('en-US'))
   const fmtM = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  // 294: compact format สำหรับ per-SD col แคบ (KAYA case: 16 SDs/page ≈ 12px col)
-  //   - 0-9,999  → "1,234"   (integer + thousands sep, ไม่มี .00)
-  //   - ≥10K     → "12K", "123K"
-  //   - ≥1M      → "1.2M"
-  //   ใช้คู่กับ overflow:hidden + title=<full value> เพื่อ hover ดูเลขเต็มได้
-  const fmtCellCompact = (n: number): string => {
-    if (n === 0) return ''
-    const abs = Math.abs(n)
-    const sign = n < 0 ? '-' : ''
-    if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M`
-    if (abs >= 10_000) return `${sign}${Math.round(abs / 1000)}K`
-    return `${sign}${Math.round(abs).toLocaleString('en-US')}`
+  // 296: per-SD cell style — fontSize 6pt + overflow safety
+  //   เลือก 6pt + col width 11mm (4.06% @ 16 SDs/page) → รับ "999,999.99" full precision
+  //   ห้าม round (บัญชี) — overflow:hidden + title=<full value> เป็น safety net เท่านั้น
+  const tdSdNum: React.CSSProperties = {
+    ...tdR, fontSize: '6pt', overflow: 'hidden', whiteSpace: 'nowrap',
   }
-  // 294: narrow cell style — fontSize 5pt + clip overflow (table-layout: fixed กับ col แคบ)
-  const tdCompact: React.CSSProperties = {
-    ...tdR, fontSize: '5pt', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'clip',
+  const tdSdInt: React.CSSProperties = {
+    ...tdC, fontSize: '6pt', overflow: 'hidden', whiteSpace: 'nowrap',
   }
 
   // 123: Split SDs into pages — max 16 per page, distribute evenly (smaller pages first)
@@ -156,7 +148,9 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
     >
       {chunks.map((chunk, pageIdx) => {
         const isLastPage = pageIdx === chunks.length - 1
-        const pageColW = Math.max(12, Math.floor(110 / Math.max(chunk.length, 1)))
+        // 296: col widths เป็น % ของ table — fixed cols 35% + per-SD cols 65% / N
+        //   ที่ 16 SDs/page = 4.06% per col = ~11mm → รับ "999,999.99" @ 6pt full precision
+        const sdColPct = 65 / Math.max(chunk.length, 1)
         return (
           <div
             key={pageIdx}
@@ -181,12 +175,12 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
             {/* Main table — columns: one per SD in this chunk */}
             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <colgroup>
-                <col style={{ width: '18px' }} />   {/* No */}
-                <col style={{ width: '76px' }} />   {/* รายการ */}
-                <col style={{ width: '18px' }} />   {/* ราคา */}
-                <col style={{ width: '28px' }} />   {/* จำนวน */}
-                <col style={{ width: '38px' }} />   {/* เป็นเงิน */}
-                {chunk.map(dn => <col key={dn.id} style={{ width: `${pageColW}px` }} />)}
+                <col style={{ width: '2.5%' }} />   {/* No */}
+                <col style={{ width: '16%' }} />    {/* รายการ */}
+                <col style={{ width: '3.5%' }} />   {/* ราคา */}
+                <col style={{ width: '5%' }} />     {/* จำนวน */}
+                <col style={{ width: '8%' }} />     {/* เป็นเงิน */}
+                {chunk.map(dn => <col key={dn.id} style={{ width: `${sdColPct}%` }} />)}
               </colgroup>
               <thead>
                 <tr>
@@ -218,11 +212,14 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                     <td style={tdC}>{getPrice(item.code) || ''}</td>
                     <td style={tdR}>{fmtN(rowQty[item.code])}</td>
                     <td style={tdR}>{rowAmt[item.code] ? fmtM(rowAmt[item.code]) : ''}</td>
-                    {chunk.map(dn => (
-                      <td key={dn.id} style={{ ...tdC, fontSize: '6pt' }}>
-                        {matrix[item.code][dn.id] ? matrix[item.code][dn.id] : ''}
-                      </td>
-                    ))}
+                    {chunk.map(dn => {
+                      const v = matrix[item.code][dn.id]
+                      return (
+                        <td key={dn.id} style={tdSdInt}>
+                          {v ? v : ''}
+                        </td>
+                      )
+                    })}
                   </tr>
                 ))}
 
@@ -237,8 +234,8 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                     {chunk.map(dn => {
                       const v = dn.transportFeeTrip || 0
                       return (
-                        <td key={dn.id} style={tdCompact} title={v > 0 ? fmtM(v) : ''}>
-                          {fmtCellCompact(v)}
+                        <td key={dn.id} style={tdSdNum} title={v > 0 ? fmtM(v) : ''}>
+                          {v > 0 ? fmtM(v) : ''}
                         </td>
                       )
                     })}
@@ -256,8 +253,8 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                     {chunk.map(dn => {
                       const v = dn.transportFeeMonth || 0
                       return (
-                        <td key={dn.id} style={tdCompact} title={v > 0 ? fmtM(v) : ''}>
-                          {fmtCellCompact(v)}
+                        <td key={dn.id} style={tdSdNum} title={v > 0 ? fmtM(v) : ''}>
+                          {v > 0 ? fmtM(v) : ''}
                         </td>
                       )
                     })}
@@ -275,8 +272,8 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                     {chunk.map(dn => {
                       const v = dn.extraCharge || 0
                       return (
-                        <td key={dn.id} style={tdCompact} title={v > 0 ? fmtM(v) : ''}>
-                          {fmtCellCompact(v)}
+                        <td key={dn.id} style={tdSdNum} title={v > 0 ? fmtM(v) : ''}>
+                          {v > 0 ? fmtM(v) : ''}
                         </td>
                       )
                     })}
@@ -294,8 +291,8 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                     {chunk.map(dn => {
                       const v = dn.discount || 0
                       return (
-                        <td key={dn.id} style={tdCompact} title={v > 0 ? `-${fmtM(v)}` : ''}>
-                          {v > 0 ? `-${fmtCellCompact(v)}` : ''}
+                        <td key={dn.id} style={tdSdNum} title={v > 0 ? `-${fmtM(v)}` : ''}>
+                          {v > 0 ? `-${fmtM(v)}` : ''}
                         </td>
                       )
                     })}
@@ -313,8 +310,8 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                   {chunk.map(dn => {
                     const v = dnTotals[dn.id] ?? 0
                     return (
-                      <td key={dn.id} style={{ ...tdCompact, fontWeight: 'bold', backgroundColor: '#f0f0f0' }} title={fmtM(v)}>
-                        {fmtCellCompact(v)}
+                      <td key={dn.id} style={{ ...tdSdNum, fontWeight: 'bold', backgroundColor: '#f0f0f0' }} title={fmtM(v)}>
+                        {fmtM(v)}
                       </td>
                     )
                   })}
