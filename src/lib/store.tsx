@@ -491,18 +491,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   //   ก่อน: addDeliveryNote ใน loop = N concurrent HTTP fire-and-forget
   //   → browser concurrency cap + Supabase rate limit → "fail to fetch"
   //   ตอนนี้: เตรียม IDs+noteNumbers ทีละตัว (running counter), 1 HTTP insert batch
+  // 293: functional setState — กัน noteNumber ซ้ำเมื่อ caller เรียกซ้อนกันใน render cycle เดียว
+  //   (Quick Batch loop ต่อ customer → state ยัง async ไม่ update → closure stale)
   const addDeliveryNotesBatch = useCallback((items: Omit<DeliveryNote, 'id' | 'noteNumber' | 'createdBy' | 'updatedAt'>[]): DeliveryNote[] => {
     if (items.length === 0) return []
     const userId = currentUserRef.current?.id || 'unknown'
     const now = todayISO()
-    const existingNumbers = deliveryNotes.map(x => x.noteNumber)
-    const newNumbers: string[] = []
-    const newDNs: DeliveryNote[] = items.map(d => {
-      const noteNumber = genDeliveryNoteNumber([...existingNumbers, ...newNumbers])
-      newNumbers.push(noteNumber)
-      return { ...d, id: genId(), noteNumber, createdBy: userId, updatedAt: now }
+    let newDNs: DeliveryNote[] = []
+    setDeliveryNotes(prev => {
+      // อ่าน existing จาก prev (ล่าสุดเสมอ) ไม่ใช่ closure ที่อาจ stale
+      const existingNumbers = prev.map(x => x.noteNumber)
+      const newNumbers: string[] = []
+      newDNs = items.map(d => {
+        const noteNumber = genDeliveryNoteNumber([...existingNumbers, ...newNumbers])
+        newNumbers.push(noteNumber)
+        return { ...d, id: genId(), noteNumber, createdBy: userId, updatedAt: now }
+      })
+      return [...newDNs, ...prev]
     })
-    setDeliveryNotes(prev => [...newDNs, ...prev])
     dbSave(db.insertDeliveryNotesBatch(newDNs), () => {
       // Rollback ทุก newDN ถ้า batch insert fail
       const failedIds = new Set(newDNs.map(d => d.id))
@@ -513,7 +519,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       logAudit('create', 'delivery_note', dn.id, dn.noteNumber)
     }
     return newDNs
-  }, [logAudit, deliveryNotes])
+  }, [logAudit])
 
   const updateDeliveryNote = useCallback((id: string, d: Partial<DeliveryNote>) => {
     const updates = { ...d, updatedAt: todayISO() }
