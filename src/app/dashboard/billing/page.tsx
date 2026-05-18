@@ -1087,11 +1087,19 @@ export default function BillingPage() {
     return map
   }, [taxInvoices, billingStatements])
 
+  // 285.2: status counts จาก filteredBilling — ตรงตาม date range / search / filter ที่ใช้อยู่
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { draft: 0, sent: 0, paid: 0, overdue: 0 }
-    billingStatements.forEach(b => { counts[b.status] = (counts[b.status] || 0) + 1 })
+    filteredBilling.forEach(b => { counts[b.status] = (counts[b.status] || 0) + 1 })
     return counts
-  }, [billingStatements])
+  }, [filteredBilling])
+
+  // 285.3: ป้ายช่วงเวลาที่ใช้กรองอยู่ — แสดงท้ายกล่อง stats
+  const dateRangeLabel = useMemo(() => {
+    if (!dateFrom) return 'ทั้งหมด (ไม่กำหนดวันที่)'
+    if (dateFilterMode === 'single') return formatDate(dateFrom)
+    return `${formatDate(dateFrom)} — ${dateTo ? formatDate(dateTo) : 'ปัจจุบัน'}`
+  }, [dateFrom, dateTo, dateFilterMode])
 
   // 69: Page-level guard
   if (!canViewBilling(currentUser)) {
@@ -1192,14 +1200,18 @@ export default function BillingPage() {
         )}
       </div>
 
-      {/* Status cards — billing tab only */}
-      {tab === 'billing' && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        {(Object.entries(BILLING_STATUS_CONFIG) as [BillingStatus, typeof BILLING_STATUS_CONFIG[BillingStatus]][]).map(([status, cfg]) => (
-          <div key={status} className={cn('rounded-xl border p-4', cfg.bgColor, 'border-transparent')}>
-            <p className={cn('text-2xl font-bold', cfg.color)}>{statusCounts[status] || 0}</p>
-            <p className="text-sm text-slate-600">{cfg.label}</p>
-          </div>
-        ))}
+      {/* Status cards — billing tab only — 285: ลบ draft + นับตาม filter ปัจจุบัน + แสดงช่วงเวลา */}
+      {tab === 'billing' && <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        {(['sent', 'paid', 'overdue'] as const).map(status => {
+          const cfg = BILLING_STATUS_CONFIG[status]
+          return (
+            <div key={status} className={cn('rounded-xl border p-4', cfg.bgColor, 'border-transparent')}>
+              <p className={cn('text-2xl font-bold', cfg.color)}>{statusCounts[status] || 0}</p>
+              <p className="text-sm text-slate-600">{cfg.label}</p>
+              <p className="text-[11px] text-slate-400 mt-1">ช่วง: {dateRangeLabel}</p>
+            </div>
+          )
+        })}
       </div>}
 
       {/* Tab buttons removed — sidebar handles navigation */}
