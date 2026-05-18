@@ -68,9 +68,13 @@ export default function CustomerSearchInline({
   // 242.4 (R1): rAF throttle + skip update if pos unchanged + ตัด query ออกจาก deps
   //   ก่อนหน้า: scroll listener fire ทุก event + setPos ทุกครั้ง → layout thrash
   //   ก่อนหน้า: query ใน deps → scroll handler unbind/rebind ทุก keystroke
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 360 })
+  // 292.1: ready flag — กัน flicker ตอนเปิด (ก่อน portal ที่ pos={0,0,360} แว่บมุมซ้ายบน 1 frame)
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 360, ready: false })
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setPos(p => p.ready ? { ...p, ready: false } : p)
+      return
+    }
     let pending = false
     let lastPos = { top: 0, left: 0, width: 0 }
     const update = () => {
@@ -80,7 +84,7 @@ export default function CustomerSearchInline({
       const next = { top: r.bottom + 4, left: r.left, width: Math.max(r.width, 360) }
       if (next.top === lastPos.top && next.left === lastPos.left && next.width === lastPos.width) return
       lastPos = next
-      setPos(next)
+      setPos({ ...next, ready: true })
     }
     const scheduleUpdate = () => {
       if (pending) return
@@ -173,7 +177,7 @@ export default function CustomerSearchInline({
         )}
       </div>
 
-      {open && typeof document !== 'undefined' && createPortal(
+      {open && pos.ready && typeof document !== 'undefined' && createPortal(
         <div
           ref={panelRef}
           data-find-skip
