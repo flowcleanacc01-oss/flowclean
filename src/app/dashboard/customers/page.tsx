@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { cn, formatCurrency, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import { highlightText } from '@/lib/highlight'
@@ -44,6 +44,7 @@ export default function CustomersPage() {
   const sp = useSearchParams()
   const router = useRouter()
   const urlHighlightQ = sp.get('q') || '' // 147.2
+  const urlEditId = sp.get('edit') // 286.2: ?edit=<id> → open edit modal directly
   // 180: scroll to first <mark> on arrival from global search
   useScrollToMark()
   const [showCustPrintList, setShowCustPrintList] = useState(false) // 154.2
@@ -181,6 +182,17 @@ export default function CustomersPage() {
     setForm({ ...EMPTY_CUSTOMER, enabledItems: [], priceList: [] })
     setShowForm(true)
   }
+
+  // 286.2: ?edit=<id> URL trigger — open edit modal from detail page
+  useEffect(() => {
+    if (!urlEditId) return
+    const c = customers.find(x => x.id === urlEditId)
+    if (c) {
+      setPageTab('customers')
+      handleEdit(c)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlEditId, customers])
 
   const handleSave = () => {
     if (!form.name) return

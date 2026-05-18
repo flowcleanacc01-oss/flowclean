@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store'
 import { formatCurrency, formatNumber, cn, formatDate, buildPriceMapFromQT } from '@/lib/utils'
 import { canViewPrice } from '@/lib/permissions'
 import {
-  X, Building2, Phone, Mail, MapPin, FileText, CreditCard,
+  X, Building2, Phone, Mail, MapPin, FileText, CreditCard, Edit2,
   Truck, Receipt, ClipboardCheck, TrendingUp, Package, AlertTriangle, Link2, ExternalLink,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -145,39 +145,46 @@ export default function CustomerDetailPage() {
           top-14 = ใต้ dashboard top bar (h-14)
           242.2: เอา backdrop-blur ออก — flicker เมื่อ drag-select text ใต้ sticky */}
       <div className="sticky top-14 z-30 -mx-4 lg:-mx-8 px-4 lg:px-8 py-3 mb-4 bg-slate-50 border-b border-slate-200">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-[#e8eef5] flex items-center justify-center flex-shrink-0">
-              <Building2 className="w-5 h-5 text-[#1B3A5C]" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-lg font-bold text-slate-800 truncate flex items-center gap-2">
-                <span className="truncate">{customer.shortName || customer.name}</span>
-                {customer.workflowMode === 'trust_customer' && (
-                  <span title="Trust Customer — โรงงานไม่นับเข้า (col5 ว่าง) · col4 ลูกค้านับกลับ ยังกรอกได้"
-                    className="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                    ✅ Trust
-                  </span>
-                )}
-              </h1>
-              <p className="text-xs text-slate-400 truncate">
-                {customer.shortName ? customer.name : customer.nameEn}
-                {customer.customerCode && ` • ${customer.customerCode}`}
-              </p>
-            </div>
-          </div>
-          {/* 185.2.2: search ค้นหาเปลี่ยนลูกค้าโดยไม่ต้องปิดหน้า */}
+        {/* 286.1: ย้าย "เปลี่ยนไปลูกค้าอื่น" ขึ้นมาแถวบน ซ้าย — ใช้งานสะดวกกว่า */}
+        <div className="flex items-center gap-3 mb-2">
           <CustomerSearchInline
             mode="detail"
             currentCustomerId={id}
             placeholder="เปลี่ยนไปลูกค้ารายอื่น — พิมพ์ชื่อ/รหัส"
-            className="flex-shrink-0 sm:w-80"
+            className="flex-1 sm:max-w-md"
           />
           <button onClick={() => router.push('/dashboard/customers')}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors flex-shrink-0"
             title="ปิด">
             <X className="w-5 h-5" />
           </button>
+        </div>
+        {/* ชื่อลูกค้า + 286.2: edit icon */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-[#e8eef5] flex items-center justify-center flex-shrink-0">
+            <Building2 className="w-5 h-5 text-[#1B3A5C]" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold text-slate-800 truncate flex items-center gap-2">
+              <span className="truncate">{customer.shortName || customer.name}</span>
+              <button
+                onClick={() => router.push(`/dashboard/customers?edit=${id}`)}
+                title="แก้ไขข้อมูลลูกค้า"
+                className="flex-shrink-0 p-1 rounded-lg text-slate-400 hover:text-[#1B3A5C] hover:bg-[#3DD8D8]/10 transition-colors">
+                <Edit2 className="w-4 h-4" />
+              </button>
+              {customer.workflowMode === 'trust_customer' && (
+                <span title="Trust Customer — โรงงานไม่นับเข้า (col5 ว่าง) · col4 ลูกค้านับกลับ ยังกรอกได้"
+                  className="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                  ✅ Trust
+                </span>
+              )}
+            </h1>
+            <p className="text-xs text-slate-400 truncate">
+              {customer.shortName ? customer.name : customer.nameEn}
+              {customer.customerCode && ` • ${customer.customerCode}`}
+            </p>
+          </div>
         </div>
       </div>
 
