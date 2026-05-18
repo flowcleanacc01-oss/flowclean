@@ -1087,7 +1087,7 @@ export default function BillingPage() {
     return map
   }, [taxInvoices, billingStatements])
 
-  // 285.2: status counts จาก filteredBilling — ตรงตาม date range / search / filter ที่ใช้อยู่
+  // 285.2: status counts (วางบิลแล้ว/ชำระแล้ว) จาก filteredBilling — ตามฟิลเตอร์ปัจจุบัน
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { draft: 0, sent: 0, paid: 0, overdue: 0 }
     filteredBilling.forEach(b => { counts[b.status] = (counts[b.status] || 0) + 1 })
@@ -1100,6 +1100,20 @@ export default function BillingPage() {
     if (dateFilterMode === 'single') return formatDate(dateFrom)
     return `${formatDate(dateFrom)} — ${dateTo ? formatDate(dateTo) : 'ปัจจุบัน'}`
   }, [dateFrom, dateTo, dateFilterMode])
+
+  // 287: บิลเกินกำหนด + บิลค้างชำระ — ทั้งหมด (cross-month) ไม่อิง date sort
+  //   เพราะบิลค้างมัก cross เดือน — sort ตามเดือนปัจจุบันจะหาย → ใช้ทุกใบ
+  const overdueTodayStats = useMemo(() => {
+    const today = todayISO()
+    const unpaid = billingStatements.filter(b => b.status === 'sent')
+    const overdue = unpaid.filter(b => b.dueDate < today)
+    return {
+      overdueCount: overdue.length,
+      overdueTotal: overdue.reduce((s, b) => s + b.netPayable, 0),
+      unpaidCount: unpaid.length,
+      unpaidTotal: unpaid.reduce((s, b) => s + b.netPayable, 0),
+    }
+  }, [billingStatements])
 
   // 69: Page-level guard
   if (!canViewBilling(currentUser)) {
@@ -1200,18 +1214,45 @@ export default function BillingPage() {
         )}
       </div>
 
-      {/* Status cards — billing tab only — 285: ลบ draft + นับตาม filter ปัจจุบัน + แสดงช่วงเวลา */}
-      {tab === 'billing' && <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-        {(['sent', 'paid', 'overdue'] as const).map(status => {
-          const cfg = BILLING_STATUS_CONFIG[status]
-          return (
-            <div key={status} className={cn('rounded-xl border p-4', cfg.bgColor, 'border-transparent')}>
-              <p className={cn('text-2xl font-bold', cfg.color)}>{statusCounts[status] || 0}</p>
-              <p className="text-sm text-slate-600">{cfg.label}</p>
-              <p className="text-[11px] text-slate-400 mt-1">ช่วง: {dateRangeLabel}</p>
-            </div>
-          )
-        })}
+      {/* Status cards — billing tab only
+          285: ลบ draft · 287: เพิ่มกล่องบิลค้างชำระ
+          - sent + paid: นับตามฟิลเตอร์ปัจจุบัน (date range / search / ...)
+          - overdue + unpaid: นับ "ทั้งหมด" cross-month (ไม่อิง sort)
+            เพราะบิลค้างมัก cross เดือน — sort ตามเดือนจะหาย */}
+      {tab === 'billing' && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {/* วางบิลแล้ว — ตาม filter */}
+        <div className={cn('rounded-xl border p-4', BILLING_STATUS_CONFIG.sent.bgColor, 'border-transparent')}>
+          <p className={cn('text-2xl font-bold', BILLING_STATUS_CONFIG.sent.color)}>{statusCounts.sent || 0}</p>
+          <p className="text-sm text-slate-600">{BILLING_STATUS_CONFIG.sent.label}</p>
+          <p className="text-[11px] text-slate-400 mt-1">ช่วง: {dateRangeLabel}</p>
+        </div>
+        {/* ชำระแล้ว — ตาม filter */}
+        <div className={cn('rounded-xl border p-4', BILLING_STATUS_CONFIG.paid.bgColor, 'border-transparent')}>
+          <p className={cn('text-2xl font-bold', BILLING_STATUS_CONFIG.paid.color)}>{statusCounts.paid || 0}</p>
+          <p className="text-sm text-slate-600">{BILLING_STATUS_CONFIG.paid.label}</p>
+          <p className="text-[11px] text-slate-400 mt-1">ช่วง: {dateRangeLabel}</p>
+        </div>
+        {/* 287.1: เกินกำหนด — ทั้งหมด (cross-month) — ไม่อิง date sort */}
+        <div className={cn('rounded-xl border p-4', BILLING_STATUS_CONFIG.overdue.bgColor, 'border-transparent')}>
+          <p className={cn('text-2xl font-bold', BILLING_STATUS_CONFIG.overdue.color)}>{overdueTodayStats.overdueCount}</p>
+          <p className="text-sm text-slate-600">{BILLING_STATUS_CONFIG.overdue.label}</p>
+          <p className="text-[11px] text-slate-400 mt-1">ช่วง: ไม่กำหนด (ทั้งหมด)</p>
+        </div>
+        {/* 287.2: บิลค้างชำระ — เหมือนหน้า dashboard home */}
+        <div className={cn('rounded-xl border p-4',
+          overdueTodayStats.overdueCount > 0 ? 'bg-red-50' : overdueTodayStats.unpaidCount > 0 ? 'bg-amber-50' : 'bg-slate-50',
+          'border-transparent')}>
+          <p className={cn('text-2xl font-bold',
+            overdueTodayStats.overdueCount > 0 ? 'text-red-600' : overdueTodayStats.unpaidCount > 0 ? 'text-amber-600' : 'text-slate-800')}>
+            {formatCurrency(overdueTodayStats.unpaidTotal)}
+          </p>
+          <p className="text-sm text-slate-600">บิลค้างชำระ ({overdueTodayStats.unpaidCount} ใบ)</p>
+          {overdueTodayStats.overdueCount > 0 ? (
+            <p className="text-[11px] text-red-600 mt-1">⚠ ในนี้เกินกำหนด {overdueTodayStats.overdueCount} ใบ · {formatCurrency(overdueTodayStats.overdueTotal)}</p>
+          ) : (
+            <p className="text-[11px] text-slate-400 mt-1">ช่วง: (ทั้งหมด)</p>
+          )}
+        </div>
       </div>}
 
       {/* Tab buttons removed — sidebar handles navigation */}
