@@ -12,7 +12,7 @@ import FindableText from '@/components/FindableText'
 import { type DeliveryNoteItem, type DeliveryNote, type LinenForm, LINEN_FORM_STATUS_CONFIG } from '@/types'
 import { calculateTransportFeeTrip, calculateDNSubtotal, recalcMonthFeeForCustomerMonth } from '@/lib/transport-fee'
 import { sortByQTOrder } from '@/lib/sort-by-qt'
-import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2, ArrowUpDown } from 'lucide-react'
+import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2, ArrowUpDown, Sparkles } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
@@ -43,6 +43,12 @@ export default function DeliveryPage() {
   const [search, setSearch] = useState('')
   const [customerFilter, setCustomerFilter] = useState<string>('all')
   const [showCreate, setShowCreate] = useState(false)
+  // 283: Quick batch — list customers ที่มี LF confirmed ค้าง → multi-select → 1-click create
+  const [showQuickBatch, setShowQuickBatch] = useState(false)
+  const [qbSelectedCusts, setQbSelectedCusts] = useState<Set<string>>(new Set())
+  const [qbDriver, setQbDriver] = useState('')
+  const [qbVehicle, setQbVehicle] = useState('')
+  const [qbReceiver, setQbReceiver] = useState('')
   const searchParams = useSearchParams()
   const router = useRouter()
   const urlHighlightQ = searchParams.get('q') || '' // 147.2
@@ -261,6 +267,25 @@ export default function DeliveryPage() {
       )
       .sort((a, b) => a.date.localeCompare(b.date) || a.formNumber.localeCompare(b.formNumber))
   }, [linenForms, selCustomerId, deliveryNotes])
+
+  // 283: Quick batch — group pending LFs by customer (no name search needed)
+  //   "Pending" = LF status=confirmed + ยังไม่ผูก SD
+  const pendingByCustomer = useMemo(() => {
+    const linkedFormIds = new Set(deliveryNotes.flatMap(dn => dn.linenFormIds))
+    const map = new Map<string, LinenForm[]>()
+    for (const f of linenForms) {
+      if (f.status !== 'confirmed') continue
+      if (linkedFormIds.has(f.id)) continue
+      const list = map.get(f.customerId) || []
+      list.push(f)
+      map.set(f.customerId, list)
+    }
+    // Sort LFs per customer (oldest first)
+    for (const lfs of map.values()) {
+      lfs.sort((a, b) => a.date.localeCompare(b.date) || a.formNumber.localeCompare(b.formNumber))
+    }
+    return map
+  }, [linenForms, deliveryNotes])
 
   // 122.4.1: Stuck LFs — ยังไม่ถึง 7/7 + customer เดียวกัน (ไม่มี SD ผูกแล้ว)
   const stuckFormsForCustomer = useMemo(() => {
@@ -576,6 +601,168 @@ export default function DeliveryPage() {
       scrollToActiveRow(newDNs[0].id)
     }
     setShowCreate(false)
+  }
+
+  // 283: Quick Batch — สร้าง SD ให้หลายลูกค้าในครั้งเดียว (1 LF = 1 SD per customer)
+  //   Mirror handleCreateBatch logic per-customer, shared driver/vehicle/receiver
+  const handleQuickBatchSubmit = () => {
+    if (qbSelectedCusts.size === 0) return
+
+    const allNewDNs: DeliveryNote[] = []
+    const itemNameMap = Object.fromEntries(linenCatalog.map(i => [i.code, i.name]))
+    let customersWithoutQT = 0
+
+    for (const customerId of qbSelectedCusts) {
+      const customer = getCustomer(customerId)
+      if (!customer) continue
+      const lfs = pendingByCustomer.get(customerId) || []
+      if (lfs.length === 0) continue
+
+      const hasAcceptedQT = quotations.some(q => q.customerId === customerId && q.status === 'accepted')
+      if (!hasAcceptedQT) customersWithoutQT++
+
+      const priceMap = buildPriceMapFromQT(customerId, quotations)
+      const latestQT = quotations
+        .filter(q => q.customerId === customerId && q.status === 'accepted')
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0]
+      const qtOrderMap: Record<string, number> = {}
+      if (latestQT) latestQT.items.forEach((it, idx) => { qtOrderMap[it.code] = idx })
+
+      // Pass 1 — prepare items + subtotal + tripFee per LF
+      type Prepared = { lf: LinenForm; items: DeliveryNoteItem[]; subtotal: number; tripFee: number; monthFee: number }
+      const prepared: Prepared[] = []
+      for (const lf of lfs) {
+        const billableMap: Record<string, number> = {}
+        const claimMap: Record<string, number> = {}
+        for (const row of lf.rows) {
+          const packSend = row.col6_factoryPackSend || 0
+          const claim = row.col3_hotelClaimCount || 0
+          if (packSend > 0) billableMap[row.code] = (billableMap[row.code] || 0) + packSend
+          if (claim > 0) claimMap[row.code] = (claimMap[row.code] || 0) + claim
+        }
+        const items: DeliveryNoteItem[] = [
+          ...Object.entries(billableMap).map(([code, q]) => ({ code, quantity: q, isClaim: false, displayName: 'ค่าบริการซัก ' + (itemNameMap[code] || code) })),
+          ...Object.entries(claimMap).map(([code, q]) => ({ code, quantity: q, isClaim: true, displayName: 'ส่วนลด ' + (itemNameMap[code] || code) + ' (เคลม)' })),
+        ]
+        items.sort((a, b) => {
+          const qa = qtOrderMap[a.code]
+          const qb = qtOrderMap[b.code]
+          let cmp = 0
+          if (qa !== undefined && qb !== undefined) cmp = qa - qb
+          else if (qa !== undefined) cmp = -1
+          else if (qb !== undefined) cmp = 1
+          else {
+            const ai = linenCatalog.findIndex(i => i.code === a.code)
+            const bi = linenCatalog.findIndex(i => i.code === b.code)
+            cmp = ai - bi
+          }
+          if (cmp === 0) return (a.isClaim ? 1 : 0) - (b.isClaim ? 1 : 0)
+          return cmp
+        })
+        if (items.length === 0) continue
+        const subtotal = items.reduce((s, i) => {
+          const amt = i.quantity * (priceMap[i.code] || 0)
+          return i.isClaim ? s - amt : s + amt
+        }, 0)
+        const tripFee = calculateTransportFeeTrip(subtotal, customer)
+        prepared.push({ lf, items, subtotal, tripFee, monthFee: 0 })
+      }
+
+      // Pass 2 — month fee compute per month group (pre-insert avoids race)
+      const externalUpdates: Array<{ dnId: string; transportFeeMonth: number }> = []
+      if (customer.enableMinPerMonth && customer.monthlyFlatRate > 0 && prepared.length > 0) {
+        const monthsAffected = new Set(prepared.map(p => p.lf.date.slice(0, 7)))
+        for (const m of monthsAffected) {
+          const monthExisting = deliveryNotes.filter(d => d.customerId === customerId && d.date.startsWith(m))
+          const monthPrepared = prepared.filter(p => p.lf.date.startsWith(m))
+          const tempNew = monthPrepared.map((p, i) => ({
+            id: `__new_${i}__`,
+            linenFormIds: [p.lf.id],
+            date: p.lf.date,
+            noteNumber: 'SD-NEW',
+            customerId,
+            items: p.items,
+            priceSnapshot: priceMap,
+            transportFeeTrip: p.tripFee,
+            transportFeeMonth: 0,
+            isBilled: false,
+          } as DeliveryNote))
+          const allDNs: DeliveryNote[] = [...monthExisting, ...tempNew]
+          const lastDN = [...allDNs].sort(createDNLastOfMonthCompare(linenForms))[0]
+          const monthTotal = allDNs.reduce((s, d) => {
+            if (d.id.startsWith('__new_')) {
+              const idx = parseInt(d.id.slice('__new_'.length, -2), 10)
+              const p = monthPrepared[idx]
+              return s + p.subtotal + p.tripFee
+            }
+            const dPm = d.priceSnapshot && Object.keys(d.priceSnapshot).length > 0
+              ? d.priceSnapshot
+              : buildPriceMapFromQT(d.customerId, quotations)
+            return s + calculateDNSubtotal(d, customer, dPm) + (d.transportFeeTrip || 0)
+          }, 0)
+          const feeAmount = monthTotal < customer.monthlyFlatRate
+            ? Math.max(0, customer.monthlyFlatRate - monthTotal)
+            : 0
+          let lastIsNew = false
+          if (lastDN.id.startsWith('__new_')) {
+            const idx = parseInt(lastDN.id.slice('__new_'.length, -2), 10)
+            monthPrepared[idx].monthFee = feeAmount
+            lastIsNew = true
+          } else if (feeAmount > 0) {
+            externalUpdates.push({ dnId: lastDN.id, transportFeeMonth: feeAmount })
+          }
+          const externalLastId = lastIsNew ? null : lastDN.id
+          for (const d of monthExisting) {
+            if (d.id === externalLastId) continue
+            if ((d.transportFeeMonth || 0) > 0) {
+              externalUpdates.push({ dnId: d.id, transportFeeMonth: 0 })
+            }
+          }
+        }
+      }
+
+      // Pass 3 — insert all newDNs
+      for (const p of prepared) {
+        const newDN = addDeliveryNote({
+          customerId,
+          linenFormIds: [p.lf.id],
+          date: p.lf.date,
+          items: p.items,
+          driverName: qbDriver,
+          vehiclePlate: qbVehicle,
+          receiverName: qbReceiver,
+          status: 'pending',
+          isPrinted: false,
+          isExported: false,
+          isBilled: false,
+          transportFeeTrip: p.tripFee,
+          transportFeeMonth: p.monthFee,
+          discount: 0,
+          discountNote: '',
+          extraCharge: 0,
+          extraChargeNote: '',
+          priceSnapshot: priceMap,
+          notes: '',
+        })
+        allNewDNs.push(newDN)
+      }
+
+      // Pass 4 — external updates
+      for (const u of externalUpdates) {
+        updateDeliveryNote(u.dnId, { transportFeeMonth: u.transportFeeMonth })
+      }
+    }
+
+    if (allNewDNs.length > 0) {
+      setActiveRowId(allNewDNs[0].id)
+      scrollToActiveRow(allNewDNs[0].id)
+    }
+    const msg = `สร้าง SD เสร็จแล้ว ${allNewDNs.length} ใบ (${qbSelectedCusts.size} ลูกค้า)`
+      + (customersWithoutQT > 0 ? `\n\n⚠ ${customersWithoutQT} ลูกค้าไม่มี QT — ราคาจะเป็น 0 จนกว่าจะสร้าง QT` : '')
+    setShowQuickBatch(false)
+    setQbSelectedCusts(new Set())
+    setQbDriver(''); setQbVehicle(''); setQbReceiver('')
+    if (allNewDNs.length > 0) alert(msg)
   }
 
   const handleCreate = () => {
@@ -961,6 +1148,19 @@ export default function DeliveryPage() {
             <Printer className="w-4 h-4" />
             พิมพ์/ส่งออกเอกสารรายการ
           </button>
+          {/* 283: Quick Batch — เห็นลูกค้าทุกรายที่มี LF ค้าง → multi-select → 1-click create */}
+          {pendingByCustomer.size > 0 && (
+            <button onClick={() => {
+              setQbSelectedCusts(new Set())
+              setQbDriver(''); setQbVehicle(''); setQbReceiver('')
+              setShowQuickBatch(true)
+            }}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium"
+              title={`มี ${pendingByCustomer.size} ลูกค้าที่มี LF ค้าง รอออก SD`}>
+              <Sparkles className="w-4 h-4" />
+              สร้าง SD เร่งด่วน ({pendingByCustomer.size} ลูกค้ารอ)
+            </button>
+          )}
           <button onClick={() => { setShowCreate(true); setBatchMode(false); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()); setDnDiscount(0); setDnDiscountNote(''); setDnExtraCharge(0); setDnExtraChargeNote('') }}
             className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />
@@ -2020,6 +2220,133 @@ export default function DeliveryPage() {
           />
         )
       })()}
+
+      {/* 283: Quick Batch SD Modal — multi-customer LF→SD */}
+      <Modal open={showQuickBatch} onClose={() => setShowQuickBatch(false)} title="สร้าง SD แบบเร่งด่วน (Multi-customer)" size="lg" closeLabel="cancel">
+        {(() => {
+          const entries = Array.from(pendingByCustomer.entries())
+            .map(([custId, lfs]) => {
+              const c = getCustomer(custId)
+              const totalPieces = lfs.reduce((s, lf) => s + lf.rows.reduce((rs, r) => rs + (r.col6_factoryPackSend || 0), 0), 0)
+              return { custId, customer: c, lfs, totalPieces }
+            })
+            .filter(e => !!e.customer)
+            .sort((a, b) => (a.customer!.shortName || a.customer!.name).localeCompare(b.customer!.shortName || b.customer!.name))
+
+          const allSelected = entries.length > 0 && entries.every(e => qbSelectedCusts.has(e.custId))
+          const toggleOne = (custId: string) => {
+            setQbSelectedCusts(prev => {
+              const next = new Set(prev)
+              if (next.has(custId)) next.delete(custId); else next.add(custId)
+              return next
+            })
+          }
+          const toggleAll = () => {
+            if (allSelected) setQbSelectedCusts(new Set())
+            else setQbSelectedCusts(new Set(entries.map(e => e.custId)))
+          }
+          const totalSDs = Array.from(qbSelectedCusts).reduce((s, cid) => s + (pendingByCustomer.get(cid)?.length || 0), 0)
+
+          return (
+            <div className="space-y-4 text-sm">
+              {/* Intro */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                <p className="font-medium mb-1">⚡ สร้าง SD แบบเร่งด่วน — ข้ามขั้นค้นหาลูกค้า</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>เห็นทุกลูกค้าที่มี LF ปิดงานแล้ว (7/7) แต่ยังไม่ออก SD</li>
+                  <li>ติ๊กเลือก → กดสร้าง → ระบบสร้าง <strong>1 LF = 1 SD</strong> ต่อใบให้อัตโนมัติ</li>
+                  <li>คนขับ/ทะเบียน/ผู้รับ ใส่ทีหลังได้ที่ SD detail</li>
+                </ul>
+              </div>
+
+              {/* Optional shared fields */}
+              <div className="border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">ข้อมูลร่วม (ใส่หรือเว้นว่างก็ได้)</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input value={qbDriver} onChange={e => setQbDriver(e.target.value)} placeholder="คนขับ"
+                    className="px-3 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  <input value={qbVehicle} onChange={e => setQbVehicle(e.target.value)} placeholder="ทะเบียนรถ"
+                    className="px-3 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                  <input value={qbReceiver} onChange={e => setQbReceiver(e.target.value)} placeholder="ผู้รับ"
+                    className="px-3 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                </div>
+              </div>
+
+              {/* Customer list */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-medium text-slate-700">ลูกค้าที่มี LF รอออก SD ({entries.length} ราย)</p>
+                  <button onClick={toggleAll} className="text-xs px-2 py-1 border border-slate-200 rounded hover:bg-slate-50">
+                    {allSelected ? 'ยกเลิกเลือกทั้งหมด' : 'เลือกทั้งหมด'}
+                  </button>
+                </div>
+                <div className="border border-slate-200 rounded-lg max-h-[50vh] overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 sticky top-0 border-b border-slate-200">
+                      <tr>
+                        <th className="px-3 py-2 w-10"></th>
+                        <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">LF รอ</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">รวม (ชิ้น)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.map(({ custId, customer, lfs, totalPieces }) => {
+                        const checked = qbSelectedCusts.has(custId)
+                        const hasQT = quotations.some(q => q.customerId === custId && q.status === 'accepted')
+                        return (
+                          <tr key={custId} className={cn('border-t border-slate-100 cursor-pointer hover:bg-slate-50',
+                            checked && 'bg-[#3DD8D8]/10')}
+                            onClick={() => toggleOne(custId)}>
+                            <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
+                              <input type="checkbox" checked={checked} onChange={() => toggleOne(custId)}
+                                className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className="font-bold text-[#1B3A5C] tracking-wide">{customer!.shortName || '-'}</span>
+                              <span className="text-slate-500 text-xs ml-2">{customer!.name}</span>
+                              {!hasQT && <span className="ml-2 text-[10px] text-amber-600 font-medium">⚠ ไม่มี QT</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-700">{lfs.length}</td>
+                            <td className="px-3 py-2 text-right text-slate-700">{formatNumber(totalPieces)}</td>
+                          </tr>
+                        )
+                      })}
+                      {entries.length === 0 && (
+                        <tr><td colSpan={4} className="text-center py-12 text-slate-400">ไม่มีลูกค้าที่มี LF รอออก SD</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200">
+                <div className="text-xs text-slate-500">
+                  {qbSelectedCusts.size > 0 && (
+                    <>เลือก <strong className="text-[#1B3A5C]">{qbSelectedCusts.size}</strong> ลูกค้า · จะสร้าง <strong className="text-[#1B3A5C]">{totalSDs}</strong> SD</>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowQuickBatch(false)}
+                    className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium">
+                    ยกเลิก
+                  </button>
+                  <button onClick={handleQuickBatchSubmit}
+                    disabled={qbSelectedCusts.size === 0}
+                    className={cn('px-4 py-2 text-sm rounded-lg font-medium transition-colors flex items-center gap-1.5',
+                      qbSelectedCusts.size === 0
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8]')}>
+                    <Sparkles className="w-4 h-4" />
+                    สร้าง SD ทั้งหมด ({totalSDs} ใบ)
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
 
       {/* Print List Modal — พิมพ์รายการ SD */}
       <Modal open={showPrintList} onClose={() => setShowPrintList(false)} title="รายการใบส่งของ" size="xl" className="print-target">
