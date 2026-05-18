@@ -2096,21 +2096,15 @@ export default function DeliveryPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const linkedLFs = detailNote.linenFormIds.map(id => linenForms.find(f => f.id === id)).filter(Boolean)
-                  const lfNumbers = linkedLFs.map(f => f!.formNumber).join(', ')
-                  if (confirm(`ยืนยันการลบใบส่งของ ${detailNote.noteNumber}?\n\nLF ที่จะย้อนสถานะกลับ:\n${lfNumbers}\n\nSD badge และ link ใน LF จะหายไปด้วย`)) {
-                    const deletedDN = detailNote
-                    deleteDeliveryNote(deletedDN.id)
-                    // Feat 267: full recalc month fee (ครอบคลุมทุกเคส ไม่เฉพาะ deletedDN ที่มี monthFee)
-                    recalcAfterDelete([deletedDN.id])
-                    setShowPrint(false)
-                    setShowDetail(null)
-                  }
+                  // 272.2v2: ใช้ confirmDelete modal (3 ปุ่ม) เหมือนปุ่มลบ SD ที่อื่น
+                  //   ยกเลิก / ลบ+อยู่หน้านี้ / ลบ+ไปแก้ LF
+                  setShowPrint(false)
+                  setConfirmDeleteId(detailNote.id)
                 }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
-                title="ลบใบส่งของและย้อนสถานะ LF กลับ">
+                title="ลบใบส่งของ + ปลดล็อค LF">
                 <Trash2 className="w-3.5 h-3.5" />
-                ลบ SD + ย้อน LF
+                ลบใบส่งของ
               </button>
               )}
             </div>

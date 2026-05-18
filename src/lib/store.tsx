@@ -508,30 +508,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [deliveryNotes, logAudit])
 
   const deleteDeliveryNote = useCallback((id: string) => {
-    // 272.5: Capture linked LFs BEFORE delete to revert their status
-    //   UI message โฆษณาว่า "LF ที่จะย้อนสถานะกลับ" — ก่อนหน้านี้ไม่ทำจริง
-    //   ลบ SD → unlock LFs โดย revert จาก delivered/confirmed → packed (5/7)
-    let linkedLfIds: string[] = []
+    // 272.5 revert: ติ๊ดเลือก keep LF status เดิม (7/7) แม้ลบ SD
+    //   เหตุผล: ลูกค้านับกลับเสร็จแล้ว → snapshot ของจริง → ไม่ควรย้อน
+    //   ปลดล็อค LF ถูกตีความใหม่ = อยู่ที่ฝั่ง availableForms filter (ไม่ใช่ status revert)
     setDeliveryNotes(prev => {
       const old = prev.find(x => x.id === id)
-      if (old) linkedLfIds = old.linenFormIds || []
       logAudit('delete', 'delivery_note', id, old?.noteNumber || id)
       return prev.filter(x => x.id !== id)
     })
     dbSave(db.deleteDeliveryNoteDB(id))
-
-    // Revert linked LFs status (delivered/confirmed → packed)
-    if (linkedLfIds.length > 0) {
-      const now = todayISO()
-      setLinenForms(prev => prev.map(lf => {
-        if (!linkedLfIds.includes(lf.id)) return lf
-        if (lf.status === 'delivered' || lf.status === 'confirmed') {
-          dbSave(db.updateLinenFormDB(lf.id, { status: 'packed', updatedAt: now }))
-          return { ...lf, status: 'packed', updatedAt: now }
-        }
-        return lf
-      }))
-    }
   }, [logAudit])
 
   // ---- Billing Statements ----
