@@ -207,25 +207,35 @@ export default function DashboardPage() {
       {/* Financial Cards (69: เฉพาะ accountant + admin) — 129: 3 cards */}
       {showFinancial && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          {/* 129.1: บิลค้างชำระ — ซ้ายสุด (ทุกใบค้างชำระ ไม่จำกัดเวลา, 128.2) */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0',
-                financialStats.overdueCount > 0 ? 'bg-red-50 text-red-600' : financialStats.unpaidCount > 0 ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400')}>
-                <Receipt className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <p className={cn('text-2xl font-bold',
-                  financialStats.overdueCount > 0 ? 'text-red-600' : 'text-slate-800')}>
-                  {formatCurrency(financialStats.unpaidTotal)}
-                </p>
-                <p className="text-xs text-slate-500">บิลค้างชำระ ({financialStats.unpaidCount} ใบ)</p>
-                {financialStats.overdueCount > 0 && (
-                  <p className="text-[11px] text-red-600 mt-0.5">⚠ ในนี้เกินกำหนด {financialStats.overdueCount} ใบ · {formatCurrency(financialStats.overdueTotal)}</p>
-                )}
-              </div>
-            </div>
-          </div>
+          {/* 129.1: บิลค้างชำระ — ซ้ายสุด · 279: click → WB focus mode */}
+          {(() => {
+            const unpaidIds = billingStatements.filter(b => b.status === 'sent').map(b => b.id)
+            const href = unpaidIds.length > 0
+              ? `/dashboard/billing?tab=billing&focus=${unpaidIds.join(',')}`
+              : '/dashboard/billing?tab=billing'
+            return (
+              <Link href={href}
+                title={unpaidIds.length > 0 ? `คลิกเพื่อดูบิลค้างชำระ ${unpaidIds.length} ใบ (focus mode)` : 'ไปหน้าใบวางบิล'}
+                className="bg-white rounded-xl border border-slate-200 p-4 hover:border-[#3DD8D8] hover:shadow-sm transition-all block">
+                <div className="flex items-center gap-3">
+                  <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0',
+                    financialStats.overdueCount > 0 ? 'bg-red-50 text-red-600' : financialStats.unpaidCount > 0 ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400')}>
+                    <Receipt className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={cn('text-2xl font-bold',
+                      financialStats.overdueCount > 0 ? 'text-red-600' : 'text-slate-800')}>
+                      {formatCurrency(financialStats.unpaidTotal)}
+                    </p>
+                    <p className="text-xs text-slate-500">บิลค้างชำระ ({financialStats.unpaidCount} ใบ)</p>
+                    {financialStats.overdueCount > 0 && (
+                      <p className="text-[11px] text-red-600 mt-0.5">⚠ ในนี้เกินกำหนด {financialStats.overdueCount} ใบ · {formatCurrency(financialStats.overdueTotal)}</p>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            )
+          })()}
 
           {/* 129.2: ยอดที่วางบิลเดือนนี้ (ก่อน VAT) — กลาง */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
