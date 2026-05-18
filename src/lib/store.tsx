@@ -51,6 +51,8 @@ interface StoreContextType {
   // Delivery Notes
   deliveryNotes: DeliveryNote[]
   addDeliveryNote: (d: Omit<DeliveryNote, 'id' | 'noteNumber' | 'createdBy' | 'updatedAt'>) => DeliveryNote
+  /** 288: batch add (1 HTTP call) — สำหรับ Quick Batch / batch mode (>100 records) */
+  addDeliveryNotesBatch: (items: Omit<DeliveryNote, 'id' | 'noteNumber' | 'createdBy' | 'updatedAt'>[]) => DeliveryNote[]
   updateDeliveryNote: (id: string, d: Partial<DeliveryNote>) => void
   updateDeliveryNoteStatus: (id: string, status: DeliveryNoteStatus) => void
   deleteDeliveryNote: (id: string) => void
@@ -483,6 +485,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
     logAudit('create', 'delivery_note', newDN.id, newDN.noteNumber)
     return newDN
+  }, [logAudit, deliveryNotes])
+
+  // 288: Batch add — เร็วและ rate-limit-safe สำหรับ Quick Batch / batch mode
+  //   ก่อน: addDeliveryNote ใน loop = N concurrent HTTP fire-and-forget
+  //   → browser concurrency cap + Supabase rate limit → "fail to fetch"
+  //   ตอนนี้: เตรียม IDs+noteNumbers ทีละตัว (running counter), 1 HTTP insert batch
+  const addDeliveryNotesBatch = useCallback((items: Omit<DeliveryNote, 'id' | 'noteNumber' | 'createdBy' | 'updatedAt'>[]): DeliveryNote[] => {
+    if (items.length === 0) return []
+    const userId = currentUserRef.current?.id || 'unknown'
+    const now = todayISO()
+    const existingNumbers = deliveryNotes.map(x => x.noteNumber)
+    const newNumbers: string[] = []
+    const newDNs: DeliveryNote[] = items.map(d => {
+      const noteNumber = genDeliveryNoteNumber([...existingNumbers, ...newNumbers])
+      newNumbers.push(noteNumber)
+      return { ...d, id: genId(), noteNumber, createdBy: userId, updatedAt: now }
+    })
+    setDeliveryNotes(prev => [...newDNs, ...prev])
+    dbSave(db.insertDeliveryNotesBatch(newDNs), () => {
+      // Rollback ทุก newDN ถ้า batch insert fail
+      const failedIds = new Set(newDNs.map(d => d.id))
+      setDeliveryNotes(prev => prev.filter(x => !failedIds.has(x.id)))
+    })
+    // Audit ทุก DN — fire-and-forget OK (auditLogs ไม่ critical)
+    for (const dn of newDNs) {
+      logAudit('create', 'delivery_note', dn.id, dn.noteNumber)
+    }
+    return newDNs
   }, [logAudit, deliveryNotes])
 
   const updateDeliveryNote = useCallback((id: string, d: Partial<DeliveryNote>) => {
@@ -1064,7 +1094,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       currentUser, login, logout,
       customers, addCustomer, updateCustomer, deleteCustomer, getCustomer,
       linenForms, addLinenForm, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
-      deliveryNotes, addDeliveryNote, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
+      deliveryNotes, addDeliveryNote, addDeliveryNotesBatch, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
       billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
       taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
       receipts, addReceipt, updateReceipt, deleteReceipt,

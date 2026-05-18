@@ -34,7 +34,7 @@ type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed'
 export default function DeliveryPage() {
   const {
     currentUser,
-    deliveryNotes, addDeliveryNote, updateDeliveryNote, deleteDeliveryNote,
+    deliveryNotes, addDeliveryNote, addDeliveryNotesBatch, updateDeliveryNote, deleteDeliveryNote,
     linenForms, updateLinenForm, customers, getCustomer, companyInfo, linenCatalog,
     billingStatements, quotations,
   } = useStore()
@@ -565,31 +565,29 @@ export default function DeliveryPage() {
       }
     }
 
-    // Pass 3 — insert all newDNs with month fee already embedded
-    for (const p of prepared) {
-      const newDN = addDeliveryNote({
-        customerId: selCustomerId,
-        linenFormIds: [p.lf.id],
-        date: p.lf.date,
-        items: p.items,
-        driverName,
-        vehiclePlate,
-        receiverName,
-        status: 'pending',
-        isPrinted: false,
-        isExported: false,
-        isBilled: false,
-        transportFeeTrip: p.tripFee,
-        transportFeeMonth: p.monthFee,
-        discount: 0,
-        discountNote: '',
-        extraCharge: 0,
-        extraChargeNote: '',
-        priceSnapshot: priceMap,
-        notes: dnNotes,
-      })
-      newDNs.push(newDN)
-    }
+    // Pass 3 — 288: batch insert (1 HTTP call) แทน loop fire-and-forget
+    const batchItems = prepared.map(p => ({
+      customerId: selCustomerId,
+      linenFormIds: [p.lf.id],
+      date: p.lf.date,
+      items: p.items,
+      driverName,
+      vehiclePlate,
+      receiverName,
+      status: 'pending' as const,
+      isPrinted: false,
+      isExported: false,
+      isBilled: false,
+      transportFeeTrip: p.tripFee,
+      transportFeeMonth: p.monthFee,
+      discount: 0,
+      discountNote: '',
+      extraCharge: 0,
+      extraChargeNote: '',
+      priceSnapshot: priceMap,
+      notes: dnNotes,
+    }))
+    newDNs.push(...addDeliveryNotesBatch(batchItems))
 
     // Pass 4 — apply external updates (existing DNs only — different rows, no race)
     for (const u of externalUpdates) {
@@ -721,31 +719,30 @@ export default function DeliveryPage() {
         }
       }
 
-      // Pass 3 — insert all newDNs
-      for (const p of prepared) {
-        const newDN = addDeliveryNote({
-          customerId,
-          linenFormIds: [p.lf.id],
-          date: p.lf.date,
-          items: p.items,
-          driverName: qbDriver,
-          vehiclePlate: qbVehicle,
-          receiverName: qbReceiver,
-          status: 'pending',
-          isPrinted: false,
-          isExported: false,
-          isBilled: false,
-          transportFeeTrip: p.tripFee,
-          transportFeeMonth: p.monthFee,
-          discount: 0,
-          discountNote: '',
-          extraCharge: 0,
-          extraChargeNote: '',
-          priceSnapshot: priceMap,
-          notes: '',
-        })
-        allNewDNs.push(newDN)
-      }
+      // Pass 3 — 288: batch insert (1 HTTP call) แทน loop fire-and-forget
+      //   ป้องกัน "fail to fetch" บน batches ใหญ่ (~692 ใบ ที่เคยเจอ)
+      const batchItems = prepared.map(p => ({
+        customerId,
+        linenFormIds: [p.lf.id],
+        date: p.lf.date,
+        items: p.items,
+        driverName: qbDriver,
+        vehiclePlate: qbVehicle,
+        receiverName: qbReceiver,
+        status: 'pending' as const,
+        isPrinted: false,
+        isExported: false,
+        isBilled: false,
+        transportFeeTrip: p.tripFee,
+        transportFeeMonth: p.monthFee,
+        discount: 0,
+        discountNote: '',
+        extraCharge: 0,
+        extraChargeNote: '',
+        priceSnapshot: priceMap,
+        notes: '',
+      }))
+      allNewDNs.push(...addDeliveryNotesBatch(batchItems))
 
       // Pass 4 — external updates
       for (const u of externalUpdates) {

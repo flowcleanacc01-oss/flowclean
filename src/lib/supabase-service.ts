@@ -438,6 +438,15 @@ export async function insertDeliveryNote(note: DeliveryNote): Promise<void> {
   await dbWrite({ table: 'delivery_notes', operation: 'insert', data: toSnakeCase(note as unknown as Record<string, unknown>) })
 }
 
+// 288: Batch insert — Supabase PostgREST รับ array ในครั้งเดียว → 1 HTTP call
+//   แก้ปัญหา fail-to-fetch บน large batches (>100 records) ที่ fire-and-forget ทำให้
+//   browser ติด concurrency limit (~6 connections/host) + Supabase rate limit
+export async function insertDeliveryNotesBatch(notes: DeliveryNote[]): Promise<void> {
+  if (notes.length === 0) return
+  const rows = notes.map(n => toSnakeCase(n as unknown as Record<string, unknown>))
+  await dbWrite({ table: 'delivery_notes', operation: 'insert', data: rows })
+}
+
 export async function updateDeliveryNoteDB(id: string, updates: Partial<DeliveryNote>): Promise<void> {
   await dbWrite({ table: 'delivery_notes', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
 }
