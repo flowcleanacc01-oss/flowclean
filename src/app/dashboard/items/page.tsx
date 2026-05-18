@@ -1102,7 +1102,7 @@ export default function ItemsPage() {
                     onClick={handleMerge}
                     className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg font-medium hover:bg-[#2bb8b8] transition-colors"
                   >
-                    🔀 Merge ไปรายการอื่น (แนะนำ — clean, ไม่มี ghost)
+                    🔀 Merge ไปรายการอื่น (แนะนำ: รายการผ้าที่มีอยู่ที่ใกล้เคียงกับรายการนี้ที่สุด หรือรายการผ้าสร้างใหม่)
                   </button>
                 )}
                 <button
