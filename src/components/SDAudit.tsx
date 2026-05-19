@@ -5,7 +5,8 @@
  * Read-only monitoring tool — ตรวจ data integrity ของ SD ทุกใบ
  * Mount: tab "🔍 SD Audit" ในเมนูรายงาน (/dashboard/reports?tab=sdaudit)
  */
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import FloatingTotalBar from '@/components/FloatingTotalBar'
 import { useRouter } from 'next/navigation'
 import {
   useSDAudit,
@@ -42,6 +43,14 @@ export default function SDAudit() {
 
   const [sortCol, setSortCol] = useState<SortCol>('severity')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  // 304: Lazy render — กัน lag เมื่อ rows เยอะ
+  const INITIAL_VISIBLE = 200
+  const LOAD_MORE_STEP = 200
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE)
+  useEffect(() => { setVisibleCount(INITIAL_VISIBLE) }, [
+    dateFrom, dateTo, customerId, severity, reason, showOk, search, sortCol, sortDir,
+  ])
 
   const filters: SDAuditFilters = useMemo(() => ({
     dateFrom: dateFrom || undefined,
@@ -179,8 +188,9 @@ export default function SDAudit() {
           label="ตรวจแล้ว"
           value={stats.total}
           color="slate"
-          active={severity === 'all' && reason === 'all'}
-          onClick={() => { setSeverity('all'); setReason('all') }}
+          // 304: active เมื่อ reset ครบทุก filter (รวม showOk) — ก่อนหน้า ตัวเลขไม่ตรง list
+          active={severity === 'all' && reason === 'all' && showOk}
+          onClick={() => { setSeverity('all'); setReason('all'); setShowOk(true) }}
           sub={`${stats.customersAudited} ลูกค้า`}
         />
       </div>
@@ -279,7 +289,7 @@ export default function SDAudit() {
             <tbody>
               {sortedRows.length === 0 ? (
                 <tr><td colSpan={7} className="text-center py-12 text-slate-400">ไม่พบ SD ที่ตรงเงื่อนไข — ลองปรับ filter</td></tr>
-              ) : sortedRows.map(r => (
+              ) : sortedRows.slice(0, visibleCount).map(r => (
                 <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-3 py-2">
                     <SeverityBadge severity={r.severity} />
@@ -339,11 +349,34 @@ export default function SDAudit() {
             </tbody>
           </table>
         </div>
+        {/* 304: Load more */}
+        {sortedRows.length > visibleCount && (
+          <button
+            type="button"
+            onClick={() => setVisibleCount(c => c + LOAD_MORE_STEP)}
+            className="w-full px-3 py-2.5 text-xs text-[#1B3A5C] bg-slate-50 hover:bg-slate-100 border-t border-slate-200 font-medium"
+          >
+            ↓ แสดงเพิ่ม {Math.min(LOAD_MORE_STEP, sortedRows.length - visibleCount).toLocaleString()} รายการ
+            <span className="text-slate-400 ml-2">(เหลือ {(sortedRows.length - visibleCount).toLocaleString()} รายการ)</span>
+          </button>
+        )}
       </div>
 
       <div className="text-xs text-slate-400 italic mt-2 px-2">
         เครื่องมือนี้ <strong>read-only</strong> — ไม่แก้ไขข้อมูล. ใช้ตรวจหลัง batch creation (Quick Batch SD) หรือ data import. คลิก SD# เพื่อไปแก้ที่หน้า delivery
       </div>
+
+      {/* 304: FloatingTotalBar */}
+      <FloatingTotalBar show={sortedRows.length > 0}>
+        <span>
+          แสดง <strong className="text-[#1B3A5C]">{Math.min(visibleCount, sortedRows.length).toLocaleString()}</strong>
+          {sortedRows.length > visibleCount && <> จาก <strong>{sortedRows.length.toLocaleString()}</strong></>}
+          {' '}รายการ
+          {(severity !== 'all' || reason !== 'all' || !showOk || search) && (
+            <span className="text-slate-400 ml-2">(กรองจากทั้งหมด {stats.total.toLocaleString()})</span>
+          )}
+        </span>
+      </FloatingTotalBar>
     </div>
   )
 }

@@ -6,6 +6,7 @@
  * Mount: tab ใหม่ในเมนูรายงาน (/dashboard/reports?tab=priceaudit)
  */
 import { useState, useMemo, useEffect } from 'react'
+import FloatingTotalBar from '@/components/FloatingTotalBar'
 import { useStore } from '@/lib/store'
 import {
   usePriceAudit,
@@ -47,6 +48,15 @@ export default function PriceAudit() {
   // Sort
   const [sortCol, setSortCol] = useState<SortCol>('severity')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  // 304: Lazy render — กัน performance lag เมื่อ 5000+ rows (เคสติ๊ดเจอใน Price Audit)
+  const INITIAL_VISIBLE = 200
+  const LOAD_MORE_STEP = 200
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE)
+  // Reset visible count เมื่อ filter เปลี่ยน → user ไม่ติดอยู่ที่ count เดิม
+  useEffect(() => { setVisibleCount(INITIAL_VISIBLE) }, [
+    dateFrom, dateTo, customerId, severity, reason, showOk, search, sortCol, sortDir,
+  ])
 
   const filters: PriceAuditFilters = useMemo(() => ({
     dateFrom: dateFrom || undefined,
@@ -192,8 +202,9 @@ export default function PriceAudit() {
           label="ตรวจแล้ว"
           value={stats.total}
           color="slate"
-          active={severity === 'all' && reason === 'all'}
-          onClick={() => { setSeverity('all'); setReason('all') }}
+          // 304: active เมื่อ filter ทุกตัว reset (รวม showOk) — ก่อนหน้า ไม่ touch showOk ทำให้ตัวเลขกับ list ไม่ตรงกัน
+          active={severity === 'all' && reason === 'all' && showOk}
+          onClick={() => { setSeverity('all'); setReason('all'); setShowOk(true) }}
           sub={`${stats.dnsAudited} DN · ${stats.customersAudited} ลูกค้า`}
         />
         {/* 237: ปรับ label ให้ชัด — ลูกค้าที่ถูกข้ามคือ "เหมาเดือน" (ไม่มีราคา/ชิ้น)
@@ -327,7 +338,7 @@ export default function PriceAudit() {
                     {stats.total === 0 ? 'ไม่มีข้อมูลในช่วงเวลานี้' : 'ไม่พบรายการตาม filter — ทุกอย่าง OK ในช่วงนี้ 🎉'}
                   </td>
                 </tr>
-              ) : sortedRows.map(r => (
+              ) : sortedRows.slice(0, visibleCount).map(r => (
                 <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-3 py-2"><SeverityBadge sev={r.severity} isBilled={r.isBilled} /></td>
                   <td className="px-3 py-2 text-slate-600 text-xs">{formatDate(r.dnDate)}</td>
@@ -372,7 +383,30 @@ export default function PriceAudit() {
             </tbody>
           </table>
         </div>
+        {/* 304: Load more — กัน lag เมื่อ result เยอะ (5000+) */}
+        {sortedRows.length > visibleCount && (
+          <button
+            type="button"
+            onClick={() => setVisibleCount(c => c + LOAD_MORE_STEP)}
+            className="w-full px-3 py-2.5 text-xs text-[#1B3A5C] bg-slate-50 hover:bg-slate-100 border-t border-slate-200 font-medium"
+          >
+            ↓ แสดงเพิ่ม {Math.min(LOAD_MORE_STEP, sortedRows.length - visibleCount).toLocaleString()} รายการ
+            <span className="text-slate-400 ml-2">(เหลือ {(sortedRows.length - visibleCount).toLocaleString()} รายการ)</span>
+          </button>
+        )}
       </div>
+
+      {/* 304: FloatingTotalBar — sticky bottom summary */}
+      <FloatingTotalBar show={sortedRows.length > 0}>
+        <span>
+          แสดง <strong className="text-[#1B3A5C]">{Math.min(visibleCount, sortedRows.length).toLocaleString()}</strong>
+          {sortedRows.length > visibleCount && <> จาก <strong>{sortedRows.length.toLocaleString()}</strong></>}
+          {' '}รายการ
+          {(severity !== 'all' || reason !== 'all' || !showOk || search) && (
+            <span className="text-slate-400 ml-2">(กรองจากทั้งหมด {stats.total.toLocaleString()})</span>
+          )}
+        </span>
+      </FloatingTotalBar>
 
       {/* Legend */}
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 space-y-1.5">
