@@ -109,7 +109,7 @@ export default function AddItemWizard({
   // Reset when modal opens
   useEffect(() => {
     if (!open) return
-    setMode('faceted')
+    setMode('free_text')  // 304: default = Wizard 1.0
     setStep(1)
     setNameInput(initialName)
     setCode('')
