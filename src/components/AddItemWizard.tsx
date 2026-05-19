@@ -82,7 +82,8 @@ export default function AddItemWizard({
   } = useStore()
 
   // ───── Mode toggle (247) ────────────────────────────────
-  const [mode, setMode] = useState<'faceted' | 'free_text'>('faceted')
+  // 304: default = Wizard 1.0 (free_text) ตามคำสั่งติ๊ด — toggle ไป 2.0 ได้ภายใน UI
+  const [mode, setMode] = useState<'faceted' | 'free_text'>('free_text')
 
   // ───── Wizard state (shared) ────────────────────────────
   const [step, setStep] = useState<1 | 2 | 3>(1)
