@@ -48,7 +48,7 @@ export interface UndoAction {
   /** ISO timestamp */
   ts: string
   /** ประเภทเครื่องมือ */
-  type: 'sync_names' | 'promote_name' | 'merge_codes' | 'reassign_orphan'
+  type: 'sync_names' | 'promote_name' | 'merge_codes' | 'reassign_orphan' | 'carry_over'
   /** สรุปสั้น แสดงให้ admin เห็น */
   description: string
   /** detail เพิ่มเติม (จำนวนเอกสารที่กระทบ ฯลฯ) */

@@ -17,6 +17,12 @@ const TYPE_LABEL: Record<UndoAction['type'], { label: string; color: string }> =
   promote_name:     { label: 'Promote',          color: 'bg-orange-100 text-orange-700' },
   merge_codes:      { label: 'Merge Codes',      color: 'bg-purple-100 text-purple-700' },
   reassign_orphan:  { label: 'Reassign Orphan',  color: 'bg-blue-100 text-blue-700' },
+  carry_over:       { label: 'ปรับยอดผ้าค้าง',     color: 'bg-teal-100 text-teal-700' },
+}
+
+interface UndoPanelProps {
+  /** 296: filter เฉพาะบาง type — กัน noise ใน context-specific page (carryover tab) */
+  filterTypes?: UndoAction['type'][]
 }
 
 function timeAgo(iso: string): string {
@@ -30,8 +36,9 @@ function timeAgo(iso: string): string {
   return `${d} วันที่แล้ว`
 }
 
-export default function UndoPanel() {
-  const stack = useUndoStack()
+export default function UndoPanel({ filterTypes }: UndoPanelProps = {}) {
+  const fullStack = useUndoStack()
+  const stack = filterTypes ? fullStack.filter(a => filterTypes.includes(a.type)) : fullStack
   const {
     deleteLinenItem, addLinenItem,
     updateQuotation,
@@ -41,6 +48,7 @@ export default function UndoPanel() {
     updateTaxInvoice,
     updateLinenForm,
     updateCarryOverAdjustment,
+    deleteCarryOverAdjustment,
   } = useStore()
   const [running, setRunning] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
@@ -50,6 +58,8 @@ export default function UndoPanel() {
     if (c.op === 'insert') {
       // เคยมีการ insert → ตอน undo ต้อง delete
       if (c.table === 'linen_items') deleteLinenItem(c.id)
+      // 296: undo "add adjustment" = soft delete (set isDeleted:true)
+      else if (c.table === 'carry_over_adjustments') deleteCarryOverAdjustment(c.id)
       // tables อื่นใช้กับ insert แทบไม่มี — skip
     } else if (c.op === 'update' && c.oldData) {
       switch (c.table) {
@@ -87,6 +97,10 @@ export default function UndoPanel() {
     } else if (c.op === 'delete' && c.oldData) {
       // restore deleted item
       if (c.table === 'linen_items') addLinenItem(c.oldData as unknown as LinenItemDef)
+      // 296: undo "delete adjustment" = clear isDeleted flag (soft restore)
+      else if (c.table === 'carry_over_adjustments') {
+        updateCarryOverAdjustment(c.id, { isDeleted: false }, 'undo delete')
+      }
     }
   }
 

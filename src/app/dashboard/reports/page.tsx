@@ -14,6 +14,8 @@ import CustomerPicker from '@/components/CustomerPicker'
 import CarryOverReportPrint from '@/components/CarryOverReportPrint'
 import Modal from '@/components/Modal'
 import CarryOverAdjustModal from '@/components/CarryOverAdjustModal'
+import UndoPanel from '@/components/UndoPanel'
+import { pushUndoAction } from '@/lib/undo-stack'
 import { CARRY_OVER_MODE_CONFIG, CARRY_OVER_REASON_CONFIG } from '@/types'
 import { canViewReports, canViewExecutiveDashboard } from '@/lib/permissions'
 import { useTabUrlSync } from '@/lib/use-tab-url-sync'
@@ -745,6 +747,9 @@ export default function ReportsPage() {
                 )}
               </div>
             )}
+
+            {/* 296: Undo panel — ย้อนการกระทำ ปรับยอด/แก้ไข/ลบ ภายใน 7 วัน */}
+            <UndoPanel filterTypes={['carry_over']} />
           </div>
 
           {/* Compare Mode — แสดง 4 เคสคู่กัน */}
@@ -979,7 +984,17 @@ export default function ReportsPage() {
                             className="p-1 min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-slate-400 hover:text-[#1B3A5C]" title="แก้ไข" aria-label="แก้ไขรายการปรับยอด">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => { if (confirm(`ลบรายการปรับยอดวันที่ ${formatDate(a.date)} ?`)) deleteCarryOverAdjustment(a.id) }}
+                          <button onClick={() => {
+                            if (!confirm(`ลบรายการปรับยอดวันที่ ${formatDate(a.date)} ?`)) return
+                            // 296: snapshot oldData ก่อน delete → push undo
+                            const oldData = { ...a }
+                            deleteCarryOverAdjustment(a.id)
+                            pushUndoAction({
+                              type: 'carry_over',
+                              description: `ลบการปรับยอดวันที่ ${formatDate(a.date)} — ${selCustomer?.shortName || selCustomer?.name || ''}`,
+                              changes: [{ table: 'carry_over_adjustments', id: a.id, op: 'delete', oldData }],
+                            })
+                          }}
                             className="p-1 min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-slate-400 hover:text-red-600" title="ลบ" aria-label="ลบรายการปรับยอด">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

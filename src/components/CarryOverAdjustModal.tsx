@@ -10,6 +10,7 @@ import type {
 } from '@/types'
 import { Plus, RotateCcw, Info } from 'lucide-react'
 import { tabularNumberNav } from '@/lib/modal-nav'
+import { pushUndoAction } from '@/lib/undo-stack'
 
 interface Props {
   open: boolean
@@ -136,14 +137,27 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
       code,
       delta: type === 'adjust' ? delta : 0,
     }))
+    const typeLabel = type === 'reset' ? 'Reset' : 'Adjust'
     if (editing) {
-      const changeNote = `แก้ไข ${type === 'reset' ? 'Reset' : 'Adjust'}: ${items.length} รายการ`
+      // 296: snapshot oldData ก่อน update → push undo
+      const oldData = { ...editing }
+      const changeNote = `แก้ไข ${typeLabel}: ${items.length} รายการ`
       updateCarryOverAdjustment(editing.id, {
         type, date, items, reasonCategory, reason, showInCustomerReport,
       }, changeNote)
+      pushUndoAction({
+        type: 'carry_over',
+        description: `แก้ไขการปรับยอด ${typeLabel} (${items.length} รายการ) — ${customerName}`,
+        changes: [{ table: 'carry_over_adjustments', id: editing.id, op: 'update', oldData }],
+      })
     } else {
-      addCarryOverAdjustment({
+      const newAdj = addCarryOverAdjustment({
         customerId, date, type, items, reasonCategory, reason, showInCustomerReport,
+      })
+      pushUndoAction({
+        type: 'carry_over',
+        description: `เพิ่ม ${typeLabel} (${items.length} รายการ) — ${customerName}`,
+        changes: [{ table: 'carry_over_adjustments', id: newAdj.id, op: 'insert', newData: { id: newAdj.id } }],
       })
     }
     onClose()
