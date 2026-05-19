@@ -114,14 +114,15 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
 
   const fmtN = (n: number) => (n === 0 ? '' : n.toLocaleString('en-US'))
   const fmtM = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  // 296: per-SD cell style — fontSize 6pt + overflow safety
-  //   เลือก 6pt + col width 11mm (4.06% @ 16 SDs/page) → รับ "999,999.99" full precision
+  // 296: per-SD cell style — fontSize ปรับตามชนิดข้อมูล + overflow safety
   //   ห้าม round (บัญชี) — overflow:hidden + title=<full value> เป็น safety net เท่านั้น
+  // 301: tdSdInt 6pt → 7pt (เท่า ราคา) เพื่ออ่านง่าย — qty integer 1-4 หลัก fit สบาย
+  //      tdSdNum keep 6pt — รับ "999,999.99" full precision (เพิ่ม font จะ overflow)
   const tdSdNum: React.CSSProperties = {
     ...tdR, fontSize: '6pt', overflow: 'hidden', whiteSpace: 'nowrap',
   }
   const tdSdInt: React.CSSProperties = {
-    ...tdC, fontSize: '6pt', overflow: 'hidden', whiteSpace: 'nowrap',
+    ...tdC, fontSize: '7pt', overflow: 'hidden', whiteSpace: 'nowrap',
   }
 
   // 123: Split SDs into pages — max 16 per page, distribute evenly (smaller pages first)
@@ -175,9 +176,9 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
             {/* Main table — columns: one per SD in this chunk */}
             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <colgroup>
-                <col style={{ width: '2.5%' }} />   {/* No */}
-                <col style={{ width: '16%' }} />    {/* รายการ */}
-                <col style={{ width: '3.5%' }} />   {/* ราคา */}
+                <col style={{ width: '2%' }} />     {/* No — 301: ลด 2.5→2 ให้ที่ราคา */}
+                <col style={{ width: '15%' }} />    {/* รายการ — 301: ลด 16→15 ให้ที่ราคา */}
+                <col style={{ width: '5%' }} />     {/* ราคา — 301: ขยาย 3.5→5 รับ fmtM "1,500.00" */}
                 <col style={{ width: '5%' }} />     {/* จำนวน */}
                 <col style={{ width: '8%' }} />     {/* เป็นเงิน */}
                 {chunk.map(dn => <col key={dn.id} style={{ width: `${sdColPct}%` }} />)}
@@ -209,7 +210,8 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                   <tr key={item.code}>
                     <td style={tdC}>{idx + 1}</td>
                     <td style={tdL}>{item.name}</td>
-                    <td style={tdC}>{getPrice(item.code) || ''}</td>
+                    {/* 301.1: ราคา → fmtM (.00) เป็นมาตรฐานเงินทั้งโปรแกรม */}
+                    <td style={tdR}>{getPrice(item.code) > 0 ? fmtM(getPrice(item.code)) : ''}</td>
                     <td style={tdR}>{fmtN(rowQty[item.code])}</td>
                     <td style={tdR}>{rowAmt[item.code] ? fmtM(rowAmt[item.code]) : ''}</td>
                     {chunk.map(dn => {
