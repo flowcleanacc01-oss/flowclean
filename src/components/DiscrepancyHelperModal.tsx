@@ -4,11 +4,12 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { Wrench, Info, AlertTriangle, Check } from 'lucide-react'
 import Modal from './Modal'
 import { useStore } from '@/lib/store'
-import { cn, formatDate } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { applyRowsSync, recalcTransportAfterSync } from '@/lib/sync-discrepancy'
 import { tabularNumberNav } from '@/lib/modal-nav'
 import TransportFeeImpactPreview from './TransportFeeImpactPreview'
 import CustomerPicker from './CustomerPicker'
+import LFPicker from './LFPicker'
 import { useRouter } from 'next/navigation'
 
 interface Props {
@@ -61,15 +62,6 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
     setDiscSyncRecalcMonth(true)
     setDiscSyncApplyAdj(true)
   }, [open, initialCustomerId, initialLfId])
-
-  // Customer's LFs (status confirmed only)
-  const customerLfs = useMemo(() => {
-    if (!selCustomerId) return []
-    return linenForms
-      .filter(f => f.customerId === selCustomerId && f.status === 'confirmed')
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 50)
-  }, [linenForms, selCustomerId])
 
   const selLf = selLfId ? linenForms.find(f => f.id === selLfId) : null
   // SD link to this LF
@@ -225,24 +217,14 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
         {selCustomerId && (
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Step 2: เลือกใบรับส่งผ้า (LF) ที่จะแก้</label>
-            {customerLfs.length === 0 ? (
-              <div className="text-sm text-slate-400 px-3 py-2 bg-slate-50 rounded-lg">ลูกค้านี้ยังไม่มี LF status confirmed</div>
-            ) : (
-              <select value={selLfId} onChange={e => { setSelLfId(e.target.value); setNewQtyMap(new Map()) }}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]">
-                <option value="">— เลือก LF —</option>
-                {customerLfs.map(f => {
-                  const sd = deliveryNotes.find(d => d.linenFormIds.includes(f.id))
-                  const wb = sd ? billingStatements.find(b => b.deliveryNoteIds.includes(sd.id)) : null
-                  return (
-                    <option key={f.id} value={f.id}>
-                      {/* 135.1: วันที่ขึ้นก่อนเลขที่ LF */}
-                      ({formatDate(f.date)}) {f.formNumber}{sd ? ` — มี SD${wb ? ' + WB ❌' : ''}` : ' — ยังไม่มี SD'}
-                    </option>
-                  )
-                })}
-              </select>
-            )}
+            {/* 299: LFPicker — รองรับ LF จำนวนมาก (search + date filter + lazy render) */}
+            <LFPicker
+              customerId={selCustomerId}
+              value={selLfId}
+              onChange={id => { setSelLfId(id); setNewQtyMap(new Map()) }}
+              filterStatus="confirmed"
+              placeholder="— เลือก LF (status 7/7) —"
+            />
           </div>
         )}
 
