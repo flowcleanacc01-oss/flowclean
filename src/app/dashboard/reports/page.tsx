@@ -21,12 +21,13 @@ import { canViewReports, canViewExecutiveDashboard } from '@/lib/permissions'
 import { useTabUrlSync } from '@/lib/use-tab-url-sync'
 import PriceAudit from '@/components/PriceAudit'
 import SDAudit from '@/components/SDAudit'
+import WBAudit from '@/components/WBAudit'
 import ExecutiveDashboard from '@/components/executive/ExecutiveDashboard'
 import type { CarryOverMode, CarryOverAdjustment, BillingStatement } from '@/types'
 
-type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'sdaudit' | 'executive'
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'sdaudit' | 'wbaudit' | 'executive'
 
-const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'sdaudit', 'executive'] as const
+const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'sdaudit', 'wbaudit', 'executive'] as const
 
 export default function ReportsPage() {
   const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations, carryOverAdjustments, deleteCarryOverAdjustment } = useStore()
@@ -90,6 +91,7 @@ export default function ReportsPage() {
     { key: 'consolidation', label: 'รวบเดือน' },
     { key: 'priceaudit', label: '🛡️ Price Audit' },
     { key: 'sdaudit', label: '🔍 SD Audit' },
+    { key: 'wbaudit', label: '🔍 WB Audit' },
     ...(canViewExecutiveDashboard(currentUser) ? [{ key: 'executive' as TabKey, label: '✨ Executive' }] : []),
   ]
 
@@ -1211,6 +1213,7 @@ export default function ReportsPage() {
       {/* 217.1: Price Audit Tab — read-only monitoring */}
       {tab === 'priceaudit' && <PriceAudit />}
       {tab === 'sdaudit' && <SDAudit />}
+      {tab === 'wbaudit' && <WBAudit />}
 
       {/* 220: Executive Dashboard — admin only */}
       {tab === 'executive' && <ExecutiveDashboard />}
