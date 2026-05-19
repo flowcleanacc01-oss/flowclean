@@ -12,6 +12,81 @@ import { Plus, RotateCcw, Info } from 'lucide-react'
 import { tabularNumberNav } from '@/lib/modal-nav'
 import { pushUndoAction } from '@/lib/undo-stack'
 
+/**
+ * 300: Delta input cell — raw string state + auto-select + allow negative
+ *   - type="text" inputMode="numeric" → รับ "-" character ได้
+ *   - raw string state → keep "-" intermediate ไม่ถูก wipe (vs parseInt('-') || 0)
+ *   - sync from parent (shortcut button → delta external change)
+ *   - auto-select row บน first type — ลดขั้นตอน UX
+ *   - blur normalize: "" / "-" → 0
+ */
+function DeltaInput({
+  rowIndex, maxIndex, delta, isSelected, onSelectChange, onChange,
+}: {
+  rowIndex: number
+  maxIndex: number
+  delta: number
+  isSelected: boolean
+  onSelectChange: () => void  // toggle row selection (called on first type when unselected)
+  onChange: (n: number) => void
+}) {
+  const [raw, setRaw] = useState(isSelected ? String(delta) : '')
+
+  // Sync from parent: shortcut button คลิก / state reset / type changed → reflect ลง raw
+  useEffect(() => {
+    setRaw(isSelected ? String(delta) : '')
+  }, [delta, isSelected])
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      data-cornavrow={rowIndex}
+      value={raw}
+      placeholder={isSelected ? '0' : '-'}
+      onFocus={e => e.currentTarget.select()}
+      onKeyDown={e => tabularNumberNav(e, 'data-cornavrow', rowIndex, maxIndex)}
+      onChange={e => {
+        const v = e.target.value
+        // อนุญาตเฉพาะ: "" | "-" | "-?\d+" (กัน user paste อักษรอื่น)
+        if (v !== '' && v !== '-' && !/^-?\d+$/.test(v)) return
+        setRaw(v)
+        // Auto-select row บน first type (เมื่อค่ายัง intermediate ก็ select ทันที)
+        if (!isSelected && (v !== '' && v !== '-')) {
+          onSelectChange()
+        } else if (!isSelected && v === '-') {
+          // typed only "-" — pre-select ด้วย (user กำลังจะใส่ negative)
+          onSelectChange()
+        }
+        // Propagate ค่าตัวเลขที่ valid
+        if (v === '' || v === '-') return
+        const n = parseInt(v, 10)
+        if (!isNaN(n)) {
+          const clamped = Math.max(-9999, Math.min(9999, n))
+          onChange(clamped)
+        }
+      }}
+      onBlur={() => {
+        // Normalize: "" / "-" → 0 (ถ้า selected) หรือ '' (ถ้า unselected)
+        if (raw === '' || raw === '-') {
+          if (isSelected) {
+            setRaw('0')
+            onChange(0)
+          } else {
+            setRaw('')
+          }
+        }
+      }}
+      className={cn(
+        'w-full px-2 py-1 border rounded text-right focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]',
+        isSelected
+          ? 'border-slate-200'
+          : 'border-transparent text-slate-300 bg-slate-50/40 hover:bg-slate-50',
+      )}
+    />
+  )
+}
+
 interface Props {
   open: boolean
   onClose: () => void
@@ -282,21 +357,15 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
                     <td className={cn('text-right px-2 py-1.5 font-mono', colorOf(v4))}>{fmt(v4)}</td>
                     {type === 'adjust' && <>
                       <td className="px-2 py-1.5">
-                        {isSelected ? (
-                          <input type="number" value={delta}
-                            min={-9999} max={9999} step={1}
-                            data-cornavrow={rowIndex}
-                            onFocus={e => e.currentTarget.select()}
-                            onKeyDown={e => tabularNumberNav(e, 'data-cornavrow', rowIndex, enabledItems.length - 1)}
-                            onChange={e => {
-                              const n = parseInt(e.target.value) || 0
-                              const clamped = Math.max(-9999, Math.min(9999, n))
-                              setItemDelta(item.code, clamped)
-                            }}
-                            className="w-full px-2 py-1 border border-slate-200 rounded text-right focus:outline-none focus:ring-1 focus:ring-[#3DD8D8]" />
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
+                        {/* 300: DeltaInput — รับติดลบได้, พิมพ์ทันที, ↑↓ Enter เลื่อน row, auto-select on type */}
+                        <DeltaInput
+                          rowIndex={rowIndex}
+                          maxIndex={enabledItems.length - 1}
+                          delta={delta}
+                          isSelected={isSelected}
+                          onSelectChange={() => toggleItem(item.code)}
+                          onChange={n => setItemDelta(item.code, n)}
+                        />
                       </td>
                       <td className="px-2 py-1.5 text-right">
                         {isSelected && shortcutDelta !== 0 && (
