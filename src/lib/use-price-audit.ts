@@ -48,7 +48,8 @@ export interface PriceAuditFilters {
   dateFrom?: string
   dateTo?: string
   customerId?: string
-  severity?: 'all' | 'critical' | 'high' | 'warning'
+  // 305: expand severity → รับ 'info' สำหรับ OK card click (info = OK rows)
+  severity?: 'all' | 'critical' | 'high' | 'warning' | 'info'
   reason?: 'all' | PriceAuditReason
   showOk?: boolean
   showFlatRate?: boolean
@@ -205,7 +206,11 @@ export function usePriceAudit(filters: PriceAuditFilters): PriceAuditResult {
     if (filters.reason && filters.reason !== 'all') {
       filtered = filtered.filter(r => r.reason === filters.reason)
     }
-    if (!filters.showOk) {
+    // 305: apply showOk filter เฉพาะตอน severity='all' && reason='all'
+    //   ถ้า user narrow ด้วย severity/reason แล้ว → honor เลือก (ไม่ตัด OK rows ออกซ้ำ)
+    const severityNarrowed = !!filters.severity && filters.severity !== 'all'
+    const reasonNarrowed = !!filters.reason && filters.reason !== 'all'
+    if (!severityNarrowed && !reasonNarrowed && !filters.showOk) {
       filtered = filtered.filter(r => r.reason !== 'ok')
     }
     if (filters.search && filters.search.trim()) {

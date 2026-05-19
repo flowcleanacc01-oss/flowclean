@@ -158,7 +158,15 @@ export default function WBAudit() {
           active={severity === 'warning'} onClick={() => setSeverity(severity === 'warning' ? 'all' : 'warning')}
           sub="ตรวจดู ไม่ critical" />
         <StatCard icon={<CheckCircle2 className="w-4 h-4" />} label="OK" value={stats.ok} color="emerald"
-          active={showOk} onClick={() => setShowOk(v => !v)}
+          // 305: คลิก OK = ดูเฉพาะ OK rows (severity='info') — exclusive กับ ตรวจแล้ว
+          active={severity === 'info'}
+          onClick={() => {
+            if (severity === 'info') {
+              setSeverity('all'); setReason('all'); setShowOk(false)
+            } else {
+              setSeverity('info'); setReason('all'); setShowOk(true)
+            }
+          }}
           sub="ผ่านทุกเช็ค" />
         <StatCard icon={<Eye className="w-4 h-4" />} label="ตรวจแล้ว" value={stats.total} color="slate"
           active={severity === 'all' && reason === 'all' && showOk}

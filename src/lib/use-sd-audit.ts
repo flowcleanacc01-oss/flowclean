@@ -246,7 +246,10 @@ export function useSDAudit(filters: SDAuditFilters): SDAuditResult {
     if (filters.reason && filters.reason !== 'all') {
       filtered = filtered.filter(r => r.issues.some(i => i.reason === filters.reason))
     }
-    if (!filters.showOk) {
+    // 305: apply showOk filter เฉพาะตอน severity='all' && reason='all'
+    const severityNarrowed = !!filters.severity && filters.severity !== 'all'
+    const reasonNarrowed = !!filters.reason && filters.reason !== 'all'
+    if (!severityNarrowed && !reasonNarrowed && !filters.showOk) {
       filtered = filtered.filter(r => r.issues.length > 0)
     }
     if (filters.search && filters.search.trim()) {

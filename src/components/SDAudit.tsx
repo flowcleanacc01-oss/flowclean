@@ -179,8 +179,15 @@ export default function SDAudit() {
           label="OK"
           value={stats.ok}
           color="emerald"
-          active={showOk}
-          onClick={() => setShowOk(v => !v)}
+          // 305: คลิก OK = ดูเฉพาะ OK rows (severity='info') — exclusive กับ ตรวจแล้ว
+          active={severity === 'info'}
+          onClick={() => {
+            if (severity === 'info') {
+              setSeverity('all'); setReason('all'); setShowOk(false)
+            } else {
+              setSeverity('info'); setReason('all'); setShowOk(true)
+            }
+          }}
           sub="ผ่านทุกเช็ค"
         />
         <StatCard

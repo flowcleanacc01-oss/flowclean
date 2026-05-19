@@ -40,7 +40,8 @@ export default function PriceAudit() {
 
   // Other filters
   const [customerId, setCustomerId] = useState<string>('all')
-  const [severity, setSeverity] = useState<'all' | 'critical' | 'high' | 'warning'>('all')
+  // 305: expand 'info' รับการคลิก OK card (info = OK rows)
+  const [severity, setSeverity] = useState<'all' | 'critical' | 'high' | 'warning' | 'info'>('all')
   const [reason, setReason] = useState<'all' | PriceAuditReason>('all')
   const [showOk, setShowOk] = useState(false)
   const [search, setSearch] = useState('')
@@ -193,8 +194,16 @@ export default function PriceAudit() {
           label="OK"
           value={stats.ok}
           color="emerald"
-          active={showOk}
-          onClick={() => setShowOk(v => !v)}
+          // 305: คลิก OK = ดูเฉพาะ OK rows (severity='info') — exclusive กับ ตรวจแล้ว
+          active={severity === 'info'}
+          onClick={() => {
+            if (severity === 'info') {
+              // toggle off — กลับ default view
+              setSeverity('all'); setReason('all'); setShowOk(false)
+            } else {
+              setSeverity('info'); setReason('all'); setShowOk(true)
+            }
+          }}
           sub="ราคาตรง QT"
         />
         <StatCard
