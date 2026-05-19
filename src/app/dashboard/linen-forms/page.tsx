@@ -11,7 +11,7 @@ import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LIN
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer } from '@/lib/recent-customers'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink, Sparkles, ArrowUpDown } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink, Sparkles, ArrowUpDown, Wrench } from 'lucide-react'
 import { sortByQTOrder } from '@/lib/sort-by-qt'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
@@ -25,6 +25,7 @@ import { exportCSV } from '@/lib/export'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
 import AddItemWizard from '@/components/AddItemWizard'
+import DiscrepancyHelperModal from '@/components/DiscrepancyHelperModal'
 
 export default function LinenFormsPage() {
   const {
@@ -45,6 +46,8 @@ export default function LinenFormsPage() {
   })
   const [customerFilter, setCustomerFilter] = useState<string>('all')
   const [showCreate, setShowCreate] = useState(false)
+  // 297.1: Discrepancy helper — ย้ายมาจาก dashboard (เกี่ยวข้องกับสถานะ ลูกค้านับผ้ากลับแล้ว)
+  const [helperOpen, setHelperOpen] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   // 292: LF ที่ user กดย้อนแต่มี SD ผูกอยู่ — block + แสดง modal ขอให้ลบ SD ก่อน
@@ -418,6 +421,12 @@ export default function LinenFormsPage() {
               <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสารที่เลือก ({selectedLfIds.length})
             </button>
           )}
+          {/* 297.1: Discrepancy helper — ย้ายมาจาก dashboard */}
+          <button onClick={() => setHelperOpen(true)}
+            title="ใช้เมื่อลูกค้าแจ้งว่านับผ้ากลับไม่ตรง — sync col6 ↔ col4 + recalc fees อัตโนมัติ"
+            className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium">
+            <Wrench className="w-4 h-4" />ลูกค้าแจ้งนับผ้าไม่ตรง
+          </button>
           <button onClick={() => setShowLfPrintList(true)} disabled={filtered.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
             <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
@@ -428,6 +437,9 @@ export default function LinenFormsPage() {
           </button>
         </div>
       </div>
+
+      {/* 297.1: Discrepancy Helper Modal (moved from dashboard) */}
+      <DiscrepancyHelperModal open={helperOpen} onClose={() => setHelperOpen(false)} />
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">

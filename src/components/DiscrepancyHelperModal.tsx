@@ -8,6 +8,7 @@ import { cn, formatDate } from '@/lib/utils'
 import { applyRowsSync, recalcTransportAfterSync } from '@/lib/sync-discrepancy'
 import { tabularNumberNav } from '@/lib/modal-nav'
 import TransportFeeImpactPreview from './TransportFeeImpactPreview'
+import CustomerPicker from './CustomerPicker'
 import { useRouter } from 'next/navigation'
 
 interface Props {
@@ -35,7 +36,7 @@ interface Props {
  */
 export default function DiscrepancyHelperModal({ open, onClose, initialCustomerId, initialLfId }: Props) {
   const {
-    currentUser, customers, linenForms, deliveryNotes, billingStatements,
+    currentUser, linenForms, deliveryNotes, billingStatements,
     updateLinenForm, updateDeliveryNote, quotations, getCustomer,
   } = useStore()
   const router = useRouter()
@@ -210,13 +211,15 @@ export default function DiscrepancyHelperModal({ open, onClose, initialCustomerI
         {/* Step 1: Customer + LF */}
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Step 1: เลือกลูกค้า</label>
-          <select value={selCustomerId} onChange={e => { setSelCustomerId(e.target.value); setSelLfId(''); setNewQtyMap(new Map()) }}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]">
-            <option value="">— เลือกลูกค้า —</option>
-            {customers.filter(c => c.isActive).map(c => (
-              <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
-            ))}
-          </select>
+          {/* 297: searchable CustomerPicker (pattern เดียวกับ "สร้างใบเสนอราคา") */}
+          <CustomerPicker
+            value={selCustomerId}
+            onChange={id => { setSelCustomerId(id); setSelLfId(''); setNewQtyMap(new Map()) }}
+            allowAll={false}
+            placeholder="— เลือกลูกค้า —"
+            filter={c => c.isActive}
+            fullWidth
+          />
         </div>
 
         {selCustomerId && (
