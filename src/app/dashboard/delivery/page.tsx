@@ -49,6 +49,12 @@ export default function DeliveryPage() {
   const [qbDriver, setQbDriver] = useState('')
   const [qbVehicle, setQbVehicle] = useState('')
   const [qbReceiver, setQbReceiver] = useState('')
+  // 303: Quick Print — list customers ที่มี SD ยังไม่พิมพ์ → multi-select → 1-click print
+  const [showQuickPrint, setShowQuickPrint] = useState(false)
+  const [qpSelectedCusts, setQpSelectedCusts] = useState<Set<string>>(new Set())
+  const [qpDateMode, setQpDateMode] = useState<'this_month' | 'last_30d' | 'all'>('this_month')
+  const [qpShowPrinted, setQpShowPrinted] = useState(false)
+  const [quickPrintTarget, setQuickPrintTarget] = useState<{ customerIds: string[]; mode: 'single' | 'multi' } | null>(null)
   const searchParams = useSearchParams()
   const router = useRouter()
   const urlHighlightQ = searchParams.get('q') || '' // 147.2
@@ -299,6 +305,34 @@ export default function DeliveryPage() {
     }
     return map
   }, [linenForms, deliveryNotes])
+
+  // 303: Quick Print — group SD by customer (filtered by date + printed status)
+  //   Default: เดือนนี้ + เฉพาะที่ยังไม่พิมพ์
+  const printableByCustomer = useMemo(() => {
+    const today = new Date()
+    let cutoffISO: string | null = null
+    if (qpDateMode === 'this_month') {
+      cutoffISO = `${today.toISOString().slice(0, 7)}-01`
+    } else if (qpDateMode === 'last_30d') {
+      const d = new Date(today); d.setDate(d.getDate() - 30)
+      cutoffISO = d.toISOString().slice(0, 10)
+    }
+    const map = new Map<string, { all: DeliveryNote[]; unprinted: DeliveryNote[] }>()
+    for (const dn of deliveryNotes) {
+      if (cutoffISO && dn.date < cutoffISO) continue
+      if (!qpShowPrinted && dn.isPrinted) continue
+      const bucket = map.get(dn.customerId) || { all: [], unprinted: [] }
+      bucket.all.push(dn)
+      if (!dn.isPrinted) bucket.unprinted.push(dn)
+      map.set(dn.customerId, bucket)
+    }
+    // Sort each customer's SDs by date asc + noteNumber
+    for (const b of map.values()) {
+      b.all.sort((a, c) => a.date.localeCompare(c.date) || a.noteNumber.localeCompare(c.noteNumber))
+      b.unprinted.sort((a, c) => a.date.localeCompare(c.date) || a.noteNumber.localeCompare(c.noteNumber))
+    }
+    return map
+  }, [deliveryNotes, qpDateMode, qpShowPrinted])
 
   // 122.4.1: Stuck LFs — ยังไม่ถึง 7/7 + customer เดียวกัน (ไม่มี SD ผูกแล้ว)
   const stuckFormsForCustomer = useMemo(() => {
@@ -1178,6 +1212,18 @@ export default function DeliveryPage() {
               สร้าง SD เร่งด่วน ({pendingByCustomer.size} ลูกค้ารอ)
             </button>
           )}
+          {/* 303: Quick Print — เห็นลูกค้าทุกรายที่มี SD รอพิมพ์ → multi-select → 1-click print */}
+          <button onClick={() => {
+            setQpSelectedCusts(new Set())
+            setQpDateMode('this_month')
+            setQpShowPrinted(false)
+            setShowQuickPrint(true)
+          }}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-50 text-violet-700 border border-violet-200 rounded-lg hover:bg-violet-100 transition-colors text-sm font-medium"
+            title="พิมพ์ SD แยกลูกค้า — เลือกราย/หลายลูกค้า แล้วพิมพ์ทีเดียว">
+            <Sparkles className="w-4 h-4" />
+            พิมพ์ SD เร่งด่วน
+          </button>
           <button onClick={() => { setShowCreate(true); setBatchMode(false); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()); setDnDiscount(0); setDnDiscountNote(''); setDnExtraCharge(0); setDnExtraChargeNote('') }}
             className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />
@@ -2365,6 +2411,242 @@ export default function DeliveryPage() {
                     สร้าง SD ทั้งหมด ({totalSDs} ใบ)
                   </button>
                 </div>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* 303: Quick Print SD Modal — multi-customer selector */}
+      <Modal open={showQuickPrint} onClose={() => setShowQuickPrint(false)} title="พิมพ์ SD เร่งด่วน (Multi-customer)" size="lg" closeLabel="cancel">
+        {(() => {
+          const entries = Array.from(printableByCustomer.entries())
+            .map(([custId, bucket]) => {
+              const c = getCustomer(custId)
+              if (!c) return null
+              return { custId, customer: c, all: bucket.all, unprinted: bucket.unprinted }
+            })
+            .filter((e): e is NonNullable<typeof e> => e !== null && e.all.length > 0)
+            .sort((a, b) => (a.customer.shortName || a.customer.name).localeCompare(b.customer.shortName || b.customer.name))
+
+          const allSelected = entries.length > 0 && entries.every(e => qpSelectedCusts.has(e.custId))
+          const toggleOne = (custId: string) => {
+            setQpSelectedCusts(prev => {
+              const next = new Set(prev)
+              if (next.has(custId)) next.delete(custId); else next.add(custId)
+              return next
+            })
+          }
+          const toggleAll = () => {
+            if (allSelected) setQpSelectedCusts(new Set())
+            else setQpSelectedCusts(new Set(entries.map(e => e.custId)))
+          }
+          const totalSelectedSDs = Array.from(qpSelectedCusts).reduce((s, cid) => {
+            const b = printableByCustomer.get(cid)
+            return s + (b ? b.all.length : 0)
+          }, 0)
+
+          const openPrintFor = (customerIds: string[], mode: 'single' | 'multi') => {
+            setQuickPrintTarget({ customerIds, mode })
+            setShowQuickPrint(false)
+          }
+
+          const dateChips: Array<{ key: typeof qpDateMode; label: string }> = [
+            { key: 'this_month', label: 'เดือนนี้' },
+            { key: 'last_30d', label: '30 วันล่าสุด' },
+            { key: 'all', label: 'ทั้งหมด' },
+          ]
+
+          return (
+            <div className="space-y-4 text-sm">
+              <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 text-xs text-violet-800">
+                <p className="font-medium mb-1">🖨️ พิมพ์ SD แยกตามลูกค้า — ทีเดียวจบ</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>คลิก <strong>&quot;พิมพ์&quot;</strong> ที่แถวลูกค้า → พิมพ์เฉพาะรายนั้น (pile per customer)</li>
+                  <li>หรือ ☑ เลือกหลายลูกค้า → <strong>&quot;พิมพ์รวมทั้งหมด&quot;</strong> → ระบบใส่ cover page แยกแต่ละลูกค้าให้</li>
+                  <li>SD ที่พิมพ์แล้วถูก mark <code>isPrinted=true</code> อัตโนมัติ + หายจาก list ครั้งต่อไป</li>
+                </ul>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+                <div className="flex items-center gap-1">
+                  {dateChips.map(chip => (
+                    <button key={chip.key} type="button" onClick={() => setQpDateMode(chip.key)}
+                      className={cn(
+                        'px-2.5 py-1 rounded text-xs font-medium transition-colors',
+                        qpDateMode === chip.key
+                          ? 'bg-[#3DD8D8] text-[#1B3A5C]'
+                          : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100',
+                      )}>
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+                <label className="flex items-center gap-1.5 text-xs cursor-pointer ml-auto">
+                  <input type="checkbox" checked={qpShowPrinted}
+                    onChange={e => setQpShowPrinted(e.target.checked)}
+                    className="rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                  <span className="text-slate-600">แสดงที่พิมพ์แล้วด้วย</span>
+                </label>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-medium text-slate-700">ลูกค้าที่มี SD รอพิมพ์ ({entries.length} ราย)</p>
+                  <button onClick={toggleAll} className="text-xs px-2 py-1 border border-slate-200 rounded hover:bg-slate-50">
+                    {allSelected ? 'ยกเลิกเลือกทั้งหมด' : 'เลือกทั้งหมด'}
+                  </button>
+                </div>
+                <div className="border border-slate-200 rounded-lg max-h-[45vh] overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 sticky top-0 border-b border-slate-200">
+                      <tr>
+                        <th className="px-3 py-2 w-10"></th>
+                        <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">SD รอ</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">ทั้งหมด</th>
+                        <th className="text-center px-2 py-2 font-medium text-slate-600 w-20"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.map(({ custId, customer, all, unprinted }) => {
+                        const checked = qpSelectedCusts.has(custId)
+                        return (
+                          <tr key={custId} className={cn('border-t border-slate-100 cursor-pointer hover:bg-slate-50',
+                            checked && 'bg-[#3DD8D8]/10')}
+                            onClick={() => toggleOne(custId)}>
+                            <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
+                              <input type="checkbox" checked={checked} onChange={() => toggleOne(custId)}
+                                className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className="font-bold text-[#1B3A5C] tracking-wide">{customer.shortName || '-'}</span>
+                              <span className="text-slate-500 text-xs ml-2">{customer.name}</span>
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <span className="font-mono font-semibold text-slate-700">{unprinted.length}</span>
+                              {unprinted.length > 0 && <span className="text-[10px] text-amber-600 ml-1">รอพิมพ์</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-500 text-xs">{all.length}</td>
+                            <td className="px-2 py-2 text-center" onClick={e => e.stopPropagation()}>
+                              <button onClick={() => openPrintFor([custId], 'single')}
+                                className="px-2.5 py-1 text-[11px] bg-violet-100 text-violet-700 rounded hover:bg-violet-200 font-medium inline-flex items-center gap-1">
+                                <Printer className="w-3 h-3" />พิมพ์
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {entries.length === 0 && (
+                        <tr><td colSpan={5} className="text-center py-12 text-slate-400">ไม่มี SD รอพิมพ์ในช่วงนี้</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200">
+                <div className="text-xs text-slate-500">
+                  {qpSelectedCusts.size > 0 && (
+                    <>เลือก <strong className="text-[#1B3A5C]">{qpSelectedCusts.size}</strong> ลูกค้า · รวม <strong className="text-[#1B3A5C]">{totalSelectedSDs}</strong> SD</>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowQuickPrint(false)}
+                    className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium">
+                    ยกเลิก
+                  </button>
+                  <button onClick={() => openPrintFor(Array.from(qpSelectedCusts), 'multi')}
+                    disabled={qpSelectedCusts.size === 0}
+                    className={cn('px-4 py-2 text-sm rounded-lg font-medium transition-colors flex items-center gap-1.5',
+                      qpSelectedCusts.size === 0
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8]')}>
+                    <Sparkles className="w-4 h-4" />
+                    พิมพ์รวมทั้งหมด ({totalSelectedSDs} ใบ)
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* 303: Quick Print View — render content + cover pages (multi-customer mode) */}
+      <Modal open={!!quickPrintTarget} onClose={() => setQuickPrintTarget(null)} title={
+        quickPrintTarget?.mode === 'multi'
+          ? `พิมพ์ SD รวม ${quickPrintTarget.customerIds.length} ลูกค้า`
+          : 'พิมพ์ SD'
+      } size="xl" className="print-target">
+        {(() => {
+          if (!quickPrintTarget) return null
+          const groups = quickPrintTarget.customerIds.map(cid => {
+            const c = getCustomer(cid)
+            const bucket = printableByCustomer.get(cid)
+            return c && bucket ? { customer: c, dns: bucket.all } : null
+          }).filter((g): g is NonNullable<typeof g> => g !== null)
+            .sort((a, b) => (a.customer.shortName || a.customer.name).localeCompare(b.customer.shortName || b.customer.name))
+
+          const allDnIds = groups.flatMap(g => g.dns.map(d => d.id))
+          const allPrinted = allDnIds.length > 0 && allDnIds.every(id => deliveryNotes.find(d => d.id === id)?.isPrinted)
+          const totalCount = allDnIds.length
+
+          const markAll = (printed: boolean) => {
+            for (const id of allDnIds) updateDeliveryNote(id, { isPrinted: printed })
+          }
+
+          return (
+            <div className="space-y-4">
+              <div id="print-quick-dn">
+                {groups.map((g, gIdx) => (
+                  <div key={g.customer.id}>
+                    {/* Multi-customer mode: cover page + page break ก่อนทุกลูกค้า (รวม group แรก ถ้ามี ≥2 customers) */}
+                    {quickPrintTarget.mode === 'multi' && groups.length > 1 && (
+                      <div style={gIdx > 0 ? { pageBreakBefore: 'always' } : undefined}
+                        className="cover-page text-center py-16 border-2 border-slate-300 rounded-lg my-6 bg-slate-50">
+                        <div className="text-xs text-slate-500 uppercase tracking-widest mb-3">Quick Print SD</div>
+                        <div className="text-3xl font-bold text-[#1B3A5C] mb-2">{g.customer.shortName || g.customer.name}</div>
+                        <div className="text-sm text-slate-600 mb-4">{g.customer.name}</div>
+                        <div className="text-sm">
+                          <span className="text-slate-500">จำนวน</span>{' '}
+                          <strong className="text-[#1B3A5C] text-lg">{g.dns.length}</strong>{' '}
+                          <span className="text-slate-500">ใบ</span>
+                        </div>
+                        <div className="text-xs text-slate-400 mt-2">
+                          {g.dns.length > 0 && <>วันที่ {formatDate(g.dns[0].date)} ถึง {formatDate(g.dns[g.dns.length - 1].date)}</>}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-4">ลูกค้าที่ {gIdx + 1} จาก {groups.length}</div>
+                      </div>
+                    )}
+                    {g.dns.map((dn, dnIdx) => (
+                      <div key={dn.id}>
+                        {/* page break: ก่อน SD ตัวที่ ≥2 ใน group เดียวกัน, หรือ ก่อน group ใหม่ใน single-mode */}
+                        {(dnIdx > 0 || (gIdx > 0 && quickPrintTarget.mode !== 'multi')) && (
+                          <div style={{ pageBreakBefore: 'always' }} />
+                        )}
+                        <DeliveryNotePrint note={dn} customer={g.customer} company={companyInfo} catalog={linenCatalog}
+                          priceMap={buildPriceMapFromQT(g.customer.id, quotations)} idSuffix={dn.id} />
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between items-center mt-4 no-print">
+                <div className="flex flex-col gap-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={allPrinted}
+                      onChange={e => markAll(e.target.checked)}
+                      className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+                    <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว (ทุกรายการ {totalCount} ใบ)</span>
+                  </label>
+                  <p className="text-xs text-slate-400">พิมพ์ → mark <code>isPrinted=true</code> อัตโนมัติ · จาก list ครั้งต่อไปหาย</p>
+                </div>
+                <ExportButtons
+                  targetId="print-quick-dn"
+                  filename={`SD-quickprint-${groups.length}cust-${totalCount}sd`}
+                  onPrint={() => markAll(true)}
+                  onExportFile={() => { for (const id of allDnIds) updateDeliveryNote(id, { isExported: true }) }}
+                />
               </div>
             </div>
           )
