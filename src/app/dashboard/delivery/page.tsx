@@ -516,7 +516,9 @@ export default function DeliveryPage() {
 
     const hasAcceptedQT = quotations.some(q => q.customerId === selCustomerId && q.status === 'accepted')
     if (!hasAcceptedQT) {
-      if (!confirm(`⚠ ลูกค้านี้ไม่มีใบเสนอราคาที่ตกลงแล้ว — ราคาทุกรายการจะเป็น 0\n\nกรุณาสร้างและกดตกลง QT ก่อน\n\nยืนยันสร้าง ${selFormIds.length} SD ต่อหรือไม่?`)) return
+      // Phase C: block creation — ห้ามสร้าง SD ถ้าลูกค้าไม่มี QT accepted (ป้องกัน priceSnapshot=0)
+      alert(`❌ ไม่สามารถสร้าง SD ได้\n\nลูกค้านี้ยังไม่มีใบเสนอราคา (QT) ที่ตกลงแล้ว\nกรุณาสร้างและกดตกลง QT ก่อน ที่หน้า "ใบเสนอราคา"`)
+      return
     }
 
     // QT order map (for item sorting per SD — same logic as Fix 253)
@@ -711,8 +713,12 @@ export default function DeliveryPage() {
       const lfs = pendingByCustomer.get(customerId) || []
       if (lfs.length === 0) continue
 
+      // Phase C: skip customer ที่ไม่มี QT (block creation) — บอก user ตอน alert ท้าย
       const hasAcceptedQT = quotations.some(q => q.customerId === customerId && q.status === 'accepted')
-      if (!hasAcceptedQT) customersWithoutQT++
+      if (!hasAcceptedQT) {
+        customersWithoutQT++
+        continue
+      }
 
       const stuckN = stuckCountByCustomer.get(customerId) || 0
       if (stuckN > 0) { stuckLFsTotal += stuckN; stuckCustCount++ }
@@ -853,7 +859,7 @@ export default function DeliveryPage() {
       scrollToActiveRow(allNewDNs[0].id)
     }
     const msg = `สร้าง SD เสร็จแล้ว ${allNewDNs.length} ใบ (${qbSelectedCusts.size} ลูกค้า)`
-      + (customersWithoutQT > 0 ? `\n\n⚠ ${customersWithoutQT} ลูกค้าไม่มี QT — ราคาจะเป็น 0 จนกว่าจะสร้าง QT` : '')
+      + (customersWithoutQT > 0 ? `\n\n❌ ${customersWithoutQT} ลูกค้าไม่มี QT — ถูก skip ไม่สร้าง SD\n   กรุณาสร้าง QT ที่หน้า "ใบเสนอราคา" แล้วลองใหม่` : '')
       + (stuckLFsTotal > 0 ? `\n\n⚠ พบ LF ค้าง ${stuckLFsTotal} ใบ ใน ${stuckCustCount} ลูกค้า ที่สถานะยังไม่ถึง 7/7 — ไม่ถูกสร้างในรอบนี้\n   กรุณาตรวจสอบที่หน้า LF อีกครั้ง` : '')
     setShowQuickBatch(false)
     setQbSelectedCusts(new Set())
@@ -866,10 +872,11 @@ export default function DeliveryPage() {
     const customer = getCustomer(selCustomerId)
     const month = dnDate.slice(0, 7)
 
-    // Warn if no accepted QT → prices will be 0
+    // Phase C: block creation — ห้ามสร้าง SD ถ้าลูกค้าไม่มี QT accepted (ป้องกัน priceSnapshot=0)
     const hasAcceptedQT = quotations.some(q => q.customerId === selCustomerId && q.status === 'accepted')
     if (!hasAcceptedQT) {
-      if (!confirm('⚠ ลูกค้านี้ไม่มีใบเสนอราคาที่ตกลงแล้ว — ราคาทุกรายการจะเป็น 0\n\nกรุณาสร้างและกดตกลง QT ก่อน\n\nยืนยันสร้าง SD ต่อหรือไม่?')) return
+      alert(`❌ ไม่สามารถสร้าง SD ได้\n\nลูกค้านี้ยังไม่มีใบเสนอราคา (QT) ที่ตกลงแล้ว\nกรุณาสร้างและกดตกลง QT ก่อน ที่หน้า "ใบเสนอราคา"`)
+      return
     }
 
     // 70+73+74+75: Detect overwrite (SD quantity ≠ LF.col6) → sync LF
@@ -2403,19 +2410,28 @@ export default function DeliveryPage() {
                         const checked = qbSelectedCusts.has(custId)
                         const hasQT = quotations.some(q => q.customerId === custId && q.status === 'accepted')
                         const stuckCount = stuckCountByCustomer.get(custId) || 0
+                        // Phase C: disable customer ที่ไม่มี QT — block creation
                         return (
-                          <tr key={custId} className={cn('border-t border-slate-100 cursor-pointer hover:bg-slate-50',
-                            checked && 'bg-[#3DD8D8]/10')}
-                            onClick={() => toggleOne(custId)}>
+                          <tr key={custId} className={cn('border-t border-slate-100',
+                            !hasQT ? 'opacity-50 cursor-not-allowed bg-red-50/30' : 'cursor-pointer hover:bg-slate-50',
+                            checked && hasQT && 'bg-[#3DD8D8]/10')}
+                            onClick={() => { if (hasQT) toggleOne(custId) }}>
                             <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
-                              <input type="checkbox" checked={checked} onChange={() => toggleOne(custId)}
-                                className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                              <input type="checkbox" checked={checked && hasQT} disabled={!hasQT}
+                                onChange={() => { if (hasQT) toggleOne(custId) }}
+                                className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8] disabled:opacity-40" />
                             </td>
                             <td className="px-3 py-2">
-                              <span className="font-bold text-[#1B3A5C] tracking-wide">{customer!.shortName || '-'}</span>
+                              <span className={cn('font-bold tracking-wide', hasQT ? 'text-[#1B3A5C]' : 'text-slate-400')}>
+                                {customer!.shortName || '-'}
+                              </span>
                               <span className="text-slate-500 text-xs ml-2">{customer!.name}</span>
-                              {!hasQT && <span className="ml-2 text-[10px] text-amber-600 font-medium">⚠ ไม่มี QT</span>}
-                              {stuckCount > 0 && (
+                              {!hasQT && (
+                                <span className="ml-2 text-[10px] text-red-600 font-bold" title="Phase C: ห้ามสร้าง SD โดยไม่มี QT — ป้องกันราคา 0">
+                                  ❌ ไม่มี QT — สร้าง SD ไม่ได้
+                                </span>
+                              )}
+                              {hasQT && stuckCount > 0 && (
                                 <span className="ml-2 text-[10px] text-amber-600 font-medium" title="LF ที่สถานะยังไม่ถึง 7/7 จะไม่ถูกสร้าง SD ในรอบนี้">
                                   ⚠ ค้าง {stuckCount} ใบ (ไม่ใช่ 7/7)
                                 </span>
