@@ -54,7 +54,8 @@ export default function DeliveryPage() {
   const [qpSelectedCusts, setQpSelectedCusts] = useState<Set<string>>(new Set())
   const [qpDateMode, setQpDateMode] = useState<'this_month' | 'last_30d' | 'all'>('this_month')
   const [qpShowPrinted, setQpShowPrinted] = useState(false)
-  const [quickPrintTarget, setQuickPrintTarget] = useState<{ customerIds: string[]; mode: 'single' | 'multi' } | null>(null)
+  // 310: snapshot dnIds ตอน click — กัน DOM clear เมื่อ onPrint mark isPrinted=true แล้ว filter ตัดออก
+  const [quickPrintTarget, setQuickPrintTarget] = useState<{ snapshotGroups: { customerId: string; dnIds: string[] }[]; mode: 'single' | 'multi' } | null>(null)
   // 308: contentReady — block user click ก่อน DOM render เสร็จ (กัน blank print preview ครั้งแรก)
   const [quickPrintReady, setQuickPrintReady] = useState(false)
   const searchParams = useSearchParams()
@@ -336,18 +337,24 @@ export default function DeliveryPage() {
     return map
   }, [deliveryNotes, qpDateMode, qpShowPrinted])
 
-  // 308: Quick Print groups + priceMap per customer — memoize เลี่ยง re-compute ทุก render
-  //   ก่อน: buildPriceMapFromQT() ถูกเรียก N ครั้งต่อ SD (slow content render)
-  //   หลัง: compute ครั้งเดียวต่อ customer
+  // 310: Quick Print groups — ใช้ dnIds snapshot (จาก openPrintFor) แทน printableByCustomer
+  //   เหตุผล: ตอน onPrint mark isPrinted=true → printableByCustomer filter ตัด rows ออก
+  //          → ถ้า derive จาก filter, groups จะ empty ระหว่าง print → DOM clear → blank preview
+  //   แก้: snapshot dnIds ตอน click "พิมพ์รายนี้" → lookup ตรงจาก deliveryNotes (no filter)
   const quickPrintGroups = useMemo(() => {
     if (!quickPrintTarget) return []
-    return quickPrintTarget.customerIds.map(cid => {
-      const c = getCustomer(cid)
-      const bucket = printableByCustomer.get(cid)
-      return c && bucket ? { customer: c, dns: bucket.all } : null
+    const dnMap = new Map(deliveryNotes.map(d => [d.id, d]))
+    return quickPrintTarget.snapshotGroups.map(g => {
+      const c = getCustomer(g.customerId)
+      if (!c) return null
+      const dns = g.dnIds
+        .map(id => dnMap.get(id))
+        .filter((d): d is NonNullable<typeof d> => d !== undefined)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.noteNumber.localeCompare(b.noteNumber))
+      return { customer: c, dns }
     }).filter((g): g is NonNullable<typeof g> => g !== null)
       .sort((a, b) => (a.customer.shortName || a.customer.name).localeCompare(b.customer.shortName || b.customer.name))
-  }, [quickPrintTarget, printableByCustomer, getCustomer])
+  }, [quickPrintTarget, deliveryNotes, getCustomer])
 
   const quickPrintPriceMaps = useMemo(() => {
     const map = new Map<string, Record<string, number>>()
@@ -2508,7 +2515,13 @@ export default function DeliveryPage() {
           }, 0)
 
           const openPrintFor = (customerIds: string[], mode: 'single' | 'multi') => {
-            setQuickPrintTarget({ customerIds, mode })
+            // 310: snapshot dnIds ตอน click — กัน race เมื่อ onPrint mark isPrinted=true แล้ว filter ตัด
+            const snapshotGroups = customerIds.map(cid => {
+              const bucket = printableByCustomer.get(cid)
+              return { customerId: cid, dnIds: bucket ? bucket.all.map(d => d.id) : [] }
+            }).filter(g => g.dnIds.length > 0)
+            if (snapshotGroups.length === 0) return
+            setQuickPrintTarget({ snapshotGroups, mode })
             setShowQuickPrint(false)
           }
 
@@ -2636,7 +2649,7 @@ export default function DeliveryPage() {
       {/* 303: Quick Print View — render content + cover pages (multi-customer mode) */}
       <Modal open={!!quickPrintTarget} onClose={() => setQuickPrintTarget(null)} title={
         quickPrintTarget?.mode === 'multi'
-          ? `พิมพ์ SD รวม ${quickPrintTarget.customerIds.length} ลูกค้า`
+          ? `พิมพ์ SD รวม ${quickPrintTarget.snapshotGroups.length} ลูกค้า`
           : 'พิมพ์ SD'
       } size="xl" className="print-target">
         {(() => {
