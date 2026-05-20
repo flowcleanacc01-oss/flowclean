@@ -3562,7 +3562,8 @@ export default function BillingPage() {
             if (!b || !cust) return null
             return (
               <div key={bId}>
-                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6 no-print" style={{ pageBreakBefore: 'always' }} />}
+                {/* 313: pattern เดียวกับ Quick Print — pageBreak อย่างเดียว ไม่มี dashed line */}
+                {idx > 0 && <div style={{ pageBreakBefore: 'always' }} />}
                 {/* Per-doc status row */}
                 <div className="flex items-center gap-4 mb-2 no-print">
                   <span className="text-xs font-mono text-slate-400">{b.billingNumber}</span>
@@ -3625,7 +3626,8 @@ export default function BillingPage() {
             const wb = billingStatements.find(b => b.id === inv.billingStatementId)
             return (
               <div key={ivId}>
-                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6 no-print" style={{ pageBreakBefore: 'always' }} />}
+                {/* 313: pattern เดียวกับ Quick Print — pageBreak อย่างเดียว ไม่มี dashed line */}
+                {idx > 0 && <div style={{ pageBreakBefore: 'always' }} />}
                 {/* Per-doc status row */}
                 <div className="flex items-center gap-4 mb-2 no-print">
                   <span className="text-xs font-mono text-slate-400">{inv.invoiceNumber}</span>

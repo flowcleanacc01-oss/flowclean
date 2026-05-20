@@ -2863,7 +2863,8 @@ export default function DeliveryPage() {
             if (!dn || !cust) return null
             return (
               <div key={dnId}>
-                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6" style={{ pageBreakBefore: 'always' }} />}
+                {/* 313: pattern เดียวกับ Quick Print SD — pageBreak อย่างเดียว ไม่มี dashed line */}
+                {idx > 0 && <div style={{ pageBreakBefore: 'always' }} />}
                 <DeliveryNotePrint note={dn} customer={cust} company={companyInfo} catalog={linenCatalog} priceMap={buildPriceMapFromQT(cust.id, quotations)} idSuffix={dn.id} />
               </div>
             )
