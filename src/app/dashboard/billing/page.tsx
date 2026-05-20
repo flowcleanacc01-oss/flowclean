@@ -67,6 +67,10 @@ export default function BillingPage() {
   const [sortKey, setSortKey] = useState('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [showCreate, setShowCreate] = useState(false)
+  // Phase B: Quick Batch WB — list customers ที่มี SD ยังไม่ผูก WB → multi-select → 1-click create
+  const [showQuickBatchWB, setShowQuickBatchWB] = useState(false)
+  const [qbwbSelectedCusts, setQbwbSelectedCusts] = useState<Set<string>>(new Set())
+  const [qbwbMonth, setQbwbMonth] = useState<string>(() => todayISO().slice(0, 7))
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
 
   // Sync tab + auto-open detail from URL params (cross-page navigation)
@@ -461,6 +465,95 @@ export default function BillingPage() {
     }
 
     setShowCreate(false)
+  }
+
+  // Phase B: Quick Batch WB — group SDs by customer ใน month ที่เลือก
+  const pendingWBByCustomer = useMemo(() => {
+    const monthStart = `${qbwbMonth}-01`
+    const [yr, mo] = qbwbMonth.split('-').map(Number)
+    const nextMonthISO = new Date(yr, mo, 1).toISOString().slice(0, 10)
+    const wbLinkedDnIds = new Set(billingStatements.flatMap(b => b.deliveryNoteIds))
+    const map = new Map<string, DeliveryNote[]>()
+    for (const dn of deliveryNotes) {
+      if (dn.date < monthStart || dn.date >= nextMonthISO) continue
+      if (wbLinkedDnIds.has(dn.id)) continue
+      // Skip ลูกค้าที่ flat-rate (enablePerPiece=false) — ใช้ flow ปกติ (อยู่ในหน้าสร้างเดิม)
+      const cust = customers.find(c => c.id === dn.customerId)
+      if (!cust || cust.enablePerPiece === false) continue
+      const list = map.get(dn.customerId) || []
+      list.push(dn)
+      map.set(dn.customerId, list)
+    }
+    // Sort SDs per customer by date asc
+    for (const list of map.values()) {
+      list.sort((a, b) => a.date.localeCompare(b.date) || a.noteNumber.localeCompare(b.noteNumber))
+    }
+    return map
+  }, [deliveryNotes, billingStatements, customers, qbwbMonth])
+
+  // Phase B: Quick Batch WB submit
+  const handleQuickBatchWBSubmit = () => {
+    if (qbwbSelectedCusts.size === 0) return
+    const today = todayISO()
+    let createdCount = 0
+    let customersWithoutQT = 0
+    const createdWbIds: string[] = []
+
+    for (const customerId of qbwbSelectedCusts) {
+      const cust = customers.find(c => c.id === customerId)
+      if (!cust) continue
+      const sds = pendingWBByCustomer.get(customerId) || []
+      if (sds.length === 0) continue
+
+      // Phase C MPD block: skip ลูกค้าไม่มี QT
+      const hasAcceptedQT = quotations.some(q => q.customerId === customerId && q.status === 'accepted')
+      if (!hasAcceptedQT) {
+        customersWithoutQT++
+        continue
+      }
+
+      const linkedQT = quotations.find(q => q.status === 'accepted' && q.customerId === customerId)
+      const baseItems = aggregateDeliveryItemsByDate(sds, cust, linkedQT?.items)
+      if (baseItems.length === 0) continue
+
+      const custVat = (cust.enableVat !== false) ? (companyInfo.vatRate ?? 7) : 0
+      const custWht = (cust.enableWithholding !== false) ? (companyInfo.withholdingRate ?? 3) : 0
+      const totals = calculateBillingTotals(baseItems, custVat, custWht)
+      if (totals.subtotal <= 0) continue
+
+      const dueDate = new Date(today)
+      dueDate.setDate(dueDate.getDate() + cust.creditDays)
+
+      const newWB = addBillingStatement({
+        customerId,
+        deliveryNoteIds: sds.map(d => d.id),
+        billingMonth: qbwbMonth,
+        issueDate: today,
+        dueDate: format(dueDate, 'yyyy-MM-dd'),
+        lineItems: baseItems,
+        subtotal: totals.subtotal,
+        vat: totals.vat,
+        grandTotal: totals.grandTotal,
+        withholdingTax: totals.withholdingTax,
+        netPayable: totals.netPayable,
+        status: 'sent',
+        paidDate: null,
+        paidAmount: 0,
+        notes: '',
+        billingMode: 'by_date',
+      })
+      createdWbIds.push(newWB.id)
+      // Mark SDs as billed
+      for (const dn of sds) updateDeliveryNote(dn.id, { isBilled: true })
+      createdCount++
+    }
+
+    const msg = `สร้าง WB เสร็จแล้ว ${createdCount} ใบ (${qbwbSelectedCusts.size} ลูกค้า)`
+      + (customersWithoutQT > 0 ? `\n\n❌ ${customersWithoutQT} ลูกค้าไม่มี QT — ถูก skip\n   กรุณาสร้าง QT ก่อน แล้วลองใหม่` : '')
+    setShowQuickBatchWB(false)
+    setQbwbSelectedCusts(new Set())
+    if (createdCount > 0) alert(msg)
+    else if (customersWithoutQT > 0) alert(msg)
   }
 
   const handleCreateTaxInvoice = (billingId: string) => {
@@ -1154,6 +1247,18 @@ export default function BillingPage() {
               className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
               <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
             </button>
+            {/* Phase B: Quick Batch WB */}
+            {pendingWBByCustomer.size > 0 && (
+              <button onClick={() => {
+                setQbwbSelectedCusts(new Set())
+                setShowQuickBatchWB(true)
+              }}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium"
+                title={`มี ${pendingWBByCustomer.size} ลูกค้าที่มี SD รอออก WB ในเดือนนี้`}>
+                <Sparkles className="w-4 h-4" />
+                สร้าง WB เร่งด่วน ({pendingWBByCustomer.size} ลูกค้ารอ)
+              </button>
+            )}
             <button onClick={() => { setShowCreate(true); setSelCustomerId(''); setBillingIssueDate(todayISO()) }}
               className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
               <Plus className="w-4 h-4" />สร้างใบวางบิล
@@ -2034,6 +2139,145 @@ export default function BillingPage() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Phase B: Quick Batch WB Modal */}
+      <Modal open={showQuickBatchWB} onClose={() => setShowQuickBatchWB(false)} title="สร้าง WB แบบเร่งด่วน (Multi-customer)" size="lg" closeLabel="cancel">
+        {(() => {
+          const entries = Array.from(pendingWBByCustomer.entries())
+            .map(([custId, sds]) => {
+              const c = customers.find(x => x.id === custId)
+              if (!c) return null
+              const hasQT = quotations.some(q => q.customerId === custId && q.status === 'accepted')
+              const totalAmount = sds.reduce((s, dn) => {
+                const items = dn.items.filter(it => !it.isClaim)
+                return s + items.reduce((ss, it) => {
+                  const price = dn.priceSnapshot?.[it.code] ?? 0
+                  return ss + it.quantity * price
+                }, 0) + (dn.transportFeeTrip || 0) + (dn.transportFeeMonth || 0) + (dn.extraCharge || 0) - (dn.discount || 0)
+              }, 0)
+              return { custId, customer: c, sds, hasQT, totalAmount }
+            })
+            .filter((e): e is NonNullable<typeof e> => e !== null)
+            .sort((a, b) => (a.customer.shortName || a.customer.name).localeCompare(b.customer.shortName || b.customer.name))
+
+          const eligibleEntries = entries.filter(e => e.hasQT)
+          const allSelected = eligibleEntries.length > 0 && eligibleEntries.every(e => qbwbSelectedCusts.has(e.custId))
+          const toggleOne = (custId: string) => {
+            setQbwbSelectedCusts(prev => {
+              const next = new Set(prev)
+              if (next.has(custId)) next.delete(custId); else next.add(custId)
+              return next
+            })
+          }
+          const toggleAll = () => {
+            if (allSelected) setQbwbSelectedCusts(new Set())
+            else setQbwbSelectedCusts(new Set(eligibleEntries.map(e => e.custId)))
+          }
+          const selectedTotal = Array.from(qbwbSelectedCusts).reduce((s, cid) => {
+            const e = entries.find(x => x.custId === cid)
+            return s + (e?.totalAmount || 0)
+          }, 0)
+
+          return (
+            <div className="space-y-4 text-sm">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                <p className="font-medium mb-1">🧾 สร้าง WB แบบเร่งด่วน — Multi-customer</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>เห็นทุกลูกค้าที่มี SD รอออก WB ในเดือนที่เลือก (skip flat-rate)</li>
+                  <li>1 customer ใน month = 1 WB · ใช้ billingMode = by_date</li>
+                  <li>ลูกค้าที่ไม่มี QT — ถูก disable (Phase C)</li>
+                  <li>กดสร้าง → mark SDs as billed อัตโนมัติ</li>
+                </ul>
+              </div>
+
+              <div className="flex items-center gap-3 border border-slate-200 rounded-lg p-3 bg-slate-50">
+                <label className="text-xs font-medium text-slate-700">เดือน:</label>
+                <input type="month" value={qbwbMonth} onChange={e => setQbwbMonth(e.target.value)}
+                  className="px-3 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+                <span className="text-xs text-slate-400 ml-auto">{entries.length} ลูกค้ามี SD รอออก WB</span>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-medium text-slate-700">ลูกค้าที่มี SD รอออก WB ({entries.length} ราย · เลือกได้ {eligibleEntries.length})</p>
+                  <button onClick={toggleAll} disabled={eligibleEntries.length === 0}
+                    className="text-xs px-2 py-1 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40">
+                    {allSelected ? 'ยกเลิกเลือกทั้งหมด' : 'เลือกทั้งหมด'}
+                  </button>
+                </div>
+                <div className="border border-slate-200 rounded-lg max-h-[45vh] overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 sticky top-0 border-b border-slate-200">
+                      <tr>
+                        <th className="px-3 py-2 w-10"></th>
+                        <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">SD รอ</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">ยอด (Subtotal)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.map(({ custId, customer, sds, hasQT, totalAmount }) => {
+                        const checked = qbwbSelectedCusts.has(custId)
+                        return (
+                          <tr key={custId} className={cn('border-t border-slate-100',
+                            !hasQT ? 'opacity-50 cursor-not-allowed bg-red-50/30' : 'cursor-pointer hover:bg-slate-50',
+                            checked && hasQT && 'bg-[#3DD8D8]/10')}
+                            onClick={() => { if (hasQT) toggleOne(custId) }}>
+                            <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
+                              <input type="checkbox" checked={checked && hasQT} disabled={!hasQT}
+                                onChange={() => { if (hasQT) toggleOne(custId) }}
+                                className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8] disabled:opacity-40" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className={cn('font-bold tracking-wide', hasQT ? 'text-[#1B3A5C]' : 'text-slate-400')}>
+                                {customer.shortName || '-'}
+                              </span>
+                              <span className="text-slate-500 text-xs ml-2">{customer.name}</span>
+                              {!hasQT && (
+                                <span className="ml-2 text-[10px] text-red-600 font-bold" title="Phase C: ห้ามสร้าง SD/WB โดยไม่มี QT">
+                                  ❌ ไม่มี QT — สร้างไม่ได้
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-700">{sds.length}</td>
+                            <td className="px-3 py-2 text-right font-mono text-slate-700">{formatCurrency(totalAmount)}</td>
+                          </tr>
+                        )
+                      })}
+                      {entries.length === 0 && (
+                        <tr><td colSpan={4} className="text-center py-12 text-slate-400">ไม่มี SD รอออก WB ในเดือนนี้</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200">
+                <div className="text-xs text-slate-500">
+                  {qbwbSelectedCusts.size > 0 && (
+                    <>เลือก <strong className="text-[#1B3A5C]">{qbwbSelectedCusts.size}</strong> ลูกค้า · ยอดรวม <strong className="text-[#1B3A5C]">{formatCurrency(selectedTotal)}</strong></>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowQuickBatchWB(false)}
+                    className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium">
+                    ยกเลิก
+                  </button>
+                  <button onClick={handleQuickBatchWBSubmit}
+                    disabled={qbwbSelectedCusts.size === 0}
+                    className={cn('px-4 py-2 text-sm rounded-lg font-medium transition-colors flex items-center gap-1.5',
+                      qbwbSelectedCusts.size === 0
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8]')}>
+                    <Sparkles className="w-4 h-4" />
+                    สร้าง WB ทั้งหมด ({qbwbSelectedCusts.size} ใบ)
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
 
       {/* Detail Modal */}
