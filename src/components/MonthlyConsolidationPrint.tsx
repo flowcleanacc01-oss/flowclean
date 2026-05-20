@@ -55,16 +55,24 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
   const getPrice = (code: string): number =>
     resolvedPriceMap[code] ?? catalog.find(i => i.code === code)?.defaultPrice ?? 0
 
-  // Build matrix: code → dnId → net qty
-  // Feat 266: claim items = discount line → subtract qty for accurate net per-cell amount
-  // (consolidation print shows what's billed, matching WB/IV totals)
-  const matrix: Record<string, Record<string, number>> = {}
-  for (const item of items) matrix[item.code] = {}
+  // Build matrices: code → dnId → qty
+  // 312: แยก gross (ผ้าส่งคืนจริง = isClaim=false) จาก claim (ส่วนลดบัญชี = isClaim=true)
+  //   - main rows แสดง gross → ลูกค้า track ผ้าส่งจริงได้
+  //   - claim section แยกใต้ item rows → "ส่วนลดทางบัญชี" clean
+  //   - dnTotals ยังคำนวณ net (gross - claim) = ยอดที่ลูกค้าจ่าย
+  const grossMatrix: Record<string, Record<string, number>> = {}
+  const claimMatrix: Record<string, Record<string, number>> = {}
+  for (const item of items) {
+    grossMatrix[item.code] = {}
+    claimMatrix[item.code] = {}
+  }
   for (const dn of notes) {
     for (const di of dn.items) {
-      if (matrix[di.code] !== undefined) {
-        const delta = di.isClaim ? -di.quantity : di.quantity
-        matrix[di.code][dn.id] = (matrix[di.code][dn.id] || 0) + delta
+      if (grossMatrix[di.code] === undefined) continue
+      if (di.isClaim) {
+        claimMatrix[di.code][dn.id] = (claimMatrix[di.code][dn.id] || 0) + di.quantity
+      } else {
+        grossMatrix[di.code][dn.id] = (grossMatrix[di.code][dn.id] || 0) + di.quantity
       }
     }
   }
@@ -75,21 +83,31 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
   const hasExtraCharge = notes.some(dn => (dn.extraCharge || 0) > 0)
   const hasDiscount = notes.some(dn => (dn.discount || 0) > 0)
 
-  // Row totals (across all SDs)
-  const rowQty: Record<string, number> = {}
-  const rowAmt: Record<string, number> = {}
+  // Row totals — gross (pack) + claim (discount)
+  const rowQty: Record<string, number> = {}        // gross qty per item
+  const rowAmt: Record<string, number> = {}        // gross amount per item
+  const claimRowQty: Record<string, number> = {}   // claim qty per item
+  const claimRowAmt: Record<string, number> = {}   // claim amount per item (positive — display as -)
   for (const item of items) {
-    const qty = notes.reduce((s, dn) => s + (matrix[item.code][dn.id] || 0), 0)
-    rowQty[item.code] = qty
-    rowAmt[item.code] = qty * getPrice(item.code)
+    const grossQ = notes.reduce((s, dn) => s + (grossMatrix[item.code][dn.id] || 0), 0)
+    const claimQ = notes.reduce((s, dn) => s + (claimMatrix[item.code][dn.id] || 0), 0)
+    const price = getPrice(item.code)
+    rowQty[item.code] = grossQ
+    rowAmt[item.code] = grossQ * price
+    claimRowQty[item.code] = claimQ
+    claimRowAmt[item.code] = claimQ * price
   }
+  // Items ที่มี claim — แสดงใน section แยก
+  const claimItems = items.filter(i => claimRowQty[i.code] > 0)
 
-  // Total amount per SD (items × price + transport fees + adjustments)
+  // Total amount per SD — net (gross - claim) × price + fees
   const dnTotals: Record<string, number> = {}
   for (const dn of notes) {
     let total = 0
     for (const item of items) {
-      total += (matrix[item.code][dn.id] || 0) * getPrice(item.code)
+      const price = getPrice(item.code)
+      total += (grossMatrix[item.code][dn.id] || 0) * price
+      total -= (claimMatrix[item.code][dn.id] || 0) * price
     }
     total += dn.transportFeeTrip || 0
     total += dn.transportFeeMonth || 0
@@ -104,8 +122,10 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
   const totalExtraCharge = notes.reduce((s, dn) => s + (dn.extraCharge || 0), 0)
   const totalDiscount = notes.reduce((s, dn) => s + (dn.discount || 0), 0)
 
-  // Financial totals
-  const itemSubtotal = Object.values(rowAmt).reduce((s, v) => s + v, 0)
+  // Financial totals — 312: claim ลบจาก gross ก่อนคำนวณ subtotal (ตรงกับ dnTotals + WB/IV)
+  const itemSubtotalGross = Object.values(rowAmt).reduce((s, v) => s + v, 0)
+  const totalClaimAmt = Object.values(claimRowAmt).reduce((s, v) => s + v, 0)
+  const itemSubtotal = itemSubtotalGross - totalClaimAmt
   const subtotal = itemSubtotal + totalTransportTrip + totalTransportMonth + totalExtraCharge - totalDiscount
   const vat = customer.enableVat ? Math.round(subtotal * 0.07 * 100) / 100 : 0
   const totalWithVat = subtotal + vat
@@ -205,7 +225,8 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                 </tr>
               </thead>
               <tbody>
-                {/* Item rows — รวม/เป็นเงิน คอลัม แสดงยอดทั้งเดือน (context เต็มทุกหน้า) */}
+                {/* Item rows — 312: gross qty (ผ้าส่งคืนจริง) — ไม่หักเคลม
+                    ลูกค้าสามารถ track จำนวนผ้าที่ส่งกลับจริงจากแถวนี้ได้เลย */}
                 {items.map((item, idx) => (
                   <tr key={item.code}>
                     <td style={tdC}>{idx + 1}</td>
@@ -215,7 +236,7 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                     <td style={tdR}>{fmtN(rowQty[item.code])}</td>
                     <td style={tdR}>{rowAmt[item.code] ? fmtM(rowAmt[item.code]) : ''}</td>
                     {chunk.map(dn => {
-                      const v = matrix[item.code][dn.id]
+                      const v = grossMatrix[item.code][dn.id]
                       return (
                         <td key={dn.id} style={tdSdInt}>
                           {v ? v : ''}
@@ -224,6 +245,41 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                     })}
                   </tr>
                 ))}
+
+                {/* 312: ส่วนลดทางบัญชี (เคลม) — section แยกใต้ item rows ถ้ามี claim */}
+                {claimItems.length > 0 && (
+                  <>
+                    <tr>
+                      <td colSpan={5 + chunk.length} style={{
+                        ...tdL, fontSize: '7pt', fontWeight: 'bold',
+                        backgroundColor: '#fef3e9', color: '#9a3412',
+                        borderTop: '1px solid #fb923c', borderBottom: '0.5px solid #fb923c',
+                        paddingTop: '3px', paddingBottom: '3px',
+                      }}>
+                        ส่วนลดทางบัญชี (เคลม) — ลูกค้าได้ผ้าซักใหม่ทดแทน · ไม่ใช่ผ้าใหม่ส่งคืน
+                      </td>
+                    </tr>
+                    {claimItems.map(item => (
+                      <tr key={`claim-${item.code}`} style={{ backgroundColor: '#fff7ed' }}>
+                        <td style={tdC}></td>
+                        <td style={tdL}>{item.name} <span style={{ color: '#9a3412', fontSize: '6pt' }}>(เคลม)</span></td>
+                        <td style={tdR}>{fmtM(getPrice(item.code))}</td>
+                        <td style={{ ...tdR, color: '#9a3412' }}>{fmtN(claimRowQty[item.code])}</td>
+                        <td style={{ ...tdR, color: '#9a3412' }}>
+                          {claimRowAmt[item.code] ? `-${fmtM(claimRowAmt[item.code])}` : ''}
+                        </td>
+                        {chunk.map(dn => {
+                          const v = claimMatrix[item.code][dn.id]
+                          return (
+                            <td key={dn.id} style={{ ...tdSdInt, color: '#9a3412' }}>
+                              {v ? `-${v}` : ''}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </>
+                )}
 
                 {/* ค่ารถ (ครั้ง) row */}
                 {hasTransportTrip && (
