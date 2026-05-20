@@ -256,7 +256,7 @@ export default function MonthlyConsolidationPrint({ customer, month, deliveryNot
                         borderTop: '1px solid #fb923c', borderBottom: '0.5px solid #fb923c',
                         paddingTop: '3px', paddingBottom: '3px',
                       }}>
-                        ส่วนลดทางบัญชี (เคลม) — ลูกค้าได้ผ้าซักใหม่ทดแทน · ไม่ใช่ผ้าใหม่ส่งคืน
+                        ส่วนลดทางบัญชี (เคลม) — ค่าซักที่ลดคืนกลับให้ในวันที่ส่งมาเคลม · ไม่ใช่จำนวนผ้าเคลมที่ส่งคืน
                       </td>
                     </tr>
                     {claimItems.map(item => (
