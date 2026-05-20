@@ -176,8 +176,12 @@ export default function PriceAudit() {
           label="Critical"
           value={stats.critical}
           color="red"
+          // 306: exclusive — set ครบทุก filter ทุกครั้ง กัน state ค้าง
           active={severity === 'critical'}
-          onClick={() => setSeverity(severity === 'critical' ? 'all' : 'critical')}
+          onClick={() => {
+            if (severity === 'critical') { setSeverity('all'); setReason('all'); setShowOk(false) }
+            else { setSeverity('critical'); setReason('all'); setShowOk(false) }
+          }}
           sub="ออกบิลแล้ว + ราคาผิด"
         />
         <StatCard
@@ -186,7 +190,10 @@ export default function PriceAudit() {
           value={stats.high}
           color="orange"
           active={severity === 'high'}
-          onClick={() => setSeverity(severity === 'high' ? 'all' : 'high')}
+          onClick={() => {
+            if (severity === 'high') { setSeverity('all'); setReason('all'); setShowOk(false) }
+            else { setSeverity('high'); setReason('all'); setShowOk(false) }
+          }}
           sub="ยังไม่ออกบิล"
         />
         <StatCard
@@ -299,20 +306,11 @@ export default function PriceAudit() {
             <option value="zero_price">{REASON_CONFIG.zero_price.icon} ราคา 0</option>
             <option value="orphan_item">{REASON_CONFIG.orphan_item.icon} ไม่อยู่ใน QT</option>
             <option value="no_qt">{REASON_CONFIG.no_qt.icon} ไม่มี QT</option>
-            {showOk && <option value="ok">{REASON_CONFIG.ok.icon} ราคาตรง</option>}
+            <option value="ok">{REASON_CONFIG.ok.icon} ราคาตรง</option>
           </select>
-          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showOk}
-              onChange={e => setShowOk(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]"
-            />
-            แสดงรายการที่ราคาตรง
-          </label>
-          <span className="text-xs text-slate-400">
-            แสดง {sortedRows.length} จาก {stats.total - (showOk ? 0 : stats.ok)} รายการ
-          </span>
+          {/* 306: ลบ checkbox + toolbar count — confusing & duplicate
+              ใช้ stat cards เป็น single control: OK card = ดูเฉพาะ OK · ตรวจแล้ว = ทั้งหมด
+              FloatingTotalBar (ล่างจอ) แสดง count แทน */}
         </div>
         <button
           onClick={handleExportCSV}

@@ -149,13 +149,26 @@ export default function WBAudit() {
       {/* Stats cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <StatCard icon={<AlertOctagon className="w-4 h-4" />} label="Critical" value={stats.critical} color="red"
-          active={severity === 'critical'} onClick={() => setSeverity(severity === 'critical' ? 'all' : 'critical')}
+          // 306: exclusive — set ครบทุก filter
+          active={severity === 'critical'}
+          onClick={() => {
+            if (severity === 'critical') { setSeverity('all'); setReason('all'); setShowOk(false) }
+            else { setSeverity('critical'); setReason('all'); setShowOk(false) }
+          }}
           sub="data integrity ผิด" />
         <StatCard icon={<AlertTriangle className="w-4 h-4" />} label="High" value={stats.high} color="orange"
-          active={severity === 'high'} onClick={() => setSeverity(severity === 'high' ? 'all' : 'high')}
+          active={severity === 'high'}
+          onClick={() => {
+            if (severity === 'high') { setSeverity('all'); setReason('all'); setShowOk(false) }
+            else { setSeverity('high'); setReason('all'); setShowOk(false) }
+          }}
           sub="ดูได้แต่ต้องแก้" />
         <StatCard icon={<AlertTriangle className="w-4 h-4" />} label="Warning" value={stats.warning} color="amber"
-          active={severity === 'warning'} onClick={() => setSeverity(severity === 'warning' ? 'all' : 'warning')}
+          active={severity === 'warning'}
+          onClick={() => {
+            if (severity === 'warning') { setSeverity('all'); setReason('all'); setShowOk(false) }
+            else { setSeverity('warning'); setReason('all'); setShowOk(false) }
+          }}
           sub="ตรวจดู ไม่ critical" />
         <StatCard icon={<CheckCircle2 className="w-4 h-4" />} label="OK" value={stats.ok} color="emerald"
           // 305: คลิก OK = ดูเฉพาะ OK rows (severity='info') — exclusive กับ ตรวจแล้ว
@@ -216,14 +229,7 @@ export default function WBAudit() {
             <CustomerPicker value={customerId === 'all' ? '' : customerId}
               onChange={(id) => setCustomerId(id || 'all')} allowAll />
           </div>
-          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
-            <input type="checkbox" checked={showOk} onChange={e => setShowOk(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
-            แสดง WB ที่ผ่าน
-          </label>
-          <span className="text-xs text-slate-400">
-            แสดง {sortedRows.length} จาก {stats.total - (showOk ? 0 : stats.ok)} รายการ
-          </span>
+          {/* 306: ลบ checkbox + toolbar count — ใช้ stat cards เป็น single control */}
         </div>
         <button onClick={handleExportCSV} disabled={sortedRows.length === 0}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed">

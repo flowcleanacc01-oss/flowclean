@@ -153,7 +153,11 @@ export default function SDAudit() {
           value={stats.critical}
           color="red"
           active={severity === 'critical'}
-          onClick={() => setSeverity(severity === 'critical' ? 'all' : 'critical')}
+          // 306: exclusive — set ครบทุก filter
+          onClick={() => {
+            if (severity === 'critical') { setSeverity('all'); setReason('all'); setShowOk(false) }
+            else { setSeverity('critical'); setReason('all'); setShowOk(false) }
+          }}
           sub="ออกบิลแล้ว + integrity ผิด"
         />
         <StatCard
@@ -162,7 +166,10 @@ export default function SDAudit() {
           value={stats.high}
           color="orange"
           active={severity === 'high'}
-          onClick={() => setSeverity(severity === 'high' ? 'all' : 'high')}
+          onClick={() => {
+            if (severity === 'high') { setSeverity('all'); setReason('all'); setShowOk(false) }
+            else { setSeverity('high'); setReason('all'); setShowOk(false) }
+          }}
           sub="ยังไม่ออกบิล"
         />
         <StatCard
@@ -171,7 +178,10 @@ export default function SDAudit() {
           value={stats.warning}
           color="amber"
           active={severity === 'warning'}
-          onClick={() => setSeverity(severity === 'warning' ? 'all' : 'warning')}
+          onClick={() => {
+            if (severity === 'warning') { setSeverity('all'); setReason('all'); setShowOk(false) }
+            else { setSeverity('warning'); setReason('all'); setShowOk(false) }
+          }}
           sub="ตรวจดู ไม่ critical"
         />
         <StatCard
@@ -255,18 +265,7 @@ export default function SDAudit() {
               allowAll
             />
           </div>
-          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showOk}
-              onChange={e => setShowOk(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]"
-            />
-            แสดง SD ที่ผ่าน
-          </label>
-          <span className="text-xs text-slate-400">
-            แสดง {sortedRows.length} จาก {stats.total - (showOk ? 0 : stats.ok)} รายการ
-          </span>
+          {/* 306: ลบ checkbox + toolbar count — ใช้ stat cards เป็น single control */}
         </div>
         <button
           onClick={handleExportCSV}
