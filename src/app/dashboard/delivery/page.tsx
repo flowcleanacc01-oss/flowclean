@@ -12,7 +12,7 @@ import FindableText from '@/components/FindableText'
 import { type DeliveryNoteItem, type DeliveryNote, type LinenForm, LINEN_FORM_STATUS_CONFIG } from '@/types'
 import { calculateTransportFeeTrip, calculateDNSubtotal, recalcMonthFeeForCustomerMonth } from '@/lib/transport-fee'
 import { sortByQTOrder } from '@/lib/sort-by-qt'
-import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2, ArrowUpDown, Sparkles } from 'lucide-react'
+import { Plus, Search, X, FileDown, Check, ExternalLink, Printer, Trash2, ArrowUpDown, Sparkles, Loader2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
@@ -55,6 +55,8 @@ export default function DeliveryPage() {
   const [qpDateMode, setQpDateMode] = useState<'this_month' | 'last_30d' | 'all'>('this_month')
   const [qpShowPrinted, setQpShowPrinted] = useState(false)
   const [quickPrintTarget, setQuickPrintTarget] = useState<{ customerIds: string[]; mode: 'single' | 'multi' } | null>(null)
+  // 308: contentReady — block user click ก่อน DOM render เสร็จ (กัน blank print preview ครั้งแรก)
+  const [quickPrintReady, setQuickPrintReady] = useState(false)
   const searchParams = useSearchParams()
   const router = useRouter()
   const urlHighlightQ = searchParams.get('q') || '' // 147.2
@@ -333,6 +335,49 @@ export default function DeliveryPage() {
     }
     return map
   }, [deliveryNotes, qpDateMode, qpShowPrinted])
+
+  // 308: Quick Print groups + priceMap per customer — memoize เลี่ยง re-compute ทุก render
+  //   ก่อน: buildPriceMapFromQT() ถูกเรียก N ครั้งต่อ SD (slow content render)
+  //   หลัง: compute ครั้งเดียวต่อ customer
+  const quickPrintGroups = useMemo(() => {
+    if (!quickPrintTarget) return []
+    return quickPrintTarget.customerIds.map(cid => {
+      const c = getCustomer(cid)
+      const bucket = printableByCustomer.get(cid)
+      return c && bucket ? { customer: c, dns: bucket.all } : null
+    }).filter((g): g is NonNullable<typeof g> => g !== null)
+      .sort((a, b) => (a.customer.shortName || a.customer.name).localeCompare(b.customer.shortName || b.customer.name))
+  }, [quickPrintTarget, printableByCustomer, getCustomer])
+
+  const quickPrintPriceMaps = useMemo(() => {
+    const map = new Map<string, Record<string, number>>()
+    for (const g of quickPrintGroups) {
+      if (!map.has(g.customer.id)) {
+        map.set(g.customer.id, buildPriceMapFromQT(g.customer.id, quotations))
+      }
+    }
+    return map
+  }, [quickPrintGroups, quotations])
+
+  // 308: contentReady tracking — ใช้ 2× rAF + 150ms buffer ให้ paint frame commit จริงก่อน enable print
+  useEffect(() => {
+    if (!quickPrintTarget) {
+      setQuickPrintReady(false)
+      return
+    }
+    setQuickPrintReady(false)
+    let raf1 = 0, raf2 = 0, timer = 0
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        timer = window.setTimeout(() => setQuickPrintReady(true), 150)
+      })
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+      clearTimeout(timer)
+    }
+  }, [quickPrintTarget])
 
   // 122.4.1: Stuck LFs — ยังไม่ถึง 7/7 + customer เดียวกัน (ไม่มี SD ผูกแล้ว)
   const stuckFormsForCustomer = useMemo(() => {
@@ -2580,13 +2625,8 @@ export default function DeliveryPage() {
       } size="xl" className="print-target">
         {(() => {
           if (!quickPrintTarget) return null
-          const groups = quickPrintTarget.customerIds.map(cid => {
-            const c = getCustomer(cid)
-            const bucket = printableByCustomer.get(cid)
-            return c && bucket ? { customer: c, dns: bucket.all } : null
-          }).filter((g): g is NonNullable<typeof g> => g !== null)
-            .sort((a, b) => (a.customer.shortName || a.customer.name).localeCompare(b.customer.shortName || b.customer.name))
-
+          // 308: use memoized groups + priceMaps (compute ครั้งเดียว, ไม่ใช่ทุก render)
+          const groups = quickPrintGroups
           const allDnIds = groups.flatMap(g => g.dns.map(d => d.id))
           const allPrinted = allDnIds.length > 0 && allDnIds.every(id => deliveryNotes.find(d => d.id === id)?.isPrinted)
           const totalCount = allDnIds.length
@@ -2596,7 +2636,17 @@ export default function DeliveryPage() {
           }
 
           return (
-            <div className="space-y-4">
+            <div className="space-y-4 relative">
+              {/* 308: Loading overlay — block user click จน DOM render + paint commit เสร็จ */}
+              {!quickPrintReady && (
+                <div className="absolute inset-0 z-10 bg-white/85 flex items-center justify-center no-print">
+                  <div className="text-center">
+                    <Loader2 className="w-10 h-10 text-[#3DD8D8] animate-spin mx-auto mb-3" />
+                    <div className="text-sm font-medium text-slate-700">กำลังเตรียมเอกสาร...</div>
+                    <div className="text-xs text-slate-400 mt-1">รอสักครู่ก่อนกดพิมพ์ — {totalCount} ใบ</div>
+                  </div>
+                </div>
+              )}
               <div id="print-quick-dn">
                 {groups.map((g, gIdx) => (
                   <div key={g.customer.id}>
@@ -2625,7 +2675,7 @@ export default function DeliveryPage() {
                           <div style={{ pageBreakBefore: 'always' }} />
                         )}
                         <DeliveryNotePrint note={dn} customer={g.customer} company={companyInfo} catalog={linenCatalog}
-                          priceMap={buildPriceMapFromQT(g.customer.id, quotations)} idSuffix={dn.id} />
+                          priceMap={quickPrintPriceMaps.get(g.customer.id) || {}} idSuffix={dn.id} />
                       </div>
                     ))}
                   </div>
