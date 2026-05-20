@@ -23,12 +23,13 @@ import PriceAudit from '@/components/PriceAudit'
 import SDAudit from '@/components/SDAudit'
 import WBAudit from '@/components/WBAudit'
 import CarryDriftAudit from '@/components/CarryDriftAudit'
+import MonthlyClosingChecklist from '@/components/MonthlyClosingChecklist'
 import ExecutiveDashboard from '@/components/executive/ExecutiveDashboard'
 import type { CarryOverMode, CarryOverAdjustment, BillingStatement } from '@/types'
 
-type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'sdaudit' | 'wbaudit' | 'driftaudit' | 'executive'
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'sdaudit' | 'wbaudit' | 'driftaudit' | 'closing' | 'executive'
 
-const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'sdaudit', 'wbaudit', 'driftaudit', 'executive'] as const
+const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'sdaudit', 'wbaudit', 'driftaudit', 'closing', 'executive'] as const
 
 export default function ReportsPage() {
   const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations, carryOverAdjustments, deleteCarryOverAdjustment } = useStore()
@@ -94,6 +95,7 @@ export default function ReportsPage() {
     { key: 'sdaudit', label: '🔍 SD Audit' },
     { key: 'wbaudit', label: '🔍 WB Audit' },
     { key: 'driftaudit', label: '🔍 Drift Audit' },
+    { key: 'closing', label: '📋 Closing' },
     ...(canViewExecutiveDashboard(currentUser) ? [{ key: 'executive' as TabKey, label: '✨ Executive' }] : []),
   ]
 
@@ -1217,6 +1219,7 @@ export default function ReportsPage() {
       {tab === 'sdaudit' && <SDAudit />}
       {tab === 'wbaudit' && <WBAudit />}
       {tab === 'driftaudit' && <CarryDriftAudit />}
+      {tab === 'closing' && <MonthlyClosingChecklist />}
 
       {/* 220: Executive Dashboard — admin only */}
       {tab === 'executive' && <ExecutiveDashboard />}
