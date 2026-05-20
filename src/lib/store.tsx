@@ -209,6 +209,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   //    ทำให้ assign-inside-updater pattern อ่านค่า [] เมื่อ caller return)
   const deliveryNotesRef = useRef<DeliveryNote[]>([])
   deliveryNotesRef.current = deliveryNotes
+  // Internal audit: billingStatementsRef — same closure-stale fix สำหรับ Quick Batch WB
+  //   (Phase B: addBillingStatement ถูกเรียกใน loop ต่อลูกค้า → ถ้าใช้ closure จะ gen WB number ซ้ำ)
+  const billingStatementsRef = useRef<BillingStatement[]>([])
+  billingStatementsRef.current = billingStatements
 
   // Keep ref in sync for use in callbacks without dependency
   useEffect(() => { currentUserRef.current = currentUser }, [currentUser])
@@ -567,14 +571,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // ---- Billing Statements ----
   const addBillingStatement = useCallback((b: Omit<BillingStatement, 'id' | 'billingNumber'>): BillingStatement => {
-    const newBS: BillingStatement = { ...b, id: genId(), billingNumber: genBillingNumber(billingStatements.map(x => x.billingNumber)) }
+    // Audit fix (post-Phase-B): ใช้ ref แทน closure — กัน billingNumber ซ้ำเมื่อ caller loop
+    //   (Quick Batch WB เรียก add ซ้ำต่อลูกค้า — closure stale = WB ซ้ำ pattern เดียวกับ Fix 295)
+    const current = billingStatementsRef.current
+    const newBS: BillingStatement = {
+      ...b, id: genId(),
+      billingNumber: genBillingNumber(current.map(x => x.billingNumber)),
+    }
+    billingStatementsRef.current = [newBS, ...current]
     setBillingStatements(prev => [newBS, ...prev])
     dbSave(db.insertBillingStatement(newBS), () => {
-      setBillingStatements(prev => prev.filter(x => x.id !== newBS.id))
+      const failedId = newBS.id
+      billingStatementsRef.current = billingStatementsRef.current.filter(x => x.id !== failedId)
+      setBillingStatements(prev => prev.filter(x => x.id !== failedId))
     })
     logAudit('create', 'billing', newBS.id, newBS.billingNumber)
     return newBS
-  }, [logAudit, billingStatements])
+  }, [logAudit])
 
   const updateBillingStatus = useCallback((id: string, status: BillingStatus, paidDate?: string) => {
     let resolvedPaidAmount: number | undefined
