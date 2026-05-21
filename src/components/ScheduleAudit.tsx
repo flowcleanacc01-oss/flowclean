@@ -11,13 +11,14 @@
  * - Migration section: "ต้อง tag extra round" (วันที่มี SD ≥ 2 ที่ทั้งหมด isExtraRound=false)
  */
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
 import { runScheduleAudit, findMultipleRegularGroups, type ScheduleAuditDayResult } from '@/lib/schedule-audit'
 import { formatDate, cn, startOfMonthISO, endOfMonthISO } from '@/lib/utils'
 import DateFilter from '@/components/DateFilter'
+import CustomerPicker from '@/components/CustomerPicker'
 import {
   CalendarClock, CheckCircle2, AlertTriangle, AlertOctagon, Settings,
   ExternalLink, Sparkles, Calendar,
@@ -57,14 +58,34 @@ export default function ScheduleAudit() {
   const [dateTo, setDateTo] = useState<string>(() => endOfMonthISO())
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')
 
-  // Auto-select customer จาก URL → fallback → first setup customer
+  // 319: Initialize ONCE — URL customerId → fallback first setup customer
+  // เดิม: useEffect รันทุก render → override user selection (bug)
+  const initializedRef = useRef(false)
   useEffect(() => {
+    if (initializedRef.current) return
+    if (setupCustomers.length === 0) return
+    initializedRef.current = true
     if (urlCustomerId && setupCustomers.some(c => c.id === urlCustomerId)) {
       setCustomerId(urlCustomerId)
-    } else if (!customerId && setupCustomers.length > 0) {
+    } else {
       setCustomerId(setupCustomers[0].id)
     }
-  }, [urlCustomerId, setupCustomers, customerId])
+  }, [urlCustomerId, setupCustomers])
+
+  // 319: ถ้า customer ถูกลบ schedule (ไม่อยู่ใน setupCustomers แล้ว) → reset เป็นรายแรก
+  useEffect(() => {
+    if (!customerId || setupCustomers.length === 0) return
+    if (!setupCustomers.some(c => c.id === customerId)) {
+      setCustomerId(setupCustomers[0].id)
+    }
+  }, [customerId, setupCustomers])
+
+  // 319: filter สำหรับ CustomerPicker — เฉพาะลูกค้าที่ setup schedule แล้ว
+  const setupCustomerIds = useMemo(() => new Set(setupCustomers.map(c => c.id)), [setupCustomers])
+  const pickerFilter = useMemo(
+    () => (c: { id: string }) => setupCustomerIds.has(c.id),
+    [setupCustomerIds],
+  )
 
   const selectedCustomer = customerId ? getCustomer(customerId) : null
 
@@ -136,17 +157,14 @@ export default function ScheduleAudit() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">ลูกค้า</label>
-            <select
+            <CustomerPicker
               value={customerId}
-              onChange={e => setCustomerId(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-[#3DD8D8] focus:ring-1 focus:ring-[#3DD8D8]"
-            >
-              {setupCustomers.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.shortName || c.name} · {SCHEDULE_TYPE_CONFIG[c.scheduleType || 'none'].label}
-                </option>
-              ))}
-            </select>
+              onChange={setCustomerId}
+              allowAll={false}
+              filter={pickerFilter}
+              placeholder="เลือกลูกค้าที่ตั้ง schedule"
+              fullWidth
+            />
           </div>
           <div className="md:col-span-2">
             <DateFilter
