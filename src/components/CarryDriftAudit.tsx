@@ -14,15 +14,35 @@ import {
   type CarryDriftSeverity,
   type CarryDriftReason,
 } from '@/lib/use-carry-drift-audit'
+import { useStore } from '@/lib/store'
 import { exportCSV } from '@/lib/export'
-import { cn, startOfMonthISO, endOfMonthISO, formatExportFilename } from '@/lib/utils'
+import { cn, startOfMonthISO, endOfMonthISO, formatExportFilename, formatDate } from '@/lib/utils'
 import DateFilter from '@/components/DateFilter'
 import CustomerPicker from '@/components/CustomerPicker'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
+import Modal from '@/components/Modal'
+import { groupCarryOver, customerUsesAggregateGroups } from '@/lib/carry-over-groups'
 import {
   Search, AlertTriangle, AlertOctagon, CheckCircle2, FileSpreadsheet,
-  ShieldCheck, Eye, ArrowUpDown, ChevronDown, ChevronUp,
+  ShieldCheck, Eye, ArrowUpDown, ChevronDown, ChevronUp, ExternalLink,
+  Package, BarChart3,
 } from 'lucide-react'
+import Link from 'next/link'
+import type { CarryOverMode } from '@/types'
+
+interface DrillDownTarget {
+  customerId: string
+  customerShortName: string
+  customerName: string
+  workflowMode: string
+  lfCount: number
+  type1Count: number
+  type2Count: number
+  discrepancyRatio: number
+  cumulativeBalance: number
+  modeBalances: { 1: number; 2: number; 3: number; 4: number }
+  modeSpread: number
+}
 
 type SortCol = 'severity' | 'customer' | 'lfCount' | 'discPct' | 'balance' | 'spread'
 type SortDir = 'asc' | 'desc'
@@ -40,6 +60,8 @@ export default function CarryDriftAudit() {
 
   const [sortCol, setSortCol] = useState<SortCol>('severity')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  // 315.D: Drill-down modal — เปิดเมื่อคลิกตัวเลข "ค้างรวม"
+  const [drillDown, setDrillDown] = useState<DrillDownTarget | null>(null)
 
   const INITIAL_VISIBLE = 200
   const LOAD_MORE_STEP = 200
@@ -238,12 +260,52 @@ export default function CarryDriftAudit() {
                     <div className="text-[10px] text-slate-400">T1:{r.type1Count} T2:{r.type2Count}</div>
                   </td>
                   <td className="px-2 py-2 text-right text-xs font-mono">
-                    <span className={cn(r.cumulativeBalance > 500 ? 'text-red-600 font-bold' : r.cumulativeBalance > 200 ? 'text-orange-600' : 'text-slate-700')}>
+                    <button
+                      type="button"
+                      onClick={() => setDrillDown({
+                        customerId: r.customerId,
+                        customerShortName: r.customerShortName,
+                        customerName: r.customerName,
+                        workflowMode: r.workflowMode,
+                        lfCount: r.lfCount,
+                        type1Count: r.type1Count,
+                        type2Count: r.type2Count,
+                        discrepancyRatio: r.discrepancyRatio,
+                        cumulativeBalance: r.cumulativeBalance,
+                        modeBalances: r.modeBalances,
+                        modeSpread: r.modeSpread,
+                      })}
+                      title="ดู breakdown code-by-code"
+                      className={cn(
+                        'inline-flex items-center gap-1 hover:underline cursor-pointer',
+                        r.cumulativeBalance > 500 ? 'text-red-600 font-bold' : r.cumulativeBalance > 200 ? 'text-orange-600' : 'text-slate-700',
+                      )}
+                    >
                       {r.cumulativeBalance.toLocaleString()}
-                    </span>
+                      <BarChart3 className="w-3 h-3 opacity-60" />
+                    </button>
                   </td>
-                  <td className="px-2 py-2 text-right text-xs font-mono text-slate-600">
-                    {r.modeSpread.toLocaleString()}
+                  <td className="px-2 py-2 text-right text-xs font-mono">
+                    <button
+                      type="button"
+                      onClick={() => setDrillDown({
+                        customerId: r.customerId,
+                        customerShortName: r.customerShortName,
+                        customerName: r.customerName,
+                        workflowMode: r.workflowMode,
+                        lfCount: r.lfCount,
+                        type1Count: r.type1Count,
+                        type2Count: r.type2Count,
+                        discrepancyRatio: r.discrepancyRatio,
+                        cumulativeBalance: r.cumulativeBalance,
+                        modeBalances: r.modeBalances,
+                        modeSpread: r.modeSpread,
+                      })}
+                      title="ดู 4-mode breakdown"
+                      className="text-slate-600 hover:underline cursor-pointer"
+                    >
+                      {r.modeSpread.toLocaleString()}
+                    </button>
                   </td>
                   <td className="px-3 py-2">
                     {r.issues.length === 0 ? (
@@ -300,6 +362,287 @@ export default function CarryDriftAudit() {
           )}
         </span>
       </FloatingTotalBar>
+
+      {/* 315.D: Drill-down modal — code-by-code breakdown + 4-mode comparison */}
+      <Modal
+        open={!!drillDown}
+        onClose={() => setDrillDown(null)}
+        title={drillDown ? `Drift Breakdown — ${drillDown.customerShortName}` : ''}
+        size="xl"
+      >
+        {drillDown && (
+          <DriftBreakdownContent
+            target={drillDown}
+            dateTo={dateTo}
+            onClose={() => setDrillDown(null)}
+          />
+        )}
+      </Modal>
+    </div>
+  )
+}
+
+// 315.D: Drill-down content — refetches carry-over per mode + group by sizeGroup
+function DriftBreakdownContent({
+  target,
+  dateTo,
+  onClose,
+}: {
+  target: DrillDownTarget
+  dateTo: string
+  onClose: () => void
+}) {
+  const { getCustomer, getCarryOver, linenCatalog } = useStore()
+  const [selectedMode, setSelectedMode] = useState<CarryOverMode>(1)
+
+  const customer = getCustomer(target.customerId)
+  const cutoffEnd = useMemo(() => {
+    const d = new Date(dateTo || new Date().toISOString().slice(0, 10))
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().slice(0, 10)
+  }, [dateTo])
+
+  // Fetch all 4 modes
+  const allModes = useMemo(() => {
+    return {
+      1: getCarryOver(target.customerId, cutoffEnd, 1),
+      2: getCarryOver(target.customerId, cutoffEnd, 2),
+      3: getCarryOver(target.customerId, cutoffEnd, 3),
+      4: getCarryOver(target.customerId, cutoffEnd, 4),
+    } as Record<CarryOverMode, Record<string, number>>
+  }, [getCarryOver, target.customerId, cutoffEnd])
+
+  // Group by sizeGroup สำหรับ selected mode (ถ้า customer opt-in)
+  const grouped = useMemo(() => {
+    if (!customer) return { groups: [], ungrouped: [] }
+    return groupCarryOver(allModes[selectedMode], customer, linenCatalog)
+  }, [allModes, selectedMode, customer, linenCatalog])
+
+  const useGroupView = customer ? customerUsesAggregateGroups(customer) : false
+
+  // Stats per mode (รวม |abs| + net + count)
+  const modeStats = useMemo(() => {
+    const result: Record<CarryOverMode, { absSum: number; netSum: number; count: number }> = {
+      1: { absSum: 0, netSum: 0, count: 0 },
+      2: { absSum: 0, netSum: 0, count: 0 },
+      3: { absSum: 0, netSum: 0, count: 0 },
+      4: { absSum: 0, netSum: 0, count: 0 },
+    }
+    for (const mode of [1, 2, 3, 4] as CarryOverMode[]) {
+      const carry = allModes[mode]
+      for (const v of Object.values(carry)) {
+        if (v === 0) continue
+        result[mode].absSum += Math.abs(v)
+        result[mode].netSum += v
+        result[mode].count++
+      }
+    }
+    return result
+  }, [allModes])
+
+  return (
+    <div className="space-y-4">
+      {/* Header info */}
+      <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+          <div>
+            <div className="text-[10px] text-slate-500 uppercase tracking-wide">Workflow</div>
+            <div className="font-semibold text-slate-700 mt-0.5">
+              {target.workflowMode === 'trust_customer' ? '✅ Trust' : '🔄 Cross-check'}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-500 uppercase tracking-wide">LF ทั้งช่วง</div>
+            <div className="font-semibold text-slate-700 mt-0.5">{target.lfCount.toLocaleString()} ใบ</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-500 uppercase tracking-wide">นับไม่ตรง</div>
+            <div className={cn('font-semibold mt-0.5',
+              target.discrepancyRatio > 0.3 ? 'text-red-600' : target.discrepancyRatio > 0.1 ? 'text-orange-600' : 'text-slate-700',
+            )}>
+              {(target.discrepancyRatio * 100).toFixed(1)}%
+              <span className="text-[10px] text-slate-400 ml-1">T1:{target.type1Count} T2:{target.type2Count}</span>
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-500 uppercase tracking-wide">Mode spread</div>
+            <div className="font-semibold text-slate-700 mt-0.5">{target.modeSpread.toLocaleString()}</div>
+          </div>
+        </div>
+        <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-3 text-xs">
+          <Link
+            href={`/dashboard/customers/${target.customerId}`}
+            onClick={onClose}
+            className="inline-flex items-center gap-1 text-[#1B3A5C] hover:underline font-medium"
+          >
+            <ExternalLink className="w-3 h-3" />เปิดหน้าลูกค้า
+          </Link>
+          <Link
+            href={`/dashboard/reports?tab=carryover&customerId=${target.customerId}`}
+            onClick={onClose}
+            className="inline-flex items-center gap-1 text-[#1B3A5C] hover:underline font-medium"
+          >
+            <ExternalLink className="w-3 h-3" />รายงานผ้าค้าง (drill-down เต็ม)
+          </Link>
+        </div>
+      </div>
+
+      {/* 4-mode comparison tabs */}
+      <div>
+        <div className="text-xs font-semibold text-slate-600 mb-2">เปรียบเทียบ 4 modes (ที่สิ้น {formatDate(dateTo)})</div>
+        <div className="grid grid-cols-4 gap-2">
+          {([1, 2, 3, 4] as CarryOverMode[]).map(mode => {
+            const stat = modeStats[mode]
+            const isActive = selectedMode === mode
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setSelectedMode(mode)}
+                className={cn(
+                  'rounded-lg border p-2.5 text-left transition-colors',
+                  isActive
+                    ? 'border-[#1B3A5C] bg-[#3DD8D8]/10 shadow-sm'
+                    : 'border-slate-200 bg-white hover:border-slate-300',
+                )}
+              >
+                <div className={cn('text-[10px] uppercase tracking-wide font-semibold',
+                  isActive ? 'text-[#1B3A5C]' : 'text-slate-500',
+                )}>
+                  Mode {mode}{mode === 1 && ' ⭐'}
+                </div>
+                <div className={cn('text-lg font-bold mt-0.5 font-mono',
+                  stat.absSum > 500 ? 'text-red-600' : stat.absSum > 200 ? 'text-orange-600' : 'text-slate-700',
+                )}>
+                  {stat.absSum.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  net: <span className={cn('font-mono', stat.netSum < 0 ? 'text-red-500' : 'text-emerald-600')}>
+                    {stat.netSum > 0 ? '+' : ''}{stat.netSum.toLocaleString()}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400">{stat.count} codes</div>
+              </button>
+            )
+          })}
+        </div>
+        <div className="mt-2 text-[10px] text-slate-500">
+          {selectedMode === 1 && 'Mode 1 (default): col6_แพคส่ง − col5_โรงซักนับเข้า'}
+          {selectedMode === 2 && 'Mode 2: col6_แพคส่ง − (col2_ลูกค้าส่ง + col3_เคลม)'}
+          {selectedMode === 3 && 'Mode 3: col4_ลูกค้านับกลับ − col5_โรงซักนับเข้า'}
+          {selectedMode === 4 && 'Mode 4: col4_ลูกค้านับกลับ − (col2_ลูกค้าส่ง + col3_เคลม)'}
+        </div>
+      </div>
+
+      {/* By-Group view (ถ้าลูกค้า opt-in) */}
+      {useGroupView && grouped.groups.length > 0 && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50/30 p-3">
+          <div className="text-xs font-semibold text-indigo-900 mb-2 flex items-center gap-1.5">
+            <Package className="w-3.5 h-3.5" />รวมกลุ่ม (sum = ค้าง/คืนจริง)
+          </div>
+          <div className="space-y-1.5">
+            {grouped.groups.map(grp => (
+              <details key={grp.groupKey} className="rounded-lg bg-white border border-indigo-100 overflow-hidden">
+                <summary className="cursor-pointer px-3 py-2 hover:bg-indigo-50 list-none flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-indigo-700 text-xs">{grp.groupKey}</span>
+                    <span className="text-[10px] text-slate-500">{grp.items.length} ไซส์</span>
+                  </span>
+                  <span className={cn(
+                    'font-bold font-mono',
+                    grp.netCarry < 0 ? 'text-red-600' : 'text-emerald-600',
+                  )}>
+                    {grp.netCarry > 0 ? '+' : ''}{grp.netCarry.toLocaleString()}
+                  </span>
+                </summary>
+                <div className="px-3 pb-2 pt-1 space-y-0.5 border-t border-indigo-100 text-xs">
+                  {grp.items.map(it => (
+                    <div key={it.code} className="flex justify-between py-0.5">
+                      <span className="text-slate-500 flex items-center gap-1.5">
+                        <code className="font-mono text-slate-400">{it.code}</code>
+                        <span className="truncate">{it.name}</span>
+                      </span>
+                      <span className={cn('font-medium font-mono', it.carry < 0 ? 'text-red-500' : 'text-emerald-600')}>
+                        {it.carry > 0 ? '+' : ''}{it.carry.toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* By-code list (ทุก code ที่ carry ≠ 0) */}
+      <div className="rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div className="text-xs font-semibold text-slate-700">
+            {useGroupView && grouped.ungrouped.length > 0 ? 'รายการนอกกลุ่ม' : 'แยกตาม code'}
+            <span className="text-[10px] text-slate-500 ml-2">
+              ({(useGroupView ? grouped.ungrouped : Object.entries(allModes[selectedMode]).filter(([, v]) => v !== 0)).length} codes)
+            </span>
+          </div>
+          <div className="text-[10px] text-slate-500">
+            Mode {selectedMode} · |abs sum| = <strong>{modeStats[selectedMode].absSum.toLocaleString()}</strong>
+          </div>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 sticky top-0">
+              <tr>
+                <th className="text-left px-3 py-1.5 font-medium text-slate-600 text-xs">Code</th>
+                <th className="text-left px-3 py-1.5 font-medium text-slate-600 text-xs">ชื่อ</th>
+                <th className="text-right px-3 py-1.5 font-medium text-slate-600 text-xs">Carry</th>
+                <th className="text-right px-3 py-1.5 font-medium text-slate-600 text-xs">|abs|</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(useGroupView ? grouped.ungrouped : Object.entries(allModes[selectedMode])
+                .filter(([, v]) => v !== 0)
+                .map(([code, carry]) => ({
+                  code,
+                  name: linenCatalog.find(i => i.code === code)?.name || code,
+                  carry,
+                }))
+              ).length === 0 ? (
+                <tr><td colSpan={4} className="text-center py-6 text-slate-400 text-xs">ไม่มีรายการนอกกลุ่ม</td></tr>
+              ) : (
+                (useGroupView ? grouped.ungrouped : Object.entries(allModes[selectedMode])
+                  .filter(([, v]) => v !== 0)
+                  .map(([code, carry]) => ({
+                    code,
+                    name: linenCatalog.find(i => i.code === code)?.name || code,
+                    carry,
+                  }))
+                ).sort((a, b) => Math.abs(b.carry) - Math.abs(a.carry)).map(it => (
+                  <tr key={it.code} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{it.code}</td>
+                    <td className="px-3 py-1.5 text-slate-700 text-xs truncate">{it.name}</td>
+                    <td className={cn('px-3 py-1.5 text-right font-mono text-xs font-medium',
+                      it.carry < 0 ? 'text-red-600' : 'text-emerald-600',
+                    )}>
+                      {it.carry > 0 ? '+' : ''}{it.carry.toLocaleString()}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-500">
+                      {Math.abs(it.carry).toLocaleString()}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="text-[10px] text-slate-400 italic pt-2 border-t border-slate-100">
+        💡 |abs sum| = ตัวเลข "ค้างรวม" ที่แสดงใน Drift Audit · net sum = ค้าง/คืนจริง (หักล้างกัน)
+        {useGroupView && (
+          <span className="block mt-1">
+            📦 รวมกลุ่ม = net sum ของแต่ละ group → ตัวเลขที่ตรงกับความจริงสำหรับลูกค้าที่นับรวมไซส์ตอนรับเข้า
+          </span>
+        )}
+      </div>
     </div>
   )
 }
