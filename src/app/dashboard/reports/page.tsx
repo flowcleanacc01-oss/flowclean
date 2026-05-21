@@ -25,12 +25,13 @@ import WBAudit from '@/components/WBAudit'
 import CarryDriftAudit from '@/components/CarryDriftAudit'
 import MonthlyClosingChecklist from '@/components/MonthlyClosingChecklist'
 import TrustModeAudit from '@/components/TrustModeAudit'
+import ScheduleAudit from '@/components/ScheduleAudit'
 import ExecutiveDashboard from '@/components/executive/ExecutiveDashboard'
 import type { CarryOverMode, CarryOverAdjustment, BillingStatement } from '@/types'
 
-type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'sdaudit' | 'wbaudit' | 'driftaudit' | 'closing' | 'trustaudit' | 'executive'
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'sdaudit' | 'wbaudit' | 'driftaudit' | 'closing' | 'trustaudit' | 'scheduleaudit' | 'executive'
 
-const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'sdaudit', 'wbaudit', 'driftaudit', 'closing', 'trustaudit', 'executive'] as const
+const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'sdaudit', 'wbaudit', 'driftaudit', 'closing', 'trustaudit', 'scheduleaudit', 'executive'] as const
 
 export default function ReportsPage() {
   const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations, carryOverAdjustments, deleteCarryOverAdjustment } = useStore()
@@ -98,6 +99,7 @@ export default function ReportsPage() {
     { key: 'driftaudit', label: '🔍 Drift Audit' },
     { key: 'closing', label: '📋 Closing' },
     { key: 'trustaudit', label: '🔍 Trust Mode' },
+    { key: 'scheduleaudit', label: '📅 Schedule Audit' },
     ...(canViewExecutiveDashboard(currentUser) ? [{ key: 'executive' as TabKey, label: '✨ Executive' }] : []),
   ]
 
@@ -1223,6 +1225,7 @@ export default function ReportsPage() {
       {tab === 'driftaudit' && <CarryDriftAudit />}
       {tab === 'closing' && <MonthlyClosingChecklist />}
       {tab === 'trustaudit' && <TrustModeAudit />}
+      {tab === 'scheduleaudit' && <ScheduleAudit />}
 
       {/* 220: Executive Dashboard — admin only */}
       {tab === 'executive' && <ExecutiveDashboard />}

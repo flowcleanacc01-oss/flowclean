@@ -63,6 +63,11 @@ const FIELD_MAP: Record<string, string> = {
   enableWithholding: 'enable_withholding',
   workflowMode: 'workflow_mode',                  // 265
   defaultCarryOverMode: 'default_carry_over_mode', // 265
+  scheduleType: 'schedule_type',                  // 311
+  scheduleDays: 'schedule_days',                  // 311
+  scheduleStartDate: 'schedule_start_date',       // 311
+  scheduleNote: 'schedule_note',                  // 311
+  isExtraRound: 'is_extra_round',                 // 311
   vatRate: 'vat_rate',
   withholdingRate: 'withholding_rate',
   formNumber: 'form_number',

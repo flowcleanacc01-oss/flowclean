@@ -7,16 +7,18 @@ import { formatCurrency, formatNumber, cn, formatDate, buildPriceMapFromQT } fro
 import { canViewPrice } from '@/lib/permissions'
 import {
   X, Building2, Phone, Mail, MapPin, FileText, CreditCard, Edit2,
-  Truck, Receipt, ClipboardCheck, TrendingUp, Package, AlertTriangle, Link2, ExternalLink,
+  Truck, Receipt, ClipboardCheck, TrendingUp, Package, AlertTriangle, Link2, ExternalLink, CalendarClock,
 } from 'lucide-react'
 import Link from 'next/link'
 import {
   LINEN_FORM_STATUS_CONFIG, BILLING_STATUS_CONFIG, CARRY_OVER_MODE_CONFIG,
+  SCHEDULE_TYPE_CONFIG, WEEKDAY_SHORT,
 } from '@/types'
 import type { LinenFormStatus, BillingStatus } from '@/types'
 import RevenueTrendChart from '@/components/RevenueTrendChart'
 import CustomerSearchInline from '@/components/CustomerSearchInline'
 import Modal from '@/components/Modal'
+import ScheduleSetupModal from '@/components/ScheduleSetupModal'
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -123,6 +125,7 @@ export default function CustomerDetailPage() {
 
   // 238: orphan code cleanup modal — เปิดจาก carry-over badge
   const [orphanCleanupCode, setOrphanCleanupCode] = useState<string | null>(null)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
 
   // Linked accepted QT for this customer (matched by customerId, only 1 allowed)
   const linkedQT = useMemo(() =>
@@ -347,6 +350,67 @@ export default function CustomerDetailPage() {
               </div>
             ) : (
               <p className="text-sm text-amber-700">ยังไม่มีใบเสนอราคาที่มีสถานะ "ตกลง" — รายการผ้าและราคาของลูกค้านี้จะถูกกำหนดผ่าน QT</p>
+            )}
+          </div>
+
+          {/* 311 — Schedule Setup Card */}
+          <div className={cn(
+            'rounded-xl border p-5',
+            (customer.scheduleType && customer.scheduleType !== 'none')
+              ? 'bg-white border-indigo-200'
+              : 'bg-slate-50 border-slate-200',
+          )}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold flex items-center gap-2 text-slate-800">
+                <CalendarClock className="w-4 h-4" />ตารางคิวส่งผ้า
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowScheduleModal(true)}
+                className="text-xs text-[#1B3A5C] hover:underline flex items-center gap-1 font-medium"
+              >
+                {customer.scheduleType && customer.scheduleType !== 'none' ? 'แก้ไข' : 'ตั้งค่า'}
+                <Edit2 className="w-3 h-3" />
+              </button>
+            </div>
+            {customer.scheduleType && customer.scheduleType !== 'none' ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">ประเภท:</span>
+                  <span className="font-semibold text-indigo-700">{SCHEDULE_TYPE_CONFIG[customer.scheduleType].label}</span>
+                </div>
+                {customer.scheduleType === 'weekly' && customer.scheduleDays && customer.scheduleDays.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-slate-500">วันส่ง:</span>
+                    {customer.scheduleDays.map(day => (
+                      <span key={day} className="px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        {WEEKDAY_SHORT[day]}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {customer.scheduleStartDate && (
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span>เริ่ม:</span>
+                    <span className="font-mono">{formatDate(customer.scheduleStartDate)}</span>
+                  </div>
+                )}
+                {customer.scheduleNote && (
+                  <div className="text-xs text-slate-500 pt-2 border-t border-slate-100">
+                    {customer.scheduleNote}
+                  </div>
+                )}
+                <Link
+                  href={`/dashboard/reports?tab=scheduleaudit&customerId=${customer.id}`}
+                  className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline mt-1"
+                >
+                  ดู Schedule Audit <ExternalLink className="w-3 h-3" />
+                </Link>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">
+                ลูกค้านี้ยังไม่ได้ตั้งคิวส่ง — ตั้งค่าเพื่อเปิดใช้ Schedule Audit (ตรวจสอบว่ามี SD ครบทุกวันที่ควรส่ง)
+              </p>
             )}
           </div>
 
@@ -589,6 +653,13 @@ export default function CustomerDetailPage() {
           />
         </Modal>
       )}
+
+      {/* 311: Schedule Setup Modal */}
+      <ScheduleSetupModal
+        open={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        customer={customer}
+      />
     </div>
   )
 }

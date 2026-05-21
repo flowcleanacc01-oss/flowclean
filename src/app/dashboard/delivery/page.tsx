@@ -128,6 +128,8 @@ export default function DeliveryPage() {
   const [dnDiscountNote, setDnDiscountNote] = useState('')
   const [dnExtraCharge, setDnExtraCharge] = useState(0)
   const [dnExtraChargeNote, setDnExtraChargeNote] = useState('')
+  // 311: รอบเสริม (extra round) — เมื่อมี SD ในวันเดียวกัน
+  const [dnIsExtraRound, setDnIsExtraRound] = useState(false)
   // 254: batch mode — select หลาย LF แล้ว auto-create 1 SD ต่อ LF (1:1)
   const [batchMode, setBatchMode] = useState(false)
 
@@ -175,6 +177,19 @@ export default function DeliveryPage() {
     }
     setShowAdjustConfirm(false)
   }, [showDetail, deliveryNotes])
+
+  // 311: Auto-suggest isExtraRound — เปลี่ยน customer/date → check existing SDs ในวันนั้น
+  // suggest true ถ้ามี SD อยู่แล้ว (น่าจะเป็นรอบเสริม) · user override ได้
+  useEffect(() => {
+    if (!showCreate || !selCustomerId || !dnDate) return
+    const dateKey = dnDate.slice(0, 10)
+    const sameDayDNs = deliveryNotes.filter(
+      d => d.customerId === selCustomerId && d.date.slice(0, 10) === dateKey,
+    )
+    setDnIsExtraRound(sameDayDNs.length > 0)
+    // ตั้งใจ depend แค่ customer/date/showCreate — deliveryNotes ไม่ใส่ เพื่อไม่ให้ override user
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCreate, selCustomerId, dnDate])
 
   // 115: Reset SD Sync Modal checkboxes เมื่อเปิด modal
   useEffect(() => {
@@ -1030,6 +1045,7 @@ export default function DeliveryPage() {
       extraChargeNote: dnExtraChargeNote,
       priceSnapshot,
       notes: dnNotes,
+      isExtraRound: dnIsExtraRound,
     })
 
     // Post-process: existing DNs only (different rows from newDN — safe from race)
@@ -1283,7 +1299,7 @@ export default function DeliveryPage() {
             <Sparkles className="w-4 h-4" />
             พิมพ์ SD เร่งด่วน
           </button>
-          <button onClick={() => { setShowCreate(true); setBatchMode(false); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()); setDnDiscount(0); setDnDiscountNote(''); setDnExtraCharge(0); setDnExtraChargeNote('') }}
+          <button onClick={() => { setShowCreate(true); setBatchMode(false); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()); setDnDiscount(0); setDnDiscountNote(''); setDnExtraCharge(0); setDnExtraChargeNote(''); setDnIsExtraRound(false) }}
             className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />
             สร้างใบส่งของชั่วคราว
@@ -1665,6 +1681,43 @@ export default function DeliveryPage() {
               <label className="block text-sm font-medium text-slate-600 mb-1">วันที่</label>
               <input type="date" value={dnDate} onChange={e => setDnDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+              {/* 311: รอบเสริม checkbox + auto-suggest */}
+              {(() => {
+                if (!selCustomerId || !dnDate) return null
+                const sameDayDNs = deliveryNotes.filter(
+                  d => d.customerId === selCustomerId && d.date.slice(0, 10) === dnDate.slice(0, 10),
+                )
+                const hasExistingSameDayDN = sameDayDNs.length > 0
+                return (
+                  <div className={cn(
+                    'mt-2 rounded-lg border p-2.5',
+                    hasExistingSameDayDN
+                      ? 'border-amber-200 bg-amber-50'
+                      : 'border-slate-200 bg-slate-50',
+                  )}>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={dnIsExtraRound}
+                        onChange={e => setDnIsExtraRound(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded border-slate-300 text-[#3DD8D8] focus:ring-[#3DD8D8]"
+                      />
+                      <div className="flex-1 text-sm">
+                        <div className="font-medium text-slate-700">รอบเสริม (ไม่นับใน Schedule Audit)</div>
+                        {hasExistingSameDayDN ? (
+                          <div className="text-xs text-amber-700 mt-0.5">
+                            ⚠ มี SD ในวันนี้แล้ว {sameDayDNs.length} ใบ ({sameDayDNs.map(d => d.noteNumber).join(', ')}) — ใบนี้น่าจะเป็นรอบเสริม
+                          </div>
+                        ) : (
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            ติ๊กถ้าเป็นรอบส่งเพิ่มเติมจากคิวนัดหมายปกติ
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  </div>
+                )
+              })()}
             </div>
           )}
 

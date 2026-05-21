@@ -193,7 +193,27 @@ export interface Customer {
   //   - cross_check ปกติใช้ Mode 1 (col6 − col5)
   workflowMode?: WorkflowMode
   defaultCarryOverMode?: CarryOverMode
+  // 311 — Schedule-based SD Audit
+  // scheduleType: 'none' (default skip audit) | 'weekly' (use scheduleDays) | 'daily' (ทุกวัน)
+  // scheduleDays: 0=อาทิตย์, 1=จันทร์, ..., 6=เสาร์ — ใช้กับ weekly เท่านั้น
+  // scheduleStartDate: วันที่เริ่ม schedule (user ระบุ หรือ AI suggest)
+  scheduleType?: ScheduleType
+  scheduleDays?: number[]
+  scheduleStartDate?: string // ISO date
+  scheduleNote?: string
 }
+
+// 311 — Schedule type สำหรับ Schedule-Based SD Audit
+export type ScheduleType = 'none' | 'weekly' | 'daily'
+
+export const SCHEDULE_TYPE_CONFIG: Record<ScheduleType, { label: string; description: string }> = {
+  none: { label: 'ไม่ตั้งคิว', description: 'ยังไม่ได้ตั้งคิวส่ง — ไม่อยู่ใน Schedule Audit' },
+  weekly: { label: 'รายสัปดาห์', description: 'ส่งตามวันในสัปดาห์ (เช่น จันทร์/พุธ/ศุกร์)' },
+  daily: { label: 'ทุกวัน', description: 'ส่งทุกวัน' },
+}
+
+export const WEEKDAY_LABELS = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์']
+export const WEEKDAY_SHORT = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
 
 // 265 — Workflow mode สำหรับลูกค้า + LF
 export type WorkflowMode = 'cross_check' | 'trust_customer'
@@ -362,6 +382,10 @@ export interface DeliveryNote {
   notes: string
   createdBy: string
   updatedAt: string
+  // 311 — รอบเสริม (urgent/pre-delivery)
+  // false (default) = รอบนัดหมายปกติ — นับใน Schedule Audit
+  // true = รอบเสริม — ไม่นับใน Schedule Audit (informational only)
+  isExtraRound?: boolean
 }
 
 // ============================================================
