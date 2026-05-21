@@ -35,14 +35,29 @@ export interface ScheduleAuditSummary {
   }
 }
 
-// Helper: walk dates [start, end] inclusive
+// 318: timezone-safe local date helpers
+// `new Date('YYYY-MM-DD')` parse เป็น UTC midnight → ในไทย (UTC+7)
+// `toISOString().slice(0,10)` คืน UTC date ที่ off-by-one จาก local
+// → ใช้ local date parsing/formatting แทน
+function parseLocalDate(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
+}
+
+function toLocalISO(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// Helper: walk dates [start, end] inclusive (timezone-safe — local date)
 function* dateRange(start: string, end: string): Generator<string> {
-  const s = new Date(start)
-  const e = new Date(end)
-  s.setHours(0, 0, 0, 0)
-  e.setHours(0, 0, 0, 0)
-  for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
-    yield d.toISOString().slice(0, 10)
+  const cur = parseLocalDate(start)
+  const endDate = parseLocalDate(end)
+  while (cur <= endDate) {
+    yield toLocalISO(cur)
+    cur.setDate(cur.getDate() + 1)
   }
 }
 
@@ -56,7 +71,7 @@ function isScheduledDay(
   if (scheduleStartDate && date < scheduleStartDate) return false
   if (scheduleType === 'daily') return true
   if (scheduleType === 'weekly') {
-    const dow = new Date(date).getDay()
+    const dow = parseLocalDate(date).getDay()
     return (scheduleDays || []).includes(dow)
   }
   return false
@@ -79,7 +94,7 @@ export function runScheduleAudit(
 
   const days: ScheduleAuditDayResult[] = []
   for (const date of dateRange(rangeStart, rangeEnd)) {
-    const dayOfWeek = new Date(date).getDay()
+    const dayOfWeek = parseLocalDate(date).getDay()
     const expected = isScheduledDay(date, customer.scheduleType, customer.scheduleDays, customer.scheduleStartDate)
     const dns = dnsByDate.get(date) || []
     const regularSDs = dns.filter(d => !d.isExtraRound)
