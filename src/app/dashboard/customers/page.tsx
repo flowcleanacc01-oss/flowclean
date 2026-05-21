@@ -1315,10 +1315,12 @@ export default function CustomersPage() {
           const selectedCusts = customers.filter(c => selectedCustIds.includes(c.id))
           return (
             <div>
-              <div id="print-cust-bulk" className="space-y-4">
+              <div id="print-cust-bulk">
                 <h2 className="hidden print:block text-lg font-bold text-center mb-4">รายการลูกค้าที่เลือก ({selectedCusts.length} ราย)</h2>
                 {selectedCusts.map((c, idx) => (
-                  <div key={c.id} className="border border-slate-200 rounded-lg p-4 break-after-page">
+                  <div key={c.id}>
+                    {idx > 0 && <div style={{ pageBreakBefore: 'always' }} />}
+                    <div className="border border-slate-200 rounded-lg p-4 mb-4">
                     <div className="flex items-start justify-between mb-3 pb-2 border-b border-slate-200">
                       <div>
                         <h3 className="text-lg font-bold text-[#1B3A5C]">{c.shortName || c.name}</h3>
@@ -1363,6 +1365,7 @@ export default function CustomersPage() {
                         </div>
                       </div>
                     )}
+                    </div>
                   </div>
                 ))}
               </div>

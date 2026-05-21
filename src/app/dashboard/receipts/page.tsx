@@ -428,19 +428,64 @@ export default function ReceiptsPage() {
         })()}
       </Modal>
 
-      {/* 154: Bulk Print Modal */}
-      <Modal open={showRcBulkPrint} onClose={() => setShowRcBulkPrint(false)} title={`พิมพ์ใบเสร็จรับเงิน (${selectedRcIds.length} ใบ)`} size="xl" closeLabel="close" className="print-target">
-        <div className="space-y-4">
-          {selectedRcIds.map(id => {
+      {/* 154: Bulk Print Modal · 314.1: unify pattern กับ WB/IV — per-doc no-print status + pageBreakBefore + ExportButtons */}
+      <Modal open={showRcBulkPrint} onClose={() => setShowRcBulkPrint(false)} title={`พิมพ์/ส่งออกเอกสารใบเสร็จรับเงิน (${selectedRcIds.length} ใบ)`} size="xl" className="print-target">
+        {/* Select All row */}
+        <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 no-print">
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox"
+                checked={selectedRcIds.every(id => receipts.find(r => r.id === id)?.isPrinted)}
+                onChange={e => { for (const rcId of selectedRcIds) updateReceipt(rcId, { isPrinted: e.target.checked }) }}
+                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+              <span className="text-sm font-medium text-blue-700 flex items-center gap-1"><Check className="w-4 h-4" />พิมพ์แล้ว (ทุกรายการ)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox"
+                checked={selectedRcIds.every(id => receipts.find(r => r.id === id)?.isExported)}
+                onChange={e => { for (const rcId of selectedRcIds) updateReceipt(rcId, { isExported: e.target.checked }) }}
+                className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+              <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกเอกสารแล้ว (ทุกรายการ)</span>
+            </label>
+          </div>
+          <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกเอกสารแล้ว"</p>
+        </div>
+        <div id="print-bulk-rc">
+          {selectedRcIds.map((id, idx) => {
             const rc = receipts.find(r => r.id === id)
             const c = rc ? getCustomer(rc.customerId) : null
             if (!rc || !c) return null
             return (
-              <div key={id} className="border border-slate-200 rounded-lg overflow-hidden break-after-page">
+              <div key={id}>
+                {idx > 0 && <div style={{ pageBreakBefore: 'always' }} />}
+                {/* Per-doc status row */}
+                <div className="flex items-center gap-4 mb-2 no-print">
+                  <span className="text-xs font-mono text-slate-400">{rc.receiptNumber}</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!rc.isPrinted}
+                      onChange={e => updateReceipt(rc.id, { isPrinted: e.target.checked })}
+                      className="w-3.5 h-3.5 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+                    <span className="text-xs font-medium text-blue-700">พิมพ์แล้ว</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!rc.isExported}
+                      onChange={e => updateReceipt(rc.id, { isExported: e.target.checked })}
+                      className="w-3.5 h-3.5 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+                    <span className="text-xs font-medium text-violet-700">ส่งออกเอกสารแล้ว</span>
+                  </label>
+                </div>
                 <ReceiptPrint receipt={rc} customer={c} idSuffix={rc.id} />
               </div>
             )
           })}
+        </div>
+        <div className="flex justify-end mt-4 no-print">
+          <ExportButtons
+            targetId="print-bulk-rc"
+            filename={`RC-bulk-${selectedRcIds.length}`}
+            onPrint={() => { for (const rcId of selectedRcIds) updateReceipt(rcId, { isPrinted: true }) }}
+            onExportFile={() => { for (const rcId of selectedRcIds) updateReceipt(rcId, { isExported: true }) }}
+          />
         </div>
       </Modal>
 

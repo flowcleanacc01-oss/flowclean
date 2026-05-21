@@ -2907,8 +2907,28 @@ export default function DeliveryPage() {
         )}
       </Modal>
 
-      {/* Bulk Print Modal — พิมพ์เอกสารหลายใบ */}
-      <Modal open={showBulkPrint} onClose={() => setShowBulkPrint(false)} title={`พิมพ์เอกสาร (${selectedDnIds.length} ใบ)`} size="xl" className="print-target">
+      {/* Bulk Print Modal — พิมพ์เอกสารหลายใบ · 314.1: unify pattern กับ WB/IV/RC */}
+      <Modal open={showBulkPrint} onClose={() => setShowBulkPrint(false)} title={`พิมพ์/ส่งออกเอกสารใบส่งของ (${selectedDnIds.length} ใบ)`} size="xl" className="print-target">
+        {/* Select All row */}
+        <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 no-print">
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox"
+                checked={selectedDnIds.every(id => deliveryNotes.find(d => d.id === id)?.isPrinted)}
+                onChange={e => { for (const dnId of selectedDnIds) updateDeliveryNote(dnId, { isPrinted: e.target.checked }) }}
+                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+              <span className="text-sm font-medium text-blue-700 flex items-center gap-1"><Check className="w-4 h-4" />พิมพ์แล้ว (ทุกรายการ)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox"
+                checked={selectedDnIds.every(id => deliveryNotes.find(d => d.id === id)?.isExported)}
+                onChange={e => { for (const dnId of selectedDnIds) updateDeliveryNote(dnId, { isExported: e.target.checked }) }}
+                className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+              <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกเอกสารแล้ว (ทุกรายการ)</span>
+            </label>
+          </div>
+          <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกเอกสารแล้ว"</p>
+        </div>
         <div id="print-bulk-dn">
           {selectedDnIds.map((dnId, idx) => {
             const dn = deliveryNotes.find(d => d.id === dnId)
@@ -2918,36 +2938,34 @@ export default function DeliveryPage() {
               <div key={dnId}>
                 {/* 313: pattern เดียวกับ Quick Print SD — pageBreak อย่างเดียว ไม่มี dashed line */}
                 {idx > 0 && <div style={{ pageBreakBefore: 'always' }} />}
+                {/* Per-doc status row */}
+                <div className="flex items-center gap-4 mb-2 no-print">
+                  <span className="text-xs font-mono text-slate-400">{dn.noteNumber}</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!dn.isPrinted}
+                      onChange={e => updateDeliveryNote(dn.id, { isPrinted: e.target.checked })}
+                      className="w-3.5 h-3.5 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+                    <span className="text-xs font-medium text-blue-700">พิมพ์แล้ว</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!dn.isExported}
+                      onChange={e => updateDeliveryNote(dn.id, { isExported: e.target.checked })}
+                      className="w-3.5 h-3.5 rounded border-violet-300 text-violet-600 focus:ring-violet-500" />
+                    <span className="text-xs font-medium text-violet-700">ส่งออกเอกสารแล้ว</span>
+                  </label>
+                </div>
                 <DeliveryNotePrint note={dn} customer={cust} company={companyInfo} catalog={linenCatalog} priceMap={buildPriceMapFromQT(cust.id, quotations)} idSuffix={dn.id} />
               </div>
             )
           })}
         </div>
-        <div className="flex justify-between items-center mt-4 no-print">
-          <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={selectedDnIds.every(id => deliveryNotes.find(d => d.id === id)?.isPrinted)}
-                onChange={e => {
-                  for (const dnId of selectedDnIds) updateDeliveryNote(dnId, { isPrinted: e.target.checked })
-                }}
-                className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว (ทุกรายการ)</span>
-            </label>
-            <p className="text-xs text-slate-400">พิมพ์ → สถานะ "พิมพ์แล้ว" | ส่งออกเอกสาร JPG/PDF/CSV → สถานะ "ส่งออกเอกสารแล้ว"</p>
-          </div>
+        <div className="flex justify-end mt-4 no-print">
           <ExportButtons
             targetId="print-bulk-dn"
             filename={`SD-bulk-${selectedDnIds.length}`}
             onExportCSV={() => handleDnListCSV(deliveryNotes.filter(d => selectedDnIds.includes(d.id)))}
-            onPrint={() => {
-              for (const dnId of selectedDnIds) updateDeliveryNote(dnId, { isPrinted: true })
-            }}
-            onExportFile={() => {
-              for (const dnId of selectedDnIds) updateDeliveryNote(dnId, { isExported: true })
-            }}
+            onPrint={() => { for (const dnId of selectedDnIds) updateDeliveryNote(dnId, { isPrinted: true }) }}
+            onExportFile={() => { for (const dnId of selectedDnIds) updateDeliveryNote(dnId, { isExported: true }) }}
           />
         </div>
       </Modal>

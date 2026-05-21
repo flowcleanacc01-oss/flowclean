@@ -1381,7 +1381,7 @@ export default function LinenFormsPage() {
             const carryOver = getCarryOver(form.customerId, form.date)
             return (
               <div key={lfId} style={idx > 0 ? { pageBreakBefore: 'always', breakBefore: 'page' } : {}}>
-                {idx > 0 && <div className="border-t-2 border-dashed border-slate-300 my-6 no-print" />}
+                {/* 314.1: pattern เดียวกับ Quick Print SD — pageBreak อย่างเดียว ไม่มี dashed line */}
                 {/* Per-doc status row */}
                 <div className="flex items-center gap-4 mb-2 no-print">
                   <span className="text-xs font-mono text-slate-400">{form.formNumber}</span>

@@ -3835,14 +3835,18 @@ export default function BillingPage() {
         })()}
       </Modal>
 
-      {/* 154.3: QT Bulk Print Modal */}
-      <Modal open={showQtBulkPrint} onClose={() => setShowQtBulkPrint(false)} title={`พิมพ์ใบเสนอราคา (${selectedQtIds.length} ใบ)`} size="xl" closeLabel="close" className="print-target">
-        <div id="print-bulk-qt" className="space-y-4">
-          {selectedQtIds.map(id => {
+      {/* 154.3: QT Bulk Print Modal · 314.1: unify pattern (inline pageBreakBefore) */}
+      <Modal open={showQtBulkPrint} onClose={() => setShowQtBulkPrint(false)} title={`พิมพ์/ส่งออกเอกสารใบเสนอราคา (${selectedQtIds.length} ใบ)`} size="xl" closeLabel="close" className="print-target">
+        <div id="print-bulk-qt">
+          {selectedQtIds.map((id, idx) => {
             const qt = quotations.find(q => q.id === id)
             if (!qt) return null
             return (
-              <div key={id} className="border border-slate-200 rounded-lg overflow-hidden break-after-page">
+              <div key={id}>
+                {idx > 0 && <div style={{ pageBreakBefore: 'always' }} />}
+                <div className="mb-2 no-print">
+                  <span className="text-xs font-mono text-slate-400">{qt.quotationNumber}</span>
+                </div>
                 <QuotationPrint quotation={qt} company={companyInfo} customerShortName={getCustomer(qt.customerId)?.shortName} itemNicknames={getCustomer(qt.customerId)?.itemNicknames} idSuffix={qt.id} />
               </div>
             )
