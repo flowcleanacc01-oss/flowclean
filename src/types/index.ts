@@ -216,11 +216,13 @@ export interface Customer {
 }
 
 // 317 Phase 1 — Aggregate Size Group Config (per customer, per group)
+// 317 Phase 1.5 (321 update) — col2Mode + col5Mode แยกกัน — ทั้งคู่อาจ aggregate หรือ per_row
 export interface AggregateSizeGroupConfig {
-  groupKey: string                       // ตรงกับ LinenItemDef.sizeGroup
-  col2Mode: 'aggregate' | 'per_row'      // ลูกค้านับส่งซัก: รวม หรือ แยกไซส์
+  groupKey: string                          // ตรงกับ LinenItemDef.sizeGroup
+  col2Mode: 'aggregate' | 'per_row'         // ลูกค้านับส่งซัก: รวม หรือ แยกไซส์
+  col5Mode?: 'aggregate' | 'per_row'        // โรงซักนับเข้า: รวม หรือ แยกไซส์ (default aggregate)
   // col3 (เคลม) แยกเสมอ — ไม่ track ที่นี่
-  // col5 (โรงซักนับเข้า) รวมเสมอเมื่อ opt-in — เป็นเหตุผลหลักของ feature นี้
+  // col4 (ลูกค้านับกลับ) แยกเสมอ
   // col6 (โรงซักแพคส่ง) แยกเสมอ — track ไซส์หลังพับ
 }
 

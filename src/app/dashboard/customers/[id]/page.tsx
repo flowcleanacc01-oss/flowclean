@@ -454,16 +454,29 @@ export default function CustomerDetailPage() {
               <div className="space-y-2 text-sm">
                 {customer.aggregateSizeGroups.map(cfg => {
                   const itemsInGroup = linenCatalog.filter(i => i.sizeGroup === cfg.groupKey)
+                  const col5Mode = cfg.col5Mode ?? 'aggregate'  // 321: backward compat
                   return (
                     <div key={cfg.groupKey} className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-2">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className="font-mono font-bold text-indigo-700 text-xs">{cfg.groupKey}</span>
                         <span className="text-[10px] text-slate-500">· {itemsInGroup.length} รายการ</span>
-                        <span className={cn(
-                          'ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded',
-                          cfg.col2Mode === 'aggregate' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700',
-                        )}>
-                          {cfg.col2Mode === 'aggregate' ? '🧺 ส่งรวม' : '📋 ส่งแยก'}
+                        <span className="ml-auto flex gap-1 flex-wrap">
+                          <span
+                            title="col2 — ลูกค้าส่งซัก"
+                            className={cn(
+                              'text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                              cfg.col2Mode === 'aggregate' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700',
+                            )}>
+                            col2: {cfg.col2Mode === 'aggregate' ? '🧺 ส่งรวม' : '📋 ส่งแยก'}
+                          </span>
+                          <span
+                            title="col5 — โรงซักนับเข้า"
+                            className={cn(
+                              'text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                              col5Mode === 'aggregate' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700',
+                            )}>
+                            col5: {col5Mode === 'aggregate' ? '🧺 นับรวม' : '📋 นับแยก'}
+                          </span>
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-1">

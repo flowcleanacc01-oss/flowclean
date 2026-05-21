@@ -54,18 +54,26 @@ export default function AggregateGroupsModal({ open, onClose, customer }: Props)
   const isEnabled = (groupKey: string) => configs.some(c => c.groupKey === groupKey)
   const getCol2Mode = (groupKey: string): 'aggregate' | 'per_row' =>
     configs.find(c => c.groupKey === groupKey)?.col2Mode ?? 'aggregate'
+  const getCol5Mode = (groupKey: string): 'aggregate' | 'per_row' =>
+    configs.find(c => c.groupKey === groupKey)?.col5Mode ?? 'aggregate'
 
   const toggleGroup = (groupKey: string) => {
     setConfigs(prev =>
       isEnabled(groupKey)
         ? prev.filter(c => c.groupKey !== groupKey)
-        : [...prev, { groupKey, col2Mode: 'aggregate' }],
+        : [...prev, { groupKey, col2Mode: 'aggregate', col5Mode: 'aggregate' }],
     )
   }
 
   const setCol2Mode = (groupKey: string, mode: 'aggregate' | 'per_row') => {
     setConfigs(prev =>
       prev.map(c => (c.groupKey === groupKey ? { ...c, col2Mode: mode } : c)),
+    )
+  }
+
+  const setCol5Mode = (groupKey: string, mode: 'aggregate' | 'per_row') => {
+    setConfigs(prev =>
+      prev.map(c => (c.groupKey === groupKey ? { ...c, col5Mode: mode } : c)),
     )
   }
 
@@ -107,6 +115,7 @@ export default function AggregateGroupsModal({ open, onClose, customer }: Props)
             {groupsInCatalog.map(({ groupKey, items }) => {
               const enabled = isEnabled(groupKey)
               const col2Mode = getCol2Mode(groupKey)
+              const col5Mode = getCol5Mode(groupKey)
               return (
                 <div
                   key={groupKey}
@@ -143,40 +152,86 @@ export default function AggregateGroupsModal({ open, onClose, customer }: Props)
                   </label>
 
                   {enabled && (
-                    <div className="mt-3 pt-3 border-t border-indigo-100 pl-7">
-                      <div className="text-xs font-semibold text-slate-600 mb-2">
-                        ลูกค้าส่งซัก (col2) แบบไหน?
+                    <div className="mt-3 pt-3 border-t border-indigo-100 pl-7 space-y-3">
+                      {/* col2 — ลูกค้านับส่ง */}
+                      <div>
+                        <div className="text-xs font-semibold text-slate-600 mb-2">
+                          ลูกค้านับส่งซัก (col2)
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCol2Mode(groupKey, 'aggregate')}
+                            className={cn(
+                              'text-left rounded-lg border px-3 py-2 text-xs transition-colors',
+                              col2Mode === 'aggregate'
+                                ? 'border-emerald-400 bg-emerald-50 text-emerald-900'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                            )}
+                          >
+                            <div className="font-semibold">🧺 ส่งรวม (ไม่แยกไซส์)</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">ลูกค้าส่งมาในถุงเดียว ไม่แยกขนาด</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCol2Mode(groupKey, 'per_row')}
+                            className={cn(
+                              'text-left rounded-lg border px-3 py-2 text-xs transition-colors',
+                              col2Mode === 'per_row'
+                                ? 'border-emerald-400 bg-emerald-50 text-emerald-900'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                            )}
+                          >
+                            <div className="font-semibold">📋 ส่งแยกไซส์</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">ลูกค้าระบุจำนวนแต่ละไซส์มาให้</div>
+                          </button>
+                        </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setCol2Mode(groupKey, 'aggregate')}
-                          className={cn(
-                            'text-left rounded-lg border px-3 py-2 text-xs transition-colors',
-                            col2Mode === 'aggregate'
-                              ? 'border-emerald-400 bg-emerald-50 text-emerald-900'
-                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
-                          )}
-                        >
-                          <div className="font-semibold">🧺 ส่งรวม (ไม่แยกไซส์)</div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">ลูกค้าส่งมาในถุงเดียว ไม่แยกขนาด</div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCol2Mode(groupKey, 'per_row')}
-                          className={cn(
-                            'text-left rounded-lg border px-3 py-2 text-xs transition-colors',
-                            col2Mode === 'per_row'
-                              ? 'border-emerald-400 bg-emerald-50 text-emerald-900'
-                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
-                          )}
-                        >
-                          <div className="font-semibold">📋 ส่งแยกไซส์</div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">ลูกค้าระบุจำนวนแต่ละไซส์มาให้</div>
-                        </button>
+
+                      {/* col5 — โรงซักนับเข้า (321) */}
+                      <div>
+                        <div className="text-xs font-semibold text-slate-600 mb-2">
+                          โรงซักนับเข้า (col5)
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCol5Mode(groupKey, 'aggregate')}
+                            className={cn(
+                              'text-left rounded-lg border px-3 py-2 text-xs transition-colors',
+                              col5Mode === 'aggregate'
+                                ? 'border-blue-400 bg-blue-50 text-blue-900'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                            )}
+                          >
+                            <div className="font-semibold">🧺 นับรวม (default)</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">โรงซักนับรวมไซส์ตอนรับเข้า (ปกติ)</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCol5Mode(groupKey, 'per_row')}
+                            className={cn(
+                              'text-left rounded-lg border px-3 py-2 text-xs transition-colors',
+                              col5Mode === 'per_row'
+                                ? 'border-blue-400 bg-blue-50 text-blue-900'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                            )}
+                          >
+                            <div className="font-semibold">📋 นับแยกไซส์</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">ลูกค้าขอให้แยกนับเข้าแต่ละไซส์</div>
+                          </button>
+                        </div>
                       </div>
-                      <div className="mt-2 text-[10px] text-slate-400">
-                        💡 col3 (เคลม) แยกเสมอ · col5 (โรงซักนับเข้า) รวมเสมอ · col6 (แพคส่ง) แยกเสมอ
+
+                      {/* All-split warning */}
+                      {col2Mode === 'per_row' && col5Mode === 'per_row' && (
+                        <div className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-900">
+                          ⚠ เลือกทั้งคู่ "แยกไซส์" → group นี้ทำงานเหมือนไม่ opt-in (ยกเว้นเห็น by-group view ใน report)
+                        </div>
+                      )}
+
+                      <div className="text-[10px] text-slate-400">
+                        💡 col3 (เคลม) · col4 (นับกลับ) · col6 (แพคส่ง) แยกไซส์เสมอ
                       </div>
                     </div>
                   )}
