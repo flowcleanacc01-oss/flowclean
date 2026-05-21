@@ -24,6 +24,7 @@ import { useStore } from '@/lib/store'
 import {
   useSimilarItems, guessCategory, suggestNextCode, isCodeUnique,
 } from '@/lib/use-similar-items'
+import { useCatalogVariants } from '@/lib/use-catalog-variants'
 import type { LinenItemDef, LinenFacets, Quotation } from '@/types'
 import {
   Sparkles, ArrowRight, ArrowLeft, Check, AlertTriangle,
@@ -157,8 +158,9 @@ export default function AddItemWizard({
   // 208.3: ถ้า lf/sd แต่ไม่มี accepted QT → blocker
   const noAcceptedQT = (context === 'lf' || context === 'sd') && !activeQT
 
-  // ───── Step 1: similarity ───────────────────────────────
-  const matches = useSimilarItems(nameInput, linenCatalog, 5)
+  // ───── Step 1: similarity (320: + variants จาก QT/SD/LF) ─
+  const catalogVariants = useCatalogVariants()
+  const matches = useSimilarItems(nameInput, linenCatalog, 5, catalogVariants)
   const hasExactMatch = matches.length > 0 && matches[0].score >= 90
 
   // ───── Auto-derive Step 2 defaults from Step 1 ──────────

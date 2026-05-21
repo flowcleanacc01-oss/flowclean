@@ -3,6 +3,7 @@
 /**
  * 207 — Similarity detection สำหรับ AddItemWizard
  * 218.1 — เพิ่ม Thai phonetic class match (ซิป↔ซิบ, ฟ↔ฝ, etc.)
+ * 320 — ใช้ matchesThaiQuery (Cmd+K logic) เป็น fallback + รับ variant names
  *
  * ตรวจรายการใกล้เคียงใน catalog เพื่อกัน user เพิ่มรายการซ้ำ
  * Strategy (เก็บ score สูงสุด):
@@ -12,10 +13,13 @@
  *  4. Phonetic exact (218.1) → 92  ← เสียงเหมือนเป๊ะ (สะกดต่าง)
  *  5. Phonetic substring (218.1) → 75-80
  *  6. Token overlap → 60-85
+ *  7. Variant match (320) → 75      ← user เคยใส่ชื่อนี้ใน QT/SD/LF
+ *  8. Cmd+K fallback (320) → 65     ← matchesThaiQuery (split + Lev + phonetic)
  * Threshold: ตอบกลับเฉพาะ score >= 60 (218.1 raised from 25)
  */
 import { useMemo } from 'react'
 import type { LinenItemDef } from '@/types'
+import { matchesThaiQuery, matchesThaiQueryAllTokens } from './thai-search'
 
 export interface SimilarMatch {
   item: LinenItemDef
@@ -77,7 +81,11 @@ function tokenize(s: string): string[] {
 }
 
 /** คำนวณ similarity score ระหว่าง query กับ item */
-function computeScore(query: string, item: LinenItemDef): { score: number; reason: string } {
+function computeScore(
+  query: string,
+  item: LinenItemDef,
+  variantNames?: string[],
+): { score: number; reason: string } {
   const q = norm(query)
   const name = norm(item.name)
   const nameEn = norm(item.nameEn)
@@ -116,29 +124,71 @@ function computeScore(query: string, item: LinenItemDef): { score: number; reaso
   // 4. Token overlap
   const qTokens = tokenize(q)
   const nameTokens = tokenize(name)
-  if (qTokens.length === 0 || nameTokens.length === 0) return { score: 0, reason: '' }
-  const common = qTokens.filter(t => nameTokens.some(nt => nt.includes(t) || t.includes(nt)))
-  if (common.length === 0) return { score: 0, reason: '' }
+  const tokenScore = (() => {
+    if (qTokens.length === 0 || nameTokens.length === 0) return 0
+    const common = qTokens.filter(t => nameTokens.some(nt => nt.includes(t) || t.includes(nt)))
+    if (common.length === 0) return 0
+    const ratio = common.length / Math.max(qTokens.length, nameTokens.length)
+    return Math.round(ratio * 85) // 218.1: max 85
+  })()
+  if (tokenScore >= MIN_SCORE_TO_SHOW) {
+    const common = qTokens.filter(t => nameTokens.some(nt => nt.includes(t) || t.includes(nt)))
+    return { score: tokenScore, reason: `คล้ายคำ "${common.join(', ')}"` }
+  }
 
-  // ratio = common / max(qTokens, nameTokens)
-  const ratio = common.length / Math.max(qTokens.length, nameTokens.length)
-  const score = Math.round(ratio * 85) // 218.1: max 85 (raised from 60)
-  if (score < MIN_SCORE_TO_SHOW) return { score: 0, reason: '' }
-  return { score, reason: `คล้ายคำ "${common.join(', ')}"` }
+  // 5. Variant names (320) — user เคยใส่ชื่อนี้ใน QT/SD/LF แล้ว
+  if (variantNames && variantNames.length > 0) {
+    for (const v of variantNames) {
+      const vNorm = norm(v)
+      if (!vNorm || vNorm === name) continue
+      if (vNorm === q) return { score: 95, reason: `เคยใช้ชื่อนี้สำหรับ "${item.name}"` }
+      if (vNorm.includes(q) || q.includes(vNorm)) {
+        return { score: 75, reason: `ใกล้กับชื่ออื่น "${v}" ของ "${item.name}"` }
+      }
+    }
+  }
+
+  // 6. Cmd+K loose fallback (320) — matchesThaiQuery (split + Lev + phonetic)
+  // ใช้ logic เดียวกับ global search → เจอกรณีที่ score-based พลาด
+  // haystack: code + name + nameEn + variants
+  const haystack = [item.code, item.name, item.nameEn || '', ...(variantNames || [])]
+    .filter(Boolean)
+    .join(' ')
+  // ถ้า query มี space → multi-token (ทุก token ต้อง match) · ไม่งั้น single
+  const matched = q.includes(' ')
+    ? matchesThaiQueryAllTokens(haystack, q)
+    : matchesThaiQuery(haystack, q)
+  if (matched) {
+    return { score: 65, reason: `ใกล้เคียงกับ "${item.name}" (Cmd+K logic)` }
+  }
+
+  return { score: 0, reason: '' }
 }
 
-/** Hook: หา top-N similar items ใน catalog */
-export function useSimilarItems(query: string, catalog: LinenItemDef[], topN = 5): SimilarMatch[] {
+/** Hook: หา top-N similar items ใน catalog
+ *
+ * @param query        ข้อความที่ user พิมพ์
+ * @param catalog      Catalog ทั้งหมด
+ * @param topN         จำนวน matches สูงสุด
+ * @param variants     320 — Map code → list of variant names (จาก QT/SD/LF)
+ */
+export function useSimilarItems(
+  query: string,
+  catalog: LinenItemDef[],
+  topN = 5,
+  variants?: Map<string, string[]>,
+): SimilarMatch[] {
   return useMemo(() => {
     if (!query || query.trim().length < 2) return []
     const matches: SimilarMatch[] = []
     for (const item of catalog) {
-      const { score, reason } = computeScore(query, item)
+      const itemVariants = variants?.get(item.code)
+      const { score, reason } = computeScore(query, item, itemVariants)
       if (score >= MIN_SCORE_TO_SHOW) matches.push({ item, score, reason })
     }
     matches.sort((a, b) => b.score - a.score)
     return matches.slice(0, topN)
-  }, [query, catalog, topN])
+  }, [query, catalog, topN, variants])
 }
 
 /** Helper: guess category จากชื่อรายการ */
