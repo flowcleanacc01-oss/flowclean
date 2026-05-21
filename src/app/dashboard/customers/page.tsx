@@ -15,12 +15,14 @@ import Link from 'next/link'
 import Modal from '@/components/Modal'
 import SortableHeader from '@/components/SortableHeader'
 import CustomerSearchInline from '@/components/CustomerSearchInline'
+import ScheduleManager from '@/components/ScheduleManager'
+import AggregateManager from '@/components/AggregateManager'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
 import { isFlatRateCustomer } from '@/lib/customer-pricing'
 import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { listTrustCandidates } from '@/lib/trust-candidate'
 
-type PageTab = 'customers' | 'categories' | 'workflow'
+type PageTab = 'customers' | 'categories' | 'workflow' | 'schedule' | 'aggregate'
 type SortKey = 'shortName' | 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'tax' | 'qt' | 'contact' | 'isActive'
 
 const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
@@ -238,11 +240,15 @@ export default function CustomersPage() {
           <p className="text-sm text-slate-500 mt-0.5">{customers.length} ราย</p>
         </div>
         <div className="flex gap-2">
-          {(['customers', 'categories', 'workflow'] as const).map(t => (
+          {(['customers', 'categories', 'workflow', 'schedule', 'aggregate'] as const).map(t => (
             <button key={t} onClick={() => setPageTab(t)}
               className={cn('px-4 py-2 text-sm font-medium rounded-lg transition-colors',
                 pageTab === t ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
-              {t === 'customers' ? 'ลูกค้า' : t === 'categories' ? 'หมวด' : 'Workflow'}
+              {t === 'customers' ? 'ลูกค้า'
+                : t === 'categories' ? 'หมวด'
+                : t === 'workflow' ? 'Workflow'
+                : t === 'schedule' ? '📅 คิวส่ง'
+                : '📦 กลุ่มไซส์'}
             </button>
           ))}
           {pageTab === 'customers' && (
@@ -549,6 +555,12 @@ export default function CustomersPage() {
           </table>
         </div>
       )}
+
+      {/* ===== Schedule Manager Tab (321.2) ===== */}
+      {pageTab === 'schedule' && <ScheduleManager />}
+
+      {/* ===== Aggregate Manager Tab (321.1) ===== */}
+      {pageTab === 'aggregate' && <AggregateManager />}
 
       {/* ===== Workflow Tab (268) ===== */}
       {pageTab === 'workflow' && (() => {

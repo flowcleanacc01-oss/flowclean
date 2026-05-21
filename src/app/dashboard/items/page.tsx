@@ -87,6 +87,8 @@ export default function ItemsPage() {
   // 162.1: combine local search + URL ?q so live typing also highlights
   const highlightQ = [search, urlHighlightQ].filter(Boolean).join(' ').trim()
   const [filterCat, setFilterCat] = useState<string>('all')
+  // 321.3: filter by size group
+  const [filterGroup, setFilterGroup] = useState<string>('all')
   const [sortCol, setSortCol] = useState<SortColumn>('sortOrder')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [showAddItem, setShowAddItem] = useState(false)
@@ -184,6 +186,12 @@ export default function ItemsPage() {
     if (filterCat !== 'all') {
       items = items.filter(i => i.category === filterCat)
     }
+    // 321.3: Filter by size group
+    if (filterGroup === '__none__') {
+      items = items.filter(i => !i.sizeGroup)
+    } else if (filterGroup !== 'all') {
+      items = items.filter(i => i.sizeGroup === filterGroup)
+    }
     // Sort
     items.sort((a, b) => {
       let cmp = 0
@@ -199,7 +207,24 @@ export default function ItemsPage() {
       return sortDir === 'asc' ? cmp : -cmp
     })
     return items
-  }, [linenCatalog, search, filterCat, sortCol, sortDir, defaultPrices, getCategoryLabel])
+  }, [linenCatalog, search, filterCat, filterGroup, sortCol, sortDir, defaultPrices, getCategoryLabel])
+
+  // 321.3: Size groups ใน catalog + item count per group
+  const sizeGroupStats = useMemo(() => {
+    const map = new Map<string, number>()
+    let noneCount = 0
+    for (const it of linenCatalog) {
+      if (it.sizeGroup) {
+        map.set(it.sizeGroup, (map.get(it.sizeGroup) || 0) + 1)
+      } else {
+        noneCount++
+      }
+    }
+    return {
+      groups: Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0])),
+      noneCount,
+    }
+  }, [linenCatalog])
 
   const sortedCategories = useMemo(() =>
     [...linenCategories].sort((a, b) => a.sortOrder - b.sortOrder)
@@ -469,6 +494,18 @@ export default function ItemsPage() {
                 {sortedCategories.map(c => (
                   <option key={c.key} value={c.key}>{c.label}</option>
                 ))}
+              </select>
+              {/* 321.3: Size group filter */}
+              <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)}
+                className="px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                title="กรองตาม Size Group">
+                <option value="all">📦 ทุก group</option>
+                {sizeGroupStats.groups.map(([g, count]) => (
+                  <option key={g} value={g}>{g} ({count})</option>
+                ))}
+                {sizeGroupStats.noneCount > 0 && (
+                  <option value="__none__">ไม่ระบุ group ({sizeGroupStats.noneCount})</option>
+                )}
               </select>
               {selectedCodes.length > 0 && (
                 <button onClick={handleBulkDeleteItems}
