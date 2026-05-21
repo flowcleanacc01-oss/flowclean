@@ -7,7 +7,7 @@ import { formatCurrency, formatNumber, cn, formatDate, buildPriceMapFromQT } fro
 import { canViewPrice } from '@/lib/permissions'
 import {
   X, Building2, Phone, Mail, MapPin, FileText, CreditCard, Edit2,
-  Truck, Receipt, ClipboardCheck, TrendingUp, Package, AlertTriangle, Link2, ExternalLink, CalendarClock,
+  Truck, Receipt, ClipboardCheck, TrendingUp, Package, AlertTriangle, Link2, ExternalLink, CalendarClock, Boxes,
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -19,6 +19,8 @@ import RevenueTrendChart from '@/components/RevenueTrendChart'
 import CustomerSearchInline from '@/components/CustomerSearchInline'
 import Modal from '@/components/Modal'
 import ScheduleSetupModal from '@/components/ScheduleSetupModal'
+import AggregateGroupsModal from '@/components/AggregateGroupsModal'
+import { groupCarryOver, customerUsesAggregateGroups } from '@/lib/carry-over-groups'
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -114,18 +116,32 @@ export default function CustomerDetailPage() {
   }, [custBilling, custDelivery, custForms, customer, quotations, legacyTotalRevenue])
 
   // Carry-over
-  const carryOver = useMemo(() => {
-    const co = getCarryOver(id, '9999-12-31')
-    return Object.entries(co).filter(([, v]) => v !== 0)
+  const carryOverRaw = useMemo(() => {
+    return getCarryOver(id, '9999-12-31')
   }, [getCarryOver, id])
+
+  const carryOver = useMemo(() =>
+    Object.entries(carryOverRaw).filter(([, v]) => v !== 0),
+    [carryOverRaw])
 
   const catalogMap = useMemo(() =>
     Object.fromEntries(linenCatalog.map(i => [i.code, i.name])),
     [linenCatalog])
 
+  // 317: Carry-over grouped by sizeGroup
+  const carryOverGrouped = useMemo(() => {
+    if (!customer) return { groups: [], ungrouped: [] }
+    return groupCarryOver(carryOverRaw, customer, linenCatalog)
+  }, [carryOverRaw, customer, linenCatalog])
+
+  const usesGroups = customer ? customerUsesAggregateGroups(customer) : false
+
   // 238: orphan code cleanup modal — เปิดจาก carry-over badge
   const [orphanCleanupCode, setOrphanCleanupCode] = useState<string | null>(null)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [showAggregateGroupsModal, setShowAggregateGroupsModal] = useState(false)
+  // 317: by-group view toggle — default = on ถ้าลูกค้า opt-in aggregate groups
+  const [carryViewMode, setCarryViewMode] = useState<'group' | 'item'>('group')
 
   // Linked accepted QT for this customer (matched by customerId, only 1 allowed)
   const linkedQT = useMemo(() =>
@@ -414,42 +430,201 @@ export default function CustomerDetailPage() {
             )}
           </div>
 
-          {/* Carry-over */}
-          {carryOver.length > 0 && (
-            <div className="bg-white rounded-xl border border-amber-200 p-5">
-              <h3 className="font-semibold text-amber-800 mb-3 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />ผ้าค้าง
+          {/* 317: Aggregate Size Groups Card */}
+          <div className={cn(
+            'rounded-xl border p-5',
+            customer.aggregateSizeGroups && customer.aggregateSizeGroups.length > 0
+              ? 'bg-white border-indigo-200'
+              : 'bg-slate-50 border-slate-200',
+          )}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold flex items-center gap-2 text-slate-800">
+                <Boxes className="w-4 h-4" />การนับรวมไซส์
               </h3>
-              <div className="space-y-1">
-                {carryOver.map(([code, qty]) => {
-                  const isOrphan = !catalogMap[code]
+              <button
+                type="button"
+                onClick={() => setShowAggregateGroupsModal(true)}
+                className="text-xs text-[#1B3A5C] hover:underline flex items-center gap-1 font-medium"
+              >
+                {customer.aggregateSizeGroups && customer.aggregateSizeGroups.length > 0 ? 'แก้ไข' : 'ตั้งค่า'}
+                <Edit2 className="w-3 h-3" />
+              </button>
+            </div>
+            {customer.aggregateSizeGroups && customer.aggregateSizeGroups.length > 0 ? (
+              <div className="space-y-2 text-sm">
+                {customer.aggregateSizeGroups.map(cfg => {
+                  const itemsInGroup = linenCatalog.filter(i => i.sizeGroup === cfg.groupKey)
                   return (
-                    <div key={code} className="flex justify-between text-sm py-1">
-                      <span className="text-slate-600 flex items-center gap-2">
-                        {isOrphan ? (
-                          <>
-                            <span className="font-mono text-orange-700">{code}</span>
-                            {/* 238: orphan badge — ลบจาก catalog แล้ว แต่ค้างใน LF */}
-                            <button
-                              type="button"
-                              onClick={() => setOrphanCleanupCode(code)}
-                              className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-300 hover:bg-orange-200 transition-colors"
-                              title="รหัสนี้ถูกลบจาก catalog แล้ว · คลิกเพื่อจัดการ"
-                            >
-                              ลบจาก catalog แล้ว
-                            </button>
-                          </>
-                        ) : (
-                          catalogMap[code]
-                        )}
-                      </span>
-                      <span className={cn('font-medium', qty < 0 ? 'text-red-600' : 'text-emerald-600')}>
-                        {qty > 0 ? '+' : ''}{qty}
-                      </span>
+                    <div key={cfg.groupKey} className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono font-bold text-indigo-700 text-xs">{cfg.groupKey}</span>
+                        <span className="text-[10px] text-slate-500">· {itemsInGroup.length} รายการ</span>
+                        <span className={cn(
+                          'ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                          cfg.col2Mode === 'aggregate' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700',
+                        )}>
+                          {cfg.col2Mode === 'aggregate' ? '🧺 ส่งรวม' : '📋 ส่งแยก'}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {itemsInGroup.map(it => (
+                          <span key={it.code} className="text-[10px] font-mono text-slate-500">
+                            {it.code}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )
                 })}
+                <p className="text-[10px] text-slate-400 pt-1">
+                  💡 Phase 1: Carry-over คำนวณ at group level ใน view by-group · Phase 2: LF UI จะมีช่องกรอกรวม
+                </p>
               </div>
+            ) : (
+              <p className="text-sm text-slate-500">
+                ลูกค้านี้นับแยกไซส์ทุกรายการ — ตั้งค่าถ้าต้องการให้บาง group นับรวมไซส์ตอนรับเข้า (เช่น ผ้าปูเตียง)
+              </p>
+            )}
+          </div>
+
+          {/* Carry-over · 317: รองรับ by-group view */}
+          {carryOver.length > 0 && (
+            <div className="bg-white rounded-xl border border-amber-200 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-amber-800 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />ผ้าค้าง
+                </h3>
+                {/* 317: View toggle — แสดงเฉพาะลูกค้าที่ opt-in size groups */}
+                {usesGroups && carryOverGrouped.groups.length > 0 && (
+                  <div className="inline-flex items-center bg-slate-100 rounded-lg p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setCarryViewMode('group')}
+                      className={cn(
+                        'px-2 py-1 rounded font-medium transition-colors',
+                        carryViewMode === 'group' ? 'bg-white text-[#1B3A5C] shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                      )}
+                    >
+                      📦 รวมกลุ่ม
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCarryViewMode('item')}
+                      className={cn(
+                        'px-2 py-1 rounded font-medium transition-colors',
+                        carryViewMode === 'item' ? 'bg-white text-[#1B3A5C] shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                      )}
+                    >
+                      📋 แยกไซส์
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* By-group view — default ถ้าลูกค้า opt-in */}
+              {usesGroups && carryViewMode === 'group' && carryOverGrouped.groups.length > 0 ? (
+                <div className="space-y-3">
+                  {/* Grouped items */}
+                  {carryOverGrouped.groups.map(grp => (
+                    <details key={grp.groupKey} className="rounded-lg border border-indigo-100 bg-indigo-50/20 overflow-hidden">
+                      <summary className="cursor-pointer px-3 py-2 hover:bg-indigo-50 transition-colors list-none flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          <Package className="w-3.5 h-3.5 text-indigo-600" />
+                          <span className="font-mono font-bold text-indigo-700 text-xs">{grp.groupKey}</span>
+                          <span className="text-[10px] text-slate-500">{grp.items.length} ไซส์</span>
+                        </span>
+                        <span className={cn(
+                          'font-bold text-sm',
+                          grp.netCarry < 0 ? 'text-red-600' : 'text-emerald-600',
+                        )}>
+                          {grp.netCarry > 0 ? '+' : ''}{grp.netCarry}
+                        </span>
+                      </summary>
+                      <div className="px-3 pb-2 pt-1 space-y-0.5 border-t border-indigo-100 text-xs">
+                        {grp.items.map(it => (
+                          <div key={it.code} className="flex justify-between py-0.5">
+                            <span className="text-slate-500 flex items-center gap-1.5">
+                              <code className="font-mono text-slate-400">{it.code}</code>
+                              <span>{it.name}</span>
+                            </span>
+                            <span className={cn('font-medium', it.carry < 0 ? 'text-red-500' : 'text-emerald-600')}>
+                              {it.carry > 0 ? '+' : ''}{it.carry}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+
+                  {/* Ungrouped items (ไม่อยู่ใน opt-in group) */}
+                  {carryOverGrouped.ungrouped.length > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-slate-100">
+                      {carryOverGrouped.ungrouped.map(it => {
+                        const isOrphan = !catalogMap[it.code]
+                        return (
+                          <div key={it.code} className="flex justify-between text-sm py-1">
+                            <span className="text-slate-600 flex items-center gap-2">
+                              {isOrphan ? (
+                                <>
+                                  <span className="font-mono text-orange-700">{it.code}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setOrphanCleanupCode(it.code)}
+                                    className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-300 hover:bg-orange-200 transition-colors"
+                                    title="รหัสนี้ถูกลบจาก catalog แล้ว · คลิกเพื่อจัดการ"
+                                  >
+                                    ลบจาก catalog แล้ว
+                                  </button>
+                                </>
+                              ) : (
+                                catalogMap[it.code]
+                              )}
+                            </span>
+                            <span className={cn('font-medium', it.carry < 0 ? 'text-red-600' : 'text-emerald-600')}>
+                              {it.carry > 0 ? '+' : ''}{it.carry}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-slate-400 pt-1 italic">
+                    💡 รวมกลุ่ม = sum ของทุก code ใน group · ตรงกับ "ค้าง/คืน" จริงเมื่อนับรวมไซส์ตอนรับเข้า
+                  </p>
+                </div>
+              ) : (
+                /* By-item view (เดิม) */
+                <div className="space-y-1">
+                  {carryOver.map(([code, qty]) => {
+                    const isOrphan = !catalogMap[code]
+                    return (
+                      <div key={code} className="flex justify-between text-sm py-1">
+                        <span className="text-slate-600 flex items-center gap-2">
+                          {isOrphan ? (
+                            <>
+                              <span className="font-mono text-orange-700">{code}</span>
+                              <button
+                                type="button"
+                                onClick={() => setOrphanCleanupCode(code)}
+                                className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-300 hover:bg-orange-200 transition-colors"
+                                title="รหัสนี้ถูกลบจาก catalog แล้ว · คลิกเพื่อจัดการ"
+                              >
+                                ลบจาก catalog แล้ว
+                              </button>
+                            </>
+                          ) : (
+                            catalogMap[code]
+                          )}
+                        </span>
+                        <span className={cn('font-medium', qty < 0 ? 'text-red-600' : 'text-emerald-600')}>
+                          {qty > 0 ? '+' : ''}{qty}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -658,6 +833,13 @@ export default function CustomerDetailPage() {
       <ScheduleSetupModal
         open={showScheduleModal}
         onClose={() => setShowScheduleModal(false)}
+        customer={customer}
+      />
+
+      {/* 317: Aggregate Size Groups Modal */}
+      <AggregateGroupsModal
+        open={showAggregateGroupsModal}
+        onClose={() => setShowAggregateGroupsModal(false)}
         customer={customer}
       />
     </div>

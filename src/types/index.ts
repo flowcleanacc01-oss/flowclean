@@ -68,6 +68,11 @@ export interface LinenItemDef {
   facets?: LinenFacets
   /** Deterministic hash of facets — same facets = same key (กัน dup ระดับ schema) */
   facetKey?: string
+  // 317 Phase 1 — Size Groups (รวมไซส์ตอนนับเข้า)
+  // Codes ที่มี sizeGroup เดียวกัน = "ครอบครัวไซส์" — ลูกค้า opt-in รายตัว
+  // เช่น S/T, S/Q, S/K → sizeGroup="BEDSHEET"
+  // ใช้กับรายการที่แยกไซส์ตอนนับเข้ายาก (ผ้าใหญ่/ผ้าหลายสี)
+  sizeGroup?: string
 }
 
 // Standard 21 items + 3 custom slots
@@ -201,6 +206,22 @@ export interface Customer {
   scheduleDays?: number[]
   scheduleStartDate?: string // ISO date
   scheduleNote?: string
+  // 317 Phase 1 — Aggregate Size Groups (per-customer opt-in)
+  // ลูกค้า opt-in รายตัวว่า size group ไหน "นับรวมไซส์" บ้าง
+  // groupKey ตรงกับ LinenItemDef.sizeGroup
+  // col2Mode: ลูกค้าส่ง col2 (นับส่งซัก) แบบไหน
+  //   - 'aggregate' = ส่งรวมไม่แยกไซส์ (กรอก col2 ที่ group level)
+  //   - 'per_row'   = ส่งแยกไซส์ (กรอก col2 ต่อ row ตามเดิม)
+  aggregateSizeGroups?: AggregateSizeGroupConfig[]
+}
+
+// 317 Phase 1 — Aggregate Size Group Config (per customer, per group)
+export interface AggregateSizeGroupConfig {
+  groupKey: string                       // ตรงกับ LinenItemDef.sizeGroup
+  col2Mode: 'aggregate' | 'per_row'      // ลูกค้านับส่งซัก: รวม หรือ แยกไซส์
+  // col3 (เคลม) แยกเสมอ — ไม่ track ที่นี่
+  // col5 (โรงซักนับเข้า) รวมเสมอเมื่อ opt-in — เป็นเหตุผลหลักของ feature นี้
+  // col6 (โรงซักแพคส่ง) แยกเสมอ — track ไซส์หลังพับ
 }
 
 // 311 — Schedule type สำหรับ Schedule-Based SD Audit
@@ -333,6 +354,13 @@ export interface LinenForm {
   isExported?: boolean  // auto-set when user exports JPG/PDF/CSV
   // 265 — snapshot ตอนสร้าง LF (กัน drift เมื่อ customer toggle ภายหลัง)
   workflowMode?: WorkflowMode
+  // 317 Phase 2 — Group-level inputs (รวมไซส์ตอนนับเข้า)
+  // { [groupKey]: { col5?: number, col2?: number } }
+  // - col5 = โรงซักนับเข้ารวมทั้ง group (เมื่อ customer opt-in)
+  // - col2 = ลูกค้านับส่งซักรวม (เมื่อ col2Mode = 'aggregate')
+  // - col3 เคลม + col6 แพคส่ง ใช้ row-level เสมอ
+  // Phase 1: จะอยู่ใน schema แต่ยังไม่ใช้ — read-only views อ่าน row-level sum
+  groupInputs?: Record<string, { col5?: number; col2?: number }>
 }
 
 // ============================================================

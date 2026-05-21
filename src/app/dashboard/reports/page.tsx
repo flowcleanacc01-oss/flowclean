@@ -12,6 +12,7 @@ import MonthlyStockReportPrint from '@/components/MonthlyStockReportPrint'
 import MonthlyConsolidationPrint from '@/components/MonthlyConsolidationPrint'
 import CustomerPicker from '@/components/CustomerPicker'
 import CarryOverReportPrint from '@/components/CarryOverReportPrint'
+import { groupCarryOver, customerUsesAggregateGroups } from '@/lib/carry-over-groups'
 import Modal from '@/components/Modal'
 import CarryOverAdjustModal from '@/components/CarryOverAdjustModal'
 import UndoPanel from '@/components/UndoPanel'
@@ -763,6 +764,54 @@ export default function ReportsPage() {
             {/* 296: Undo panel — ย้อนการกระทำ ปรับยอด/แก้ไข/ลบ ภายใน 7 วัน */}
             <UndoPanel filterTypes={['carry_over']} />
           </div>
+
+          {/* 317: By-Group Summary — แสดงเฉพาะลูกค้าที่ opt-in size groups */}
+          {coMode !== 'compare' && selCustomer && customerUsesAggregateGroups(selCustomer) && (() => {
+            const grouped = groupCarryOver(coCarriedAfter, selCustomer, linenCatalog)
+            if (grouped.groups.length === 0) return null
+            return (
+              <div className="bg-white rounded-xl border border-indigo-200 p-4">
+                <h3 className="font-semibold text-indigo-900 mb-3 flex items-center gap-2 text-sm">
+                  📦 สรุปแบบรวมกลุ่ม (ที่สิ้น {formatDate(coEndDate)})
+                  <span className="text-[10px] text-slate-500 font-normal">— สำหรับลูกค้าที่นับรวมไซส์ตอนรับเข้า</span>
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {grouped.groups.map(grp => (
+                    <details key={grp.groupKey} className="rounded-lg border border-indigo-100 bg-indigo-50/30 overflow-hidden">
+                      <summary className="cursor-pointer px-3 py-2 hover:bg-indigo-50 transition-colors list-none flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-indigo-700 text-xs">{grp.groupKey}</span>
+                          <span className="text-[10px] text-slate-500">{grp.items.length} ไซส์</span>
+                        </span>
+                        <span className={cn(
+                          'font-bold text-sm',
+                          grp.netCarry < 0 ? 'text-red-600' : 'text-emerald-600',
+                        )}>
+                          {grp.netCarry > 0 ? '+' : ''}{grp.netCarry}
+                        </span>
+                      </summary>
+                      <div className="px-3 pb-2 pt-1 space-y-0.5 border-t border-indigo-100 text-xs">
+                        {grp.items.map(it => (
+                          <div key={it.code} className="flex justify-between py-0.5">
+                            <span className="text-slate-500 flex items-center gap-1.5">
+                              <code className="font-mono text-slate-400">{it.code}</code>
+                              <span className="truncate">{it.name}</span>
+                            </span>
+                            <span className={cn('font-medium', it.carry < 0 ? 'text-red-500' : 'text-emerald-600')}>
+                              {it.carry > 0 ? '+' : ''}{it.carry}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2 italic">
+                  💡 ตัวเลขสะสม "ค้าง/คืน" จริงของแต่ละกลุ่ม = sum ของทุก code ใน group · ตรงกับ workflow รวมไซส์ตอนรับเข้า
+                </p>
+              </div>
+            )
+          })()}
 
           {/* Compare Mode — แสดง 4 เคสคู่กัน */}
           {coMode === 'compare' && coCompareValues && (

@@ -234,7 +234,7 @@ export default function ItemsPage() {
 
   const handleStartEdit = (item: LinenItemDef) => {
     setEditingCode(item.code)
-    setEditItem({ name: item.name, nameEn: item.nameEn, category: item.category, unit: item.unit })
+    setEditItem({ name: item.name, nameEn: item.nameEn, category: item.category, unit: item.unit, sizeGroup: item.sizeGroup })
   }
 
   const handleSaveEdit = (code: string) => {
@@ -432,6 +432,19 @@ export default function ItemsPage() {
         ))}
       </div>
 
+      {/* 317: Datalist สำหรับ Size Group suggestions */}
+      <datalist id="size-group-suggestions">
+        {Array.from(new Set(linenCatalog.map(i => i.sizeGroup).filter((g): g is string => !!g))).sort().map(g => (
+          <option key={g} value={g} />
+        ))}
+        <option value="BEDSHEET" />
+        <option value="PILLOWCASE" />
+        <option value="DUVET_COVER" />
+        <option value="DUVET_INSERT" />
+        <option value="MATTRESS_PAD" />
+        <option value="SPA_TOWEL" />
+      </datalist>
+
       {/* Items Tab */}
       {tab === 'items' && (
         <div className="space-y-4">
@@ -439,7 +452,7 @@ export default function ItemsPage() {
             <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-3">
               <div>
                 <h3 className="font-medium text-slate-700">รายการผ้า ({linenCatalog.length} รายการ)</h3>
-                <p className="text-xs text-slate-400 mt-0.5">เพิ่ม/แก้ไข/ลบรายการผ้า และตั้งราคา default</p>
+                <p className="text-xs text-slate-400 mt-0.5">เพิ่ม/แก้ไข/ลบรายการผ้า และตั้งราคา default · ตั้ง 📦 Group เพื่อรองรับลูกค้าที่นับรวมไซส์</p>
               </div>
               <div className="flex-1" />
               {/* Search — 281.1: accent teal border for visibility */}
@@ -595,6 +608,10 @@ export default function ItemsPage() {
                     <th className={cn("text-left px-4 py-2 font-medium cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('unit'))} onClick={() => handleSort('unit')}>
                       <span className="flex items-center">หน่วย<SortIcon col="unit" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
+                    {/* 317: Size Group — รวมไซส์ตอนนับเข้า */}
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">
+                      <span className="flex items-center" title="กลุ่มรวมไซส์ — codes ที่อยู่ใน group เดียวกัน ลูกค้า opt-in นับรวมตอนรับเข้าได้">📦 Group</span>
+                    </th>
                     <th className={cn("text-right px-4 py-2 font-medium w-28 cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('defaultPrice'))} onClick={() => handleSort('defaultPrice')}>
                       <span className="flex items-center justify-end">ราคา default<SortIcon col="defaultPrice" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
@@ -720,6 +737,24 @@ export default function ItemsPage() {
                             onChange={e => setEditItem({ ...editItem, unit: e.target.value })}
                             className="w-16 px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                         ) : item.unit}
+                      </td>
+                      {/* 317: Size Group cell */}
+                      <td className="px-4 py-2 text-xs">
+                        {editingCode === item.code ? (
+                          <input
+                            value={editItem.sizeGroup ?? item.sizeGroup ?? ''}
+                            onChange={e => setEditItem({ ...editItem, sizeGroup: e.target.value.toUpperCase().trim() || undefined })}
+                            placeholder="เช่น BEDSHEET"
+                            list="size-group-suggestions"
+                            className="w-28 px-2 py-1 border border-slate-200 rounded text-sm font-mono focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                          />
+                        ) : item.sizeGroup ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[10px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                            {item.sizeGroup}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">−</span>
+                        )}
                       </td>
                       <td className={cn("px-4 py-2 text-right", sortedBg('defaultPrice'))}>
                         {/* 243: arrow ↑↓/Enter เลื่อน row + onFocus auto-select (เหมือน LF/QT) */}

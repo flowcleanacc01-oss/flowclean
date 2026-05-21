@@ -68,6 +68,9 @@ const FIELD_MAP: Record<string, string> = {
   scheduleStartDate: 'schedule_start_date',       // 311
   scheduleNote: 'schedule_note',                  // 311
   isExtraRound: 'is_extra_round',                 // 311
+  sizeGroup: 'size_group',                        // 317
+  aggregateSizeGroups: 'aggregate_size_groups',   // 317
+  groupInputs: 'group_inputs',                    // 317
   vatRate: 'vat_rate',
   withholdingRate: 'withholding_rate',
   formNumber: 'form_number',
