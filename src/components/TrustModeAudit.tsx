@@ -13,13 +13,24 @@ import { formatDate, cn, startOfMonthISO, endOfMonthISO, formatExportFilename } 
 import DateFilter from '@/components/DateFilter'
 import CustomerPicker from '@/components/CustomerPicker'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
+import Modal from '@/components/Modal'
 import {
   Search, AlertTriangle, AlertOctagon, CheckCircle2, FileSpreadsheet,
   ShieldCheck, Eye, ArrowUpDown, ChevronDown, ChevronUp, ExternalLink,
+  RefreshCw,
 } from 'lucide-react'
 
 type TrustReason = 'snapshot_mismatch' | 'snapshot_missing'
 type Severity = 'critical' | 'high' | 'warning' | 'info'
+
+interface PendingFix {
+  lfId: string
+  lfNumber: string
+  customerShortName: string
+  fromMode: string | null
+  toMode: string
+  reason: TrustReason
+}
 
 const REASON_CONFIG: Record<TrustReason, { label: string; color: string; icon: string }> = {
   snapshot_mismatch: { label: 'snapshot ≠ ปัจจุบัน', color: 'orange', icon: '🔀' },
@@ -31,7 +42,8 @@ type SortDir = 'asc' | 'desc'
 
 export default function TrustModeAudit() {
   const router = useRouter()
-  const { linenForms, customers } = useStore()
+  const { linenForms, customers, updateLinenForm } = useStore()
+  const [pendingFix, setPendingFix] = useState<PendingFix | null>(null)
 
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')
   const [dateFrom, setDateFrom] = useState<string>(() => startOfMonthISO())
@@ -161,6 +173,36 @@ export default function TrustModeAudit() {
 
   const goToLF = (lfId: string) => router.push(`/dashboard/linen-forms?detail=${lfId}`)
 
+  // 316: Sync snapshot — set LF.workflowMode = customer.workflowMode (current)
+  // - snapshot_missing → safe (เพิ่ม field เปล่า)
+  // - snapshot_mismatch → ต้อง confirm เพราะอาจ overwrite snapshot ที่ถูกต้องอยู่แล้ว
+  const handleSync = (row: typeof sortedRows[number]) => {
+    if (row.reason === null) return
+    const fix: PendingFix = {
+      lfId: row.lfId,
+      lfNumber: row.lfNumber,
+      customerShortName: row.customerShortName,
+      fromMode: row.lfMode,
+      toMode: row.currentMode,
+      reason: row.reason,
+    }
+    if (row.reason === 'snapshot_missing') {
+      // safe — apply ทันที (ใส่ snapshot ที่ขาดหายไป)
+      updateLinenForm(row.lfId, { workflowMode: row.currentMode as 'cross_check' | 'trust_customer' })
+    } else {
+      // mismatch — เปิด confirm modal เพราะมีความเสี่ยง
+      setPendingFix(fix)
+    }
+  }
+
+  const confirmSync = () => {
+    if (!pendingFix) return
+    updateLinenForm(pendingFix.lfId, {
+      workflowMode: pendingFix.toMode as 'cross_check' | 'trust_customer',
+    })
+    setPendingFix(null)
+  }
+
   return (
     <div className="space-y-5">
       <div className="bg-gradient-to-r from-[#1B3A5C] to-[#3DD8D8] rounded-xl p-5 text-white">
@@ -275,7 +317,7 @@ export default function TrustModeAudit() {
                 <th className="text-center px-2 py-2.5 font-medium text-slate-600 text-xs">LF mode</th>
                 <th className="text-center px-2 py-2.5 font-medium text-slate-600 text-xs">Customer now</th>
                 <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">Issue</th>
-                <th className="text-center px-2 py-2.5 font-medium text-slate-600 text-xs">→</th>
+                <th className="text-center px-2 py-2.5 font-medium text-slate-600 text-xs">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -323,9 +365,33 @@ export default function TrustModeAudit() {
                     )}
                   </td>
                   <td className="px-2 py-2 text-center">
-                    <button onClick={() => goToLF(r.lfId)} className="p-1 text-slate-400 hover:text-[#1B3A5C]">
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="inline-flex items-center gap-1">
+                      {r.reason !== null && (
+                        <button
+                          type="button"
+                          onClick={() => handleSync(r)}
+                          title={r.reason === 'snapshot_missing'
+                            ? `ใส่ snapshot ที่ขาด → ${r.currentMode}`
+                            : `เปลี่ยน snapshot จาก ${r.lfMode} → ${r.currentMode} (มีความเสี่ยง — confirm ก่อน)`}
+                          className={cn(
+                            'p-1 rounded transition-colors',
+                            r.reason === 'snapshot_missing'
+                              ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'
+                              : 'text-orange-600 hover:text-orange-700 hover:bg-orange-50',
+                          )}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => goToLF(r.lfId)}
+                        title="เปิด LF detail"
+                        className="p-1 text-slate-400 hover:text-[#1B3A5C]"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -343,8 +409,8 @@ export default function TrustModeAudit() {
       </div>
 
       <div className="text-xs text-slate-400 italic mt-2 px-2">
-        <strong>read-only</strong> — Feat 265 + 268: customer.workflowMode = current setting · LF.workflowMode = snapshot ตอน create.
-        <br />Mismatch ไม่ใช่ bug — แต่ควรรู้ว่า calc carry-over จะใช้ snapshot ของ LF เป็นหลัก
+        <strong>Feat 265 + 268 + 316</strong>: customer.workflowMode = current setting · LF.workflowMode = snapshot ตอน create.
+        <br />Mismatch ไม่ใช่ bug — calc carry-over ใช้ snapshot ของ LF เป็นหลัก · คลิก <RefreshCw className="w-3 h-3 inline mb-0.5" /> เพื่อ sync snapshot
       </div>
 
       <FloatingTotalBar show={sortedRows.length > 0}>
@@ -357,6 +423,76 @@ export default function TrustModeAudit() {
           )}
         </span>
       </FloatingTotalBar>
+
+      {/* 316: Confirm modal — snapshot_mismatch ต้อง confirm ก่อนแก้ เพราะมีความเสี่ยง */}
+      <Modal
+        open={!!pendingFix}
+        onClose={() => setPendingFix(null)}
+        title="ยืนยัน Sync snapshot"
+        size="md"
+        closeLabel="cancel"
+      >
+        {pendingFix && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 text-sm">
+              <p className="font-semibold text-orange-900 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />คุณกำลังจะเปลี่ยน snapshot ที่บันทึกไว้
+              </p>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex gap-2"><span className="text-slate-500 min-w-[80px]">LF:</span><span className="font-mono font-semibold">{pendingFix.lfNumber}</span></div>
+              <div className="flex gap-2"><span className="text-slate-500 min-w-[80px]">ลูกค้า:</span><span className="font-medium">{pendingFix.customerShortName}</span></div>
+              <div className="flex gap-2"><span className="text-slate-500 min-w-[80px]">เปลี่ยน:</span>
+                <span className="flex items-center gap-2">
+                  <code className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">{pendingFix.fromMode}</code>
+                  <span className="text-slate-400">→</span>
+                  <code className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{pendingFix.toMode}</code>
+                </span>
+              </div>
+            </div>
+
+            {pendingFix.fromMode === 'cross_check' && pendingFix.toMode === 'trust_customer' && (
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm">
+                <p className="font-semibold text-red-900 mb-1">⚠ ความเสี่ยง: cross_check → trust_customer</p>
+                <p className="text-red-700 text-xs">
+                  LF ใบนี้สร้างตอน cross_check → col5 (โรงซักนับเข้า) มีข้อมูลครบ การคำนวณ carry-over ปัจจุบันใช้ Mode 1 (col6 − col5) ถ้าเปลี่ยนเป็น trust_customer → จะใช้ Mode 2 (col6 − col2+col3) แทน → carry-over อาจเปลี่ยนค่า
+                </p>
+              </div>
+            )}
+            {pendingFix.fromMode === 'trust_customer' && pendingFix.toMode === 'cross_check' && (
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm">
+                <p className="font-semibold text-red-900 mb-1">⚠ ความเสี่ยง: trust_customer → cross_check</p>
+                <p className="text-red-700 text-xs">
+                  LF ใบนี้สร้างตอน trust_customer → col5 (โรงซักนับเข้า) อาจไม่ได้กรอก (เป็น 0) ถ้าเปลี่ยนเป็น cross_check → carry-over จะใช้ Mode 1 (col6 − col5) → ค่า col5=0 จะทำให้ carry-over ผิดมหาศาล (= +col6 ทั้งหมด)
+                </p>
+              </div>
+            )}
+
+            <div className="text-xs text-slate-500">
+              💡 ปกติแล้ว <strong>ไม่ต้อง sync</strong> — snapshot mismatch ไม่ใช่ bug LF เก่ายังคำนวณถูกตาม snapshot ตอนสร้าง
+              <br />Sync เฉพาะเมื่อ ติ๊ดตั้งใจให้ LF ใบนี้ใช้ workflow ใหม่ (เช่นแก้ไขย้อนหลังเพื่อ correct config error)
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setPendingFix(null)}
+                className="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={confirmSync}
+                className="px-4 py-2 text-sm font-semibold rounded-lg bg-orange-600 text-white hover:bg-orange-700 transition-colors flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-4 h-4" />ยืนยัน Sync
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
