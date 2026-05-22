@@ -511,18 +511,18 @@ export default function LinenFormGrid({
                     </span>
                   </td>
 
-                  {/* Col 2 - ลูกค้านับส่ง · 328: เข้มขึ้น + active state */}
+                  {/* Col 2 - ลูกค้านับส่ง · 328: เข้มขึ้น + active state · 329: ความหนาเท่า cell ปกติ */}
                   <td className={cn(
                     'px-1 py-1 text-center',
-                    // 328.2: เส้นขอบบน/ล่างของกลุ่ม aggregate — เปลี่ยนสี+หนาเมื่อ active
+                    // 328.2/329: เส้นขอบบน/ล่างของกลุ่ม aggregate — คงหนา 1px เปลี่ยนเฉพาะสี
                     aggMeta?.col2Aggregate && aggMeta.isFirstInGroup && (
                       isAggGroupActive(aggMeta.groupKey, 'col2')
-                        ? 'border-t-2 border-t-[#3DD8D8]'
+                        ? 'border-t border-t-[#3DD8D8]'
                         : 'border-t border-t-slate-300'
                     ),
                     aggMeta?.col2Aggregate && aggMeta.isLastInGroup && (
                       isAggGroupActive(aggMeta.groupKey, 'col2')
-                        ? 'border-b-2 border-b-[#3DD8D8]'
+                        ? 'border-b border-b-[#3DD8D8]'
                         : 'border-b border-b-slate-300'
                     ),
                   )}>
@@ -550,7 +550,7 @@ export default function LinenFormGrid({
                               }}
                               onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); setActiveColIdx(COL_NAV_INDEX.col2); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                               onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col2)}
-                              className="w-16 px-2 py-1 border border-slate-300 rounded text-center text-sm focus:ring-2 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
+                              className="w-16 px-2 py-1 border border-slate-300 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
                             />
                           ) : (
                             <span className="text-slate-700">{row.col2_hotelCountIn || '-'}</span>
@@ -569,7 +569,7 @@ export default function LinenFormGrid({
                               disabled={!isEditable('col2')}
                               title={isEditable('col2') ? 'ค่ารวมอยู่ที่ row anchor — คลิกเพื่อ focus' : 'ค่ารวมอยู่ที่ row anchor'}
                               className={cn(
-                                'text-base font-semibold transition-colors disabled:cursor-default',
+                                'text-sm transition-colors disabled:cursor-default',
                                 active ? 'text-[#3DD8D8]' : 'text-slate-400 hover:text-[#3DD8D8]',
                               )}
                             >
@@ -620,19 +620,19 @@ export default function LinenFormGrid({
                     )}
                   </td>
 
-                  {/* Col 5 - โรงซักนับเข้า · 328: เข้มขึ้น + active state */}
+                  {/* Col 5 - โรงซักนับเข้า · 328: เข้มขึ้น + active state · 329: ความหนาเท่า cell ปกติ */}
                   <td className={cn(
                     'px-1 py-1 text-center',
                     !isTrustCustomer && hasCountInDisc && !aggMeta?.col5Aggregate && 'bg-amber-50',
-                    // 328.2: เส้นขอบบน/ล่างของกลุ่ม aggregate — เปลี่ยนสี+หนาเมื่อ active
+                    // 328.2/329: เส้นขอบบน/ล่างของกลุ่ม aggregate — คงหนา 1px เปลี่ยนเฉพาะสี
                     aggMeta?.col5Aggregate && aggMeta.isFirstInGroup && (
                       isAggGroupActive(aggMeta.groupKey, 'col5')
-                        ? 'border-t-2 border-t-[#3DD8D8]'
+                        ? 'border-t border-t-[#3DD8D8]'
                         : 'border-t border-t-slate-300'
                     ),
                     aggMeta?.col5Aggregate && aggMeta.isLastInGroup && (
                       isAggGroupActive(aggMeta.groupKey, 'col5')
-                        ? 'border-b-2 border-b-[#3DD8D8]'
+                        ? 'border-b border-b-[#3DD8D8]'
                         : 'border-b border-b-slate-300'
                     ),
                   )}>
@@ -663,7 +663,7 @@ export default function LinenFormGrid({
                               }}
                               onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); setActiveColIdx(COL_NAV_INDEX.col5); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                               onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col5)}
-                              className="w-16 px-2 py-1 border border-slate-300 rounded text-center text-sm focus:ring-2 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
+                              className="w-16 px-2 py-1 border border-slate-300 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
                             />
                           ) : (
                             <span className="text-slate-700">{row.col5_factoryClaimApproved || '-'}</span>
@@ -682,7 +682,7 @@ export default function LinenFormGrid({
                               disabled={!isEditable('col5')}
                               title={isEditable('col5') ? 'ค่ารวมอยู่ที่ row anchor — คลิกเพื่อ focus' : 'ค่ารวมอยู่ที่ row anchor'}
                               className={cn(
-                                'text-base font-semibold transition-colors disabled:cursor-default',
+                                'text-sm transition-colors disabled:cursor-default',
                                 active ? 'text-[#3DD8D8]' : 'text-slate-400 hover:text-[#3DD8D8]',
                               )}
                             >
