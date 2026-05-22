@@ -242,12 +242,12 @@ export default function CustomerDetailPage() {
           </span>
         )}
         {linkedQT ? (
-          <Link href={`/dashboard/billing?tab=quotation&openqt=${linkedQT.id}`}
+          <Link href={`/dashboard/billing?tab=quotation&openqt=${linkedQT.id}&qtcustomer=${id}`}
             className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
             <Link2 className="w-3 h-3" />{linkedQT.quotationNumber}
           </Link>
         ) : (
-          <Link href={`/dashboard/billing?tab=quotation&newqt=${id}`}
+          <Link href={`/dashboard/billing?tab=quotation&newqt=${id}&qtcustomer=${id}`}
             className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">
             <Link2 className="w-3 h-3" />ยังไม่มี QT
           </Link>
@@ -320,12 +320,12 @@ export default function CustomerDetailPage() {
                 <Link2 className="w-4 h-4" />ใบเสนอราคา (QT ราคา)
               </h3>
               {linkedQT ? (
-                <Link href={`/dashboard/billing?tab=quotation&openqt=${linkedQT.id}`}
+                <Link href={`/dashboard/billing?tab=quotation&openqt=${linkedQT.id}&qtcustomer=${id}`}
                   className="text-xs text-emerald-600 hover:underline flex items-center gap-1">
                   ดู QT <ExternalLink className="w-3 h-3" />
                 </Link>
               ) : (
-                <Link href={`/dashboard/billing?tab=quotation&newqt=${id}`}
+                <Link href={`/dashboard/billing?tab=quotation&newqt=${id}&qtcustomer=${id}`}
                   className="text-xs text-amber-600 hover:underline flex items-center gap-1">
                   สร้าง QT <ExternalLink className="w-3 h-3" />
                 </Link>
