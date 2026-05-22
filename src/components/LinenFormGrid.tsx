@@ -221,7 +221,42 @@ export default function LinenFormGrid({
 
   const [localRows, setLocalRows] = useState<LinenFormRow[]>(rows)
   const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null)
+  const [activeColIdx, setActiveColIdx] = useState<number | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
+
+  // 328.1/328.2: focused aggregate group — drives arrow + border active state
+  //   ทุก cell ในกลุ่มเดียวกัน (anchor row + non-anchor rows) ใช้สถานะนี้
+  //   เปลี่ยนสีพร้อมกันเมื่อ cursor อยู่ที่ anchor input ของกลุ่มนั้น
+  const focusedAgg = useMemo<{ groupKey: string; col: 'col2' | 'col5' } | null>(() => {
+    if (activeRowIdx === null || activeColIdx === null) return null
+    const activeItem = enabledItems[activeRowIdx]
+    if (!activeItem) return null
+    const agg = aggregateMeta.get(activeItem.code)
+    if (!agg || !agg.isAnchor) return null
+    if (activeColIdx === COL_NAV_INDEX.col2 && agg.col2Aggregate) {
+      return { groupKey: agg.groupKey, col: 'col2' }
+    }
+    if (activeColIdx === COL_NAV_INDEX.col5 && agg.col5Aggregate) {
+      return { groupKey: agg.groupKey, col: 'col5' }
+    }
+    return null
+  }, [activeRowIdx, activeColIdx, enabledItems, aggregateMeta])
+
+  const isAggGroupActive = (groupKey: string | undefined, col: 'col2' | 'col5') => {
+    if (!groupKey) return false
+    return focusedAgg?.groupKey === groupKey && focusedAgg?.col === col
+  }
+
+  // 328.1: clear active states when focus leaves grid entirely
+  //   relatedTarget ถ้าอยู่ใน grid = user แค่เลื่อน cell → ไม่ clear
+  //   ถ้าอยู่นอก grid (click ออกข้างนอก) = clear ทั้ง row + col
+  const handleGridBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    const next = e.relatedTarget as Node | null
+    if (!next || !gridRef.current?.contains(next)) {
+      setActiveColIdx(null)
+      setActiveRowIdx(null)
+    }
+  }
 
   useEffect(() => {
     setLocalRows(rows)
@@ -378,7 +413,7 @@ export default function LinenFormGrid({
   }
 
   return (
-    <div ref={gridRef}>
+    <div ref={gridRef} onBlur={handleGridBlur}>
       {/* Date display */}
       {formDate && (
         <div className="mb-2 text-sm text-slate-600">
@@ -476,13 +511,31 @@ export default function LinenFormGrid({
                     </span>
                   </td>
 
-                  {/* Col 2 - ลูกค้านับส่ง · 327: clean UI (no bg/brace) · arrows ↓↑ · label "รวม" teal on focus */}
-                  <td className="group px-1 py-1 text-center">
+                  {/* Col 2 - ลูกค้านับส่ง · 328: เข้มขึ้น + active state */}
+                  <td className={cn(
+                    'px-1 py-1 text-center',
+                    // 328.2: เส้นขอบบน/ล่างของกลุ่ม aggregate — เปลี่ยนสี+หนาเมื่อ active
+                    aggMeta?.col2Aggregate && aggMeta.isFirstInGroup && (
+                      isAggGroupActive(aggMeta.groupKey, 'col2')
+                        ? 'border-t-2 border-t-[#3DD8D8]'
+                        : 'border-t border-t-slate-300'
+                    ),
+                    aggMeta?.col2Aggregate && aggMeta.isLastInGroup && (
+                      isAggGroupActive(aggMeta.groupKey, 'col2')
+                        ? 'border-b-2 border-b-[#3DD8D8]'
+                        : 'border-b border-b-slate-300'
+                    ),
+                  )}>
                     {aggMeta?.col2Aggregate ? (
                       aggMeta.isAnchor ? (
-                        // Anchor: input + label "รวม" (teal when focused)
+                        // Anchor: input + label "รวม" (teal when group active)
                         <div className="flex flex-col items-center">
-                          <div className="text-[10px] leading-none mb-0.5 text-slate-400 group-focus-within:text-[#3DD8D8] group-focus-within:font-semibold transition-colors">
+                          <div className={cn(
+                            'text-[10px] leading-none mb-0.5 transition-colors',
+                            isAggGroupActive(aggMeta.groupKey, 'col2')
+                              ? 'text-[#3DD8D8] font-semibold'
+                              : 'text-slate-500',
+                          )}>
                             รวม
                           </div>
                           {isEditable('col2') ? (
@@ -495,9 +548,9 @@ export default function LinenFormGrid({
                                 if (v === '' || /^\d+$/.test(v))
                                   updateRow(item.code, 'col2_hotelCountIn', v === '' ? 0 : parseInt(v, 10))
                               }}
-                              onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                              onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); setActiveColIdx(COL_NAV_INDEX.col2); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                               onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col2)}
-                              className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
+                              className="w-16 px-2 py-1 border border-slate-300 rounded text-center text-sm focus:ring-2 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
                             />
                           ) : (
                             <span className="text-slate-700">{row.col2_hotelCountIn || '-'}</span>
@@ -508,13 +561,17 @@ export default function LinenFormGrid({
                         (() => {
                           const anchorIdx = enabledItems.findIndex(it => it.code === aggMeta.anchorCode)
                           const dir = rowIndex < anchorIdx ? '↓' : '↑'
+                          const active = isAggGroupActive(aggMeta.groupKey, 'col2')
                           return (
                             <button
                               type="button"
                               onClick={() => isEditable('col2') && focusAnchorCell(aggMeta.anchorCode, COL_NAV_INDEX.col2)}
                               disabled={!isEditable('col2')}
                               title={isEditable('col2') ? 'ค่ารวมอยู่ที่ row anchor — คลิกเพื่อ focus' : 'ค่ารวมอยู่ที่ row anchor'}
-                              className="text-slate-300 hover:text-[#3DD8D8] text-sm disabled:cursor-default"
+                              className={cn(
+                                'text-base font-semibold transition-colors disabled:cursor-default',
+                                active ? 'text-[#3DD8D8]' : 'text-slate-400 hover:text-[#3DD8D8]',
+                              )}
                             >
                               {dir}
                             </button>
@@ -532,9 +589,9 @@ export default function LinenFormGrid({
                             if (v === '' || /^\d+$/.test(v))
                               updateRow(item.code, 'col2_hotelCountIn', v === '' ? 0 : parseInt(v, 10))
                           }}
-                          onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                          onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); setActiveColIdx(COL_NAV_INDEX.col2); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                           onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col2)}
-                          className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                          className="w-16 px-2 py-1 border border-slate-300 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
                         />
                       ) : (
                         <span className="text-slate-700">{row.col2_hotelCountIn || '-'}</span>
@@ -554,28 +611,44 @@ export default function LinenFormGrid({
                           if (v === '' || /^\d+$/.test(v))
                             updateRow(item.code, 'col3_hotelClaimCount', v === '' ? 0 : parseInt(v, 10))
                         }}
-                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); setActiveColIdx(COL_NAV_INDEX.col3); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                         onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col3)}
-                        className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                        className="w-16 px-2 py-1 border border-slate-300 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
                       />
                     ) : (
                       <span className="text-slate-700">{row.col3_hotelClaimCount || '-'}</span>
                     )}
                   </td>
 
-                  {/* Col 5 - โรงซักนับเข้า · 327: clean UI · arrows ↓↑ · label "รวม" teal on focus */}
+                  {/* Col 5 - โรงซักนับเข้า · 328: เข้มขึ้น + active state */}
                   <td className={cn(
-                    'group px-1 py-1 text-center',
+                    'px-1 py-1 text-center',
                     !isTrustCustomer && hasCountInDisc && !aggMeta?.col5Aggregate && 'bg-amber-50',
+                    // 328.2: เส้นขอบบน/ล่างของกลุ่ม aggregate — เปลี่ยนสี+หนาเมื่อ active
+                    aggMeta?.col5Aggregate && aggMeta.isFirstInGroup && (
+                      isAggGroupActive(aggMeta.groupKey, 'col5')
+                        ? 'border-t-2 border-t-[#3DD8D8]'
+                        : 'border-t border-t-slate-300'
+                    ),
+                    aggMeta?.col5Aggregate && aggMeta.isLastInGroup && (
+                      isAggGroupActive(aggMeta.groupKey, 'col5')
+                        ? 'border-b-2 border-b-[#3DD8D8]'
+                        : 'border-b border-b-slate-300'
+                    ),
                   )}>
                     {isTrustCustomer ? (
                       // 265 — trust mode: ไม่นับเข้า แสดง "—"
                       <span className="text-slate-300" title="ลูกค้า Trust Customer — ไม่นับเข้า">—</span>
                     ) : aggMeta?.col5Aggregate ? (
                       aggMeta.isAnchor ? (
-                        // Anchor: input + label "รวม" (teal when focused)
+                        // Anchor: input + label "รวม" (teal when group active)
                         <div className="flex flex-col items-center">
-                          <div className="text-[10px] leading-none mb-0.5 text-slate-400 group-focus-within:text-[#3DD8D8] group-focus-within:font-semibold transition-colors">
+                          <div className={cn(
+                            'text-[10px] leading-none mb-0.5 transition-colors',
+                            isAggGroupActive(aggMeta.groupKey, 'col5')
+                              ? 'text-[#3DD8D8] font-semibold'
+                              : 'text-slate-500',
+                          )}>
                             รวม
                           </div>
                           {isEditable('col5') ? (
@@ -588,9 +661,9 @@ export default function LinenFormGrid({
                                 if (v === '' || /^\d+$/.test(v))
                                   updateRow(item.code, 'col5_factoryClaimApproved', v === '' ? 0 : parseInt(v, 10))
                               }}
-                              onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                              onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); setActiveColIdx(COL_NAV_INDEX.col5); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                               onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col5)}
-                              className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
+                              className="w-16 px-2 py-1 border border-slate-300 rounded text-center text-sm focus:ring-2 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
                             />
                           ) : (
                             <span className="text-slate-700">{row.col5_factoryClaimApproved || '-'}</span>
@@ -601,13 +674,17 @@ export default function LinenFormGrid({
                         (() => {
                           const anchorIdx = enabledItems.findIndex(it => it.code === aggMeta.anchorCode)
                           const dir = rowIndex < anchorIdx ? '↓' : '↑'
+                          const active = isAggGroupActive(aggMeta.groupKey, 'col5')
                           return (
                             <button
                               type="button"
                               onClick={() => isEditable('col5') && focusAnchorCell(aggMeta.anchorCode, COL_NAV_INDEX.col5)}
                               disabled={!isEditable('col5')}
                               title={isEditable('col5') ? 'ค่ารวมอยู่ที่ row anchor — คลิกเพื่อ focus' : 'ค่ารวมอยู่ที่ row anchor'}
-                              className="text-slate-300 hover:text-[#3DD8D8] text-sm disabled:cursor-default"
+                              className={cn(
+                                'text-base font-semibold transition-colors disabled:cursor-default',
+                                active ? 'text-[#3DD8D8]' : 'text-slate-400 hover:text-[#3DD8D8]',
+                              )}
                             >
                               {dir}
                             </button>
@@ -624,11 +701,11 @@ export default function LinenFormGrid({
                           if (v === '' || /^\d+$/.test(v))
                             updateRow(item.code, 'col5_factoryClaimApproved', v === '' ? 0 : parseInt(v, 10))
                         }}
-                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); setActiveColIdx(COL_NAV_INDEX.col5); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                         onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col5)}
                         className={cn(
-                          'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
-                          hasCountInDisc ? 'border-amber-400 bg-amber-50' : 'border-slate-200'
+                          'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none',
+                          hasCountInDisc ? 'border-amber-400 bg-amber-50' : 'border-slate-300'
                         )}
                       />
                     ) : (
@@ -651,9 +728,9 @@ export default function LinenFormGrid({
                           if (v === '' || /^\d+$/.test(v))
                             updateRow(item.code, 'col6_factoryPackSend', v === '' ? 0 : parseInt(v, 10))
                         }}
-                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); setActiveColIdx(COL_NAV_INDEX.col6); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                         onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col6)}
-                        className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                        className="w-16 px-2 py-1 border border-slate-300 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
                       />
                     ) : (
                       <span className="text-slate-700">{row.col6_factoryPackSend || '-'}</span>
@@ -685,9 +762,9 @@ export default function LinenFormGrid({
                         data-row={rowIndex} data-col={COL_NAV_INDEX.note}
                         value={row.note}
                         onChange={e => updateRow(item.code, 'note', e.target.value)}
-                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); setActiveColIdx(COL_NAV_INDEX.note); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                         onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.note)}
-                        className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                        className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
                         placeholder="..."
                       />
                     ) : (
@@ -708,11 +785,11 @@ export default function LinenFormGrid({
                             if (v === '' || /^\d+$/.test(v))
                               updateRow(item.code, 'col4_factoryApproved', v === '' ? 0 : parseInt(v, 10))
                           }}
-                          onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                          onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); setActiveColIdx(COL_NAV_INDEX.col4); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                           onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col4)}
                           className={cn(
-                            'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
-                            hasCountBackDisc ? 'border-red-400 bg-red-50' : 'border-slate-200'
+                            'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none',
+                            hasCountBackDisc ? 'border-red-400 bg-red-50' : 'border-slate-300'
                           )}
                         />
                       ) : (
