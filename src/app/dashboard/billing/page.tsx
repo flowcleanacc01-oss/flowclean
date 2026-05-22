@@ -92,6 +92,12 @@ export default function BillingPage() {
       setShowQuDetail(openqt)
       scrollToActiveRow(openqt)
     }
+    // 323: filter QT list by customer (จาก edit modal link)
+    const qtCust = searchParams.get('qtcustomer')
+    if (qtCust) {
+      setTab('quotation')
+      setQtCustomerFilter(qtCust)
+    }
     // Auto-open IV detail
     const openiv = searchParams.get('openiv')
     if (openiv) {
@@ -3313,13 +3319,8 @@ export default function BillingPage() {
         </div>
       </Modal>
 
-      {/* Quotation Detail Modal · 322: ตรวจ returnTo ตอน close → navigate กลับ */}
-      <Modal open={!!showQuDetail} onClose={() => {
-        setShowQuDetail(null)
-        setShowQuPrint(false)
-        const returnTo = searchParams.get('returnTo')
-        if (returnTo) router.push(returnTo)
-      }} title={`ใบเสนอราคา ${detailQuotation?.quotationNumber || ''}`} size="lg">
+      {/* Quotation Detail Modal · 323: revert 322 — อยู่ที่ QT list หลังปิด · qtcustomer filter จะแสดงเฉพาะ QT ของ customer นั้น */}
+      <Modal open={!!showQuDetail} onClose={() => { setShowQuDetail(null); setShowQuPrint(false) }} title={`ใบเสนอราคา ${detailQuotation?.quotationNumber || ''}`} size="lg">
         {detailQuotation && (
           <div className="space-y-4">
             {/* 102+103+157: Navy bar — ลูกค้าใช้ shortName (resolve via customer_id), fallback legacy customerName */}

@@ -1091,11 +1091,11 @@ export default function CustomersPage() {
                 ) : (
                   <span className="text-amber-700 flex-1 text-xs">ยังไม่มีใบเสนอราคา (QT) ที่ตกลงแล้ว — รายการผ้าและราคาจะถูกกำหนดผ่าน QT</span>
                 )}
-                {/* 322: ส่ง openqt + returnTo เพื่อ jump → open → close → highlight ลูกค้าใน list */}
+                {/* 323: ส่ง qtcustomer เพื่อ filter QT list ตามลูกค้านี้ + openqt เปิด detail · ปิดแล้วยังอยู่ใน QT list */}
                 <Link
                   href={qt
-                    ? `/dashboard/billing?tab=quotation&openqt=${qt.id}&returnTo=${encodeURIComponent(`/dashboard/customers?focus=${editId}`)}`
-                    : `/dashboard/billing?tab=quotation&newqt=${editId}&returnTo=${encodeURIComponent(`/dashboard/customers?focus=${editId}`)}`
+                    ? `/dashboard/billing?tab=quotation&openqt=${qt.id}&qtcustomer=${editId}`
+                    : `/dashboard/billing?tab=quotation&newqt=${editId}&qtcustomer=${editId}`
                   }
                   className={cn('text-xs underline ml-auto flex-shrink-0', qt ? 'text-emerald-600' : 'text-amber-600')}>
                   {qt ? 'ดู QT' : 'สร้าง QT'}
