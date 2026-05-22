@@ -491,10 +491,28 @@ export default function LinenFormGrid({
                 row.col4_factoryApproved > 0 && row.col4_factoryApproved !== packSend
               // 326: aggregate meta — anchor + group geometry for cell rendering
               const aggMeta = aggregateMeta.get(item.code) || null
+              // 331: full-width aggregate group borders — เส้นขอบยาวเต็ม row
+              //   showAggBorder = row อยู่ในกลุ่ม aggregate (col2 หรือ col5)
+              //   aggBorderActive = กลุ่มนี้กำลัง focus (anchor input ของ col ที่ aggregate)
+              const showAggBorder = !!(aggMeta && (aggMeta.col2Aggregate || aggMeta.col5Aggregate))
+              const aggBorderActive = !!(
+                aggMeta && (
+                  (aggMeta.col2Aggregate && isAggGroupActive(aggMeta.groupKey, 'col2')) ||
+                  (aggMeta.col5Aggregate && isAggGroupActive(aggMeta.groupKey, 'col5'))
+                )
+              )
+              const isFirstInAggGroup = !!(showAggBorder && aggMeta?.isFirstInGroup)
+              const isLastInAggGroup = !!(showAggBorder && aggMeta?.isLastInGroup)
 
               return (
                 <tr key={item.code} className={cn(
-                  'border-b border-slate-100 transition-colors',
+                  'transition-colors',
+                  // 331: bottom border — ใช้ aggregate color เมื่อ row สุดท้ายของกลุ่ม
+                  isLastInAggGroup
+                    ? (aggBorderActive ? 'border-b border-b-[#3DD8D8]' : 'border-b border-b-slate-300')
+                    : 'border-b border-b-slate-100',
+                  // 331: top border — ใส่เมื่อ row แรกของกลุ่ม
+                  isFirstInAggGroup && (aggBorderActive ? 'border-t border-t-[#3DD8D8]' : 'border-t border-t-slate-300'),
                   activeRowIdx === rowIndex ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50'
                 )}>
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{highlightText(item.code, highlightQ)}</td>
@@ -511,21 +529,8 @@ export default function LinenFormGrid({
                     </span>
                   </td>
 
-                  {/* Col 2 - ลูกค้านับส่ง · 328: เข้มขึ้น + active state · 329: ความหนาเท่า cell ปกติ */}
-                  <td className={cn(
-                    'px-1 py-1 text-center',
-                    // 328.2/329: เส้นขอบบน/ล่างของกลุ่ม aggregate — คงหนา 1px เปลี่ยนเฉพาะสี
-                    aggMeta?.col2Aggregate && aggMeta.isFirstInGroup && (
-                      isAggGroupActive(aggMeta.groupKey, 'col2')
-                        ? 'border-t border-t-[#3DD8D8]'
-                        : 'border-t border-t-slate-300'
-                    ),
-                    aggMeta?.col2Aggregate && aggMeta.isLastInGroup && (
-                      isAggGroupActive(aggMeta.groupKey, 'col2')
-                        ? 'border-b border-b-[#3DD8D8]'
-                        : 'border-b border-b-slate-300'
-                    ),
-                  )}>
+                  {/* Col 2 - ลูกค้านับส่ง · 331: borders ย้ายไป tr (full-width) */}
+                  <td className="px-1 py-1 text-center">
                     {aggMeta?.col2Aggregate ? (
                       aggMeta.isAnchor ? (
                         // Anchor: input + label "รวม" (teal when group active)
@@ -620,21 +625,10 @@ export default function LinenFormGrid({
                     )}
                   </td>
 
-                  {/* Col 5 - โรงซักนับเข้า · 328: เข้มขึ้น + active state · 329: ความหนาเท่า cell ปกติ */}
+                  {/* Col 5 - โรงซักนับเข้า · 331: borders ย้ายไป tr (full-width) */}
                   <td className={cn(
                     'px-1 py-1 text-center',
                     !isTrustCustomer && hasCountInDisc && !aggMeta?.col5Aggregate && 'bg-amber-50',
-                    // 328.2/329: เส้นขอบบน/ล่างของกลุ่ม aggregate — คงหนา 1px เปลี่ยนเฉพาะสี
-                    aggMeta?.col5Aggregate && aggMeta.isFirstInGroup && (
-                      isAggGroupActive(aggMeta.groupKey, 'col5')
-                        ? 'border-t border-t-[#3DD8D8]'
-                        : 'border-t border-t-slate-300'
-                    ),
-                    aggMeta?.col5Aggregate && aggMeta.isLastInGroup && (
-                      isAggGroupActive(aggMeta.groupKey, 'col5')
-                        ? 'border-b border-b-[#3DD8D8]'
-                        : 'border-b border-b-slate-300'
-                    ),
                   )}>
                     {isTrustCustomer ? (
                       // 265 — trust mode: ไม่นับเข้า แสดง "—"
