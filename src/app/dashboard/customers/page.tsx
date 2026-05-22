@@ -48,6 +48,7 @@ export default function CustomersPage() {
   const urlHighlightQ = sp.get('q') || '' // 147.2
   const urlEditId = sp.get('edit') // 286.2: ?edit=<id> → open edit modal directly
   const urlReturnTo = sp.get('returnTo') // 289: ?returnTo=<path> → after save, navigate back there
+  const urlFocusId = sp.get('focus') // 322: ?focus=<id> → highlight + scroll to row
   // 180: scroll to first <mark> on arrival from global search
   useScrollToMark()
   const [showCustPrintList, setShowCustPrintList] = useState(false) // 154.2
@@ -196,6 +197,17 @@ export default function CustomersPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlEditId, customers])
+
+  // 322: ?focus=<id> URL trigger — highlight + scroll to customer row
+  useEffect(() => {
+    if (!urlFocusId) return
+    const c = customers.find(x => x.id === urlFocusId)
+    if (!c) return
+    setPageTab('customers')
+    setActiveCustomerId(urlFocusId)
+    // Wait for render → scroll to row
+    setTimeout(() => scrollToActiveRow(urlFocusId), 100)
+  }, [urlFocusId, customers])
 
   const handleSave = () => {
     if (!form.name) return
@@ -1079,7 +1091,12 @@ export default function CustomersPage() {
                 ) : (
                   <span className="text-amber-700 flex-1 text-xs">ยังไม่มีใบเสนอราคา (QT) ที่ตกลงแล้ว — รายการผ้าและราคาจะถูกกำหนดผ่าน QT</span>
                 )}
-                <Link href={qt ? `/dashboard/billing?tab=quotation` : `/dashboard/billing?tab=quotation&newqt=${editId}`}
+                {/* 322: ส่ง openqt + returnTo เพื่อ jump → open → close → highlight ลูกค้าใน list */}
+                <Link
+                  href={qt
+                    ? `/dashboard/billing?tab=quotation&openqt=${qt.id}&returnTo=${encodeURIComponent(`/dashboard/customers?focus=${editId}`)}`
+                    : `/dashboard/billing?tab=quotation&newqt=${editId}&returnTo=${encodeURIComponent(`/dashboard/customers?focus=${editId}`)}`
+                  }
                   className={cn('text-xs underline ml-auto flex-shrink-0', qt ? 'text-emerald-600' : 'text-amber-600')}>
                   {qt ? 'ดู QT' : 'สร้าง QT'}
                 </Link>
