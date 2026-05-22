@@ -491,28 +491,51 @@ export default function LinenFormGrid({
                 row.col4_factoryApproved > 0 && row.col4_factoryApproved !== packSend
               // 326: aggregate meta — anchor + group geometry for cell rendering
               const aggMeta = aggregateMeta.get(item.code) || null
-              // 331: full-width aggregate group borders — เส้นขอบยาวเต็ม row
-              //   showAggBorder = row อยู่ในกลุ่ม aggregate (col2 หรือ col5)
-              //   aggBorderActive = กลุ่มนี้กำลัง focus (anchor input ของ col ที่ aggregate)
-              const showAggBorder = !!(aggMeta && (aggMeta.col2Aggregate || aggMeta.col5Aggregate))
+              // 331/332: full-width aggregate group borders — เส้นขอบยาวเต็ม row
+              //   ใช้ "border-bottom ของ row ก่อน" เป็นเส้นบนของกลุ่ม → กัน CSS collapse conflict
+              //   (browser ตัดสินใจระหว่าง border-bottom slate-100 (row ก่อน) กับ border-top slate-300
+              //    เมื่อ width เท่ากัน → ผลลัพธ์ไม่แน่นอนใน Tailwind v4)
               const aggBorderActive = !!(
                 aggMeta && (
                   (aggMeta.col2Aggregate && isAggGroupActive(aggMeta.groupKey, 'col2')) ||
                   (aggMeta.col5Aggregate && isAggGroupActive(aggMeta.groupKey, 'col5'))
                 )
               )
-              const isFirstInAggGroup = !!(showAggBorder && aggMeta?.isFirstInGroup)
+              const showAggBorder = !!(aggMeta && (aggMeta.col2Aggregate || aggMeta.col5Aggregate))
               const isLastInAggGroup = !!(showAggBorder && aggMeta?.isLastInGroup)
+
+              // Peek row ถัดไป — ถ้า next เป็น first-in-group → row นี้ render border-bottom เป็นเส้นบนของกลุ่ม
+              const nextItem = enabledItems[rowIndex + 1]
+              const nextAggMeta = nextItem ? aggregateMeta.get(nextItem.code) || null : null
+              const nextShowAggBorder = !!(nextAggMeta && (nextAggMeta.col2Aggregate || nextAggMeta.col5Aggregate))
+              const nextIsFirstInAggGroup = !!(nextShowAggBorder && nextAggMeta?.isFirstInGroup)
+              const nextAggBorderActive = !!(
+                nextAggMeta && (
+                  (nextAggMeta.col2Aggregate && isAggGroupActive(nextAggMeta.groupKey, 'col2')) ||
+                  (nextAggMeta.col5Aggregate && isAggGroupActive(nextAggMeta.groupKey, 'col5'))
+                )
+              )
+
+              // เคสพิเศษ: row แรกของ table เป็น first-in-group → ต้องใช้ border-top ของตัวเอง (ไม่มี row ก่อน)
+              const isFirstRowAndFirstInGroup = rowIndex === 0 && !!(showAggBorder && aggMeta?.isFirstInGroup)
+
+              // Bottom border resolution (ลำดับ priority):
+              //   1. isLastInAggGroup → ใช้สีของกลุ่มตัวเอง
+              //   2. nextIsFirstInAggGroup → ใช้สีของกลุ่มถัดไป (ทำหน้าที่เป็นเส้นบนของ next group)
+              //   3. default → slate-100
+              let bottomBorderClass = 'border-b border-b-slate-100'
+              if (isLastInAggGroup) {
+                bottomBorderClass = aggBorderActive ? 'border-b border-b-[#3DD8D8]' : 'border-b border-b-slate-300'
+              } else if (nextIsFirstInAggGroup) {
+                bottomBorderClass = nextAggBorderActive ? 'border-b border-b-[#3DD8D8]' : 'border-b border-b-slate-300'
+              }
 
               return (
                 <tr key={item.code} className={cn(
                   'transition-colors',
-                  // 331: bottom border — ใช้ aggregate color เมื่อ row สุดท้ายของกลุ่ม
-                  isLastInAggGroup
-                    ? (aggBorderActive ? 'border-b border-b-[#3DD8D8]' : 'border-b border-b-slate-300')
-                    : 'border-b border-b-slate-100',
-                  // 331: top border — ใส่เมื่อ row แรกของกลุ่ม
-                  isFirstInAggGroup && (aggBorderActive ? 'border-t border-t-[#3DD8D8]' : 'border-t border-t-slate-300'),
+                  bottomBorderClass,
+                  // เคสพิเศษ row แรกของ table — ต้องใส่ border-top ของตัวเอง
+                  isFirstRowAndFirstInGroup && (aggBorderActive ? 'border-t border-t-[#3DD8D8]' : 'border-t border-t-slate-300'),
                   activeRowIdx === rowIndex ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50'
                 )}>
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{highlightText(item.code, highlightQ)}</td>
