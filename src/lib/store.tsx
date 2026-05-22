@@ -24,6 +24,8 @@ import { verifyPassword, hashPassword, createSession, getSession, clearSession }
 import * as db from './supabase-service'
 import { DEFAULT_FACET_VOCAB, type FacetVocab } from './linen-vocabulary'
 import { getOrSeedFacetVocab, saveFacetVocab } from './facet-vocab-service'
+// 330 — Group-aware carry-over (fix infinity bug from aggregate size groups)
+import { buildAggregateSnapshot, computeAnchorByGroup, diffsForForm } from './carry-over-logic'
 
 // ============================================================
 // Store Interface
@@ -439,11 +441,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // ---- Linen Forms ----
   const addLinenForm = useCallback((f: Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt' | 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'> & Partial<Pick<LinenForm, 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>>): LinenForm => {
+    // 330 — auto-snapshot aggregateSizeGroups ถ้า caller ไม่ระบุ + customer มี config
+    // กัน drift ตามเหตุผลเดียวกับ workflowMode snapshot (265)
+    const customer = customers.find(c => c.id === f.customerId)
+    const autoAggSnapshot = f.aggregateSnapshot
+      ?? buildAggregateSnapshot(customer?.aggregateSizeGroups)
     const newForm: LinenForm = {
       bagsSentCount: 0, bagsPackCount: 0,
       deptDrying: false, deptIroning: false, deptFolding: false, deptQc: false,
       ...f, id: genId(), formNumber: genLinenFormNumber(linenForms.map(x => x.formNumber)),
       createdBy: currentUserRef.current?.id || 'unknown', updatedAt: todayISO(),
+      aggregateSnapshot: autoAggSnapshot,
     }
     setLinenForms(prev => [newForm, ...prev])
     dbSave(db.insertLinenForm(newForm), () => {
@@ -451,7 +459,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
     logAudit('create', 'linen_form', newForm.id, newForm.formNumber)
     return newForm
-  }, [logAudit, linenForms])
+  }, [logAudit, linenForms, customers])
 
   const updateLinenForm = useCallback((id: string, f: Partial<LinenForm>) => {
     const updates = { ...f, updatedAt: todayISO() }
@@ -1044,25 +1052,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
 
     // Step 2: Sum from LF rows (skip if before reset date for that item code)
+    // 330 — Group-aware: ถ้า LF snapshot บอกว่า col5/col2 เป็น aggregate
+    //       → sum diff ทั้ง group → store ที่ anchor (กัน infinity bug)
     const forms = linenForms
       .filter(f => f.customerId === customerId && f.date < beforeDate)
       .sort((a, b) => a.date.localeCompare(b.date))
+    const customer = customers.find(c => c.id === customerId)
+    const catalogMap = new Map(linenCatalog.map(c => [c.code, c]))
+    // Fallback snapshot สำหรับ LF เก่าก่อน 330 (ไม่มี aggregateSnapshot)
+    const fallbackSnapshot = buildAggregateSnapshot(customer?.aggregateSizeGroups)
+    // Pre-compute anchor codes — รวมทุก groupKey ที่อาจมีใน snapshot ทั้งของ LF + fallback
+    const allGroupKeys = new Set<string>()
+    if (fallbackSnapshot) Object.keys(fallbackSnapshot).forEach(k => allGroupKeys.add(k))
+    for (const f of forms) {
+      if (f.aggregateSnapshot) Object.keys(f.aggregateSnapshot).forEach(k => allGroupKeys.add(k))
+    }
+    const anchorByGroup = computeAnchorByGroup(allGroupKeys, linenCatalog)
+
     for (const form of forms) {
       // 265: ถ้า LF snapshot = trust_customer → บังคับใช้ Mode 2 ไม่ว่า caller จะเลือก mode ใด
       //      เหตุผล: trust LF ไม่มี col4 + col5 → mode 1/3 จะคำนวณผิด
       const effectiveMode: CarryOverMode = form.workflowMode === 'trust_customer' ? 2 : mode
-      for (const row of form.rows) {
-        if (resetDateMap[row.code] && form.date < resetDateMap[row.code]) continue
-        let diff = 0
-        switch (effectiveMode) {
-          case 1: diff = (row.col6_factoryPackSend || 0) - row.col5_factoryClaimApproved; break
-          case 2: diff = (row.col6_factoryPackSend || 0) - (row.col2_hotelCountIn + row.col3_hotelClaimCount); break
-          case 3: diff = row.col4_factoryApproved - row.col5_factoryClaimApproved; break
-          case 4: diff = row.col4_factoryApproved - (row.col2_hotelCountIn + row.col3_hotelClaimCount); break
-        }
-        if (diff !== 0) {
-          result[row.code] = (result[row.code] || 0) + diff
-        }
+      // 330: ใช้ snapshot ของ LF (drift-proof) — fallback ไป customer ปัจจุบันถ้า LF ไม่มี
+      const snapshot = form.aggregateSnapshot ?? fallbackSnapshot
+      const formDiffs = diffsForForm(
+        form.rows,
+        effectiveMode,
+        snapshot,
+        catalogMap,
+        anchorByGroup,
+        (code) => !!resetDateMap[code] && form.date < resetDateMap[code],
+      )
+      for (const [code, diff] of Object.entries(formDiffs)) {
+        result[code] = (result[code] || 0) + diff
       }
     }
 
@@ -1083,7 +1105,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
 
     return result
-  }, [linenForms, carryOverAdjustments])
+  }, [linenForms, carryOverAdjustments, customers, linenCatalog])
 
   const getDiscrepancies = useCallback((formId: string): Record<string, number> => {
     const form = linenForms.find(f => f.id === formId)

@@ -71,6 +71,7 @@ const FIELD_MAP: Record<string, string> = {
   sizeGroup: 'size_group',                        // 317
   aggregateSizeGroups: 'aggregate_size_groups',   // 317
   groupInputs: 'group_inputs',                    // 317
+  aggregateSnapshot: 'aggregate_snapshot',        // 330
   vatRate: 'vat_rate',
   withholdingRate: 'withholding_rate',
   formNumber: 'form_number',

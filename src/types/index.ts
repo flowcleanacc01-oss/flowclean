@@ -363,6 +363,11 @@ export interface LinenForm {
   // - col3 เคลม + col6 แพคส่ง ใช้ row-level เสมอ
   // Phase 1: จะอยู่ใน schema แต่ยังไม่ใช้ — read-only views อ่าน row-level sum
   groupInputs?: Record<string, { col5?: number; col2?: number }>
+  // 330 — snapshot ของ aggregateSizeGroups ตอนสร้าง LF (กัน drift เมื่อ customer toggle ภายหลัง)
+  // Pattern เดียวกับ workflowMode snapshot (265) — getCarryOver ใช้ snapshot ของ LF แต่ละใบ
+  // - { [groupKey]: { col2Mode, col5Mode } }
+  // - ถ้าไม่มี (LF เก่าก่อน 330) → getCarryOver fallback ใช้ customer.aggregateSizeGroups ปัจจุบัน
+  aggregateSnapshot?: Record<string, { col2Mode: 'aggregate' | 'per_row'; col5Mode: 'aggregate' | 'per_row' }>
 }
 
 // ============================================================
