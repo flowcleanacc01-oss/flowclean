@@ -293,19 +293,24 @@ export default function LinenFormGrid({
     const container = gridRef.current
     if (!container) return
 
-    // Enter (58): jump to first editable cell of next row
+    // Enter (58): jump to first editable cell of next row · 327.1: skip rows without input
     if (e.key === 'Enter') {
-      const nextRowInputs = Array.from(
-        container.querySelectorAll<HTMLInputElement>(`input[data-row="${rowIndex + 1}"]`)
-      ).sort((a, b) => Number(a.dataset.col) - Number(b.dataset.col))
-      const first = nextRowInputs[0]
-      if (first) {
-        e.preventDefault()
-        first.focus()
-        first.select()
-        setActiveRowIdx(rowIndex + 1)
-        const tr = first.closest('tr')
-        if (tr) scrollCellVisible(tr)
+      let nextRow = rowIndex + 1
+      while (nextRow < enabledItems.length) {
+        const nextRowInputs = Array.from(
+          container.querySelectorAll<HTMLInputElement>(`input[data-row="${nextRow}"]`)
+        ).sort((a, b) => Number(a.dataset.col) - Number(b.dataset.col))
+        const first = nextRowInputs[0]
+        if (first) {
+          e.preventDefault()
+          first.focus()
+          first.select()
+          setActiveRowIdx(nextRow)
+          const tr = first.closest('tr')
+          if (tr) scrollCellVisible(tr)
+          return
+        }
+        nextRow++
       }
       return
     }
@@ -319,16 +324,22 @@ export default function LinenFormGrid({
     else return
 
     if (dRow !== 0) {
-      const target = container.querySelector<HTMLInputElement>(
-        `input[data-row="${rowIndex + dRow}"][data-col="${colIndex}"]`
-      )
-      if (target) {
-        e.preventDefault()
-        target.focus()
-        target.select()
-        setActiveRowIdx(rowIndex + dRow)
-        const tr = target.closest('tr')
-        if (tr) scrollCellVisible(tr)
+      // 327.1: skip rows ที่ไม่มี input (aggregate non-anchor cells) — เลื่อนต่อจนเจอ
+      let targetRow = rowIndex + dRow
+      while (targetRow >= 0 && targetRow < enabledItems.length) {
+        const target = container.querySelector<HTMLInputElement>(
+          `input[data-row="${targetRow}"][data-col="${colIndex}"]`
+        )
+        if (target) {
+          e.preventDefault()
+          target.focus()
+          target.select()
+          setActiveRowIdx(targetRow)
+          const tr = target.closest('tr')
+          if (tr) scrollCellVisible(tr)
+          return
+        }
+        targetRow += dRow
       }
       return
     }
@@ -465,19 +476,14 @@ export default function LinenFormGrid({
                     </span>
                   </td>
 
-                  {/* Col 2 - ลูกค้านับส่ง · 326: aggregate-aware */}
-                  <td className={cn(
-                    'px-1 py-1 text-center',
-                    aggMeta?.col2Aggregate && 'bg-indigo-50/40 border-l-2 border-indigo-300',
-                    aggMeta?.col2Aggregate && aggMeta.isLastInGroup && 'border-b border-indigo-300',
-                    aggMeta?.col2Aggregate && aggMeta.isFirstInGroup && 'border-t border-indigo-300',
-                  )}>
+                  {/* Col 2 - ลูกค้านับส่ง · 327: clean UI (no bg/brace) · arrows ↓↑ · label "รวม" teal on focus */}
+                  <td className="group px-1 py-1 text-center">
                     {aggMeta?.col2Aggregate ? (
                       aggMeta.isAnchor ? (
-                        // Anchor: input + label "รวม"
+                        // Anchor: input + label "รวม" (teal when focused)
                         <div className="flex flex-col items-center">
-                          <div className="text-[9px] text-indigo-700 font-semibold leading-none mb-0.5 flex items-center gap-0.5">
-                            <Anchor className="w-2 h-2" />🧺 รวม {aggMeta.groupSize} ไซส์
+                          <div className="text-[10px] leading-none mb-0.5 text-slate-400 group-focus-within:text-[#3DD8D8] group-focus-within:font-semibold transition-colors">
+                            รวม
                           </div>
                           {isEditable('col2') ? (
                             <input
@@ -491,23 +497,29 @@ export default function LinenFormGrid({
                               }}
                               onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                               onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col2)}
-                              className="w-16 px-2 py-1 border-2 border-indigo-300 bg-white rounded text-center text-sm font-semibold focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                              className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
                             />
                           ) : (
-                            <span className="text-indigo-900 font-semibold">{row.col2_hotelCountIn || '-'}</span>
+                            <span className="text-slate-700">{row.col2_hotelCountIn || '-'}</span>
                           )}
                         </div>
                       ) : (
-                        // Non-anchor: dash + click focus anchor
-                        <button
-                          type="button"
-                          onClick={() => isEditable('col2') && focusAnchorCell(aggMeta.anchorCode, COL_NAV_INDEX.col2)}
-                          disabled={!isEditable('col2')}
-                          title={isEditable('col2') ? `ค่ารวมอยู่ที่ row anchor — คลิกเพื่อ focus` : 'ค่ารวมอยู่ที่ row anchor'}
-                          className="text-slate-300 hover:text-indigo-600 cursor-pointer text-xs disabled:cursor-default"
-                        >
-                          —<span className="text-[8px] ml-0.5">↑รวม</span>
-                        </button>
+                        // Non-anchor: arrow ↓ ถ้าอยู่ก่อน anchor / ↑ ถ้าอยู่หลัง
+                        (() => {
+                          const anchorIdx = enabledItems.findIndex(it => it.code === aggMeta.anchorCode)
+                          const dir = rowIndex < anchorIdx ? '↓' : '↑'
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => isEditable('col2') && focusAnchorCell(aggMeta.anchorCode, COL_NAV_INDEX.col2)}
+                              disabled={!isEditable('col2')}
+                              title={isEditable('col2') ? 'ค่ารวมอยู่ที่ row anchor — คลิกเพื่อ focus' : 'ค่ารวมอยู่ที่ row anchor'}
+                              className="text-slate-300 hover:text-[#3DD8D8] text-sm disabled:cursor-default"
+                            >
+                              {dir}
+                            </button>
+                          )
+                        })()
                       )
                     ) : (
                       isEditable('col2') ? (
@@ -551,23 +563,20 @@ export default function LinenFormGrid({
                     )}
                   </td>
 
-                  {/* Col 5 - โรงซักนับเข้า · 326: aggregate-aware */}
+                  {/* Col 5 - โรงซักนับเข้า · 327: clean UI · arrows ↓↑ · label "รวม" teal on focus */}
                   <td className={cn(
-                    'px-1 py-1 text-center',
+                    'group px-1 py-1 text-center',
                     !isTrustCustomer && hasCountInDisc && !aggMeta?.col5Aggregate && 'bg-amber-50',
-                    aggMeta?.col5Aggregate && 'bg-indigo-50/40 border-l-2 border-indigo-300',
-                    aggMeta?.col5Aggregate && aggMeta.isLastInGroup && 'border-b border-indigo-300',
-                    aggMeta?.col5Aggregate && aggMeta.isFirstInGroup && 'border-t border-indigo-300',
                   )}>
                     {isTrustCustomer ? (
                       // 265 — trust mode: ไม่นับเข้า แสดง "—"
                       <span className="text-slate-300" title="ลูกค้า Trust Customer — ไม่นับเข้า">—</span>
                     ) : aggMeta?.col5Aggregate ? (
                       aggMeta.isAnchor ? (
-                        // Anchor: input + label "รวม"
+                        // Anchor: input + label "รวม" (teal when focused)
                         <div className="flex flex-col items-center">
-                          <div className="text-[9px] text-indigo-700 font-semibold leading-none mb-0.5 flex items-center gap-0.5">
-                            <Anchor className="w-2 h-2" />🧺 รวม {aggMeta.groupSize} ไซส์
+                          <div className="text-[10px] leading-none mb-0.5 text-slate-400 group-focus-within:text-[#3DD8D8] group-focus-within:font-semibold transition-colors">
+                            รวม
                           </div>
                           {isEditable('col5') ? (
                             <input
@@ -581,23 +590,29 @@ export default function LinenFormGrid({
                               }}
                               onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                               onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col5)}
-                              className="w-16 px-2 py-1 border-2 border-indigo-300 bg-white rounded text-center text-sm font-semibold focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                              className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
                             />
                           ) : (
-                            <span className="text-indigo-900 font-semibold">{row.col5_factoryClaimApproved || '-'}</span>
+                            <span className="text-slate-700">{row.col5_factoryClaimApproved || '-'}</span>
                           )}
                         </div>
                       ) : (
-                        // Non-anchor: dash + click focus anchor
-                        <button
-                          type="button"
-                          onClick={() => isEditable('col5') && focusAnchorCell(aggMeta.anchorCode, COL_NAV_INDEX.col5)}
-                          disabled={!isEditable('col5')}
-                          title={isEditable('col5') ? `ค่ารวมอยู่ที่ row anchor — คลิกเพื่อ focus` : 'ค่ารวมอยู่ที่ row anchor'}
-                          className="text-slate-300 hover:text-indigo-600 cursor-pointer text-xs disabled:cursor-default"
-                        >
-                          —<span className="text-[8px] ml-0.5">↑รวม</span>
-                        </button>
+                        // Non-anchor: arrow ↓ ถ้าอยู่ก่อน anchor / ↑ ถ้าอยู่หลัง
+                        (() => {
+                          const anchorIdx = enabledItems.findIndex(it => it.code === aggMeta.anchorCode)
+                          const dir = rowIndex < anchorIdx ? '↓' : '↑'
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => isEditable('col5') && focusAnchorCell(aggMeta.anchorCode, COL_NAV_INDEX.col5)}
+                              disabled={!isEditable('col5')}
+                              title={isEditable('col5') ? 'ค่ารวมอยู่ที่ row anchor — คลิกเพื่อ focus' : 'ค่ารวมอยู่ที่ row anchor'}
+                              className="text-slate-300 hover:text-[#3DD8D8] text-sm disabled:cursor-default"
+                            >
+                              {dir}
+                            </button>
+                          )
+                        })()
                       )
                     ) : isEditable('col5') ? (
                       <input
