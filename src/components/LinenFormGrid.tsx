@@ -401,6 +401,10 @@ export default function LinenFormGrid({
   const totals = {
     col1: 0, col2: 0, col3: 0, col4: 0, col5: 0, col6: 0,
   }
+  // 333.1: pre-compute group sums สำหรับ Col(-)/(+) อะกริเกตที่ anchor
+  //   เก็บ sum(col6) + sum(baseline) ของแต่ละ group ที่อยู่ใน aggregate mode
+  //   baseline = col5 (cross_check) หรือ col2+col3 (trust)
+  const groupCarrySums: Record<string, { col6: number; baseline: number }> = {}
   for (const item of enabledItems) {
     const row = getRow(item.code)
     const co = carryOver[item.code] || 0
@@ -410,6 +414,15 @@ export default function LinenFormGrid({
     totals.col4 += row.col4_factoryApproved
     totals.col5 += row.col5_factoryClaimApproved
     totals.col6 += (row.col6_factoryPackSend || 0)
+    // accumulate group sum
+    const meta = aggregateMeta.get(item.code)
+    if (meta) {
+      if (!groupCarrySums[meta.groupKey]) groupCarrySums[meta.groupKey] = { col6: 0, baseline: 0 }
+      groupCarrySums[meta.groupKey].col6 += row.col6_factoryPackSend || 0
+      groupCarrySums[meta.groupKey].baseline += isTrustCustomer
+        ? (row.col2_hotelCountIn + row.col3_hotelClaimCount)
+        : row.col5_factoryClaimApproved
+    }
   }
 
   return (
@@ -754,10 +767,36 @@ export default function LinenFormGrid({
                     )}
                   </td>
 
-                  {/* Calculated - ค้าง(-)/คืน(+) */}
+                  {/* Calculated - ค้าง(-)/คืน(+) · 333.1: group-aware (theme เดียวกับ col2/col5) */}
                   {/* 265 — trust_customer: ใช้ col6 − (col2+col3) แทน col6 − col5 */}
+                  {/* 333.1 — เมื่อ col ที่ใช้คำนวณ (col5/col2) เป็น aggregate → group sum ที่ anchor */}
                   <td className="px-1 py-1 text-center">
                     {(() => {
+                      // ตรวจว่าควรแสดงแบบ group หรือ per-row
+                      // cross_check + col5Aggregate → group / trust + col2Aggregate → group / ที่เหลือ → per-row
+                      const isAggForCarry = !!(aggMeta && (
+                        (!isTrustCustomer && aggMeta.col5Aggregate) ||
+                        (isTrustCustomer && aggMeta.col2Aggregate)
+                      ))
+                      if (isAggForCarry && aggMeta) {
+                        if (aggMeta.isAnchor) {
+                          // Anchor: group net (sum col6 ทั้งกลุ่ม − baseline ของกลุ่ม)
+                          const gs = groupCarrySums[aggMeta.groupKey]
+                          const val = gs ? gs.col6 - gs.baseline : 0
+                          if (val === 0) return <span className="text-slate-400">-</span>
+                          return (
+                            <span className={cn(val < 0 ? 'text-red-600 font-medium' : 'text-emerald-600 font-medium')}>
+                              {val > 0 ? `+${val}` : val}
+                            </span>
+                          )
+                        } else {
+                          // Non-anchor: ลูกศรชี้ไป anchor (theme เดียวกับ col2/col5)
+                          const anchorIdx = enabledItems.findIndex(it => it.code === aggMeta.anchorCode)
+                          const dir = rowIndex < anchorIdx ? '↓' : '↑'
+                          return <span className="text-slate-400 text-sm">{dir}</span>
+                        }
+                      }
+                      // Default: per-row diff (เดิม)
                       const baseline = isTrustCustomer
                         ? (row.col2_hotelCountIn + row.col3_hotelClaimCount)
                         : row.col5_factoryClaimApproved
