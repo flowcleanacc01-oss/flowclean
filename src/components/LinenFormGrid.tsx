@@ -401,10 +401,11 @@ export default function LinenFormGrid({
   const totals = {
     col1: 0, col2: 0, col3: 0, col4: 0, col5: 0, col6: 0,
   }
-  // 333.1: pre-compute group sums สำหรับ Col(-)/(+) อะกริเกตที่ anchor
-  //   เก็บ sum(col6) + sum(baseline) ของแต่ละ group ที่อยู่ใน aggregate mode
+  // 333.1 + 334: pre-compute group sums
+  //   - carry (Col(-)/(+)): col6, baseline
+  //   - countIn discrepancy: col5, expected (col2+col3)
   //   baseline = col5 (cross_check) หรือ col2+col3 (trust)
-  const groupCarrySums: Record<string, { col6: number; baseline: number }> = {}
+  const groupSums: Record<string, { col6: number; baseline: number; col5: number; expected: number }> = {}
   for (const item of enabledItems) {
     const row = getRow(item.code)
     const co = carryOver[item.code] || 0
@@ -417,11 +418,13 @@ export default function LinenFormGrid({
     // accumulate group sum
     const meta = aggregateMeta.get(item.code)
     if (meta) {
-      if (!groupCarrySums[meta.groupKey]) groupCarrySums[meta.groupKey] = { col6: 0, baseline: 0 }
-      groupCarrySums[meta.groupKey].col6 += row.col6_factoryPackSend || 0
-      groupCarrySums[meta.groupKey].baseline += isTrustCustomer
+      if (!groupSums[meta.groupKey]) groupSums[meta.groupKey] = { col6: 0, baseline: 0, col5: 0, expected: 0 }
+      groupSums[meta.groupKey].col6 += row.col6_factoryPackSend || 0
+      groupSums[meta.groupKey].baseline += isTrustCustomer
         ? (row.col2_hotelCountIn + row.col3_hotelClaimCount)
         : row.col5_factoryClaimApproved
+      groupSums[meta.groupKey].col5 += row.col5_factoryClaimApproved
+      groupSums[meta.groupKey].expected += row.col2_hotelCountIn + row.col3_hotelClaimCount
     }
   }
 
@@ -498,12 +501,25 @@ export default function LinenFormGrid({
               const row = getRow(item.code)
               const co = carryOver[item.code] || 0
               const expectedCountIn = row.col2_hotelCountIn + row.col3_hotelClaimCount
-              const hasCountInDisc = row.col5_factoryClaimApproved > 0 && row.col5_factoryClaimApproved !== expectedCountIn
+              // 326: aggregate meta — anchor + group geometry for cell rendering
+              const aggMeta = aggregateMeta.get(item.code) || null
+              // 334: group-aware disc — เมื่อ col5 หรือ col2 เป็น aggregate
+              //   per-row check ใช้ไม่ได้ (ค่าที่ non-anchor = 0 → false positive)
+              //   แทนที่ → group level: sum(col5_group) ≠ sum(col2+col3_group) → flag เฉพาะ anchor
+              const isAggDisc = !!(aggMeta && (aggMeta.col5Aggregate || aggMeta.col2Aggregate))
+              const hasCountInDisc = (() => {
+                if (isAggDisc && aggMeta) {
+                  // group-level — flag เฉพาะ anchor row
+                  const gs = groupSums[aggMeta.groupKey]
+                  if (!gs) return false
+                  return aggMeta.isAnchor && gs.col5 > 0 && gs.col5 !== gs.expected
+                }
+                // per-row (เดิม)
+                return row.col5_factoryClaimApproved > 0 && row.col5_factoryClaimApproved !== expectedCountIn
+              })()
               const packSend = row.col6_factoryPackSend || 0
               const hasCountBackDisc = (!formStatus || ['delivered', 'confirmed'].includes(formStatus)) &&
                 row.col4_factoryApproved > 0 && row.col4_factoryApproved !== packSend
-              // 326: aggregate meta — anchor + group geometry for cell rendering
-              const aggMeta = aggregateMeta.get(item.code) || null
               // 331/332: full-width aggregate group borders — เส้นขอบยาวเต็ม row
               //   ใช้ "border-bottom ของ row ก่อน" เป็นเส้นบนของกลุ่ม → กัน CSS collapse conflict
               //   (browser ตัดสินใจระหว่าง border-bottom slate-100 (row ก่อน) กับ border-top slate-300
@@ -661,10 +677,10 @@ export default function LinenFormGrid({
                     )}
                   </td>
 
-                  {/* Col 5 - โรงซักนับเข้า · 331: borders ย้ายไป tr (full-width) */}
+                  {/* Col 5 - โรงซักนับเข้า · 331: borders ย้ายไป tr · 334: hasCountInDisc group-aware */}
                   <td className={cn(
                     'px-1 py-1 text-center',
-                    !isTrustCustomer && hasCountInDisc && !aggMeta?.col5Aggregate && 'bg-amber-50',
+                    !isTrustCustomer && hasCountInDisc && 'bg-amber-50',
                   )}>
                     {isTrustCustomer ? (
                       // 265 — trust mode: ไม่นับเข้า แสดง "—"
@@ -693,10 +709,16 @@ export default function LinenFormGrid({
                               }}
                               onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); setActiveColIdx(COL_NAV_INDEX.col5); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
                               onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col5)}
-                              className="w-16 px-2 py-1 border border-slate-300 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none"
+                              className={cn(
+                                'w-16 px-2 py-1 border rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none',
+                                hasCountInDisc ? 'border-amber-400 bg-amber-50' : 'border-slate-300 focus:border-[#3DD8D8]',
+                              )}
                             />
                           ) : (
-                            <span className="text-slate-700">{row.col5_factoryClaimApproved || '-'}</span>
+                            <span className={cn('text-slate-700', hasCountInDisc && 'text-amber-600 font-medium')}>
+                              {row.col5_factoryClaimApproved || '-'}
+                              {hasCountInDisc && ' ⚠'}
+                            </span>
                           )}
                         </div>
                       ) : (
@@ -781,7 +803,7 @@ export default function LinenFormGrid({
                       if (isAggForCarry && aggMeta) {
                         if (aggMeta.isAnchor) {
                           // Anchor: group net (sum col6 ทั้งกลุ่ม − baseline ของกลุ่ม)
-                          const gs = groupCarrySums[aggMeta.groupKey]
+                          const gs = groupSums[aggMeta.groupKey]
                           const val = gs ? gs.col6 - gs.baseline : 0
                           if (val === 0) return <span className="text-slate-400">-</span>
                           return (
