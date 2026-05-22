@@ -16,7 +16,6 @@ import { sortByQTOrder } from '@/lib/sort-by-qt'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
-import AggregateGroupBanners from '@/components/AggregateGroupBanners'
 import LinenFormPrint from '@/components/LinenFormPrint'
 import CustomerPicker from '@/components/CustomerPicker'
 import ExportButtons from '@/components/ExportButtons'
@@ -733,15 +732,6 @@ export default function LinenFormsPage() {
                   <Sparkles className="w-3.5 h-3.5" /> เพิ่มผ้ารายการใหม่ (Wizard)
                 </button>
               </div>
-              {/* 317.P2: Aggregate group banners (create modal — draft status: col2 only) */}
-              <AggregateGroupBanners
-                customer={getCustomer(newCustomerId)!}
-                catalog={linenCatalog}
-                rows={newRows}
-                onChange={setNewRows}
-                qtItems={getLinkedQT(getCustomer(newCustomerId)!.name, newCustomerId)?.items}
-                editableCols={['col2']}
-              />
               <LinenFormGrid
                 customer={getCustomer(newCustomerId)!}
                 rows={newRows}
@@ -1043,22 +1033,6 @@ export default function LinenFormsPage() {
                 )
               })()}
             </div>
-            {/* 317.P2: Aggregate group banners — แสดงเหนือ grid ถ้าลูกค้า opt-in size groups */}
-            <AggregateGroupBanners
-              customer={detailCustomer}
-              catalog={linenCatalog}
-              rows={detailForm.rows}
-              onChange={(rows) => updateLinenForm(detailForm.id, { rows })}
-              qtItems={getLinkedQT(detailCustomer.name, detailForm.customerId)?.items}
-              readOnly={PROCESS_STATUSES.includes(detailForm.status)}
-              editableCols={(() => {
-                const allowed: ('col2' | 'col5')[] = []
-                const s = detailForm.status
-                if (s === 'draft' || s === 'received') allowed.push('col2')
-                if (s === 'received') allowed.push('col5')
-                return allowed
-              })()}
-            />
             <LinenFormGrid
               customer={detailCustomer}
               rows={detailForm.rows}

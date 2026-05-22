@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Trash2, Zap, Check } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { Trash2, Zap, Check, Anchor } from 'lucide-react'
 import type { LinenFormRow, Customer, LinenItemDef, LinenFormStatus, QuotationItem, WorkflowMode } from '@/types'
 import { cn } from '@/lib/utils'
 import { wasSynced } from '@/lib/sync-discrepancy'
 import { resolveDisplayName } from '@/lib/facet-generators'
 import { highlightText } from '@/lib/highlight'
+import { getGroupAnchorCode } from '@/lib/aggregate-groups'
 
 interface LinenFormGridProps {
   customer: Customer
@@ -115,7 +116,108 @@ export default function LinenFormGrid({
         sortOrder: 999,
       }
     })
-  const enabledItems: LinenItemDef[] = [...baseItems, ...orphanItems]
+  const rawItems: LinenItemDef[] = [...baseItems, ...orphanItems]
+
+  // 326: Auto-rearrange — group items ที่ลูกค้า opt-in aggregate ติดกัน
+  // Order สัมพัทธ์ของแต่ละ group คงเดิม (first occurrence ใน rawItems)
+  // Items ที่ไม่อยู่ในกลุ่ม → คงตำแหน่งเดิม
+  // 326: Catalog map (code → catalog item) — ใช้ใน sort + aggregate detection
+  const catalogMap = useMemo(() => new Map(catalog.map(c => [c.code, c])), [catalog])
+  const optInGroupKeys = useMemo(
+    () => new Set((customer.aggregateSizeGroups ?? []).map(c => c.groupKey)),
+    [customer.aggregateSizeGroups],
+  )
+
+  const enabledItems: LinenItemDef[] = useMemo(() => {
+    if (optInGroupKeys.size === 0) return rawItems
+    const seen = new Set<string>()
+    const result: LinenItemDef[] = []
+    for (const item of rawItems) {
+      if (seen.has(item.code)) continue
+      const groupKey = catalogMap.get(item.code)?.sizeGroup
+      if (groupKey && optInGroupKeys.has(groupKey)) {
+        // First occurrence ของ group → push all group items ติดกัน
+        const groupItems = rawItems.filter(
+          it => catalogMap.get(it.code)?.sizeGroup === groupKey,
+        )
+        for (const gi of groupItems) {
+          if (!seen.has(gi.code)) {
+            result.push(gi)
+            seen.add(gi.code)
+          }
+        }
+      } else {
+        result.push(item)
+        seen.add(item.code)
+      }
+    }
+    return result
+    // rawItems sufficient — เพราะ contents ขึ้นกับ catalog/qtItems/rows ที่ใส่ใน deps แล้ว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogMap, optInGroupKeys, baseItems, orphanItems.length])
+
+  // 326: aggregateMeta per code — anchor flag + col2/col5 aggregate mode + group geometry
+  interface AggregateMeta {
+    groupKey: string
+    isAnchor: boolean
+    isFirstInGroup: boolean
+    isLastInGroup: boolean
+    col2Aggregate: boolean
+    col5Aggregate: boolean
+    anchorCode: string
+    groupSize: number
+  }
+  const aggregateMeta = useMemo(() => {
+    const map = new Map<string, AggregateMeta>()
+    if (optInGroupKeys.size === 0) return map
+    const cfgByKey = new Map((customer.aggregateSizeGroups ?? []).map(c => [c.groupKey, c]))
+    // Build groups เฉพาะ codes ใน enabledItems
+    const codesByGroup = new Map<string, string[]>()
+    for (const item of enabledItems) {
+      const gk = catalogMap.get(item.code)?.sizeGroup
+      if (!gk || !optInGroupKeys.has(gk)) continue
+      if (!codesByGroup.has(gk)) codesByGroup.set(gk, [])
+      codesByGroup.get(gk)!.push(item.code)
+    }
+    for (const [groupKey, codes] of codesByGroup.entries()) {
+      const cfg = cfgByKey.get(groupKey)
+      if (!cfg) continue
+      const groupItems = codes
+        .map(c => catalogMap.get(c))
+        .filter((i): i is LinenItemDef => !!i)
+      const anchor = getGroupAnchorCode(groupItems)
+      const col2Agg = cfg.col2Mode === 'aggregate'
+      const col5Agg = (cfg.col5Mode ?? 'aggregate') === 'aggregate'
+      codes.forEach((code, idx) => {
+        map.set(code, {
+          groupKey,
+          isAnchor: code === anchor,
+          isFirstInGroup: idx === 0,
+          isLastInGroup: idx === codes.length - 1,
+          col2Aggregate: col2Agg,
+          col5Aggregate: col5Agg,
+          anchorCode: anchor,
+          groupSize: codes.length,
+        })
+      })
+    }
+    return map
+  }, [enabledItems, optInGroupKeys, catalogMap, customer.aggregateSizeGroups])
+
+  // 326: focus to anchor row helper — click ที่ non-anchor cell
+  const focusAnchorCell = (anchorCode: string, colNavIndex: number) => {
+    const anchorIdx = enabledItems.findIndex(it => it.code === anchorCode)
+    if (anchorIdx < 0) return
+    setTimeout(() => {
+      const el = gridRef.current?.querySelector<HTMLInputElement>(
+        `input[data-row="${anchorIdx}"][data-col="${colNavIndex}"]`,
+      )
+      if (el) {
+        el.focus()
+        el.select()
+      }
+    }, 0)
+  }
 
   const [localRows, setLocalRows] = useState<LinenFormRow[]>(rows)
   const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null)
@@ -341,6 +443,8 @@ export default function LinenFormGrid({
               const packSend = row.col6_factoryPackSend || 0
               const hasCountBackDisc = (!formStatus || ['delivered', 'confirmed'].includes(formStatus)) &&
                 row.col4_factoryApproved > 0 && row.col4_factoryApproved !== packSend
+              // 326: aggregate meta — anchor + group geometry for cell rendering
+              const aggMeta = aggregateMeta.get(item.code) || null
 
               return (
                 <tr key={item.code} className={cn(
@@ -361,24 +465,68 @@ export default function LinenFormGrid({
                     </span>
                   </td>
 
-                  {/* Col 2 - ลูกค้านับส่ง */}
-                  <td className="px-1 py-1 text-center">
-                    {isEditable('col2') ? (
-                      <input
-                        type="text" inputMode="numeric" pattern="[0-9]*"
-                        data-row={rowIndex} data-col={COL_NAV_INDEX.col2}
-                        value={row.col2_hotelCountIn || ''}
-                        onChange={e => {
-                          const v = e.target.value
-                          if (v === '' || /^\d+$/.test(v))
-                            updateRow(item.code, 'col2_hotelCountIn', v === '' ? 0 : parseInt(v, 10))
-                        }}
-                        onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
-                        onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col2)}
-                        className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
-                      />
+                  {/* Col 2 - ลูกค้านับส่ง · 326: aggregate-aware */}
+                  <td className={cn(
+                    'px-1 py-1 text-center',
+                    aggMeta?.col2Aggregate && 'bg-indigo-50/40 border-l-2 border-indigo-300',
+                    aggMeta?.col2Aggregate && aggMeta.isLastInGroup && 'border-b border-indigo-300',
+                    aggMeta?.col2Aggregate && aggMeta.isFirstInGroup && 'border-t border-indigo-300',
+                  )}>
+                    {aggMeta?.col2Aggregate ? (
+                      aggMeta.isAnchor ? (
+                        // Anchor: input + label "รวม"
+                        <div className="flex flex-col items-center">
+                          <div className="text-[9px] text-indigo-700 font-semibold leading-none mb-0.5 flex items-center gap-0.5">
+                            <Anchor className="w-2 h-2" />🧺 รวม {aggMeta.groupSize} ไซส์
+                          </div>
+                          {isEditable('col2') ? (
+                            <input
+                              type="text" inputMode="numeric" pattern="[0-9]*"
+                              data-row={rowIndex} data-col={COL_NAV_INDEX.col2}
+                              value={row.col2_hotelCountIn || ''}
+                              onChange={e => {
+                                const v = e.target.value
+                                if (v === '' || /^\d+$/.test(v))
+                                  updateRow(item.code, 'col2_hotelCountIn', v === '' ? 0 : parseInt(v, 10))
+                              }}
+                              onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                              onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col2)}
+                              className="w-16 px-2 py-1 border-2 border-indigo-300 bg-white rounded text-center text-sm font-semibold focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                            />
+                          ) : (
+                            <span className="text-indigo-900 font-semibold">{row.col2_hotelCountIn || '-'}</span>
+                          )}
+                        </div>
+                      ) : (
+                        // Non-anchor: dash + click focus anchor
+                        <button
+                          type="button"
+                          onClick={() => isEditable('col2') && focusAnchorCell(aggMeta.anchorCode, COL_NAV_INDEX.col2)}
+                          disabled={!isEditable('col2')}
+                          title={isEditable('col2') ? `ค่ารวมอยู่ที่ row anchor — คลิกเพื่อ focus` : 'ค่ารวมอยู่ที่ row anchor'}
+                          className="text-slate-300 hover:text-indigo-600 cursor-pointer text-xs disabled:cursor-default"
+                        >
+                          —<span className="text-[8px] ml-0.5">↑รวม</span>
+                        </button>
+                      )
                     ) : (
-                      <span className="text-slate-700">{row.col2_hotelCountIn || '-'}</span>
+                      isEditable('col2') ? (
+                        <input
+                          type="text" inputMode="numeric" pattern="[0-9]*"
+                          data-row={rowIndex} data-col={COL_NAV_INDEX.col2}
+                          value={row.col2_hotelCountIn || ''}
+                          onChange={e => {
+                            const v = e.target.value
+                            if (v === '' || /^\d+$/.test(v))
+                              updateRow(item.code, 'col2_hotelCountIn', v === '' ? 0 : parseInt(v, 10))
+                          }}
+                          onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                          onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col2)}
+                          className="w-16 px-2 py-1 border border-slate-200 rounded text-center text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                        />
+                      ) : (
+                        <span className="text-slate-700">{row.col2_hotelCountIn || '-'}</span>
+                      )
                     )}
                   </td>
 
@@ -403,11 +551,54 @@ export default function LinenFormGrid({
                     )}
                   </td>
 
-                  {/* Col 5 - โรงซักนับเข้า */}
-                  <td className={cn('px-1 py-1 text-center', !isTrustCustomer && hasCountInDisc && 'bg-amber-50')}>
+                  {/* Col 5 - โรงซักนับเข้า · 326: aggregate-aware */}
+                  <td className={cn(
+                    'px-1 py-1 text-center',
+                    !isTrustCustomer && hasCountInDisc && !aggMeta?.col5Aggregate && 'bg-amber-50',
+                    aggMeta?.col5Aggregate && 'bg-indigo-50/40 border-l-2 border-indigo-300',
+                    aggMeta?.col5Aggregate && aggMeta.isLastInGroup && 'border-b border-indigo-300',
+                    aggMeta?.col5Aggregate && aggMeta.isFirstInGroup && 'border-t border-indigo-300',
+                  )}>
                     {isTrustCustomer ? (
                       // 265 — trust mode: ไม่นับเข้า แสดง "—"
                       <span className="text-slate-300" title="ลูกค้า Trust Customer — ไม่นับเข้า">—</span>
+                    ) : aggMeta?.col5Aggregate ? (
+                      aggMeta.isAnchor ? (
+                        // Anchor: input + label "รวม"
+                        <div className="flex flex-col items-center">
+                          <div className="text-[9px] text-indigo-700 font-semibold leading-none mb-0.5 flex items-center gap-0.5">
+                            <Anchor className="w-2 h-2" />🧺 รวม {aggMeta.groupSize} ไซส์
+                          </div>
+                          {isEditable('col5') ? (
+                            <input
+                              type="text" inputMode="numeric" pattern="[0-9]*"
+                              data-row={rowIndex} data-col={COL_NAV_INDEX.col5}
+                              value={row.col5_factoryClaimApproved || ''}
+                              onChange={e => {
+                                const v = e.target.value
+                                if (v === '' || /^\d+$/.test(v))
+                                  updateRow(item.code, 'col5_factoryClaimApproved', v === '' ? 0 : parseInt(v, 10))
+                              }}
+                              onFocus={e => { e.currentTarget.select(); setActiveRowIdx(rowIndex); const tr = e.currentTarget.closest('tr'); if (tr) scrollCellVisible(tr) }}
+                              onKeyDown={e => navigate(e, rowIndex, COL_NAV_INDEX.col5)}
+                              className="w-16 px-2 py-1 border-2 border-indigo-300 bg-white rounded text-center text-sm font-semibold focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                            />
+                          ) : (
+                            <span className="text-indigo-900 font-semibold">{row.col5_factoryClaimApproved || '-'}</span>
+                          )}
+                        </div>
+                      ) : (
+                        // Non-anchor: dash + click focus anchor
+                        <button
+                          type="button"
+                          onClick={() => isEditable('col5') && focusAnchorCell(aggMeta.anchorCode, COL_NAV_INDEX.col5)}
+                          disabled={!isEditable('col5')}
+                          title={isEditable('col5') ? `ค่ารวมอยู่ที่ row anchor — คลิกเพื่อ focus` : 'ค่ารวมอยู่ที่ row anchor'}
+                          className="text-slate-300 hover:text-indigo-600 cursor-pointer text-xs disabled:cursor-default"
+                        >
+                          —<span className="text-[8px] ml-0.5">↑รวม</span>
+                        </button>
+                      )
                     ) : isEditable('col5') ? (
                       <input
                         type="text" inputMode="numeric" pattern="[0-9]*"
