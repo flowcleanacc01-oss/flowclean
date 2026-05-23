@@ -232,16 +232,16 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
                 ? (row.col6_factoryPackSend || 0) - (row.col2_hotelCountIn + row.col3_hotelClaimCount)
                 : (row.col6_factoryPackSend || 0) - row.col5_factoryClaimApproved
             }
-            // 341: row classes — visual brace สำหรับ aggregate group
+            // 341 + 352: visual brace — เส้นแนวนอน 1px slate-400 ที่ขอบบน/ล่างของกลุ่ม
+            //   ลบเส้นแนวตั้ง (border-l/r) ออก + ลดความหนา 2px → 1px (ติ๊ด feedback bac6a45)
             const rowCls = m ? cn(
               'group-row',
-              m.isFirstInGroup && 'border-t-2 border-t-slate-500',
-              m.isLastInGroup && 'border-b-2 border-b-slate-500',
+              m.isFirstInGroup && 'border-t border-t-slate-400',
+              m.isLastInGroup && 'border-b border-b-slate-400',
             ) : ''
             return (
               <tr key={row.code} className={rowCls} style={{ breakInside: 'avoid' }}>
-                <td className={cn('px-1.5 py-1 border border-slate-300 font-mono text-[10px] align-middle',
-                  m && 'border-l-2 border-l-slate-500')}>{row.code}</td>
+                <td className="px-1.5 py-1 border border-slate-300 font-mono text-[10px] align-middle">{row.code}</td>
                 {/* 350: ลบ badge/anchor hint — uniform เหมือน LF Grid */}
                 <td className="px-1.5 py-1 border border-slate-300 align-middle">
                   {nameMap[row.code] || row.code}
@@ -274,8 +274,7 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
                 {/* หมายเหตุ */}
                 <td className="px-1.5 py-1 border border-slate-300 text-[10px] align-middle">{row.note || '-'}</td>
                 {/* นับกลับ (col4) — per-row */}
-                <td className={cn('px-1.5 py-1 border border-slate-300 text-right align-middle',
-                  m && 'border-r-2 border-r-slate-500')}>
+                <td className="px-1.5 py-1 border border-slate-300 text-right align-middle">
                   {row.col4_factoryApproved || '-'}
                 </td>
               </tr>
