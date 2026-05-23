@@ -15,9 +15,14 @@ import { useSearchParams } from 'next/navigation'
 export function useScrollToMark(deps: unknown[] = []) {
   const searchParams = useSearchParams()
   const q = searchParams.get('q')
+  // 343: ถ้า URL มี specific-target param (focusCode/focus) → skip q-based scroll
+  //      เพราะ page-level useEffect จะ scroll ไปยัง target row โดยตรง
+  //      ก่อนหน้านี้ q-based scroll override (ไปที่ mark แรกในหน้า) → click A58 jump ไป A15
+  const hasSpecificTarget = !!(searchParams.get('focusCode') || searchParams.get('focus'))
 
   useEffect(() => {
     if (!q || !q.trim()) return
+    if (hasSpecificTarget) return // 343: cede scroll to focusCode handler
 
     let cancelled = false
     let attempts = 0
@@ -62,5 +67,5 @@ export function useScrollToMark(deps: unknown[] = []) {
       if (activeTimeoutId !== null) clearTimeout(activeTimeoutId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, ...deps])
+  }, [q, hasSpecificTarget, ...deps])
 }

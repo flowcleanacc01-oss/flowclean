@@ -70,6 +70,22 @@ export function useFindMatches(active: boolean) {
     if (indexRef.current >= matches.length) setIndex(matches.length - 1)
   }, [matches])
 
+  // 343: ถ้า URL มี focusCode/focus → set active index ไปที่ mark inside target row
+  //      เคส Cmd+K click A58 (with q=ขี้): focusCode=A58 ใน URL
+  //      → FindBar ยังเปิด + highlight ครบ แต่ active mark = อยู่ใน row A58 (ไม่ใช่ A15)
+  //      → scrollIntoView ไปที่ A58 ตรงกับ user intent
+  useEffect(() => {
+    if (!active || matches.length === 0) return
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    const target = sp.get('focusCode') || sp.get('focus')
+    if (!target) return
+    const row = document.querySelector(`[data-row-id="${CSS.escape(target)}"]`)
+    if (!row) return
+    const idx = matches.findIndex(m => row.contains(m))
+    if (idx >= 0 && idx !== indexRef.current) setIndex(idx)
+  }, [matches, active])
+
   // Apply active attribute + scroll
   useEffect(() => {
     if (!active) return
