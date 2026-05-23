@@ -313,32 +313,31 @@ export default function ReportsPage() {
     [linenCatalog],
   )
 
-  /** 339: row classes สำหรับ visual brace ของ aggregate group (pattern LF 326-332)
-   *  - In-group: bg-indigo tint + border-l-4 indigo
-   *  - First in group: border-t-2 indigo
-   *  - Last in group: border-b-2 indigo
+  /** 339 + 346: row classes สำหรับ visual brace — theme เดียวกับ LF Grid (post-345)
+   *  - LF Grid pattern: ไม่มี bg tint + ไม่มี border-l
+   *  - First in group: border-t slate-300 (1px)
+   *  - Last in group: border-b slate-300 (1px)
    */
   const coRowClasses = (code: string, baseClasses = ''): string => {
     const m = coRowAggMeta.get(code)
     return cn(
       baseClasses || 'border-t border-slate-100',
-      m?.isInGroup && 'bg-indigo-50/40 border-l-4 border-l-indigo-300',
-      m?.isFirstInGroup && '!border-t-2 !border-t-indigo-300',
-      m?.isLastInGroup && '!border-b-2 !border-b-indigo-300',
+      m?.isFirstInGroup && '!border-t !border-t-slate-300',
+      m?.isLastInGroup && '!border-b !border-b-slate-300',
     )
   }
 
-  /** 339: render label cell (code + name + arrow ↑/↓ ถ้า non-anchor) */
+  /** 339 + 346: render label cell — theme LF Grid (slate, ไม่ใช่ indigo) */
   const renderCoLabel = (code: string) => {
     const m = coRowAggMeta.get(code)
     if (m?.isInGroup && !m.isAnchor) {
       const dir = m.indexInList < m.anchorIndex ? '↓' : '↑'
       return (
         <span className="inline-flex items-center gap-1">
-          <span className="text-indigo-400 text-sm font-bold">{dir}</span>
+          <span className="text-slate-400 text-sm">{dir}</span>
           <span className="font-mono text-slate-300 mr-0.5">{code}</span>
           <span className="text-slate-400">{itemNameMap[code]}</span>
-          <span className="ml-1 text-[10px] text-indigo-400 italic">รวมที่ {m.anchorCode}</span>
+          <span className="ml-1 text-[10px] text-slate-400 italic">รวมที่ {m.anchorCode}</span>
         </span>
       )
     }
@@ -347,7 +346,7 @@ export default function ReportsPage() {
         <span className="font-mono text-slate-400 mr-1">{code}</span>
         <span className="text-slate-700">{itemNameMap[code]}</span>
         {m?.isInGroup && m.isAnchor && (
-          <span className="ml-1.5 text-[10px] text-indigo-600 font-medium">📦 รวม {m.groupSize} ไซส์</span>
+          <span className="ml-1.5 text-[10px] text-slate-600 font-medium">📦 รวม {m.groupSize} ไซส์</span>
         )}
       </>
     )
@@ -973,17 +972,17 @@ export default function ReportsPage() {
             const grouped = groupCarryOver(coCarriedAfter, selCustomer, linenCatalog)
             if (grouped.groups.length === 0) return null
             return (
-              <div className="bg-white rounded-xl border border-indigo-200 p-4">
-                <h3 className="font-semibold text-indigo-900 mb-3 flex items-center gap-2 text-sm">
+              <div className="bg-white rounded-xl border border-slate-300 p-4">
+                <h3 className="font-semibold text-slate-700 mb-3 flex items-center gap-2 text-sm">
                   📦 สรุปแบบรวมกลุ่ม (ที่สิ้น {formatDate(coEndDate)})
                   <span className="text-[10px] text-slate-500 font-normal">— สำหรับลูกค้าที่นับรวมไซส์ตอนรับเข้า</span>
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {grouped.groups.map(grp => (
-                    <details key={grp.groupKey} className="rounded-lg border border-indigo-100 bg-indigo-50/30 overflow-hidden">
-                      <summary className="cursor-pointer px-3 py-2 hover:bg-indigo-50 transition-colors list-none flex items-center justify-between">
+                    <details key={grp.groupKey} className="rounded-lg border border-slate-200 bg-slate-50/40 overflow-hidden">
+                      <summary className="cursor-pointer px-3 py-2 hover:bg-slate-100 transition-colors list-none flex items-center justify-between">
                         <span className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-indigo-700 text-xs">{grp.groupKey}</span>
+                          <span className="font-mono font-bold text-slate-700 text-xs">{grp.groupKey}</span>
                           <span className="text-[10px] text-slate-500">{grp.items.length} ไซส์</span>
                         </span>
                         <span className={cn(
@@ -993,7 +992,7 @@ export default function ReportsPage() {
                           {grp.netCarry > 0 ? '+' : ''}{grp.netCarry}
                         </span>
                       </summary>
-                      <div className="px-3 pb-2 pt-1 space-y-0.5 border-t border-indigo-100 text-xs">
+                      <div className="px-3 pb-2 pt-1 space-y-0.5 border-t border-slate-200 text-xs">
                         {grp.items.map(it => (
                           <div key={it.code} className="flex justify-between py-0.5">
                             <span className="text-slate-500 flex items-center gap-1.5">
@@ -1110,8 +1109,7 @@ export default function ReportsPage() {
                     const fmt = (v: number) => v === 0 ? '·' : (v > 0 ? '+' : '') + v
                     return (
                       <tr key={code} className={coRowClasses(code)}>
-                        <td className={cn('px-3 py-1.5 sticky left-0 z-10',
-                          coRowAggMeta.get(code)?.isInGroup ? 'bg-indigo-50/40' : 'bg-white')}>
+                        <td className="px-3 py-1.5 sticky left-0 z-10 bg-white">
                           {renderCoLabel(code)}
                         </td>
                         <td className={cellCls(brought)}>{fmt(brought)}</td>
@@ -1161,8 +1159,7 @@ export default function ReportsPage() {
                     const fmt = (v: number) => v === 0 ? '·' : (v > 0 ? '+' : '') + v
                     return (
                       <tr key={code} className={coRowClasses(code)}>
-                        <td className={cn('px-3 py-1.5 sticky left-0 z-10',
-                          coRowAggMeta.get(code)?.isInGroup ? 'bg-indigo-50/40' : 'bg-white')}>
+                        <td className="px-3 py-1.5 sticky left-0 z-10 bg-white">
                           {renderCoLabel(code)}
                         </td>
                         <td className={cellCls(brought)}>{fmt(brought)}</td>
