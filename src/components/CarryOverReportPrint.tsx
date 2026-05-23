@@ -1,11 +1,13 @@
 'use client'
 
+import { useMemo } from 'react'
 import type {
   LinenForm, Customer, CompanyInfo, LinenItemDef,
   CarryOverAdjustment, CarryOverMode,
 } from '@/types'
 import { CARRY_OVER_MODE_CONFIG } from '@/types'
 import { formatDate, cn } from '@/lib/utils'
+import { getGroupAnchorCode } from '@/lib/aggregate-groups'
 
 interface Props {
   customer: Customer
@@ -36,27 +38,124 @@ export default function CarryOverReportPrint(props: Props) {
   const fmt = (n: number) => n > 0 ? `+${n}` : `${n}`
   const colorOf = (n: number) => n < 0 ? 'text-red-700' : n > 0 ? 'text-emerald-700' : 'text-slate-400'
 
-  // ---- Active codes (รายการที่มีกิจกรรมในช่วงเวลานี้) ----
-  const codesSet = new Set<string>()
-  for (const f of linenForms) {
-    if (f.customerId !== customer.id) continue
-    if (f.date < startDate || f.date > endDate) continue
-    for (const r of f.rows) codesSet.add(r.code)
-  }
-  for (const a of carryOverAdjustments) {
-    if (a.isDeleted || a.customerId !== customer.id) continue
-    if (a.date < startDate || a.date > endDate) continue
-    for (const it of a.items) codesSet.add(it.code)
-  }
-  // Also include codes ที่มี brought-forward balance (ยกมา) ไม่ว่าจะมี LF ในช่วงนี้หรือไม่
-  if (mode !== 'compare') {
-    const bf = getCarryOver(customer.id, startDate, mode, showAdjustments)
-    for (const code of Object.keys(bf)) {
-      if (bf[code] !== 0) codesSet.add(code)
+  // 353: aggregate group meta — per code (pattern เดียวกับ reports/page.tsx post-349)
+  const aggGroupInfo = useMemo(() => {
+    type Meta = { groupKey: string; anchorCode: string; isAnchor: boolean }
+    const meta = new Map<string, Meta>()
+    if (!customer.aggregateSizeGroups || customer.aggregateSizeGroups.length === 0) return meta
+    for (const cfg of customer.aggregateSizeGroups) {
+      const col5Agg = (cfg.col5Mode ?? 'aggregate') === 'aggregate'
+      const col2Agg = cfg.col2Mode === 'aggregate'
+      if (!col5Agg && !col2Agg) continue
+      const groupItems = catalog.filter(i => i.sizeGroup === cfg.groupKey)
+      if (groupItems.length === 0) continue
+      const anchorCode = getGroupAnchorCode(groupItems, cfg.anchorCode)
+      for (const item of groupItems) {
+        meta.set(item.code, { groupKey: cfg.groupKey, anchorCode, isAnchor: item.code === anchorCode })
+      }
     }
-  }
-  const orderMap = new Map(catalog.map((it, i) => [it.code, i]))
-  const activeCodes = [...codesSet].sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999))
+    return meta
+  }, [customer.aggregateSizeGroups, catalog])
+
+  // ---- Active codes — group cohesion + expand group members ----
+  const orderedCodes = useMemo(() => {
+    const codesSet = new Set<string>()
+    for (const f of linenForms) {
+      if (f.customerId !== customer.id) continue
+      if (f.date < startDate || f.date > endDate) continue
+      for (const r of f.rows) codesSet.add(r.code)
+    }
+    for (const a of carryOverAdjustments) {
+      if (a.isDeleted || a.customerId !== customer.id) continue
+      if (a.date < startDate || a.date > endDate) continue
+      for (const it of a.items) codesSet.add(it.code)
+    }
+    // include brought-forward codes
+    if (mode !== 'compare') {
+      const bf = getCarryOver(customer.id, startDate, mode, showAdjustments)
+      for (const code of Object.keys(bf)) {
+        if (bf[code] !== 0) codesSet.add(code)
+      }
+    }
+    // 353: expand to full group members + sort with group cohesion
+    const expanded = new Set<string>(codesSet)
+    for (const c of codesSet) {
+      const m = aggGroupInfo.get(c)
+      if (!m) continue
+      const groupItems = catalog.filter(i => i.sizeGroup === m.groupKey)
+      for (const gi of groupItems) expanded.add(gi.code)
+    }
+    const orderMap = new Map(catalog.map((it, i) => [it.code, i]))
+    const baseSorted = [...expanded].sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999))
+    const result: string[] = []
+    const seen = new Set<string>()
+    for (const code of baseSorted) {
+      if (seen.has(code)) continue
+      const m = aggGroupInfo.get(code)
+      if (m) {
+        const groupCodes = catalog
+          .filter(i => i.sizeGroup === m.groupKey && expanded.has(i.code))
+          .map(i => i.code)
+          .sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999))
+        for (const gc of groupCodes) {
+          if (!seen.has(gc)) { result.push(gc); seen.add(gc) }
+        }
+      } else {
+        result.push(code); seen.add(code)
+      }
+    }
+    return result
+  }, [linenForms, carryOverAdjustments, customer.id, startDate, endDate, mode, showAdjustments, getCarryOver, aggGroupInfo, catalog])
+
+  // 353: per-code metadata for visual brace + cell arrow
+  const rowMeta = useMemo(() => {
+    type RowMeta = {
+      isInGroup: boolean
+      isAnchor: boolean
+      anchorCode: string
+      anchorIndex: number
+      indexInList: number
+      isFirstInGroup: boolean
+      isLastInGroup: boolean
+    }
+    const map = new Map<string, RowMeta>()
+    // หา anchor index per group
+    const groupAnchors = new Map<string, number>()
+    orderedCodes.forEach((code, idx) => {
+      const info = aggGroupInfo.get(code)
+      if (info && info.isAnchor) groupAnchors.set(info.groupKey, idx)
+    })
+    const groupRange = new Map<string, { first: number; last: number }>()
+    orderedCodes.forEach((code, idx) => {
+      const info = aggGroupInfo.get(code)
+      if (!info) return
+      const existing = groupRange.get(info.groupKey)
+      if (!existing) groupRange.set(info.groupKey, { first: idx, last: idx })
+      else existing.last = idx
+    })
+    orderedCodes.forEach((code, idx) => {
+      const info = aggGroupInfo.get(code)
+      if (!info) {
+        map.set(code, {
+          isInGroup: false, isAnchor: false, anchorCode: code, anchorIndex: idx,
+          indexInList: idx, isFirstInGroup: false, isLastInGroup: false,
+        })
+        return
+      }
+      const range = groupRange.get(info.groupKey)
+      map.set(code, {
+        isInGroup: true,
+        isAnchor: info.isAnchor,
+        anchorCode: info.anchorCode,
+        anchorIndex: groupAnchors.get(info.groupKey) ?? idx,
+        indexInList: idx,
+        isFirstInGroup: range ? idx === range.first : false,
+        isLastInGroup: range ? idx === range.last : false,
+      })
+    })
+    return map
+  }, [orderedCodes, aggGroupInfo])
+
   const itemNameMap = Object.fromEntries(catalog.map(it => [it.code, it.name]))
 
   // ---- Days/Months in range ----
@@ -82,15 +181,20 @@ export default function CarryOverReportPrint(props: Props) {
     }
   }
 
-  // ---- Compute helpers ----
-  const computeDailyDiff = (code: string, day: string, m: CarryOverMode): number => {
+  // ---- Daily/Monthly diff — group-aware ----
+  /** Anchor row: sum diff ทุก code ใน group · ungrouped: per-row */
+  const computeDailyDiff = (code: string, day: string, mo: CarryOverMode): number => {
+    const info = aggGroupInfo.get(code)
+    const groupCodes = info?.isAnchor
+      ? new Set(catalog.filter(i => i.sizeGroup === info.groupKey).map(i => i.code))
+      : null
     let diff = 0
     for (const f of linenForms) {
       if (f.customerId !== customer.id || f.date !== day) continue
-      // 265: trust LF บังคับ Mode 2
-      const em: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : m
+      const em: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : mo
       for (const r of f.rows) {
-        if (r.code !== code) continue
+        const matches = groupCodes ? groupCodes.has(r.code) : r.code === code
+        if (!matches) continue
         switch (em) {
           case 1: diff += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
           case 2: diff += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
@@ -103,20 +207,36 @@ export default function CarryOverReportPrint(props: Props) {
       if (a.isDeleted || a.customerId !== customer.id || a.date !== day || a.type !== 'adjust') continue
       if (!showAdjustments && !a.showInCustomerReport) continue
       for (const it of a.items) {
-        if (it.code === code) diff += it.delta || 0
+        const matches = groupCodes ? groupCodes.has(it.code) : it.code === code
+        if (matches) diff += it.delta || 0
       }
     }
     return diff
   }
 
-  const computeMonthlySum = (code: string, monthYM: string, m: CarryOverMode): number => {
+  /** Non-anchor daily — adj only (LF aggregate ที่ anchor แล้ว) */
+  const computeNonAnchorDailyAdj = (code: string, day: string): number => {
+    let d = 0
+    for (const a of carryOverAdjustments) {
+      if (a.isDeleted || a.customerId !== customer.id || a.date !== day || a.type !== 'adjust') continue
+      if (!showAdjustments && !a.showInCustomerReport) continue
+      for (const it of a.items) if (it.code === code) d += it.delta || 0
+    }
+    return d
+  }
+
+  const computeMonthlySum = (code: string, monthYM: string, mo: CarryOverMode): number => {
+    const info = aggGroupInfo.get(code)
+    const groupCodes = info?.isAnchor
+      ? new Set(catalog.filter(i => i.sizeGroup === info.groupKey).map(i => i.code))
+      : null
     let sum = 0
     for (const f of linenForms) {
       if (f.customerId !== customer.id || !f.date.startsWith(monthYM)) continue
-      // 265: trust LF บังคับ Mode 2
-      const em: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : m
+      const em: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : mo
       for (const r of f.rows) {
-        if (r.code !== code) continue
+        const matches = groupCodes ? groupCodes.has(r.code) : r.code === code
+        if (!matches) continue
         switch (em) {
           case 1: sum += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
           case 2: sum += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
@@ -129,10 +249,21 @@ export default function CarryOverReportPrint(props: Props) {
       if (a.isDeleted || a.customerId !== customer.id || !a.date.startsWith(monthYM) || a.type !== 'adjust') continue
       if (!showAdjustments && !a.showInCustomerReport) continue
       for (const it of a.items) {
-        if (it.code === code) sum += it.delta || 0
+        const matches = groupCodes ? groupCodes.has(it.code) : it.code === code
+        if (matches) sum += it.delta || 0
       }
     }
     return sum
+  }
+
+  const computeNonAnchorMonthlyAdj = (code: string, monthYM: string): number => {
+    let s = 0
+    for (const a of carryOverAdjustments) {
+      if (a.isDeleted || a.customerId !== customer.id || !a.date.startsWith(monthYM) || a.type !== 'adjust') continue
+      if (!showAdjustments && !a.showInCustomerReport) continue
+      for (const it of a.items) if (it.code === code) s += it.delta || 0
+    }
+    return s
   }
 
   // ---- Brought / Carried ----
@@ -146,6 +277,55 @@ export default function CarryOverReportPrint(props: Props) {
     3: getCarryOver(customer.id, nextDay(endDate), 3, showAdjustments),
     4: getCarryOver(customer.id, nextDay(endDate), 4, showAdjustments),
   } as Record<CarryOverMode, Record<string, number>> : null
+
+  // 353: cell arrow helper — ↓/↑ for first/last row of group when anchor has value
+  const cellArrow = (code: string, anchorHasValue: boolean): '↓' | '↑' | null => {
+    const m = rowMeta.get(code)
+    if (!m?.isInGroup || m.isAnchor) return null
+    if (!anchorHasValue) return null
+    if (m.isFirstInGroup) return '↓'
+    if (m.isLastInGroup) return '↑'
+    return null
+  }
+
+  /** 353: row classes สำหรับ visual brace (theme LF Print post-352)
+   *  2px slate-400 horizontal borders ที่ขอบบน/ล่างของกลุ่ม
+   */
+  const rowCls = (code: string): string => {
+    const m = rowMeta.get(code)
+    if (!m?.isInGroup) return ''
+    return cn(
+      m.isFirstInGroup && 'border-t-2 border-t-slate-400',
+      m.isLastInGroup && 'border-b-2 border-b-slate-400',
+    )
+  }
+
+  /** 353: render value with "รวม" label เหนือ anchor cell (theme LF Grid/Print)
+   *  - anchor + aggregate column → vertical stack "รวม" label + value
+   *  - non-anchor + aggregate column → arrow ↓/↑ (if anchor has value)
+   *  - ungrouped → plain value
+   */
+  const renderCell = (code: string, value: number, anchorValue: number, signed = false): React.ReactNode => {
+    const m = rowMeta.get(code)
+    const displayVal = (v: number) => {
+      if (v === 0) return '-'
+      return signed ? (v > 0 ? `+${v}` : `${v}`) : String(v)
+    }
+    if (m?.isInGroup && m.isAnchor) {
+      return (
+        <div className="flex flex-col items-end leading-none">
+          <span className="text-[8px] text-slate-500 mb-0.5">รวม</span>
+          <span>{displayVal(value)}</span>
+        </div>
+      )
+    }
+    if (m?.isInGroup && !m.isAnchor) {
+      if (value !== 0) return displayVal(value) // per-size adj
+      const arr = cellArrow(code, anchorValue !== 0)
+      return arr ? <span className="text-slate-400 text-sm">{arr}</span> : '·'
+    }
+    return displayVal(value)
+  }
 
   // ---- Adjustments in range ----
   const adjInRange = carryOverAdjustments
@@ -164,6 +344,7 @@ export default function CarryOverReportPrint(props: Props) {
     : `เคส ${mode}: ${CARRY_OVER_MODE_CONFIG[mode].label} (${CARRY_OVER_MODE_CONFIG[mode].description})`
   const modeHint = mode !== 'compare' ? CARRY_OVER_MODE_CONFIG[mode].hint : undefined
   const titleByView = view === 'monthly' ? 'แจกแจงรายวัน' : 'แจกแจงรายเดือน'
+  const hasAggregate = aggGroupInfo.size > 0
 
   return (
     <div className="bg-white p-4 mx-auto text-xs print:p-0 print:shadow-none" id="print-carryover-report"
@@ -211,21 +392,28 @@ export default function CarryOverReportPrint(props: Props) {
             </tr>
           </thead>
           <tbody>
-            {activeCodes.length === 0 ? (
+            {orderedCodes.length === 0 ? (
               <tr><td colSpan={6} className="border border-slate-400 px-4 py-8 text-center text-slate-400">ไม่มีรายการในช่วงเวลานี้</td></tr>
-            ) : activeCodes.map(code => {
+            ) : orderedCodes.map(code => {
               const v1 = compareValues[1][code] || 0
               const v2 = compareValues[2][code] || 0
               const v3 = compareValues[3][code] || 0
               const v4 = compareValues[4][code] || 0
+              const m = rowMeta.get(code)
+              const anc = m?.isInGroup && !m.isAnchor ? {
+                1: compareValues[1][m.anchorCode] || 0,
+                2: compareValues[2][m.anchorCode] || 0,
+                3: compareValues[3][m.anchorCode] || 0,
+                4: compareValues[4][m.anchorCode] || 0,
+              } : null
               return (
-                <tr key={code}>
-                  <td className="border border-slate-400 px-2 py-1.5 font-mono text-slate-500">{code}</td>
-                  <td className="border border-slate-400 px-2 py-1.5">{itemNameMap[code]}</td>
-                  <td className={cn('border border-slate-400 px-2 py-1.5 text-right font-mono', colorOf(v1))}>{fmt(v1)}</td>
-                  <td className={cn('border border-slate-400 px-2 py-1.5 text-right font-mono', colorOf(v2))}>{fmt(v2)}</td>
-                  <td className={cn('border border-slate-400 px-2 py-1.5 text-right font-mono', colorOf(v3))}>{fmt(v3)}</td>
-                  <td className={cn('border border-slate-400 px-2 py-1.5 text-right font-mono', colorOf(v4))}>{fmt(v4)}</td>
+                <tr key={code} className={rowCls(code)}>
+                  <td className="border border-slate-400 px-2 py-1.5 font-mono text-slate-500 align-middle">{code}</td>
+                  <td className="border border-slate-400 px-2 py-1.5 align-middle">{itemNameMap[code]}</td>
+                  <td className={cn('border border-slate-400 px-2 py-1.5 text-right font-mono align-middle', colorOf(v1))}>{renderCell(code, v1, anc?.[1] || 0, true)}</td>
+                  <td className={cn('border border-slate-400 px-2 py-1.5 text-right font-mono align-middle', colorOf(v2))}>{renderCell(code, v2, anc?.[2] || 0, true)}</td>
+                  <td className={cn('border border-slate-400 px-2 py-1.5 text-right font-mono align-middle', colorOf(v3))}>{renderCell(code, v3, anc?.[3] || 0, true)}</td>
+                  <td className={cn('border border-slate-400 px-2 py-1.5 text-right font-mono align-middle', colorOf(v4))}>{renderCell(code, v4, anc?.[4] || 0, true)}</td>
                 </tr>
               )
             })}
@@ -249,27 +437,33 @@ export default function CarryOverReportPrint(props: Props) {
             </tr>
           </thead>
           <tbody>
-            {activeCodes.length === 0 ? (
+            {orderedCodes.length === 0 ? (
               <tr><td colSpan={days.length + 5} className="border border-slate-400 px-4 py-8 text-center text-slate-400">ไม่มีรายการในช่วงเวลานี้</td></tr>
-            ) : activeCodes.map(code => {
+            ) : orderedCodes.map(code => {
               const b = brought[code] || 0
               const c = carried[code] || 0
               const monthTotal = c - b
+              const m = rowMeta.get(code)
+              const ancB = m?.isInGroup && !m.isAnchor ? (brought[m.anchorCode] || 0) : 0
+              const ancC = m?.isInGroup && !m.isAnchor ? (carried[m.anchorCode] || 0) : 0
+              const ancT = ancC - ancB
+              const isNonAnchor = !!(m?.isInGroup && !m.isAnchor)
               return (
-                <tr key={code}>
-                  <td className="border border-slate-400 px-1 py-1 font-mono text-slate-500">{code}</td>
-                  <td className="border border-slate-400 px-1 py-1">{itemNameMap[code]}</td>
-                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono', colorOf(b))}>{fmt(b)}</td>
+                <tr key={code} className={rowCls(code)}>
+                  <td className="border border-slate-400 px-1 py-1 font-mono text-slate-500 align-middle">{code}</td>
+                  <td className="border border-slate-400 px-1 py-1 align-middle">{itemNameMap[code]}</td>
+                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono align-middle', colorOf(b))}>{renderCell(code, b, ancB, true)}</td>
                   {days.map(day => {
-                    const d = computeDailyDiff(code, day, mode)
+                    const d = isNonAnchor ? computeNonAnchorDailyAdj(code, day) : computeDailyDiff(code, day, mode)
+                    const ancD = isNonAnchor ? computeDailyDiff(m!.anchorCode, day, mode) : 0
                     return (
-                      <td key={day} className={cn('border border-slate-400 px-0.5 py-1 text-right font-mono', d === 0 ? 'text-slate-300' : colorOf(d))}>
-                        {d === 0 ? '·' : (d > 0 ? '+' : '') + d}
+                      <td key={day} className={cn('border border-slate-400 px-0.5 py-1 text-right font-mono align-middle', d === 0 ? 'text-slate-300' : colorOf(d))}>
+                        {renderCell(code, d, ancD, true)}
                       </td>
                     )
                   })}
-                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono bg-blue-50', colorOf(monthTotal))}>{fmt(monthTotal)}</td>
-                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono bg-indigo-50 font-semibold', colorOf(c))}>{fmt(c)}</td>
+                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono bg-blue-50 align-middle', colorOf(monthTotal))}>{renderCell(code, monthTotal, ancT, true)}</td>
+                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono bg-indigo-50 font-semibold align-middle', colorOf(c))}>{renderCell(code, c, ancC, true)}</td>
                 </tr>
               )
             })}
@@ -293,32 +487,50 @@ export default function CarryOverReportPrint(props: Props) {
             </tr>
           </thead>
           <tbody>
-            {activeCodes.length === 0 ? (
+            {orderedCodes.length === 0 ? (
               <tr><td colSpan={months.length + 5} className="border border-slate-400 px-4 py-8 text-center text-slate-400">ไม่มีรายการในช่วงเวลานี้</td></tr>
-            ) : activeCodes.map(code => {
+            ) : orderedCodes.map(code => {
               const b = brought[code] || 0
               const c = carried[code] || 0
               const yearTotal = c - b
+              const m = rowMeta.get(code)
+              const ancB = m?.isInGroup && !m.isAnchor ? (brought[m.anchorCode] || 0) : 0
+              const ancC = m?.isInGroup && !m.isAnchor ? (carried[m.anchorCode] || 0) : 0
+              const ancT = ancC - ancB
+              const isNonAnchor = !!(m?.isInGroup && !m.isAnchor)
               return (
-                <tr key={code}>
-                  <td className="border border-slate-400 px-1 py-1 font-mono text-slate-500">{code}</td>
-                  <td className="border border-slate-400 px-1 py-1">{itemNameMap[code]}</td>
-                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono', colorOf(b))}>{fmt(b)}</td>
+                <tr key={code} className={rowCls(code)}>
+                  <td className="border border-slate-400 px-1 py-1 font-mono text-slate-500 align-middle">{code}</td>
+                  <td className="border border-slate-400 px-1 py-1 align-middle">{itemNameMap[code]}</td>
+                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono align-middle', colorOf(b))}>{renderCell(code, b, ancB, true)}</td>
                   {months.map(monthYM => {
-                    const sum = computeMonthlySum(code, monthYM, mode)
+                    const sum = isNonAnchor ? computeNonAnchorMonthlyAdj(code, monthYM) : computeMonthlySum(code, monthYM, mode)
+                    const ancSum = isNonAnchor ? computeMonthlySum(m!.anchorCode, monthYM, mode) : 0
                     return (
-                      <td key={monthYM} className={cn('border border-slate-400 px-1 py-1 text-right font-mono', sum === 0 ? 'text-slate-300' : colorOf(sum))}>
-                        {sum === 0 ? '·' : (sum > 0 ? '+' : '') + sum}
+                      <td key={monthYM} className={cn('border border-slate-400 px-1 py-1 text-right font-mono align-middle', sum === 0 ? 'text-slate-300' : colorOf(sum))}>
+                        {renderCell(code, sum, ancSum, true)}
                       </td>
                     )
                   })}
-                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono bg-blue-50', colorOf(yearTotal))}>{fmt(yearTotal)}</td>
-                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono bg-indigo-50 font-semibold', colorOf(c))}>{fmt(c)}</td>
+                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono bg-blue-50 align-middle', colorOf(yearTotal))}>{renderCell(code, yearTotal, ancT, true)}</td>
+                  <td className={cn('border border-slate-400 px-1 py-1 text-right font-mono bg-indigo-50 font-semibold align-middle', colorOf(c))}>{renderCell(code, c, ancC, true)}</td>
                 </tr>
               )
             })}
           </tbody>
         </table>
+      )}
+
+      {/* 353: legend สำหรับ aggregate group (theme เดียวกับ LF Print) */}
+      {hasAggregate && (
+        <div className="mt-2 text-[9px] text-slate-500 flex flex-wrap gap-3">
+          <span className="inline-flex items-center gap-1">
+            <span className="font-medium">รวม</span> = anchor row (ค่ารวมทั้งกลุ่ม)
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="text-slate-400">↓ / ↑</span> = ค่าอยู่ที่ anchor (ตามทิศที่ลูกศรชี้)
+          </span>
+        </div>
       )}
 
       {/* Adjustments History */}
@@ -343,6 +555,9 @@ export default function CarryOverReportPrint(props: Props) {
                       a.type === 'reset' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')}>
                       {a.type === 'reset' ? 'Reset' : 'Adjust'}
                     </span>
+                    {a.autoBalancedAnchor && (
+                      <span className="ml-1 text-[9px] text-emerald-700">⚖ balance</span>
+                    )}
                   </td>
                   <td className="border border-slate-400 px-2 py-1 font-mono">
                     {a.items.map(it => `${it.code}${a.type === 'adjust' && it.delta !== 0 ? ` ${it.delta > 0 ? '+' : ''}${it.delta}` : ''}`).join(', ')}
