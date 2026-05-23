@@ -1236,10 +1236,19 @@ export default function ReportsPage() {
                     <tr key={a.id} className="border-t border-slate-100 hover:bg-slate-50">
                       <td className="px-3 py-2 font-mono text-slate-600">{formatDate(a.date)}</td>
                       <td className="px-3 py-2">
-                        <span className={cn('inline-block px-2 py-0.5 rounded font-medium',
-                          a.type === 'reset' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700')}>
-                          {a.type === 'reset' ? 'Reset' : 'Adjust'}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className={cn('inline-block px-2 py-0.5 rounded font-medium',
+                            a.type === 'reset' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700')}>
+                            {a.type === 'reset' ? 'Reset' : 'Adjust'}
+                          </span>
+                          {/* 340.3: badge สำหรับ adj ที่ใช้ auto-balance (redistribute pattern) */}
+                          {a.autoBalancedAnchor && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              title="ใช้ auto-balance — redistribute pattern (group sum คงที่)">
+                              ⚖ balance
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1">

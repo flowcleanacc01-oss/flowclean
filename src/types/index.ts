@@ -790,4 +790,12 @@ export interface CarryOverAdjustment {
   updatedAt: string
   history: CarryOverAdjustmentHistory[] // Option B: edit history
   isDeleted: boolean                    // soft delete
+  /** 340.3: Aggregate config snapshot ตอน create (pattern เดียวกับ LF 330)
+   *  กัน drift เมื่อ customer toggle aggregate config ภายหลัง
+   *  - แตะ adj ก่อนเปลี่ยน config: snapshot = config เดิม
+   *  - แสดง audit ว่า adj นี้ apply ภายใต้ config แบบไหน
+   */
+  aggregateSnapshot?: Record<string, { col2Mode: 'aggregate' | 'per_row'; col5Mode: 'aggregate' | 'per_row' }>
+  /** 340.3: บันทึกว่า adj นี้ใช้ auto-balance pattern (= redistribute, not add) */
+  autoBalancedAnchor?: boolean
 }

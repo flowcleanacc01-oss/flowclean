@@ -12,6 +12,7 @@ import { Plus, RotateCcw, Info, Package, Scale, AlertTriangle } from 'lucide-rea
 import { tabularNumberNav } from '@/lib/modal-nav'
 import { pushUndoAction } from '@/lib/undo-stack'
 import { getGroupAnchorCode } from '@/lib/aggregate-groups'
+import { buildAggregateSnapshot } from '@/lib/carry-over-logic'
 
 /**
  * 300: Delta input cell — raw string state + auto-select + allow negative
@@ -309,12 +310,17 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
     for (const [code, delta] of selectedItems.entries()) {
       itemMap.set(code, type === 'adjust' ? delta : 0)
     }
+    const usedAutoBalance = autoBalanceAnchor && type === 'adjust' && derivedAnchorDeltas.size > 0
     if (autoBalanceAnchor && type === 'adjust') {
       for (const [anchorCode, derivedDelta] of derivedAnchorDeltas) {
         itemMap.set(anchorCode, derivedDelta) // override user input ถ้ามี
       }
     }
     const items = [...itemMap.entries()].map(([code, delta]) => ({ code, delta }))
+    // 340.3: Capture aggregate snapshot (กัน drift เมื่อ customer toggle config ภายหลัง)
+    const snapshot = hasAggregateGroups
+      ? buildAggregateSnapshot(customer?.aggregateSizeGroups)
+      : undefined
     const typeLabel = type === 'reset' ? 'Reset' : 'Adjust'
     if (editing) {
       // 296: snapshot oldData ก่อน update → push undo
@@ -322,6 +328,8 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
       const changeNote = `แก้ไข ${typeLabel}: ${items.length} รายการ`
       updateCarryOverAdjustment(editing.id, {
         type, date, items, reasonCategory, reason, showInCustomerReport,
+        aggregateSnapshot: snapshot,
+        autoBalancedAnchor: usedAutoBalance,
       }, changeNote)
       pushUndoAction({
         type: 'carry_over',
@@ -331,6 +339,8 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
     } else {
       const newAdj = addCarryOverAdjustment({
         customerId, date, type, items, reasonCategory, reason, showInCustomerReport,
+        aggregateSnapshot: snapshot,
+        autoBalancedAnchor: usedAutoBalance,
       })
       pushUndoAction({
         type: 'carry_over',
