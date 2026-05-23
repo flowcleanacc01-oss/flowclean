@@ -353,11 +353,43 @@ export default function ReportsPage() {
     )
   }
 
-  /** 339: helper — non-anchor cell แสดง dim "·" แทนเลข (ค่าจริงรวมอยู่ที่ anchor row แล้ว) */
-  const isCoNonAnchorRow = (code: string): boolean => {
+  /** 340.1: helper — code เป็น non-anchor ของ aggregate group ไหม
+   *  หมายเหตุ: LF activity ของ non-anchor → aggregate ไปที่ anchor หมด
+   *           non-anchor row "ของจริง" จึงมีแค่ per-size adjustment เท่านั้น
+   */
+  const isCoNonAnchorInGroup = (code: string): boolean => {
     const m = coRowAggMeta.get(code)
     return !!(m?.isInGroup && !m.isAnchor)
   }
+
+  /** 340.1: compute daily diff สำหรับ non-anchor row — adjustment เท่านั้น (ไม่รวม LF)
+   *  เหตุผล: LF row ของ non-anchor (col6 per-row) ไม่ใช่ค่า balanced ของ size นั้น
+   *         เพราะ col2/col5 aggregate ไปที่ anchor → per-row diff = noise ไม่ใช่ ค้าง/คืน
+   */
+  const computeNonAnchorDailyAdj = useCallback((customerId: string, code: string, day: string): number => {
+    let diff = 0
+    for (const a of carryOverAdjustments) {
+      if (a.isDeleted || a.customerId !== customerId || a.date !== day || a.type !== 'adjust') continue
+      if (!coShowAdjustments && !a.showInCustomerReport) continue
+      for (const it of a.items) {
+        if (it.code === code) diff += it.delta || 0
+      }
+    }
+    return diff
+  }, [carryOverAdjustments, coShowAdjustments])
+
+  /** 340.1: month sum สำหรับ non-anchor row (yearly view) — adjustment เท่านั้น */
+  const computeNonAnchorMonthlyAdj = useCallback((customerId: string, code: string, month: string): number => {
+    let sum = 0
+    for (const a of carryOverAdjustments) {
+      if (a.isDeleted || a.customerId !== customerId || !a.date.startsWith(month) || a.type !== 'adjust') continue
+      if (!coShowAdjustments && !a.showInCustomerReport) continue
+      for (const it of a.items) {
+        if (it.code === code) sum += it.delta || 0
+      }
+    }
+    return sum
+  }, [carryOverAdjustments, coShowAdjustments])
 
   /** Compute per-day diff for one item code in current mode
    *  336: group-aware — ถ้า code = anchor ของ aggregate group → sum diff ทุก code ใน group
@@ -1021,26 +1053,20 @@ export default function ReportsPage() {
                     const v2 = coCompareValues[2][code] || 0
                     const v3 = coCompareValues[3][code] || 0
                     const v4 = coCompareValues[4][code] || 0
-                    const isNonAnchor = isCoNonAnchorRow(code)
-                    const dim = 'text-right px-4 py-2 font-mono text-slate-300'
+                    // 340.1: cell renderer — เป็นศูนย์แสดง '·' dim (consistent กับ daily cells)
+                    //        non-anchor row โดยปกติ = 0 ถ้าไม่มี adj → ดู '·' ดูเรียบกว่า "0"
+                    const cellCls = (v: number) => cn(
+                      'text-right px-4 py-2 font-mono',
+                      v < 0 ? 'text-red-600' : v > 0 ? 'text-emerald-600' : 'text-slate-300',
+                    )
+                    const fmt = (v: number) => v === 0 ? '·' : (v > 0 ? '+' : '') + v
                     return (
                       <tr key={code} className={coRowClasses(code)}>
                         <td className="px-4 py-2">{renderCoLabel(code)}</td>
-                        {isNonAnchor ? (
-                          <>
-                            <td className={dim}>·</td>
-                            <td className={dim}>·</td>
-                            <td className={dim}>·</td>
-                            <td className={dim}>·</td>
-                          </>
-                        ) : (
-                          <>
-                            <td className={cn('text-right px-4 py-2 font-mono', v1 < 0 ? 'text-red-600' : v1 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v1 > 0 ? '+' : ''}{v1}</td>
-                            <td className={cn('text-right px-4 py-2 font-mono', v2 < 0 ? 'text-red-600' : v2 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v2 > 0 ? '+' : ''}{v2}</td>
-                            <td className={cn('text-right px-4 py-2 font-mono', v3 < 0 ? 'text-red-600' : v3 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v3 > 0 ? '+' : ''}{v3}</td>
-                            <td className={cn('text-right px-4 py-2 font-mono', v4 < 0 ? 'text-red-600' : v4 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v4 > 0 ? '+' : ''}{v4}</td>
-                          </>
-                        )}
+                        <td className={cellCls(v1)}>{fmt(v1)}</td>
+                        <td className={cellCls(v2)}>{fmt(v2)}</td>
+                        <td className={cellCls(v3)}>{fmt(v3)}</td>
+                        <td className={cellCls(v4)}>{fmt(v4)}</td>
                       </tr>
                     )
                   })}
@@ -1071,43 +1097,30 @@ export default function ReportsPage() {
                     const brought = coBroughtForward[code] || 0
                     const carried = coCarriedAfter[code] || 0
                     const monthTotal = carried - brought
-                    const isNonAnchor = isCoNonAnchorRow(code)
-                    const dim = 'text-right px-2 py-1.5 font-mono text-slate-300'
-                    const dimTotal = 'text-right px-2 py-1.5 font-mono bg-slate-50 text-slate-300'
+                    // 340.1: non-anchor row daily = adj-only (LF aggregate ที่ anchor แล้ว — per-row diff = noise)
+                    const isNonAnchor = isCoNonAnchorInGroup(code)
+                    const dailyFor = (day: string) => isNonAnchor
+                      ? computeNonAnchorDailyAdj(selCustomerId, code, day)
+                      : computeDailyDiff(selCustomerId, code, day, coMode as CarryOverMode)
+                    const cellCls = (v: number, bgTotal = false) => cn(
+                      'text-right px-2 py-1.5 font-mono',
+                      bgTotal && 'bg-slate-50',
+                      v < 0 ? 'text-red-600' : v > 0 ? 'text-emerald-600' : 'text-slate-300',
+                    )
+                    const fmt = (v: number) => v === 0 ? '·' : (v > 0 ? '+' : '') + v
                     return (
                       <tr key={code} className={coRowClasses(code)}>
                         <td className={cn('px-3 py-1.5 sticky left-0 z-10',
                           coRowAggMeta.get(code)?.isInGroup ? 'bg-indigo-50/40' : 'bg-white')}>
                           {renderCoLabel(code)}
                         </td>
-                        {isNonAnchor ? (
-                          <>
-                            <td className={dim}>·</td>
-                            {coDaysInRange.map(day => <td key={day} className={dim}>·</td>)}
-                            <td className={dimTotal}>·</td>
-                            <td className={dimTotal}>·</td>
-                          </>
-                        ) : (
-                          <>
-                            <td className={cn('text-right px-2 py-1.5 font-mono', brought < 0 ? 'text-red-600' : brought > 0 ? 'text-emerald-600' : 'text-slate-400')}>
-                              {brought > 0 ? '+' : ''}{brought}
-                            </td>
-                            {coDaysInRange.map(day => {
-                              const d = computeDailyDiff(selCustomerId, code, day, coMode as CarryOverMode)
-                              return (
-                                <td key={day} className={cn('text-right px-2 py-1.5 font-mono', d < 0 ? 'text-red-600' : d > 0 ? 'text-emerald-600' : 'text-slate-300')}>
-                                  {d === 0 ? '·' : (d > 0 ? '+' : '') + d}
-                                </td>
-                              )
-                            })}
-                            <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50', monthTotal < 0 ? 'text-red-600' : monthTotal > 0 ? 'text-emerald-600' : 'text-slate-400')}>
-                              {monthTotal > 0 ? '+' : ''}{monthTotal}
-                            </td>
-                            <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50 font-semibold', carried < 0 ? 'text-red-600' : carried > 0 ? 'text-emerald-600' : 'text-slate-400')}>
-                              {carried > 0 ? '+' : ''}{carried}
-                            </td>
-                          </>
-                        )}
+                        <td className={cellCls(brought)}>{fmt(brought)}</td>
+                        {coDaysInRange.map(day => {
+                          const d = dailyFor(day)
+                          return <td key={day} className={cellCls(d)}>{fmt(d)}</td>
+                        })}
+                        <td className={cn(cellCls(monthTotal, true), monthTotal !== 0 && 'font-medium')}>{fmt(monthTotal)}</td>
+                        <td className={cn(cellCls(carried, true), carried !== 0 && 'font-semibold')}>{fmt(carried)}</td>
                       </tr>
                     )
                   })}
@@ -1138,73 +1151,60 @@ export default function ReportsPage() {
                     const brought = coBroughtForward[code] || 0
                     const carried = coCarriedAfter[code] || 0
                     const yearTotal = carried - brought
-                    const isNonAnchor = isCoNonAnchorRow(code)
-                    const dim = 'text-right px-2 py-1.5 font-mono text-slate-300'
-                    const dimTotal = 'text-right px-2 py-1.5 font-mono bg-slate-50 text-slate-300'
+                    // 340.1: non-anchor row monthly = adj-only (LF aggregate ที่ anchor)
+                    const isNonAnchor = isCoNonAnchorInGroup(code)
+                    const cellCls = (v: number, bgTotal = false) => cn(
+                      'text-right px-2 py-1.5 font-mono',
+                      bgTotal && 'bg-slate-50',
+                      v < 0 ? 'text-red-600' : v > 0 ? 'text-emerald-600' : 'text-slate-300',
+                    )
+                    const fmt = (v: number) => v === 0 ? '·' : (v > 0 ? '+' : '') + v
                     return (
                       <tr key={code} className={coRowClasses(code)}>
                         <td className={cn('px-3 py-1.5 sticky left-0 z-10',
                           coRowAggMeta.get(code)?.isInGroup ? 'bg-indigo-50/40' : 'bg-white')}>
                           {renderCoLabel(code)}
                         </td>
-                        {isNonAnchor ? (
-                          <>
-                            <td className={dim}>·</td>
-                            {coMonthsInRange.map(month => <td key={month} className={dim}>·</td>)}
-                            <td className={dimTotal}>·</td>
-                            <td className={dimTotal}>·</td>
-                          </>
-                        ) : (
-                          <>
-                        <td className={cn('text-right px-2 py-1.5 font-mono', brought < 0 ? 'text-red-600' : brought > 0 ? 'text-emerald-600' : 'text-slate-400')}>
-                          {brought > 0 ? '+' : ''}{brought}
-                        </td>
+                        <td className={cellCls(brought)}>{fmt(brought)}</td>
                         {coMonthsInRange.map(month => {
-                          // 336: group-aware — ถ้า code = anchor → sum ทุก code ใน group
-                          const aggInfo = getAggInfoForCode(code)
-                          const isAggAnchor = !!(aggInfo && aggInfo.anchorCode === code)
-                          const groupCodes = isAggAnchor && aggInfo
-                            ? new Set(linenCatalog.filter(i => i.sizeGroup === aggInfo.groupKey).map(i => i.code))
-                            : null
                           let monthSum = 0
-                          for (const f of linenForms) {
-                            if (f.customerId !== selCustomerId || !f.date.startsWith(month)) continue
-                            // 265: trust LF บังคับ Mode 2
-                            const m: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : (coMode as CarryOverMode)
-                            for (const r of f.rows) {
-                              const matches = groupCodes ? groupCodes.has(r.code) : r.code === code
-                              if (!matches) continue
-                              switch (m) {
-                                case 1: monthSum += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
-                                case 2: monthSum += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
-                                case 3: monthSum += r.col4_factoryApproved - r.col5_factoryClaimApproved; break
-                                case 4: monthSum += r.col4_factoryApproved - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
+                          if (isNonAnchor) {
+                            // adj-only — LF อยู่ที่ anchor row
+                            monthSum = computeNonAnchorMonthlyAdj(selCustomerId, code, month)
+                          } else {
+                            // anchor หรือ ungrouped — group-aware inline (เหมือนเดิม)
+                            const aggInfo = getAggInfoForCode(code)
+                            const isAggAnchor = !!(aggInfo && aggInfo.anchorCode === code)
+                            const groupCodes = isAggAnchor && aggInfo
+                              ? new Set(linenCatalog.filter(i => i.sizeGroup === aggInfo.groupKey).map(i => i.code))
+                              : null
+                            for (const f of linenForms) {
+                              if (f.customerId !== selCustomerId || !f.date.startsWith(month)) continue
+                              const m: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : (coMode as CarryOverMode)
+                              for (const r of f.rows) {
+                                const matches = groupCodes ? groupCodes.has(r.code) : r.code === code
+                                if (!matches) continue
+                                switch (m) {
+                                  case 1: monthSum += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
+                                  case 2: monthSum += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
+                                  case 3: monthSum += r.col4_factoryApproved - r.col5_factoryClaimApproved; break
+                                  case 4: monthSum += r.col4_factoryApproved - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
+                                }
+                              }
+                            }
+                            for (const a of carryOverAdjustments) {
+                              if (a.isDeleted || a.customerId !== selCustomerId || !a.date.startsWith(month) || a.type !== 'adjust') continue
+                              if (!coShowAdjustments && !a.showInCustomerReport) continue
+                              for (const it of a.items) {
+                                const matches = groupCodes ? groupCodes.has(it.code) : it.code === code
+                                if (matches) monthSum += it.delta || 0
                               }
                             }
                           }
-                          // Add adjustments in this month (group-aware)
-                          for (const a of carryOverAdjustments) {
-                            if (a.isDeleted || a.customerId !== selCustomerId || !a.date.startsWith(month) || a.type !== 'adjust') continue
-                            if (!coShowAdjustments && !a.showInCustomerReport) continue
-                            for (const it of a.items) {
-                              const matches = groupCodes ? groupCodes.has(it.code) : it.code === code
-                              if (matches) monthSum += it.delta || 0
-                            }
-                          }
-                          return (
-                            <td key={month} className={cn('text-right px-2 py-1.5 font-mono', monthSum < 0 ? 'text-red-600' : monthSum > 0 ? 'text-emerald-600' : 'text-slate-300')}>
-                              {monthSum === 0 ? '·' : (monthSum > 0 ? '+' : '') + monthSum}
-                            </td>
-                          )
+                          return <td key={month} className={cellCls(monthSum)}>{fmt(monthSum)}</td>
                         })}
-                        <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50', yearTotal < 0 ? 'text-red-600' : yearTotal > 0 ? 'text-emerald-600' : 'text-slate-400')}>
-                          {yearTotal > 0 ? '+' : ''}{yearTotal}
-                        </td>
-                        <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50 font-semibold', carried < 0 ? 'text-red-600' : carried > 0 ? 'text-emerald-600' : 'text-slate-400')}>
-                          {carried > 0 ? '+' : ''}{carried}
-                        </td>
-                          </>
-                        )}
+                        <td className={cn(cellCls(yearTotal, true), yearTotal !== 0 && 'font-medium')}>{fmt(yearTotal)}</td>
+                        <td className={cn(cellCls(carried, true), carried !== 0 && 'font-semibold')}>{fmt(carried)}</td>
                       </tr>
                     )
                   })}
