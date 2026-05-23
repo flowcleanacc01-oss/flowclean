@@ -8,7 +8,7 @@ import type {
   CustomerCategoryDef, ProductChecklist, ChecklistStatus,
   AuditAction, AuditEntityType, AuditLog,
   CarryOverAdjustment, CarryOverMode, CarryOverAdjustmentHistory,
-  LegacyDocument, ScheduleOverride,
+  LegacyDocument, ScheduleOverride, RoutePlan,
 } from '@/types'
 import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES, DEFAULT_CUSTOMER_CATEGORIES } from '@/types'
 import {
@@ -145,6 +145,10 @@ interface StoreContextType {
   updateScheduleOverride: (id: string, updates: Partial<Omit<ScheduleOverride, 'id' | 'createdAt' | 'createdBy'>>) => void
   deleteScheduleOverride: (id: string) => void
 
+  // P5.2 — Route Plans (ลำดับวิ่งต่อวัน)
+  routePlans: RoutePlan[]
+  setRouteOrder: (date: string, orderedCustomerIds: string[]) => void
+
   // 255: Facet Vocabulary (Wizard 2.0 — admin-editable)
   facetVocab: FacetVocab
   updateFacetVocab: (vocab: FacetVocab) => Promise<void>
@@ -209,6 +213,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [carryOverAdjustments, setCarryOverAdjustments] = useState<CarryOverAdjustment[]>([])
   // 311 P2 — Schedule overrides
   const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
+  // P5.2 — Route plans (ลำดับวิ่งต่อวัน)
+  const [routePlans, setRoutePlans] = useState<RoutePlan[]>([])
   // 255: Facet Vocabulary — start with defaults, replaced after DB load
   const [facetVocab, setFacetVocab] = useState<FacetVocab>(DEFAULT_FACET_VOCAB)
   const [loaded, setLoaded] = useState(false)
@@ -223,6 +229,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   //   (Phase B: addBillingStatement ถูกเรียกใน loop ต่อลูกค้า → ถ้าใช้ closure จะ gen WB number ซ้ำ)
   const billingStatementsRef = useRef<BillingStatement[]>([])
   billingStatementsRef.current = billingStatements
+  // P5.2: routePlansRef — upsert by date ใน setRouteOrder ต้องอ่าน list ปัจจุบัน (กัน closure stale)
+  const routePlansRef = useRef<RoutePlan[]>([])
+  routePlansRef.current = routePlans
 
   // Keep ref in sync for use in callbacks without dependency
   useEffect(() => { currentUserRef.current = currentUser }, [currentUser])
@@ -350,6 +359,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setChecklists(data.checklists)
       setCarryOverAdjustments(data.carryOverAdjustments || [])
       setScheduleOverrides(data.scheduleOverrides || [])
+      setRoutePlans(data.routePlans || [])
 
       // Build defaultPrices from linenItems
       if (data.linenItems.length > 0) {
@@ -1024,6 +1034,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     logAudit('delete', 'customer', id, 'ลบ Schedule Override')
   }, [logAudit])
 
+  // P5.2 — Route order (upsert by date · 1 row/วัน)
+  const setRouteOrder = useCallback((date: string, orderedCustomerIds: string[]) => {
+    const existing = routePlansRef.current.find(p => p.date === date)
+    const plan: RoutePlan = {
+      id: existing?.id || genId(),
+      date,
+      orderedCustomerIds,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUserRef.current?.id || 'unknown',
+    }
+    setRoutePlans(prev => existing ? prev.map(p => p.date === date ? plan : p) : [...prev, plan])
+    dbSave(db.upsertRoutePlanDB(plan))
+    logAudit('update', 'customer', plan.id, `จัดลำดับวิ่ง ${date}`, `${orderedCustomerIds.length} ลูกค้า`)
+  }, [logAudit])
+
   // ---- Computed Helpers ----
 
   // 255 Phase 1.b: Facet Vocabulary update / reset
@@ -1205,6 +1230,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       checklists, addChecklist, updateChecklist, updateChecklistStatus, deleteChecklist,
       carryOverAdjustments, addCarryOverAdjustment, updateCarryOverAdjustment, deleteCarryOverAdjustment,
       scheduleOverrides, addScheduleOverride, updateScheduleOverride, deleteScheduleOverride,
+      routePlans, setRouteOrder,
       facetVocab, updateFacetVocab, resetFacetVocab,
       getCarryOver, getDiscrepancies,
     }}>

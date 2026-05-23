@@ -275,6 +275,17 @@ export const SCHEDULE_OVERRIDE_TYPE_CONFIG: Record<ScheduleOverrideType, { label
   reschedule_add:     { label: 'เลื่อนเข้า (add)', short: 'R-Add', color: 'indigo' },
 }
 
+// P5.2 — Route Plan (ลำดับวิ่งรับ-ส่งผ้าต่อวัน)
+// 1 row ต่อวัน · orderedCustomerIds = customerId เรียงตามลำดับที่คนขับวิ่ง
+// ลูกค้าที่ไม่อยู่ใน array = ยังไม่จัดลำดับ (default sort ต่อท้าย)
+export interface RoutePlan {
+  id: string
+  date: string                   // ISO YYYY-MM-DD (unique)
+  orderedCustomerIds: string[]
+  updatedAt: string
+  updatedBy: string
+}
+
 // 265 — Workflow mode สำหรับลูกค้า + LF
 export type WorkflowMode = 'cross_check' | 'trust_customer'
 

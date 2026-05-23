@@ -12,13 +12,16 @@ import {
   buildLogisticsWeek, getWeekStart, addDays, parseLocalDate, isDraggableStatus,
   type LogisticsCell, type LogisticsRow,
 } from '@/lib/logistics-week'
-import { todayISO, genId, cn } from '@/lib/utils'
+import { todayISO, genId, cn, formatExportFilename } from '@/lib/utils'
 import { WEEKDAY_SHORT, SCHEDULE_TYPE_CONFIG, type DeliveryNote } from '@/types'
 import { canViewSD } from '@/lib/permissions'
 import Modal from '@/components/Modal'
+import RouteSheetPrint, { type RouteStop } from '@/components/RouteSheetPrint'
+import ExportButtons from '@/components/ExportButtons'
 import {
   ChevronLeft, ChevronRight, CalendarDays, Truck, Plus, AlertOctagon,
   AlertTriangle, CheckCircle2, ArrowRight, Ban, Info, ClipboardCheck, CornerUpRight, CornerDownRight,
+  ChevronUp, ChevronDown, GripVertical, ListOrdered,
 } from 'lucide-react'
 
 const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
@@ -29,6 +32,15 @@ function fmtShort(iso: string): string {
 function fmtFull(iso: string): string {
   const d = parseLocalDate(iso)
   return `${WEEKDAY_SHORT[d.getDay()]} ${d.getDate()} ${TH_MONTHS[d.getMonth()]}`
+}
+function cellStatusLabel(cell: LogisticsCell, today: string): string {
+  if (cell.regularSDs.length) return cell.regularSDs.map(s => s.noteNumber).join(', ')
+  if (cell.status === 'extra-only' || cell.status === 'override-extra') {
+    return cell.extraSDs.length ? `รอบเสริม (${cell.extraSDs.map(s => s.noteNumber).join(', ')})` : 'รอบเสริม'
+  }
+  if (cell.status === 'missing') return cell.date <= today ? 'ขาด — รอสร้าง SD' : 'รอสร้าง SD'
+  if (cell.status === 'off-schedule') return cell.extraSDs.length ? `นอกคิว (${cell.extraSDs.map(s => s.noteNumber).join(', ')})` : 'นอกคิว'
+  return '-'
 }
 
 interface PendingReschedule {
@@ -41,7 +53,7 @@ interface PendingReschedule {
 }
 
 export default function LogisticsPage() {
-  const { currentUser, customers, deliveryNotes, scheduleOverrides, updateDeliveryNote, addScheduleOverride } = useStore()
+  const { currentUser, customers, deliveryNotes, scheduleOverrides, updateDeliveryNote, addScheduleOverride, routePlans, setRouteOrder, companyInfo } = useStore()
   const router = useRouter()
 
   const today = todayISO()
@@ -60,6 +72,33 @@ export default function LogisticsPage() {
     () => buildLogisticsWeek(customers, deliveryNotes, scheduleOverrides, anchor, today),
     [customers, deliveryNotes, scheduleOverrides, anchor, today],
   )
+
+  // day-detail (route ordering) state
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const listDragIdx = useRef<number | null>(null)
+  const [listDragOver, setListDragOver] = useState<number | null>(null)
+
+  // จุดวิ่งของวันที่เลือก — เรียงตาม routePlan (unordered ต่อท้ายตามชื่อ)
+  const dayStops = useMemo(() => {
+    if (!selectedDay) return []
+    const plan = routePlans.find(p => p.date === selectedDay)
+    const order = plan?.orderedCustomerIds || []
+    const stops = week.rows
+      .map(row => ({ row, cell: row.cells.find(c => c.date === selectedDay) }))
+      .filter((x): x is { row: LogisticsRow; cell: LogisticsCell } =>
+        !!x.cell && x.cell.status !== 'empty' && x.cell.status !== 'skipped')
+    stops.sort((a, b) => {
+      const ia = order.indexOf(a.row.customer.id)
+      const ib = order.indexOf(b.row.customer.id)
+      if (ia === -1 && ib === -1) {
+        return (a.row.customer.shortName || a.row.customer.name).localeCompare(b.row.customer.shortName || b.row.customer.name, 'th')
+      }
+      if (ia === -1) return 1
+      if (ib === -1) return -1
+      return ia - ib
+    })
+    return stops
+  }, [selectedDay, week, routePlans])
 
   if (!canViewSD(currentUser)) {
     return (
@@ -116,6 +155,23 @@ export default function LogisticsPage() {
       addScheduleOverride({ customerId: pending.customerId, date: pending.toDate, type: 'reschedule_add', reason, rescheduledLinkId: linkId })
     }
     setPending(null)
+  }
+
+  // ── route reorder (day-detail) ──
+  const moveStop = (idx: number, dir: -1 | 1) => {
+    if (!selectedDay) return
+    const j = idx + dir
+    if (j < 0 || j >= dayStops.length) return
+    const ids = dayStops.map(s => s.row.customer.id)
+    ;[ids[idx], ids[j]] = [ids[j], ids[idx]] // swap
+    setRouteOrder(selectedDay, ids)
+  }
+  const reorderDrag = (from: number, to: number) => {
+    if (!selectedDay || from === to) return
+    const ids = dayStops.map(s => s.row.customer.id)
+    const [moved] = ids.splice(from, 1)
+    ids.splice(from < to ? to - 1 : to, 0, moved) // insert-before target (adjust for removal)
+    setRouteOrder(selectedDay, ids)
   }
 
   // ── cell click ──
@@ -222,12 +278,20 @@ export default function LogisticsPage() {
                   <th
                     key={d.date}
                     className={cn(
-                      'border-b border-slate-200 px-2 py-2.5 text-center font-semibold min-w-[96px]',
+                      'border-b border-slate-200 px-1 py-1.5 text-center font-semibold min-w-[96px]',
                       d.isToday ? 'bg-[#3DD8D8]/15 text-[#1B3A5C]' : 'bg-slate-50 text-slate-600',
                     )}
                   >
-                    <div className="text-[13px]">{WEEKDAY_SHORT[d.dayOfWeek]}</div>
-                    <div className={cn('text-[11px] font-normal', d.isToday ? 'text-[#1B3A5C]' : 'text-slate-400')}>{fmtShort(d.date)}</div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDay(d.date)}
+                      title="จัดลำดับวิ่ง + พิมพ์ route sheet"
+                      className="w-full rounded-md px-1 py-1 hover:bg-white/70 transition-colors group/day"
+                    >
+                      <div className="text-[13px]">{WEEKDAY_SHORT[d.dayOfWeek]}</div>
+                      <div className={cn('text-[11px] font-normal', d.isToday ? 'text-[#1B3A5C]' : 'text-slate-400')}>{fmtShort(d.date)}</div>
+                      <ListOrdered className="w-3 h-3 mx-auto mt-0.5 text-slate-300 group-hover/day:text-[#3DD8D8]" />
+                    </button>
                   </th>
                 ))}
               </tr>
@@ -357,6 +421,83 @@ export default function LogisticsPage() {
                 <CornerDownRight className="w-4 h-4" />
                 ยืนยันเลื่อนคิว
               </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Day-detail: route ordering + print */}
+      <Modal
+        open={!!selectedDay}
+        onClose={() => setSelectedDay(null)}
+        title={selectedDay ? `แผนวิ่ง ${fmtFull(selectedDay)}` : 'แผนวิ่ง'}
+        size="xl"
+        className="print-target"
+      >
+        {selectedDay && (
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-3 no-print">
+              <p className="text-sm text-slate-500">
+                {dayStops.length} จุด — กดลูกศร หรือลากเพื่อจัดลำดับการวิ่ง
+              </p>
+              {dayStops.length > 0 && (
+                <ExportButtons targetId="print-route-sheet" filename={formatExportFilename(`RouteSheet-${selectedDay}`)} orientation="landscape" />
+              )}
+            </div>
+
+            {dayStops.length === 0 ? (
+              <div className="no-print text-center py-10 text-slate-400 text-sm">
+                ไม่มีจุดวิ่งในวันนี้ (ไม่มีลูกค้าที่ถึงคิวหรือมี SD)
+              </div>
+            ) : (
+              <div className="space-y-1.5 mb-5 no-print">
+                {dayStops.map((s, idx) => (
+                  <div
+                    key={s.row.customer.id}
+                    draggable
+                    onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(idx)); listDragIdx.current = idx }}
+                    onDragOver={e => { e.preventDefault(); setListDragOver(idx) }}
+                    onDragLeave={() => setListDragOver(o => (o === idx ? null : o))}
+                    onDrop={() => { if (listDragIdx.current != null) reorderDrag(listDragIdx.current, idx); listDragIdx.current = null; setListDragOver(null) }}
+                    onDragEnd={() => { listDragIdx.current = null; setListDragOver(null) }}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-2 rounded-lg border bg-white',
+                      listDragOver === idx ? 'border-t-2 border-t-[#3DD8D8]' : 'border-slate-200',
+                    )}
+                  >
+                    <GripVertical className="w-4 h-4 text-slate-300 cursor-grab flex-shrink-0" />
+                    <span className="w-6 h-6 flex items-center justify-center rounded-full bg-[#1B3A5C] text-white text-xs font-bold flex-shrink-0">{idx + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-[#1B3A5C] truncate">{s.row.customer.shortName || s.row.customer.name}</div>
+                      <div className="text-xs text-slate-400 truncate">
+                        {cellStatusLabel(s.cell, today)}{s.row.customer.contactPhone ? ` · ${s.row.customer.contactPhone}` : ''}
+                      </div>
+                    </div>
+                    <div className="flex flex-col flex-shrink-0">
+                      <button type="button" onClick={() => moveStop(idx, -1)} disabled={idx === 0} aria-label="เลื่อนขึ้น" className="text-slate-400 hover:text-[#1B3A5C] disabled:opacity-30 disabled:cursor-not-allowed">
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button type="button" onClick={() => moveStop(idx, 1)} disabled={idx === dayStops.length - 1} aria-label="เลื่อนลง" className="text-slate-400 hover:text-[#1B3A5C] disabled:opacity-30 disabled:cursor-not-allowed">
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="border-t border-slate-200 pt-3">
+              <p className="text-xs text-slate-400 mb-2 no-print">ตัวอย่างใบพิมพ์ (Route Sheet)</p>
+              <RouteSheetPrint
+                dateLabel={`${fmtFull(selectedDay)} ${parseLocalDate(selectedDay).getFullYear() + 543}`}
+                company={companyInfo}
+                stops={dayStops.map(({ row, cell }): RouteStop => ({
+                  customerName: row.customer.shortName || row.customer.name,
+                  address: row.customer.address || '',
+                  phone: row.customer.contactPhone || '',
+                  statusLabel: cellStatusLabel(cell, today),
+                }))}
+              />
             </div>
           </div>
         )}

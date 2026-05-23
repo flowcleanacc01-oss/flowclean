@@ -10,6 +10,8 @@ const ALLOWED_TABLES = new Set([
   'receipts', // 152 fix: ใบเสร็จรับเงิน (Feature 148)
   'legacy_documents', // Feature 161: archive of old NeoSME documents
   'app_settings', // 255: Facet vocabulary (admin-editable)
+  'schedule_overrides', // 311 P2: schedule overrides (ลืม allowlist ตอน P2 → writes fail rollback)
+  'route_plans', // P5.2: ลำดับวิ่งต่อวัน
 ])
 
 interface DbRequest {

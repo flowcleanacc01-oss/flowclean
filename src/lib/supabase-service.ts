@@ -3,7 +3,7 @@ import type {
   Customer, LinenForm, DeliveryNote, BillingStatement, TaxInvoice, Receipt,
   Quotation, Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
   CustomerCategoryDef, ProductChecklist, AuditLog, CarryOverAdjustment,
-  LegacyDocument, ScheduleOverride,
+  LegacyDocument, ScheduleOverride, RoutePlan,
 } from '@/types'
 
 // ============================================================
@@ -71,6 +71,8 @@ const FIELD_MAP: Record<string, string> = {
   scheduleBiweeklyAnchorWeek: 'schedule_biweekly_anchor_week', // 311 P2.1
   rescheduledLinkId: 'rescheduled_link_id',       // 311 P2.1 (ScheduleOverride)
   isExtraRound: 'is_extra_round',                 // 311
+  orderedCustomerIds: 'ordered_customer_ids',     // P5.2 (RoutePlan)
+  updatedBy: 'updated_by',                        // P5.2 (RoutePlan)
   sizeGroup: 'size_group',                        // 317
   aggregateSizeGroups: 'aggregate_size_groups',   // 317
   groupInputs: 'group_inputs',                    // 317
@@ -657,6 +659,18 @@ export async function deleteScheduleOverrideDB(id: string): Promise<void> {
 }
 
 // ============================================================
+// Route Plans (P5.2 — ลำดับวิ่งต่อวัน)
+// ============================================================
+
+export async function fetchRoutePlans(): Promise<RoutePlan[]> {
+  return fetchAllPaginated<RoutePlan>('route_plans', 'date')
+}
+
+export async function upsertRoutePlanDB(plan: RoutePlan): Promise<void> {
+  await dbWrite({ table: 'route_plans', operation: 'upsert', data: toSnakeCase(plan as unknown as Record<string, unknown>), onConflict: 'date' })
+}
+
+// ============================================================
 // Default Prices — stored as linen_items.default_price
 // ============================================================
 
@@ -705,6 +719,7 @@ export async function fetchAllData() {
     fetchReceipts().catch(() => [] as Receipt[]),
     fetchLegacyDocuments().catch(() => [] as LegacyDocument[]),
     fetchScheduleOverrides().catch(() => [] as ScheduleOverride[]),
+    fetchRoutePlans().catch(() => [] as RoutePlan[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -714,7 +729,7 @@ export async function fetchAllData() {
     customers, linenForms, deliveryNotes, billingStatements,
     taxInvoices, quotations, expenses, users, companyInfo,
     linenItems, checklists, linenCategories, customerCategories,
-    carryOverAdjustments, receipts, legacyDocuments, scheduleOverrides,
+    carryOverAdjustments, receipts, legacyDocuments, scheduleOverrides, routePlans,
   ] = [
     val(results[0], [] as Customer[]),
     val(results[1], [] as LinenForm[]),
@@ -733,6 +748,7 @@ export async function fetchAllData() {
     val(results[14], [] as Receipt[]),
     val(results[15], [] as LegacyDocument[]),
     val(results[16], [] as ScheduleOverride[]),
+    val(results[17], [] as RoutePlan[]),
   ]
 
   return {
@@ -753,5 +769,6 @@ export async function fetchAllData() {
     receipts,
     legacyDocuments,
     scheduleOverrides,
+    routePlans,
   }
 }
