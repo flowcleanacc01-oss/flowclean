@@ -11,7 +11,7 @@ import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LIN
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer } from '@/lib/recent-customers'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink, Sparkles, ArrowUpDown, Wrench } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileText, FileDown, ExternalLink, Sparkles, ArrowUpDown, Wrench, Pencil, Calendar } from 'lucide-react'
 import { sortByQTOrder } from '@/lib/sort-by-qt'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
@@ -163,6 +163,11 @@ export default function LinenFormsPage() {
   // 209: track ว่า wizard ถูกเปิดจาก create หรือ detail (เพื่อรู้จะเพิ่ม row ที่ไหน)
   const [wizardTarget, setWizardTarget] = useState<'create' | 'detail' | null>(null)
   const [wizardTargetLfId, setWizardTargetLfId] = useState<string | null>(null)
+
+  // 344: edit date state — pencil icon ใน detail modal เปิด inline date input
+  //   confirm ก่อน save (carry-over จะ recalc บนช่วง date เก่า/ใหม่)
+  const [editingDate, setEditingDate] = useState<string>('')   // empty = not editing, ISO = editing value
+  const [dateConfirm, setDateConfirm] = useState<{ newDate: string; oldDate: string } | null>(null)
 
   // จำนวนผ้าตามสถานะ — แสดงค่าที่ relevant ที่สุด ณ สถานะนั้น
   const getPiecesForStatus = (f: typeof linenForms[number]): number => {
@@ -781,7 +786,7 @@ export default function LinenFormsPage() {
       </Modal>
 
       {/* Detail Modal */}
-      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title={`ใบส่งรับผ้า ${detailForm?.formNumber || ''}`} size="wide" closeLabel="saved">
+      <Modal open={!!showDetail} onClose={() => { setShowDetail(null); setEditingDate(''); setDateConfirm(null) }} title={`ใบส่งรับผ้า ${detailForm?.formNumber || ''}`} size="wide" closeLabel="saved">
         {detailForm && detailCustomer && (
           <div className="space-y-4">
             <div id="linen-form-detail" className="space-y-4 bg-white p-2">
@@ -797,7 +802,54 @@ export default function LinenFormsPage() {
                   </span>
                 )}
               </div>
-              <div><span className="text-slate-500">วันที่:</span> {formatDate(detailForm.date)}</div>
+              {/* 344: editable date — pencil → inline date input → confirm modal */}
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">วันที่:</span>
+                {editingDate ? (
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-[#3DD8D8]" />
+                    <input
+                      type="date"
+                      value={editingDate}
+                      onChange={e => setEditingDate(e.target.value)}
+                      className="px-2 py-1 border border-[#3DD8D8] rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!editingDate || editingDate === detailForm.date) {
+                          setEditingDate('')
+                          return
+                        }
+                        setDateConfirm({ newDate: editingDate, oldDate: detailForm.date })
+                      }}
+                      className="px-2 py-1 text-xs bg-[#3DD8D8] text-[#1B3A5C] rounded hover:bg-[#2bb8b8] font-semibold flex items-center gap-1"
+                    >
+                      <Check className="w-3 h-3" /> ยืนยัน
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDate('')}
+                      className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded"
+                    >
+                      ยกเลิก
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <strong>{formatDate(detailForm.date)}</strong>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDate(detailForm.date)}
+                      title="เปลี่ยนวันที่ของ LF นี้"
+                      className="p-1 text-slate-400 hover:text-[#1B3A5C] hover:bg-slate-100 rounded transition-colors"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
             {/* Top stepper — แผนที่สถานี (train station map) */}
             {(() => {
@@ -1254,6 +1306,89 @@ export default function LinenFormsPage() {
                   <button onClick={() => { if (confirmDeleteId) { deleteLinenForm(confirmDeleteId); setConfirmDeleteId(null); setShowDetail(null) } }}
                     className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">ลบ</button>
                 )}
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* 344: Date Change Confirm Modal — เปลี่ยนวันที่ LF กระทบ carry-over */}
+      <Modal open={!!dateConfirm} onClose={() => setDateConfirm(null)} title="ยืนยันเปลี่ยนวันที่" closeLabel="cancel">
+        {(() => {
+          if (!dateConfirm || !detailForm || !detailCustomer) return null
+          const linkedDN = deliveryNotes.find(dn => dn.linenFormIds.includes(detailForm.id))
+          const hasLinkedDN = !!linkedDN
+          const isConfirmed = detailForm.status === 'confirmed'
+          const earlier = dateConfirm.oldDate < dateConfirm.newDate ? dateConfirm.oldDate : dateConfirm.newDate
+          const later = dateConfirm.oldDate < dateConfirm.newDate ? dateConfirm.newDate : dateConfirm.oldDate
+          return (
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                <p className="text-sm font-medium text-amber-900 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> เปลี่ยนวันที่ของ LF
+                </p>
+                <div className="mt-2 text-sm text-amber-800 space-y-1">
+                  <div>LF: <strong className="font-mono">{detailForm.formNumber}</strong></div>
+                  <div>ลูกค้า: <strong>{detailCustomer.shortName || detailCustomer.name}</strong></div>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <code className="px-2 py-0.5 rounded bg-white border border-amber-300">{formatDate(dateConfirm.oldDate)}</code>
+                    <span className="text-amber-700">→</span>
+                    <code className="px-2 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-emerald-800 font-semibold">{formatDate(dateConfirm.newDate)}</code>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 text-xs text-blue-900 space-y-1">
+                <p className="font-semibold flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" /> ผลกระทบ
+                </p>
+                <ul className="ml-4 list-disc space-y-0.5">
+                  <li>Carry-over ของลูกค้า {detailCustomer.shortName} ในช่วง <strong>{formatDate(earlier)} ถึง {formatDate(later)}</strong> จะ recalc</li>
+                  <li>รายงานที่ filter ตามช่วงวันที่ → LF ใบนี้จะย้ายไปอยู่ในช่วงใหม่</li>
+                  <li>เลข LF ({detailForm.formNumber}) ไม่เปลี่ยน — เปลี่ยนเฉพาะ date field</li>
+                </ul>
+              </div>
+
+              {(hasLinkedDN || isConfirmed) && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-lg px-3 py-2.5 text-xs text-red-900 space-y-1">
+                  <p className="font-bold flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" /> ⚠ มีความเสี่ยงสูง
+                  </p>
+                  {hasLinkedDN && (
+                    <p>LF นี้ผูกกับใบส่งของ (SD) <strong className="font-mono">{linkedDN?.noteNumber}</strong> วันที่ <strong>{formatDate(linkedDN!.date)}</strong> — SD ไม่เปลี่ยน แต่ความสัมพันธ์อาจขัด</p>
+                  )}
+                  {isConfirmed && (
+                    <p>สถานะปัจจุบัน = ✓ confirmed (ลูกค้านับกลับเสร็จ) — การย้ายวันที่อาจกระทบบิลที่ออกแล้ว</p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setDateConfirm(null)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!detailForm) return
+                    updateLinenForm(detailForm.id, { date: dateConfirm.newDate })
+                    setDateConfirm(null)
+                    setEditingDate('')
+                  }}
+                  className={cn(
+                    'px-4 py-2 text-sm rounded-lg font-semibold flex items-center gap-1.5',
+                    (hasLinkedDN || isConfirmed)
+                      ? 'bg-red-600 text-white hover:bg-red-700'
+                      : 'bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8]',
+                  )}
+                >
+                  <Check className="w-4 h-4" />
+                  {(hasLinkedDN || isConfirmed) ? '⚠ ยืนยัน (high impact)' : 'ยืนยันเปลี่ยนวันที่'}
+                </button>
               </div>
             </div>
           )
