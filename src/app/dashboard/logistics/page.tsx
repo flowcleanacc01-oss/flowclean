@@ -105,13 +105,14 @@ export default function LogisticsPage() {
 
   const confirmReschedule = () => {
     if (!pending) return
+    const linkId = genId()
+    // วันเดิม: บันทึก "เลื่อนออก" เสมอ — กันวันเดิมโชว์ "ขาด" (แดง) ทั้งที่ตั้งใจเลื่อน
+    addScheduleOverride({ customerId: pending.customerId, date: pending.fromDate, type: 'reschedule_skip', reason, rescheduledLinkId: linkId })
     if (pending.mode === 'move-sd') {
-      // ย้ายวันที่ SD จริง — SD เป็น record ของรอบนั้น
+      // มี SD จริง: ย้ายวันที่ SD ไปวันใหม่ (SD = หลักฐานว่าส่งวันใหม่ ไม่ต้อง add override)
       pending.regularSDs.forEach(sd => updateDeliveryNote(sd.id, { date: pending.toDate }))
     } else {
-      // ย้าย "คิวที่คาดไว้" — สร้าง override คู่ skip(จากวัน) + add(ไปวัน)
-      const linkId = genId()
-      addScheduleOverride({ customerId: pending.customerId, date: pending.fromDate, type: 'reschedule_skip', reason, rescheduledLinkId: linkId })
+      // ยังไม่มี SD: ทำเครื่องหมาย "เลื่อนเข้า" ที่วันใหม่ (คู่กับ skip ผ่าน linkId)
       addScheduleOverride({ customerId: pending.customerId, date: pending.toDate, type: 'reschedule_add', reason, rescheduledLinkId: linkId })
     }
     setPending(null)
@@ -316,9 +317,11 @@ export default function LogisticsPage() {
               {pending.mode === 'move-sd' ? (
                 <p className="mt-1 flex items-start gap-1.5">
                   <Truck className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                  ย้ายวันที่ของใบส่งของ {pending.regularSDs.length} ใบ
-                  ({pending.regularSDs.map(s => s.noteNumber).join(', ')})
-                  ไปเป็นวันใหม่
+                  <span>
+                    ย้ายวันที่ใบส่งของ {pending.regularSDs.length} ใบ
+                    ({pending.regularSDs.map(s => s.noteNumber).join(', ')}) ไปวันใหม่
+                    <span className="block text-xs text-slate-400 mt-0.5">วันเดิมจะถูกบันทึกเป็น “เลื่อนออก” (ไม่โชว์ว่าขาด)</span>
+                  </span>
                 </p>
               ) : (
                 <p className="mt-1 flex items-start gap-1.5">
