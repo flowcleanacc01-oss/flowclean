@@ -327,28 +327,49 @@ export default function ReportsPage() {
     )
   }
 
-  /** 339 + 346: render label cell — theme LF Grid (slate, ไม่ใช่ indigo) */
+  /** 339 + 346 + 348: render label cell — visual hierarchy (anchor=bold, non-anchor=indent+dim)
+   *  - Regular item: code mono + name slate-700 (เป็นกลาง)
+   *  - Anchor row: code mono + name slate-800 font-medium + pill badge "📦 N"
+   *  - Non-anchor row: pl-4 indent + ↑/↓ small dim + code/name slate-400 + tooltip
+   *    (ย้าย "รวมที่ XXX" จาก inline text → title attribute ลด clutter)
+   */
   const renderCoLabel = (code: string) => {
     const m = coRowAggMeta.get(code)
+    // Non-anchor: indented child row
     if (m?.isInGroup && !m.isAnchor) {
       const dir = m.indexInList < m.anchorIndex ? '↓' : '↑'
       return (
-        <span className="inline-flex items-center gap-1">
-          <span className="text-slate-400 text-sm">{dir}</span>
-          <span className="font-mono text-slate-300 mr-0.5">{code}</span>
-          <span className="text-slate-400">{itemNameMap[code]}</span>
-          <span className="ml-1 text-[10px] text-slate-400 italic">รวมที่ {m.anchorCode}</span>
+        <span
+          className="inline-flex items-center gap-1.5 pl-4"
+          title={`รวมที่ ${m.anchorCode} (${itemNameMap[m.anchorCode] || ''})`}
+        >
+          <span className="text-slate-300 text-[11px] w-3 inline-block text-center">{dir}</span>
+          <span className="font-mono text-[11px] text-slate-400">{code}</span>
+          <span className="text-slate-500 truncate">{itemNameMap[code]}</span>
         </span>
       )
     }
+    // Anchor row: group header with pill badge
+    if (m?.isInGroup && m.isAnchor) {
+      return (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="font-mono text-[11px] text-slate-500">{code}</span>
+          <span className="text-slate-800 font-medium">{itemNameMap[code]}</span>
+          <span
+            className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-full bg-slate-100 text-slate-600 text-[10px] font-medium border border-slate-200"
+            title={`Aggregate group — รวม ${m.groupSize} ไซส์`}
+          >
+            📦 {m.groupSize}
+          </span>
+        </span>
+      )
+    }
+    // Regular item (not in any group)
     return (
-      <>
-        <span className="font-mono text-slate-400 mr-1">{code}</span>
-        <span className="text-slate-700">{itemNameMap[code]}</span>
-        {m?.isInGroup && m.isAnchor && (
-          <span className="ml-1.5 text-[10px] text-slate-600 font-medium">📦 รวม {m.groupSize} ไซส์</span>
-        )}
-      </>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="font-mono text-[11px] text-slate-400">{code}</span>
+        <span className="text-slate-700 truncate">{itemNameMap[code]}</span>
+      </span>
     )
   }
 
@@ -1021,7 +1042,7 @@ export default function ReportsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="text-left px-4 py-2.5 font-medium text-slate-600">รายการ</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-slate-600 border-r border-slate-200">รายการ</th>
                     <th className="text-right px-4 py-2.5 font-medium text-slate-600 w-32">
                       เคส 1
                       <span className="block text-[10px] font-normal text-slate-500 leading-tight">{CARRY_OVER_MODE_CONFIG[1].label}</span>
@@ -1061,7 +1082,7 @@ export default function ReportsPage() {
                     const fmt = (v: number) => v === 0 ? '·' : (v > 0 ? '+' : '') + v
                     return (
                       <tr key={code} className={coRowClasses(code)}>
-                        <td className="px-4 py-2">{renderCoLabel(code)}</td>
+                        <td className="px-4 py-2 border-r border-slate-100 max-w-[320px]">{renderCoLabel(code)}</td>
                         <td className={cellCls(v1)}>{fmt(v1)}</td>
                         <td className={cellCls(v2)}>{fmt(v2)}</td>
                         <td className={cellCls(v3)}>{fmt(v3)}</td>
@@ -1080,7 +1101,7 @@ export default function ReportsPage() {
               <table className="text-xs">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600 sticky left-0 bg-slate-50 z-10">รายการ</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[200px]">รายการ</th>
                     <th className="text-right px-2 py-2 font-medium text-slate-600 w-14">ยกมา</th>
                     {coDaysInRange.map(day => (
                       <th key={day} className="text-right px-2 py-2 font-medium text-slate-600 w-12">{parseInt(day.split('-')[2])}</th>
@@ -1109,7 +1130,7 @@ export default function ReportsPage() {
                     const fmt = (v: number) => v === 0 ? '·' : (v > 0 ? '+' : '') + v
                     return (
                       <tr key={code} className={coRowClasses(code)}>
-                        <td className="px-3 py-1.5 sticky left-0 z-10 bg-white">
+                        <td className="px-3 py-1.5 sticky left-0 z-10 bg-white border-r border-slate-100 max-w-[280px]">
                           {renderCoLabel(code)}
                         </td>
                         <td className={cellCls(brought)}>{fmt(brought)}</td>
@@ -1133,7 +1154,7 @@ export default function ReportsPage() {
               <table className="text-xs">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600 sticky left-0 bg-slate-50 z-10">รายการ</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[200px]">รายการ</th>
                     <th className="text-right px-2 py-2 font-medium text-slate-600 w-16">ยกมา</th>
                     {coMonthsInRange.map(month => (
                       <th key={month} className="text-right px-2 py-2 font-medium text-slate-600 w-16">{month.slice(5)}/{month.slice(2, 4)}</th>
@@ -1159,7 +1180,7 @@ export default function ReportsPage() {
                     const fmt = (v: number) => v === 0 ? '·' : (v > 0 ? '+' : '') + v
                     return (
                       <tr key={code} className={coRowClasses(code)}>
-                        <td className="px-3 py-1.5 sticky left-0 z-10 bg-white">
+                        <td className="px-3 py-1.5 sticky left-0 z-10 bg-white border-r border-slate-100 max-w-[280px]">
                           {renderCoLabel(code)}
                         </td>
                         <td className={cellCls(brought)}>{fmt(brought)}</td>
