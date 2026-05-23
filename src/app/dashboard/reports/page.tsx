@@ -327,50 +327,31 @@ export default function ReportsPage() {
     )
   }
 
-  /** 339 + 346 + 348: render label cell — visual hierarchy (anchor=bold, non-anchor=indent+dim)
-   *  - Regular item: code mono + name slate-700 (เป็นกลาง)
-   *  - Anchor row: code mono + name slate-800 font-medium + pill badge "📦 N"
-   *  - Non-anchor row: pl-4 indent + ↑/↓ small dim + code/name slate-400 + tooltip
-   *    (ย้าย "รวมที่ XXX" จาก inline text → title attribute ลด clutter)
+  /** 339 + 346 + 348 + 349: render label cell — uniform font ทุกแถว (no anchor emphasis, no pill)
+   *  349.2: ลบ "📦 N" badge ออก
+   *  349.1: font/style เดียวกันหมด (เหมือน H01 H02 ปกติ) — anchor/non-anchor distinguished
+   *         จาก values + brace borders + cell arrows (349.1.1/2) แทน
    */
   const renderCoLabel = (code: string) => {
-    const m = coRowAggMeta.get(code)
-    // Non-anchor: indented child row
-    if (m?.isInGroup && !m.isAnchor) {
-      const dir = m.indexInList < m.anchorIndex ? '↓' : '↑'
-      return (
-        <span
-          className="inline-flex items-center gap-1.5 pl-4"
-          title={`รวมที่ ${m.anchorCode} (${itemNameMap[m.anchorCode] || ''})`}
-        >
-          <span className="text-slate-300 text-[11px] w-3 inline-block text-center">{dir}</span>
-          <span className="font-mono text-[11px] text-slate-400">{code}</span>
-          <span className="text-slate-500 truncate">{itemNameMap[code]}</span>
-        </span>
-      )
-    }
-    // Anchor row: group header with pill badge
-    if (m?.isInGroup && m.isAnchor) {
-      return (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="font-mono text-[11px] text-slate-500">{code}</span>
-          <span className="text-slate-800 font-medium">{itemNameMap[code]}</span>
-          <span
-            className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-full bg-slate-100 text-slate-600 text-[10px] font-medium border border-slate-200"
-            title={`Aggregate group — รวม ${m.groupSize} ไซส์`}
-          >
-            📦 {m.groupSize}
-          </span>
-        </span>
-      )
-    }
-    // Regular item (not in any group)
     return (
       <span className="inline-flex items-center gap-1.5">
-        <span className="font-mono text-[11px] text-slate-400">{code}</span>
+        <span className="font-mono text-xs text-slate-400">{code}</span>
         <span className="text-slate-700 truncate">{itemNameMap[code]}</span>
       </span>
     )
+  }
+
+  /** 349.1.1+349.1.2: arrow ↓/↑ ที่ first/last row ของ group ใน cells ที่ anchor มีค่า
+   *  pattern เดียวกับ LF Grid — clean "ปีกกา" feeling โดยไม่มี border tricks
+   *  return null = ไม่ใช่ first/last หรือ anchor ไม่มีค่า → cell แสดงค่าปกติ
+   */
+  const cellArrow = (code: string, anchorHasValue: boolean): '↓' | '↑' | null => {
+    const m = coRowAggMeta.get(code)
+    if (!m?.isInGroup || m.isAnchor) return null
+    if (!anchorHasValue) return null
+    if (m.isFirstInGroup) return '↓'
+    if (m.isLastInGroup) return '↑'
+    return null
   }
 
   /** 340.1: helper — code เป็น non-anchor ของ aggregate group ไหม
@@ -1073,20 +1054,32 @@ export default function ReportsPage() {
                     const v2 = coCompareValues[2][code] || 0
                     const v3 = coCompareValues[3][code] || 0
                     const v4 = coCompareValues[4][code] || 0
-                    // 340.1: cell renderer — เป็นศูนย์แสดง '·' dim (consistent กับ daily cells)
-                    //        non-anchor row โดยปกติ = 0 ถ้าไม่มี adj → ดู '·' ดูเรียบกว่า "0"
+                    // 349: peek anchor values for first/last arrow
+                    const m = coRowAggMeta.get(code)
+                    const anchorVals = m?.isInGroup && !m.isAnchor && coCompareValues ? {
+                      1: coCompareValues[1][m.anchorCode] || 0,
+                      2: coCompareValues[2][m.anchorCode] || 0,
+                      3: coCompareValues[3][m.anchorCode] || 0,
+                      4: coCompareValues[4][m.anchorCode] || 0,
+                    } : null
                     const cellCls = (v: number) => cn(
                       'text-right px-4 py-2 font-mono',
                       v < 0 ? 'text-red-600' : v > 0 ? 'text-emerald-600' : 'text-slate-300',
                     )
                     const fmt = (v: number) => v === 0 ? '·' : (v > 0 ? '+' : '') + v
+                    // render: own value → arrow ↓/↑ ถ้า anchor มีค่า → '·'
+                    const renderCell = (v: number, anchorV: number) => {
+                      if (v !== 0) return fmt(v)
+                      const arr = anchorVals ? cellArrow(code, anchorV !== 0) : null
+                      return arr || '·'
+                    }
                     return (
                       <tr key={code} className={coRowClasses(code)}>
                         <td className="px-4 py-2 border-r border-slate-100 max-w-[320px]">{renderCoLabel(code)}</td>
-                        <td className={cellCls(v1)}>{fmt(v1)}</td>
-                        <td className={cellCls(v2)}>{fmt(v2)}</td>
-                        <td className={cellCls(v3)}>{fmt(v3)}</td>
-                        <td className={cellCls(v4)}>{fmt(v4)}</td>
+                        <td className={cellCls(v1)}>{renderCell(v1, anchorVals?.[1] || 0)}</td>
+                        <td className={cellCls(v2)}>{renderCell(v2, anchorVals?.[2] || 0)}</td>
+                        <td className={cellCls(v3)}>{renderCell(v3, anchorVals?.[3] || 0)}</td>
+                        <td className={cellCls(v4)}>{renderCell(v4, anchorVals?.[4] || 0)}</td>
                       </tr>
                     )
                   })}
@@ -1095,19 +1088,19 @@ export default function ReportsPage() {
             </div>
           )}
 
-          {/* Monthly View (51.1) — รายการ=row, day=col */}
+          {/* Monthly View (51.1) — รายการ=row, day=col · 349.3 compact widths */}
           {coMode !== 'compare' && coView === 'monthly' && (
             <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-              <table className="text-xs">
+              <table className="text-[11px] w-full">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[200px]">รายการ</th>
-                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-14">ยกมา</th>
+                    <th className="text-left px-2 py-1.5 font-medium text-slate-600 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[150px]">รายการ</th>
+                    <th className="text-right px-1 py-1.5 font-medium text-slate-600 w-10">ยกมา</th>
                     {coDaysInRange.map(day => (
-                      <th key={day} className="text-right px-2 py-2 font-medium text-slate-600 w-12">{parseInt(day.split('-')[2])}</th>
+                      <th key={day} className="text-right px-0.5 py-1.5 font-medium text-slate-600 w-8">{parseInt(day.split('-')[2])}</th>
                     ))}
-                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-14 bg-slate-100">รวม</th>
-                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-14 bg-slate-100">สะสม</th>
+                    <th className="text-right px-1 py-1.5 font-medium text-slate-600 w-10 bg-slate-100">รวม</th>
+                    <th className="text-right px-1 py-1.5 font-medium text-slate-600 w-10 bg-slate-100">สะสม</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1117,29 +1110,41 @@ export default function ReportsPage() {
                     const brought = coBroughtForward[code] || 0
                     const carried = coCarriedAfter[code] || 0
                     const monthTotal = carried - brought
-                    // 340.1: non-anchor row daily = adj-only (LF aggregate ที่ anchor แล้ว — per-row diff = noise)
                     const isNonAnchor = isCoNonAnchorInGroup(code)
                     const dailyFor = (day: string) => isNonAnchor
                       ? computeNonAnchorDailyAdj(selCustomerId, code, day)
                       : computeDailyDiff(selCustomerId, code, day, coMode as CarryOverMode)
+                    // 349: peek anchor values for first/last arrow
+                    const m = coRowAggMeta.get(code)
+                    const ancBrought = m?.isInGroup && !m.isAnchor ? (coBroughtForward[m.anchorCode] || 0) : 0
+                    const ancCarried = m?.isInGroup && !m.isAnchor ? (coCarriedAfter[m.anchorCode] || 0) : 0
+                    const ancMonthTotal = ancCarried - ancBrought
                     const cellCls = (v: number, bgTotal = false) => cn(
-                      'text-right px-2 py-1.5 font-mono',
-                      bgTotal && 'bg-slate-50',
+                      'text-right px-0.5 py-1 font-mono',
+                      bgTotal && 'bg-slate-50 px-1',
                       v < 0 ? 'text-red-600' : v > 0 ? 'text-emerald-600' : 'text-slate-300',
                     )
                     const fmt = (v: number) => v === 0 ? '·' : (v > 0 ? '+' : '') + v
+                    const renderCell = (v: number, anchorV: number) => {
+                      if (v !== 0) return fmt(v)
+                      const arr = m?.isInGroup && !m.isAnchor ? cellArrow(code, anchorV !== 0) : null
+                      return arr || '·'
+                    }
                     return (
                       <tr key={code} className={coRowClasses(code)}>
-                        <td className="px-3 py-1.5 sticky left-0 z-10 bg-white border-r border-slate-100 max-w-[280px]">
+                        <td className="px-2 py-1 sticky left-0 z-10 bg-white border-r border-slate-100">
                           {renderCoLabel(code)}
                         </td>
-                        <td className={cellCls(brought)}>{fmt(brought)}</td>
+                        <td className={cellCls(brought)}>{renderCell(brought, ancBrought)}</td>
                         {coDaysInRange.map(day => {
                           const d = dailyFor(day)
-                          return <td key={day} className={cellCls(d)}>{fmt(d)}</td>
+                          const ancD = m?.isInGroup && !m.isAnchor
+                            ? computeDailyDiff(selCustomerId, m.anchorCode, day, coMode as CarryOverMode)
+                            : 0
+                          return <td key={day} className={cellCls(d)}>{renderCell(d, ancD)}</td>
                         })}
-                        <td className={cn(cellCls(monthTotal, true), monthTotal !== 0 && 'font-medium')}>{fmt(monthTotal)}</td>
-                        <td className={cn(cellCls(carried, true), carried !== 0 && 'font-semibold')}>{fmt(carried)}</td>
+                        <td className={cn(cellCls(monthTotal, true), monthTotal !== 0 && 'font-medium')}>{renderCell(monthTotal, ancMonthTotal)}</td>
+                        <td className={cn(cellCls(carried, true), carried !== 0 && 'font-semibold')}>{renderCell(carried, ancCarried)}</td>
                       </tr>
                     )
                   })}
@@ -1148,19 +1153,48 @@ export default function ReportsPage() {
             </div>
           )}
 
-          {/* Yearly View (51.2) — รายการ=row, month=col */}
-          {coMode !== 'compare' && coView === 'yearly' && (
+          {/* Yearly View (51.2) — รายการ=row, month=col · 349.3 compact widths */}
+          {coMode !== 'compare' && coView === 'yearly' && (() => {
+            // 349.1.1: helper — compute anchor's monthly sum (re-use logic ของ anchor inline)
+            const computeAnchorMonthlySum = (anchorCode: string, month: string): number => {
+              const aggInfo = getAggInfoForCode(anchorCode)
+              if (!aggInfo) return 0
+              const groupCodes = new Set(linenCatalog.filter(i => i.sizeGroup === aggInfo.groupKey).map(i => i.code))
+              let sum = 0
+              for (const f of linenForms) {
+                if (f.customerId !== selCustomerId || !f.date.startsWith(month)) continue
+                const m: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : (coMode as CarryOverMode)
+                for (const r of f.rows) {
+                  if (!groupCodes.has(r.code)) continue
+                  switch (m) {
+                    case 1: sum += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
+                    case 2: sum += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
+                    case 3: sum += r.col4_factoryApproved - r.col5_factoryClaimApproved; break
+                    case 4: sum += r.col4_factoryApproved - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
+                  }
+                }
+              }
+              for (const a of carryOverAdjustments) {
+                if (a.isDeleted || a.customerId !== selCustomerId || !a.date.startsWith(month) || a.type !== 'adjust') continue
+                if (!coShowAdjustments && !a.showInCustomerReport) continue
+                for (const it of a.items) {
+                  if (groupCodes.has(it.code)) sum += it.delta || 0
+                }
+              }
+              return sum
+            }
+            return (
             <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-              <table className="text-xs">
+              <table className="text-[11px] w-full">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[200px]">รายการ</th>
-                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-16">ยกมา</th>
+                    <th className="text-left px-2 py-1.5 font-medium text-slate-600 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[150px]">รายการ</th>
+                    <th className="text-right px-1 py-1.5 font-medium text-slate-600 w-12">ยกมา</th>
                     {coMonthsInRange.map(month => (
-                      <th key={month} className="text-right px-2 py-2 font-medium text-slate-600 w-16">{month.slice(5)}/{month.slice(2, 4)}</th>
+                      <th key={month} className="text-right px-1 py-1.5 font-medium text-slate-600 w-12">{month.slice(5)}/{month.slice(2, 4)}</th>
                     ))}
-                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-16 bg-slate-100">รวม</th>
-                    <th className="text-right px-2 py-2 font-medium text-slate-600 w-16 bg-slate-100">สะสม</th>
+                    <th className="text-right px-1 py-1.5 font-medium text-slate-600 w-12 bg-slate-100">รวม</th>
+                    <th className="text-right px-1 py-1.5 font-medium text-slate-600 w-12 bg-slate-100">สะสม</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1170,27 +1204,35 @@ export default function ReportsPage() {
                     const brought = coBroughtForward[code] || 0
                     const carried = coCarriedAfter[code] || 0
                     const yearTotal = carried - brought
-                    // 340.1: non-anchor row monthly = adj-only (LF aggregate ที่ anchor)
                     const isNonAnchor = isCoNonAnchorInGroup(code)
+                    // 349: peek anchor values for first/last arrow
+                    const m = coRowAggMeta.get(code)
+                    const ancBrought = m?.isInGroup && !m.isAnchor ? (coBroughtForward[m.anchorCode] || 0) : 0
+                    const ancCarried = m?.isInGroup && !m.isAnchor ? (coCarriedAfter[m.anchorCode] || 0) : 0
+                    const ancYearTotal = ancCarried - ancBrought
                     const cellCls = (v: number, bgTotal = false) => cn(
-                      'text-right px-2 py-1.5 font-mono',
+                      'text-right px-1 py-1 font-mono',
                       bgTotal && 'bg-slate-50',
                       v < 0 ? 'text-red-600' : v > 0 ? 'text-emerald-600' : 'text-slate-300',
                     )
                     const fmt = (v: number) => v === 0 ? '·' : (v > 0 ? '+' : '') + v
+                    const renderCell = (v: number, anchorV: number) => {
+                      if (v !== 0) return fmt(v)
+                      const arr = m?.isInGroup && !m.isAnchor ? cellArrow(code, anchorV !== 0) : null
+                      return arr || '·'
+                    }
                     return (
                       <tr key={code} className={coRowClasses(code)}>
-                        <td className="px-3 py-1.5 sticky left-0 z-10 bg-white border-r border-slate-100 max-w-[280px]">
+                        <td className="px-2 py-1 sticky left-0 z-10 bg-white border-r border-slate-100">
                           {renderCoLabel(code)}
                         </td>
-                        <td className={cellCls(brought)}>{fmt(brought)}</td>
+                        <td className={cellCls(brought)}>{renderCell(brought, ancBrought)}</td>
                         {coMonthsInRange.map(month => {
                           let monthSum = 0
                           if (isNonAnchor) {
-                            // adj-only — LF อยู่ที่ anchor row
                             monthSum = computeNonAnchorMonthlyAdj(selCustomerId, code, month)
                           } else {
-                            // anchor หรือ ungrouped — group-aware inline (เหมือนเดิม)
+                            // anchor / ungrouped — inline calc
                             const aggInfo = getAggInfoForCode(code)
                             const isAggAnchor = !!(aggInfo && aggInfo.anchorCode === code)
                             const groupCodes = isAggAnchor && aggInfo
@@ -1198,11 +1240,11 @@ export default function ReportsPage() {
                               : null
                             for (const f of linenForms) {
                               if (f.customerId !== selCustomerId || !f.date.startsWith(month)) continue
-                              const m: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : (coMode as CarryOverMode)
+                              const mode: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : (coMode as CarryOverMode)
                               for (const r of f.rows) {
                                 const matches = groupCodes ? groupCodes.has(r.code) : r.code === code
                                 if (!matches) continue
-                                switch (m) {
+                                switch (mode) {
                                   case 1: monthSum += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
                                   case 2: monthSum += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
                                   case 3: monthSum += r.col4_factoryApproved - r.col5_factoryClaimApproved; break
@@ -1219,17 +1261,22 @@ export default function ReportsPage() {
                               }
                             }
                           }
-                          return <td key={month} className={cellCls(monthSum)}>{fmt(monthSum)}</td>
+                          // 349: anchor's monthly value for arrow
+                          const ancMonthSum = m?.isInGroup && !m.isAnchor
+                            ? computeAnchorMonthlySum(m.anchorCode, month)
+                            : 0
+                          return <td key={month} className={cellCls(monthSum)}>{renderCell(monthSum, ancMonthSum)}</td>
                         })}
-                        <td className={cn(cellCls(yearTotal, true), yearTotal !== 0 && 'font-medium')}>{fmt(yearTotal)}</td>
-                        <td className={cn(cellCls(carried, true), carried !== 0 && 'font-semibold')}>{fmt(carried)}</td>
+                        <td className={cn(cellCls(yearTotal, true), yearTotal !== 0 && 'font-medium')}>{renderCell(yearTotal, ancYearTotal)}</td>
+                        <td className={cn(cellCls(carried, true), carried !== 0 && 'font-semibold')}>{renderCell(carried, ancCarried)}</td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
             </div>
-          )}
+            )
+          })()}
 
           {/* Adjustments History */}
           {coShowAdjustments && coAdjustmentsInRange.length > 0 && (
