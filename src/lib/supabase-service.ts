@@ -3,7 +3,7 @@ import type {
   Customer, LinenForm, DeliveryNote, BillingStatement, TaxInvoice, Receipt,
   Quotation, Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
   CustomerCategoryDef, ProductChecklist, AuditLog, CarryOverAdjustment,
-  LegacyDocument,
+  LegacyDocument, ScheduleOverride,
 } from '@/types'
 
 // ============================================================
@@ -67,6 +67,9 @@ const FIELD_MAP: Record<string, string> = {
   scheduleDays: 'schedule_days',                  // 311
   scheduleStartDate: 'schedule_start_date',       // 311
   scheduleNote: 'schedule_note',                  // 311
+  scheduleEveryNDays: 'schedule_every_n_days',    // 311 P2.1
+  scheduleBiweeklyAnchorWeek: 'schedule_biweekly_anchor_week', // 311 P2.1
+  rescheduledLinkId: 'rescheduled_link_id',       // 311 P2.1 (ScheduleOverride)
   isExtraRound: 'is_extra_round',                 // 311
   sizeGroup: 'size_group',                        // 317
   aggregateSizeGroups: 'aggregate_size_groups',   // 317
@@ -634,6 +637,26 @@ export async function deleteCarryOverAdjustmentDB(id: string): Promise<void> {
 }
 
 // ============================================================
+// Schedule Overrides (311 P2)
+// ============================================================
+
+export async function fetchScheduleOverrides(): Promise<ScheduleOverride[]> {
+  return fetchAllPaginated<ScheduleOverride>('schedule_overrides', 'date')
+}
+
+export async function insertScheduleOverride(o: ScheduleOverride): Promise<void> {
+  await dbWrite({ table: 'schedule_overrides', operation: 'insert', data: toSnakeCase(o as unknown as Record<string, unknown>) })
+}
+
+export async function updateScheduleOverrideDB(id: string, updates: Partial<ScheduleOverride>): Promise<void> {
+  await dbWrite({ table: 'schedule_overrides', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
+}
+
+export async function deleteScheduleOverrideDB(id: string): Promise<void> {
+  await dbWrite({ table: 'schedule_overrides', operation: 'delete', match: { column: 'id', value: id } })
+}
+
+// ============================================================
 // Default Prices — stored as linen_items.default_price
 // ============================================================
 
@@ -681,6 +704,7 @@ export async function fetchAllData() {
     fetchCarryOverAdjustments().catch(() => [] as CarryOverAdjustment[]),
     fetchReceipts().catch(() => [] as Receipt[]),
     fetchLegacyDocuments().catch(() => [] as LegacyDocument[]),
+    fetchScheduleOverrides().catch(() => [] as ScheduleOverride[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -690,7 +714,7 @@ export async function fetchAllData() {
     customers, linenForms, deliveryNotes, billingStatements,
     taxInvoices, quotations, expenses, users, companyInfo,
     linenItems, checklists, linenCategories, customerCategories,
-    carryOverAdjustments, receipts, legacyDocuments,
+    carryOverAdjustments, receipts, legacyDocuments, scheduleOverrides,
   ] = [
     val(results[0], [] as Customer[]),
     val(results[1], [] as LinenForm[]),
@@ -708,6 +732,7 @@ export async function fetchAllData() {
     val(results[13], [] as CarryOverAdjustment[]),
     val(results[14], [] as Receipt[]),
     val(results[15], [] as LegacyDocument[]),
+    val(results[16], [] as ScheduleOverride[]),
   ]
 
   return {
@@ -727,5 +752,6 @@ export async function fetchAllData() {
     carryOverAdjustments,
     receipts,
     legacyDocuments,
+    scheduleOverrides,
   }
 }

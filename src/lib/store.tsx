@@ -8,7 +8,7 @@ import type {
   CustomerCategoryDef, ProductChecklist, ChecklistStatus,
   AuditAction, AuditEntityType, AuditLog,
   CarryOverAdjustment, CarryOverMode, CarryOverAdjustmentHistory,
-  LegacyDocument,
+  LegacyDocument, ScheduleOverride,
 } from '@/types'
 import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES, DEFAULT_CUSTOMER_CATEGORIES } from '@/types'
 import {
@@ -139,6 +139,12 @@ interface StoreContextType {
   updateCarryOverAdjustment: (id: string, updates: Partial<Omit<CarryOverAdjustment, 'id' | 'createdAt' | 'createdBy'>>, changeNote?: string) => void
   deleteCarryOverAdjustment: (id: string) => void
 
+  // 311 P2 — Schedule Overrides
+  scheduleOverrides: ScheduleOverride[]
+  addScheduleOverride: (o: Omit<ScheduleOverride, 'id' | 'createdAt' | 'createdBy'>) => ScheduleOverride
+  updateScheduleOverride: (id: string, updates: Partial<Omit<ScheduleOverride, 'id' | 'createdAt' | 'createdBy'>>) => void
+  deleteScheduleOverride: (id: string) => void
+
   // 255: Facet Vocabulary (Wizard 2.0 — admin-editable)
   facetVocab: FacetVocab
   updateFacetVocab: (vocab: FacetVocab) => Promise<void>
@@ -201,6 +207,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [customerCategories, setCustomerCategories] = useState<CustomerCategoryDef[]>(DEFAULT_CUSTOMER_CATEGORIES)
   const [checklists, setChecklists] = useState<ProductChecklist[]>([])
   const [carryOverAdjustments, setCarryOverAdjustments] = useState<CarryOverAdjustment[]>([])
+  // 311 P2 — Schedule overrides
+  const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
   // 255: Facet Vocabulary — start with defaults, replaced after DB load
   const [facetVocab, setFacetVocab] = useState<FacetVocab>(DEFAULT_FACET_VOCAB)
   const [loaded, setLoaded] = useState(false)
@@ -341,6 +349,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       setChecklists(data.checklists)
       setCarryOverAdjustments(data.carryOverAdjustments || [])
+      setScheduleOverrides(data.scheduleOverrides || [])
 
       // Build defaultPrices from linenItems
       if (data.linenItems.length > 0) {
@@ -987,6 +996,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     logAudit('delete', 'customer', id, 'ลบรายการปรับยอด')
   }, [logAudit])
 
+  // 311 P2 — Schedule Overrides CRUD
+  const addScheduleOverride = useCallback((o: Omit<ScheduleOverride, 'id' | 'createdAt' | 'createdBy'>): ScheduleOverride => {
+    const newOverride: ScheduleOverride = {
+      ...o,
+      id: genId(),
+      createdAt: new Date().toISOString(),
+      createdBy: currentUserRef.current?.id || 'unknown',
+    }
+    setScheduleOverrides(prev => [newOverride, ...prev])
+    dbSave(db.insertScheduleOverride(newOverride), () => {
+      setScheduleOverrides(prev => prev.filter(x => x.id !== newOverride.id))
+    })
+    logAudit('create', 'customer', newOverride.id, `Schedule ${o.type} (${o.date})`, o.reason)
+    return newOverride
+  }, [logAudit])
+
+  const updateScheduleOverride = useCallback((id: string, updates: Partial<Omit<ScheduleOverride, 'id' | 'createdAt' | 'createdBy'>>) => {
+    setScheduleOverrides(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    dbSave(db.updateScheduleOverrideDB(id, updates))
+    logAudit('update', 'customer', id, 'แก้ไข Schedule Override')
+  }, [logAudit])
+
+  const deleteScheduleOverride = useCallback((id: string) => {
+    setScheduleOverrides(prev => prev.filter(x => x.id !== id))
+    dbSave(db.deleteScheduleOverrideDB(id))
+    logAudit('delete', 'customer', id, 'ลบ Schedule Override')
+  }, [logAudit])
+
   // ---- Computed Helpers ----
 
   // 255 Phase 1.b: Facet Vocabulary update / reset
@@ -1167,6 +1204,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       customerCategories, addCustomerCategory, updateCustomerCategory, deleteCustomerCategory, getCustomerCategoryLabel,
       checklists, addChecklist, updateChecklist, updateChecklistStatus, deleteChecklist,
       carryOverAdjustments, addCarryOverAdjustment, updateCarryOverAdjustment, deleteCarryOverAdjustment,
+      scheduleOverrides, addScheduleOverride, updateScheduleOverride, deleteScheduleOverride,
       facetVocab, updateFacetVocab, resetFacetVocab,
       getCarryOver, getDiscrepancies,
     }}>
