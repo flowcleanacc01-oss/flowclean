@@ -19,6 +19,7 @@ import { runScheduleAudit, findMultipleRegularGroups, type ScheduleAuditDayResul
 import { formatDate, cn, startOfMonthISO, endOfMonthISO } from '@/lib/utils'
 import DateFilter from '@/components/DateFilter'
 import CustomerPicker from '@/components/CustomerPicker'
+import Modal from '@/components/Modal'
 import {
   CalendarClock, CheckCircle2, AlertTriangle, AlertOctagon, Settings,
   ExternalLink, Sparkles, Calendar,
@@ -38,7 +39,10 @@ const STATUS_CONFIG: Record<ScheduleAuditDayResult['status'], { label: string; c
 export default function ScheduleAudit() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { customers, deliveryNotes, getCustomer, updateDeliveryNote, scheduleOverrides } = useStore()
+  const { customers, deliveryNotes, getCustomer, updateDeliveryNote, scheduleOverrides, addScheduleOverride } = useStore()
+  // P4 — Quick-add skip modal state
+  const [quickSkipDate, setQuickSkipDate] = useState<string | null>(null)
+  const [quickSkipReason, setQuickSkipReason] = useState('')
 
   const urlCustomerId = searchParams.get('customerId')
 
@@ -289,12 +293,13 @@ export default function ScheduleAudit() {
                   <th className="text-left px-3 py-2 font-medium text-slate-600">SD ปกติ</th>
                   <th className="text-left px-3 py-2 font-medium text-slate-600">รอบเสริม</th>
                   <th className="text-center px-3 py-2 font-medium text-slate-600">สถานะ</th>
+                  <th className="text-center px-3 py-2 font-medium text-slate-600 w-24">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredDays.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-12 text-slate-400 text-sm">
+                    <td colSpan={7} className="text-center py-12 text-slate-400 text-sm">
                       {audit.days.length === 0 ? 'ไม่พบข้อมูลในช่วงที่เลือก' : 'ไม่พบรายการตาม filter'}
                     </td>
                   </tr>
@@ -308,9 +313,13 @@ export default function ScheduleAudit() {
                         <td className="px-3 py-2 text-slate-600">{WEEKDAY_LABELS[day.dayOfWeek]}</td>
                         <td className="px-3 py-2 text-center">
                           {day.expected ? (
-                            <span className="text-emerald-600">✓</span>
+                            <span className="text-emerald-600" title={day.hasExtraOverride ? `extra override: ${day.overrideReason}` : undefined}>
+                              {day.hasExtraOverride ? '✓+' : '✓'}
+                            </span>
                           ) : (
-                            <span className="text-slate-300">−</span>
+                            <span className="text-slate-300" title={day.hasSkipOverride ? `skip override: ${day.overrideReason}` : undefined}>
+                              {day.hasSkipOverride ? '−⊘' : '−'}
+                            </span>
                           )}
                         </td>
                         <td className="px-3 py-2">
@@ -351,9 +360,22 @@ export default function ScheduleAudit() {
                           <span className={cn(
                             'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border',
                             cfg.color, cfg.bg, cfg.border,
-                          )}>
+                          )} title={day.overrideReason}>
                             <Icon className="w-3 h-3" />{cfg.label}
                           </span>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {/* P4: missing day → quick-add skip override */}
+                          {day.status === 'missing' && (
+                            <button
+                              type="button"
+                              onClick={() => { setQuickSkipDate(day.date); setQuickSkipReason('') }}
+                              title="เพิ่ม skip override สำหรับวันนี้"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] bg-purple-50 text-purple-700 border border-purple-200 rounded hover:bg-purple-100"
+                            >
+                              + Skip
+                            </button>
+                          )}
                         </td>
                       </tr>
                     )
@@ -427,6 +449,77 @@ export default function ScheduleAudit() {
         </div>
       )}
 
+      {/* P4: Quick-add skip override modal */}
+      <Modal
+        open={!!quickSkipDate}
+        onClose={() => { setQuickSkipDate(null); setQuickSkipReason('') }}
+        title="เพิ่ม Skip Override"
+        size="sm"
+      >
+        {quickSkipDate && selectedCustomer && (
+          <div className="space-y-4">
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm space-y-1">
+              <div className="flex gap-2">
+                <span className="text-slate-600 min-w-[60px]">ลูกค้า:</span>
+                <strong>{selectedCustomer.shortName || selectedCustomer.name}</strong>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-slate-600 min-w-[60px]">วันที่:</span>
+                <strong className="font-mono">{formatDate(quickSkipDate)}</strong>
+              </div>
+              <div className="flex gap-2 text-xs text-slate-500 italic">
+                <span className="min-w-[60px]">ผลกระทบ:</span>
+                <span>วันนี้จะถูกตัดออกจาก expected → ไม่อยู่ใน "ขาด SD" อีกต่อไป</span>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                เหตุผล <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={quickSkipReason}
+                onChange={e => setQuickSkipReason(e.target.value)}
+                rows={2}
+                autoFocus
+                placeholder="เช่น ผ้าน้อยไม่ถึง min-per-trip, ลูกค้าขอข้าม, วันหยุดร้านปิด"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-[#3DD8D8] focus:ring-2 focus:ring-[#3DD8D8]/30 resize-none"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => { setQuickSkipDate(null); setQuickSkipReason('') }}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!quickSkipReason.trim() || !selectedCustomer || !quickSkipDate) return
+                  addScheduleOverride({
+                    customerId: selectedCustomer.id,
+                    date: quickSkipDate,
+                    type: 'skip',
+                    reason: quickSkipReason.trim(),
+                  })
+                  setQuickSkipDate(null)
+                  setQuickSkipReason('')
+                }}
+                disabled={!quickSkipReason.trim()}
+                className={cn(
+                  'px-4 py-2 text-sm font-semibold rounded-lg flex items-center gap-1.5',
+                  quickSkipReason.trim()
+                    ? 'bg-purple-600 text-white hover:bg-purple-700'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed',
+                )}
+              >
+                + Skip
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
