@@ -48,16 +48,22 @@ export function buildAggregateSnapshot(
   return snapshot
 }
 
-/** Pre-compute anchor code ของแต่ละ group จาก catalog */
+/**
+ * Pre-compute anchor code ของแต่ละ group จาก catalog
+ *
+ * @param configAnchors  Optional map: groupKey → anchor code (จาก customer.aggregateSizeGroups)
+ *                       ถ้าระบุ → ใช้ override, ไม่งั้น fallback median (335)
+ */
 export function computeAnchorByGroup(
   groupKeys: Iterable<string>,
   catalog: LinenItemDef[],
+  configAnchors?: Map<string, string>,
 ): Map<string, string> {
   const result = new Map<string, string>()
   for (const groupKey of groupKeys) {
     const items = catalog.filter(i => i.sizeGroup === groupKey)
     if (items.length > 0) {
-      result.set(groupKey, getGroupAnchorCode(items))
+      result.set(groupKey, getGroupAnchorCode(items, configAnchors?.get(groupKey)))
     }
   }
   return result

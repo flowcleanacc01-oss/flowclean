@@ -1067,7 +1067,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     for (const f of forms) {
       if (f.aggregateSnapshot) Object.keys(f.aggregateSnapshot).forEach(k => allGroupKeys.add(k))
     }
-    const anchorByGroup = computeAnchorByGroup(allGroupKeys, linenCatalog)
+    // 335: customer config อาจมี manual anchor override → pass เข้า computeAnchorByGroup
+    const configAnchors = new Map<string, string>(
+      (customer?.aggregateSizeGroups ?? [])
+        .filter(c => c.anchorCode)
+        .map(c => [c.groupKey, c.anchorCode!]),
+    )
+    const anchorByGroup = computeAnchorByGroup(allGroupKeys, linenCatalog, configAnchors)
 
     for (const form of forms) {
       // 265: ถ้า LF snapshot = trust_customer → บังคับใช้ Mode 2 ไม่ว่า caller จะเลือก mode ใด

@@ -185,7 +185,7 @@ export default function LinenFormGrid({
       const groupItems = codes
         .map(c => catalogMap.get(c))
         .filter((i): i is LinenItemDef => !!i)
-      const anchor = getGroupAnchorCode(groupItems)
+      const anchor = getGroupAnchorCode(groupItems, cfg.anchorCode)
       const col2Agg = cfg.col2Mode === 'aggregate'
       const col5Agg = (cfg.col5Mode ?? 'aggregate') === 'aggregate'
       codes.forEach((code, idx) => {

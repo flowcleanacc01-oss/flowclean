@@ -24,10 +24,21 @@ export interface GroupContext {
 }
 
 /**
- * หา anchor code ของ group (median sortOrder)
+ * หา anchor code ของ group
+ *
+ * Priority:
+ *   1. configAnchor (manual override จาก customer config) — ถ้าอยู่ใน items
+ *   2. median sortOrder (default automatic)
+ *
+ * 335: user เลือก anchor เองได้ผ่าน AggregateGroupsModal
  */
-export function getGroupAnchorCode(items: LinenItemDef[]): string {
+export function getGroupAnchorCode(items: LinenItemDef[], configAnchor?: string): string {
   if (items.length === 0) return ''
+  // Manual override: ใช้ถ้าอยู่ใน items
+  if (configAnchor && items.some(i => i.code === configAnchor)) {
+    return configAnchor
+  }
+  // Default: median sortOrder
   const sorted = [...items].sort((a, b) => a.sortOrder - b.sortOrder)
   const medianIdx = Math.floor((sorted.length - 1) / 2)
   return sorted[medianIdx].code
@@ -60,7 +71,7 @@ export function getOptInGroupsForCustomer(
       groupKey: cfg.groupKey,
       config: cfg,
       items: items.sort((a, b) => a.sortOrder - b.sortOrder),
-      anchorCode: getGroupAnchorCode(items),
+      anchorCode: getGroupAnchorCode(items, cfg.anchorCode),
     })
   }
 

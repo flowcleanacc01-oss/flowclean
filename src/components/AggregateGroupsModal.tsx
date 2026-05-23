@@ -20,6 +20,7 @@ import { Package, Info } from 'lucide-react'
 import Modal from './Modal'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { getGroupAnchorCode } from '@/lib/aggregate-groups'
 import type { Customer, AggregateSizeGroupConfig, LinenItemDef } from '@/types'
 
 interface Props {
@@ -56,6 +57,9 @@ export default function AggregateGroupsModal({ open, onClose, customer }: Props)
     configs.find(c => c.groupKey === groupKey)?.col2Mode ?? 'aggregate'
   const getCol5Mode = (groupKey: string): 'aggregate' | 'per_row' =>
     configs.find(c => c.groupKey === groupKey)?.col5Mode ?? 'aggregate'
+  // 335: manual anchor — undefined = auto median
+  const getAnchorCode = (groupKey: string): string | undefined =>
+    configs.find(c => c.groupKey === groupKey)?.anchorCode
 
   const toggleGroup = (groupKey: string) => {
     setConfigs(prev =>
@@ -74,6 +78,13 @@ export default function AggregateGroupsModal({ open, onClose, customer }: Props)
   const setCol5Mode = (groupKey: string, mode: 'aggregate' | 'per_row') => {
     setConfigs(prev =>
       prev.map(c => (c.groupKey === groupKey ? { ...c, col5Mode: mode } : c)),
+    )
+  }
+
+  // 335: เลือก anchor manually — undefined = auto median
+  const setAnchorCode = (groupKey: string, code: string | undefined) => {
+    setConfigs(prev =>
+      prev.map(c => (c.groupKey === groupKey ? { ...c, anchorCode: code } : c)),
     )
   }
 
@@ -222,6 +233,42 @@ export default function AggregateGroupsModal({ open, onClose, customer }: Props)
                           </button>
                         </div>
                       </div>
+
+                      {/* 335: Anchor selector — row ที่จะเก็บค่ายอดรวมใน LF */}
+                      {(col2Mode === 'aggregate' || col5Mode === 'aggregate') && (() => {
+                        const anchorCode = getAnchorCode(groupKey)
+                        const autoAnchor = getGroupAnchorCode(items)
+                        const effective = anchorCode && items.some(i => i.code === anchorCode)
+                          ? anchorCode : autoAnchor
+                        const effItem = items.find(i => i.code === effective)
+                        return (
+                          <div>
+                            <div className="text-xs font-semibold text-slate-600 mb-2">
+                              ตำแหน่ง row "รวม" (anchor)
+                              <span className="text-[10px] font-normal text-slate-400 ml-2">— ที่เก็บค่ายอดรวมและแสดงผ้าค้าง/คืน</span>
+                            </div>
+                            <select
+                              value={anchorCode || ''}
+                              onChange={e => setAnchorCode(groupKey, e.target.value || undefined)}
+                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-[#3DD8D8] focus:border-[#3DD8D8] focus:outline-none bg-white"
+                            >
+                              <option value="">
+                                (อัตโนมัติ — ตำแหน่งกลาง: {items.find(i => i.code === autoAnchor)?.name || autoAnchor})
+                              </option>
+                              {items.map(it => (
+                                <option key={it.code} value={it.code}>
+                                  {it.code} — {it.name}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="text-[10px] text-slate-500 mt-1">
+                              ปัจจุบันใช้: <span className="font-mono font-semibold text-indigo-700">{effective}</span>
+                              {effItem && <span className="ml-1 text-slate-600">— {effItem.name}</span>}
+                              {!anchorCode && <span className="text-slate-400 ml-1">(เลือกด้วย median sortOrder อัตโนมัติ)</span>}
+                            </div>
+                          </div>
+                        )
+                      })()}
 
                       {/* All-split warning */}
                       {col2Mode === 'per_row' && col5Mode === 'per_row' && (

@@ -221,6 +221,9 @@ export interface AggregateSizeGroupConfig {
   groupKey: string                          // ตรงกับ LinenItemDef.sizeGroup
   col2Mode: 'aggregate' | 'per_row'         // ลูกค้านับส่งซัก: รวม หรือ แยกไซส์
   col5Mode?: 'aggregate' | 'per_row'        // โรงซักนับเข้า: รวม หรือ แยกไซส์ (default aggregate)
+  // 335 — manual anchor override (default = median sortOrder อัตโนมัติ)
+  // ถ้า user เลือก code นอก group → ignore (validate ตอน save)
+  anchorCode?: string
   // col3 (เคลม) แยกเสมอ — ไม่ track ที่นี่
   // col4 (ลูกค้านับกลับ) แยกเสมอ
   // col6 (โรงซักแพคส่ง) แยกเสมอ — track ไซส์หลังพับ
