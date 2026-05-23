@@ -113,19 +113,52 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
   const totalCol6 = form.rows.reduce((s, r) => s + (r.col6_factoryPackSend || 0), 0)
   const totalCol4 = form.rows.reduce((s, r) => s + r.col4_factoryApproved, 0)
 
-  /** 341: render cell value — dim "·" สำหรับ non-anchor ที่ aggregate, ส่วน per-row ค่าจริง */
+  /** 350: directional arrow ↓/↑ สำหรับ non-anchor row (theme LF Grid post-345)
+   *  - ↓ ถ้า row อยู่ก่อน anchor (anchor อยู่ข้างล่าง)
+   *  - ↑ ถ้า row อยู่หลัง anchor (anchor อยู่ข้างบน)
+   */
+  const orderedIndex = useMemo(() => {
+    const m = new Map<string, number>()
+    orderedRows.forEach((r, idx) => m.set(r.code, idx))
+    return m
+  }, [orderedRows])
+
+  const arrowFor = (code: string): '↓' | '↑' => {
+    const m = aggMeta.get(code)
+    if (!m) return '↑'
+    const myIdx = orderedIndex.get(code) ?? 0
+    const ancIdx = orderedIndex.get(m.anchorCode) ?? 0
+    return myIdx < ancIdx ? '↓' : '↑'
+  }
+
+  /** 350: render aggregate cell — LF Grid post-345 pattern
+   *  - anchor row: "รวม" label เหนือ value (vertical stack, small label)
+   *  - non-anchor row: directional ↓/↑ arrow
+   *  - non-aggregate column: per-row value ปกติ
+   */
   const renderAggCell = (
     row: typeof form.rows[number],
     value: number,
-    aggColumn: boolean, // true = column นี้เป็น aggregate (col2 col5 col1 ค้าง)
-    asArrow = true, // true = แสดง ↑ instead of '·' (แยกความหมาย)
+    aggColumn: boolean,
+    signed = false,  // true = ค้าง/คืน (+/- prefix)
   ) => {
     const m = aggMeta.get(row.code)
     if (m && aggColumn && !m.isAnchor) {
-      // non-anchor + aggregate col → arrow ↑
-      return <span className="text-slate-400 text-xs" title={`รวมที่ ${m.anchorCode}`}>{asArrow ? '↑' : '·'}</span>
+      return <span className="text-slate-400 text-sm" title={`รวมที่ ${m.anchorCode}`}>{arrowFor(row.code)}</span>
     }
-    return value !== 0 ? formatNumber(value) : '-'
+    if (m && aggColumn && m.isAnchor) {
+      const displayVal = value === 0 ? '-' :
+        signed ? (value > 0 ? `+${value}` : `${value}`) : formatNumber(value)
+      return (
+        <div className="flex flex-col items-center leading-none">
+          <span className="text-[8px] text-slate-500 mb-0.5">รวม</span>
+          <span>{displayVal}</span>
+        </div>
+      )
+    }
+    // Not in group, or not aggregate column → per-row value
+    if (value === 0) return '-'
+    return signed ? (value > 0 ? `+${value}` : `${value}`) : formatNumber(value)
   }
 
   return (
@@ -207,50 +240,41 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
             ) : ''
             return (
               <tr key={row.code} className={rowCls} style={{ breakInside: 'avoid' }}>
-                <td className={cn('px-1.5 py-1 border border-slate-300 font-mono text-[10px]',
+                <td className={cn('px-1.5 py-1 border border-slate-300 font-mono text-[10px] align-middle',
                   m && 'border-l-2 border-l-slate-500')}>{row.code}</td>
-                <td className="px-1.5 py-1 border border-slate-300">
+                {/* 350: ลบ badge/anchor hint — uniform เหมือน LF Grid */}
+                <td className="px-1.5 py-1 border border-slate-300 align-middle">
                   {nameMap[row.code] || row.code}
-                  {m?.isAnchor && (
-                    <span className="ml-1 text-[9px] font-medium text-slate-700">📦 รวม {m.groupSize} ไซส์</span>
-                  )}
-                  {m && !m.isAnchor && (
-                    <span className="ml-1 text-[9px] text-slate-400">↑ {m.anchorCode}</span>
-                  )}
                 </td>
-                {/* ยกยอด — aggregate (stored at anchor) */}
-                <td className="px-1.5 py-1 border border-slate-300 text-right">
-                  {m && !m.isAnchor ? (
-                    <span className="text-slate-400 text-xs">↑</span>
-                  ) : co !== 0 ? formatNumber(co) : '-'}
+                {/* ยกยอด — aggregate (stored at anchor) — 350: "รวม" label เหนือ value */}
+                <td className="px-1.5 py-1 border border-slate-300 text-right align-middle">
+                  {renderAggCell(row, co, !!m, true)}
                 </td>
                 {/* ส่งซัก (col2) — aggregate ถ้า col2Agg */}
-                <td className="px-1.5 py-1 border border-slate-300 text-right">
+                <td className="px-1.5 py-1 border border-slate-300 text-right align-middle">
                   {renderAggCell(row, row.col2_hotelCountIn, !!m?.col2Agg)}
                 </td>
                 {/* เคลม (col3) — per-row */}
-                <td className="px-1.5 py-1 border border-slate-300 text-right">
+                <td className="px-1.5 py-1 border border-slate-300 text-right align-middle">
                   {row.col3_hotelClaimCount || '-'}
                 </td>
                 {/* นับเข้า (col5) — aggregate ถ้า col5Agg */}
-                <td className="px-1.5 py-1 border border-slate-300 text-right">
+                <td className="px-1.5 py-1 border border-slate-300 text-right align-middle">
                   {renderAggCell(row, row.col5_factoryClaimApproved, !!m?.col5Agg)}
                 </td>
                 {/* แพคส่ง (col6) — per-row */}
-                <td className="px-1.5 py-1 border border-slate-300 text-right">
+                <td className="px-1.5 py-1 border border-slate-300 text-right align-middle">
                   {row.col6_factoryPackSend || '-'}
                 </td>
-                {/* ค้าง/คืน — aggregate (group sum at anchor, ↑ at non-anchor) */}
-                <td className={cn('px-1.5 py-1 border border-slate-300 text-right',
+                {/* ค้าง/คืน — 350: "รวม" label เหนือ value ที่ anchor (theme LF Grid) */}
+                <td className={cn('px-1.5 py-1 border border-slate-300 text-right align-middle',
                   diff > 0 && 'text-emerald-600', diff < 0 && 'text-red-600')}>
-                  {m && !m.isAnchor ? (
-                    <span className="text-slate-400 text-xs">↑</span>
-                  ) : diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : '-'}
+                  {renderAggCell(row, diff, !!m, true)}
                 </td>
                 {/* หมายเหตุ */}
-                <td className="px-1.5 py-1 border border-slate-300 text-[10px]">{row.note || '-'}</td>
+                <td className="px-1.5 py-1 border border-slate-300 text-[10px] align-middle">{row.note || '-'}</td>
                 {/* นับกลับ (col4) — per-row */}
-                <td className={cn('px-1.5 py-1 border border-slate-300 text-right',
+                <td className={cn('px-1.5 py-1 border border-slate-300 text-right align-middle',
                   m && 'border-r-2 border-r-slate-500')}>
                   {row.col4_factoryApproved || '-'}
                 </td>
@@ -271,14 +295,14 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
         </tbody>
       </table>
 
-      {/* 341: legend สำหรับ aggregate group (เฉพาะลูกค้า aggregate) */}
+      {/* 350: legend สำหรับ aggregate group (theme LF Grid) */}
       {hasAggregate && (
         <div className="mt-2 text-[10px] text-slate-500 flex flex-wrap gap-3">
           <span className="inline-flex items-center gap-1">
-            <span className="font-medium">📦 รวม N ไซส์</span> = anchor row (ค่ารวมทั้งกลุ่ม)
+            <span className="font-medium">รวม</span> = anchor row (ค่ารวมทั้งกลุ่ม)
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="text-slate-400">↑</span> = ค่าอยู่ที่ anchor row ด้านบน
+            <span className="text-slate-400">↓ / ↑</span> = ค่าอยู่ที่ anchor row (ตามทิศที่ลูกศรชี้)
           </span>
         </div>
       )}
