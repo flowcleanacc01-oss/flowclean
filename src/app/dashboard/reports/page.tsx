@@ -28,13 +28,14 @@ import CarryDriftAudit from '@/components/CarryDriftAudit'
 import MonthlyClosingChecklist from '@/components/MonthlyClosingChecklist'
 import TrustModeAudit from '@/components/TrustModeAudit'
 import AggregateModeAudit from '@/components/AggregateModeAudit'
+import AggregateAnchorAudit from '@/components/AggregateAnchorAudit'
 import ScheduleAudit from '@/components/ScheduleAudit'
 import ExecutiveDashboard from '@/components/executive/ExecutiveDashboard'
 import type { CarryOverMode, CarryOverAdjustment, BillingStatement } from '@/types'
 
-type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'sdaudit' | 'wbaudit' | 'driftaudit' | 'closing' | 'trustaudit' | 'aggaudit' | 'scheduleaudit' | 'executive'
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'sdaudit' | 'wbaudit' | 'driftaudit' | 'closing' | 'trustaudit' | 'aggaudit' | 'anchoraudit' | 'scheduleaudit' | 'executive'
 
-const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'sdaudit', 'wbaudit', 'driftaudit', 'closing', 'trustaudit', 'aggaudit', 'scheduleaudit', 'executive'] as const
+const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'sdaudit', 'wbaudit', 'driftaudit', 'closing', 'trustaudit', 'aggaudit', 'anchoraudit', 'scheduleaudit', 'executive'] as const
 
 export default function ReportsPage() {
   const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations, carryOverAdjustments, deleteCarryOverAdjustment } = useStore()
@@ -103,6 +104,7 @@ export default function ReportsPage() {
     { key: 'closing', label: '📋 Closing' },
     { key: 'trustaudit', label: '🔍 Trust Mode' },
     { key: 'aggaudit', label: '📦 Aggregate Mode' },
+    { key: 'anchoraudit', label: '⚓ Anchor Drift' },
     { key: 'scheduleaudit', label: '📅 Schedule Audit' },
     ...(canViewExecutiveDashboard(currentUser) ? [{ key: 'executive' as TabKey, label: '✨ Executive' }] : []),
   ]
@@ -1565,6 +1567,7 @@ export default function ReportsPage() {
       {tab === 'closing' && <MonthlyClosingChecklist />}
       {tab === 'trustaudit' && <TrustModeAudit />}
       {tab === 'aggaudit' && <AggregateModeAudit />}
+      {tab === 'anchoraudit' && <AggregateAnchorAudit />}
       {tab === 'scheduleaudit' && <ScheduleAudit />}
 
       {/* 220: Executive Dashboard — admin only */}
