@@ -21,6 +21,7 @@ import VocabularyAudit from '@/components/VocabularyAudit'
 import OrphanCodeInspector from '@/components/OrphanCodeInspector'
 import CodeReuseDetector from '@/components/CodeReuseDetector'
 import NameDuplicateDetector from '@/components/NameDuplicateDetector'
+import ItemCatalogAudit from '@/components/ItemCatalogAudit'
 import GhostLFCleanup from '@/components/GhostLFCleanup'
 import AddItemWizard from '@/components/AddItemWizard'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
@@ -31,13 +32,14 @@ import { useNameDrift } from '@/lib/use-name-drift'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
 import { useCodeReuse } from '@/lib/use-code-reuse'
 import { useNameDuplicates } from '@/lib/use-name-duplicates'
+import { useItemCatalogAudit } from '@/lib/use-item-catalog-audit'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { tabularNumberNav, blockNumberArrowKeys } from '@/lib/modal-nav'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
-import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle, Shuffle, Ghost, Tags } from 'lucide-react'
+import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle, Shuffle, Ghost, Tags, Package } from 'lucide-react'
 import FacetVocabEditor from '@/components/FacetVocabEditor'
 
-type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse' | 'ghost' | 'facets' | 'namedup'
+type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse' | 'ghost' | 'facets' | 'namedup' | 'catalogaudit'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
 type SortDir = 'asc' | 'desc'
 
@@ -161,6 +163,8 @@ export default function ItemsPage() {
   const { totalCodes: reuseCodeCount } = useCodeReuse()
   // 348: Name Duplicate Detector — catalog cross-code name overlap (trap reducer)
   const { total: nameDupTotal, aggregateRisk: nameDupAggregateRisk } = useNameDuplicates()
+  // A2: Item Catalog Audit — multi-subtype scan (unused, orphan group, no size group, no facets)
+  const { total: catalogAuditTotal } = useItemCatalogAudit()
   // 240.3: รับ ?focus=<code> URL → set syncFocusCode (เปิดจาก CodeReuseDetector)
   const urlFocus = sp.get('focus') || ''
   const [syncFocusCode, setSyncFocusCode] = useState<string | null>(urlFocus || null)
@@ -427,6 +431,7 @@ export default function ItemsPage() {
       { key: 'orphan' as TabKey, label: 'Orphan Inspector', badge: orphanCodeCount, icon: <AlertTriangle className="w-3.5 h-3.5" /> },
       { key: 'reuse' as TabKey, label: 'Reuse Detector', badge: reuseCodeCount, icon: <Shuffle className="w-3.5 h-3.5" /> },
       { key: 'namedup' as TabKey, label: 'Name Duplicate', badge: nameDupTotal, icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+      { key: 'catalogaudit' as TabKey, label: 'Catalog Audit', badge: catalogAuditTotal, icon: <Package className="w-3.5 h-3.5" /> },
       { key: 'ghost' as TabKey, label: 'Ghost LF Cleanup', icon: <Ghost className="w-3.5 h-3.5" /> },
       { key: 'vocab' as TabKey, label: 'Vocabulary Audit', icon: <BookOpen className="w-3.5 h-3.5" /> },
       { key: 'facets' as TabKey, label: 'Facet Picker Editor', icon: <Tags className="w-3.5 h-3.5" /> },
@@ -1060,6 +1065,11 @@ export default function ItemsPage() {
       {/* 348: Name Duplicate Detector tab — catalog cross-code name overlap */}
       {tab === 'namedup' && (
         <NameDuplicateDetector />
+      )}
+
+      {/* A2: Item Catalog Audit tab — unused / orphan group / no size group / no facets */}
+      {tab === 'catalogaudit' && (
+        <ItemCatalogAudit />
       )}
 
       {/* 242: Ghost LF Cleanup tab */}

@@ -16,6 +16,7 @@ import { useNameDrift } from '@/lib/use-name-drift'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
 import { useCodeReuse } from '@/lib/use-code-reuse'
 import { useNameDuplicates } from '@/lib/use-name-duplicates'
+import { useItemCatalogAudit } from '@/lib/use-item-catalog-audit'
 import {
   Activity, AlertTriangle, ArrowRight, BookOpen, CheckCircle2,
   HelpCircle, History, Layers, RefreshCcw, Settings, Shield, Shuffle, Sparkles, Zap,
@@ -26,7 +27,7 @@ interface Props {
   // 240: เพิ่ม 'orphan' — Orphan Inspector tab
   // 240.3: เพิ่ม 'reuse' — Code Reuse Detector tab
   // 242: เพิ่ม 'ghost' — Ghost LF Cleanup tab
-  onOpenTab: (tab: 'sync' | 'merge' | 'items' | 'vocab' | 'orphan' | 'reuse' | 'ghost' | 'namedup') => void
+  onOpenTab: (tab: 'sync' | 'merge' | 'items' | 'vocab' | 'orphan' | 'reuse' | 'ghost' | 'namedup' | 'catalogaudit') => void
 }
 
 const VALIDATION_KEY = 'flowclean_catalog_validation'
@@ -58,6 +59,8 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
   const { totalCodes: reuseCodes, highSeverity: reuseHighSeverity, totalQtsAffected: reuseQts } = useCodeReuse()
   // 348: Name Duplicate Detector — catalog cross-code name overlap (trap reducer)
   const { total: nameDupTotal, high: nameDupHigh, aggregateRisk: nameDupAggregateRisk } = useNameDuplicates()
+  // A2: Item Catalog Audit — multi-subtype scan
+  const { total: catalogAuditTotal, countBySubtype: catalogAuditBy } = useItemCatalogAudit()
 
   // Code clashes (รหัสเดียว ชื่อต่าง — รวมทั้ง drift names + catalog name)
   const clashCount = useMemo(() => {
@@ -182,6 +185,18 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
               : 'ไม่พบ name ซ้ำ'}
             actionLabel={nameDupTotal > 0 ? 'เปิด Detector' : 'ดู'}
             onClick={() => onOpenTab('namedup')}
+          />
+          {/* A2: Item Catalog Audit — multi-subtype (unused / orphan group / no facets etc.) */}
+          <DashCard
+            icon={<Layers className="w-5 h-5" />}
+            label="Catalog Audit"
+            value={catalogAuditTotal}
+            color={catalogAuditTotal > 0 ? 'amber' : 'slate'}
+            sub={catalogAuditTotal > 0
+              ? `${catalogAuditBy.item_unused_in_qt} unused · ${catalogAuditBy.item_orphan_group + catalogAuditBy.item_no_size_group} size · ${catalogAuditBy.item_no_facets} facets`
+              : 'catalog แข็งแรง'}
+            actionLabel={catalogAuditTotal > 0 ? 'เปิด Audit' : 'ดู'}
+            onClick={() => onOpenTab('catalogaudit')}
           />
         </div>
       </section>
