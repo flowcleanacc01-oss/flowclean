@@ -20,6 +20,7 @@ import CatalogHygieneCenter from '@/components/CatalogHygieneCenter'
 import VocabularyAudit from '@/components/VocabularyAudit'
 import OrphanCodeInspector from '@/components/OrphanCodeInspector'
 import CodeReuseDetector from '@/components/CodeReuseDetector'
+import NameDuplicateDetector from '@/components/NameDuplicateDetector'
 import GhostLFCleanup from '@/components/GhostLFCleanup'
 import AddItemWizard from '@/components/AddItemWizard'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
@@ -29,13 +30,14 @@ import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 import { useNameDrift } from '@/lib/use-name-drift'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
 import { useCodeReuse } from '@/lib/use-code-reuse'
+import { useNameDuplicates } from '@/lib/use-name-duplicates'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { tabularNumberNav, blockNumberArrowKeys } from '@/lib/modal-nav'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
 import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle, Shuffle, Ghost, Tags } from 'lucide-react'
 import FacetVocabEditor from '@/components/FacetVocabEditor'
 
-type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse' | 'ghost' | 'facets'
+type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse' | 'ghost' | 'facets' | 'namedup'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
 type SortDir = 'asc' | 'desc'
 
@@ -157,6 +159,8 @@ export default function ItemsPage() {
   const { totalCodes: orphanCodeCount } = useOrphanCodes()
   // 240.3: code reuse suspect count for tab badge
   const { totalCodes: reuseCodeCount } = useCodeReuse()
+  // 348: Name Duplicate Detector — catalog cross-code name overlap (trap reducer)
+  const { total: nameDupTotal, aggregateRisk: nameDupAggregateRisk } = useNameDuplicates()
   // 240.3: รับ ?focus=<code> URL → set syncFocusCode (เปิดจาก CodeReuseDetector)
   const urlFocus = sp.get('focus') || ''
   const [syncFocusCode, setSyncFocusCode] = useState<string | null>(urlFocus || null)
@@ -422,6 +426,7 @@ export default function ItemsPage() {
       { key: 'sync' as TabKey, label: 'ซิงก์ชื่อ', badge: driftCodeCount },
       { key: 'orphan' as TabKey, label: 'Orphan Inspector', badge: orphanCodeCount, icon: <AlertTriangle className="w-3.5 h-3.5" /> },
       { key: 'reuse' as TabKey, label: 'Reuse Detector', badge: reuseCodeCount, icon: <Shuffle className="w-3.5 h-3.5" /> },
+      { key: 'namedup' as TabKey, label: 'Name Duplicate', badge: nameDupTotal, icon: <AlertTriangle className="w-3.5 h-3.5" /> },
       { key: 'ghost' as TabKey, label: 'Ghost LF Cleanup', icon: <Ghost className="w-3.5 h-3.5" /> },
       { key: 'vocab' as TabKey, label: 'Vocabulary Audit', icon: <BookOpen className="w-3.5 h-3.5" /> },
       { key: 'facets' as TabKey, label: 'Facet Picker Editor', icon: <Tags className="w-3.5 h-3.5" /> },
@@ -1050,6 +1055,11 @@ export default function ItemsPage() {
       {/* 240.3: Code Reuse Detector tab */}
       {tab === 'reuse' && (
         <CodeReuseDetector />
+      )}
+
+      {/* 348: Name Duplicate Detector tab — catalog cross-code name overlap */}
+      {tab === 'namedup' && (
+        <NameDuplicateDetector />
       )}
 
       {/* 242: Ghost LF Cleanup tab */}

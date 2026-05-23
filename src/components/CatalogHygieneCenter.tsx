@@ -15,6 +15,7 @@ import { useStore } from '@/lib/store'
 import { useNameDrift } from '@/lib/use-name-drift'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
 import { useCodeReuse } from '@/lib/use-code-reuse'
+import { useNameDuplicates } from '@/lib/use-name-duplicates'
 import {
   Activity, AlertTriangle, ArrowRight, BookOpen, CheckCircle2,
   HelpCircle, History, Layers, RefreshCcw, Settings, Shield, Shuffle, Sparkles, Zap,
@@ -25,7 +26,7 @@ interface Props {
   // 240: เพิ่ม 'orphan' — Orphan Inspector tab
   // 240.3: เพิ่ม 'reuse' — Code Reuse Detector tab
   // 242: เพิ่ม 'ghost' — Ghost LF Cleanup tab
-  onOpenTab: (tab: 'sync' | 'merge' | 'items' | 'vocab' | 'orphan' | 'reuse' | 'ghost') => void
+  onOpenTab: (tab: 'sync' | 'merge' | 'items' | 'vocab' | 'orphan' | 'reuse' | 'ghost' | 'namedup') => void
 }
 
 const VALIDATION_KEY = 'flowclean_catalog_validation'
@@ -55,6 +56,8 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
   const { orphans, totalCodes: orphanCodes, totalRows: orphanRows } = useOrphanCodes()
   // 240.3: code reuse suspect (drift name with low similarity)
   const { totalCodes: reuseCodes, highSeverity: reuseHighSeverity, totalQtsAffected: reuseQts } = useCodeReuse()
+  // 348: Name Duplicate Detector — catalog cross-code name overlap (trap reducer)
+  const { total: nameDupTotal, high: nameDupHigh, aggregateRisk: nameDupAggregateRisk } = useNameDuplicates()
 
   // Code clashes (รหัสเดียว ชื่อต่าง — รวมทั้ง drift names + catalog name)
   const clashCount = useMemo(() => {
@@ -167,6 +170,18 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
             sub="รหัสเดียวมีหลายชื่อ"
             actionLabel="รวม/Split"
             onClick={() => onOpenTab('merge')}
+          />
+          {/* 348: Name Duplicate Detector — name คล้ายกัน แต่ code ต่าง (trap reducer) */}
+          <DashCard
+            icon={<AlertTriangle className="w-5 h-5" />}
+            label="Name Duplicates"
+            value={nameDupTotal}
+            color={nameDupHigh > 0 ? 'red' : nameDupTotal > 0 ? 'amber' : 'slate'}
+            sub={nameDupTotal > 0
+              ? `${nameDupHigh > 0 ? `${nameDupHigh} high · ` : ''}${nameDupAggregateRisk} aggregate risk`
+              : 'ไม่พบ name ซ้ำ'}
+            actionLabel={nameDupTotal > 0 ? 'เปิด Detector' : 'ดู'}
+            onClick={() => onOpenTab('namedup')}
           />
         </div>
       </section>
