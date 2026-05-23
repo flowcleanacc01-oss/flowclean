@@ -8,6 +8,7 @@ import { wasSynced } from '@/lib/sync-discrepancy'
 import { resolveDisplayName } from '@/lib/facet-generators'
 import { highlightText } from '@/lib/highlight'
 import { getGroupAnchorCode } from '@/lib/aggregate-groups'
+import { nameSimilarity } from '@/lib/thai-search'
 
 interface LinenFormGridProps {
   customer: Customer
@@ -482,9 +483,40 @@ export default function LinenFormGrid({
               })
             }
           }
-          if (activeGroups.length === 0 && inactiveGroups.length === 0) return null
+          // 348 Trap #2: Cross-prefix warning — ตรวจ items นอก group ที่ name ใกล้กับ items ในกลุ่ม
+          //   เคสจริง: A58 'ผ้าขี้ริ้วเล็ก' (group=X) + R58 'ผ้าขี้ริ้วเล็ก' (group=null หรือต่าง)
+          //   user เผลอกรอก R58 ใน QT/LF → aggregate matching พลาด
+          type CrossPrefix = {
+            inGroup: { code: string; name: string; group: string }
+            outside: { code: string; name: string; group?: string }
+            similarity: number
+          }
+          const crossPrefixRisks: CrossPrefix[] = []
+          if (activeGroups.length > 0) {
+            const optInKeys = new Set(activeGroups.map(g => g.key))
+            // items ใน enabledItems ที่อยู่ใน opt-in group
+            const inGroupItems = enabledItems
+              .map(it => ({ item: it, group: catalogMap.get(it.code)?.sizeGroup }))
+              .filter(x => x.group && optInKeys.has(x.group))
+            // เทียบ name กับ catalog items นอก group (different/no sizeGroup)
+            for (const { item, group } of inGroupItems) {
+              for (const cat of catalog) {
+                if (cat.code === item.code) continue
+                if (cat.sizeGroup === group) continue // same group → ไม่เสี่ยง
+                const sim = nameSimilarity(item.name, cat.name)
+                if (sim >= 80) {
+                  crossPrefixRisks.push({
+                    inGroup: { code: item.code, name: item.name, group: group! },
+                    outside: { code: cat.code, name: cat.name, group: cat.sizeGroup },
+                    similarity: sim,
+                  })
+                }
+              }
+            }
+          }
+          if (activeGroups.length === 0 && inactiveGroups.length === 0 && crossPrefixRisks.length === 0) return null
           return (
-            <div className="mb-3 bg-indigo-50/40 border border-indigo-200 rounded-lg px-3 py-2 text-xs">
+            <div className="mb-3 bg-indigo-50/40 border border-indigo-200 rounded-lg px-3 py-2 text-xs space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-indigo-900">📦 Aggregate groups ({customer.aggregateSizeGroups.length}):</span>
                 {activeGroups.map(g => (
@@ -501,12 +533,42 @@ export default function LinenFormGrid({
                 ))}
               </div>
               {inactiveGroups.length > 0 && (
-                <p className="text-[10px] text-amber-700 mt-1">
+                <p className="text-[10px] text-amber-700">
                   💡 กลุ่มที่มีเครื่องหมาย ⚠ ไม่แสดงในตารางด้านล่าง — แก้โดย
                   {inactiveGroups.some(g => g.catalogCount === 0)
                     ? ' เพิ่มรายการใน catalog (กำหนด sizeGroup)'
                     : ' เพิ่มรายการของกลุ่มนั้นใน QT ของลูกค้า'}
                 </p>
+              )}
+              {crossPrefixRisks.length > 0 && (
+                <div className="bg-orange-50 border border-orange-300 rounded-md px-2 py-1.5 text-[11px] text-orange-900 space-y-1">
+                  <div className="font-semibold flex items-center gap-1">
+                    ⚠ Cross-prefix risk ({crossPrefixRisks.length}) — name คล้ายกัน แต่ sizeGroup ต่าง
+                  </div>
+                  <ul className="ml-4 list-disc space-y-0.5">
+                    {crossPrefixRisks.slice(0, 5).map((r, idx) => (
+                      <li key={idx} className="text-orange-800">
+                        <code className="px-1 rounded bg-white border border-orange-200 font-mono">{r.inGroup.code}</code>
+                        <span className="text-orange-600"> ({r.inGroup.group})</span>
+                        <span className="mx-1">vs</span>
+                        <code className="px-1 rounded bg-white border border-orange-200 font-mono">{r.outside.code}</code>
+                        <span className="text-orange-600"> ({r.outside.group || 'ไม่มี group'})</span>
+                        <span className="text-orange-500 ml-1">— sim {r.similarity}%</span>
+                        <span className="block text-[10px] text-orange-700 italic ml-3">
+                          &quot;{r.inGroup.name}&quot; ≈ &quot;{r.outside.name}&quot;
+                        </span>
+                      </li>
+                    ))}
+                    {crossPrefixRisks.length > 5 && (
+                      <li className="text-[10px] italic text-orange-600">
+                        + อีก {crossPrefixRisks.length - 5} คู่ — เปิด Hygiene Center → Name Duplicate Detector ดูทั้งหมด
+                      </li>
+                    )}
+                  </ul>
+                  <p className="text-[10px] text-orange-700 italic">
+                    💡 ระวัง: user อาจเผลอกรอกรหัสนอกกลุ่ม (ที่ name เหมือนกัน) ทำให้ aggregate matching พลาด
+                  </p>
+                </div>
               )}
             </div>
           )
