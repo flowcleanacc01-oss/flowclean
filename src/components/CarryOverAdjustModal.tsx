@@ -8,9 +8,10 @@ import { CARRY_OVER_MODE_CONFIG, CARRY_OVER_REASON_CONFIG } from '@/types'
 import type {
   CarryOverAdjustment, CarryOverMode, CarryOverAdjustmentType, CarryOverReasonCategory,
 } from '@/types'
-import { Plus, RotateCcw, Info } from 'lucide-react'
+import { Plus, RotateCcw, Info, Package, Scale, AlertTriangle } from 'lucide-react'
 import { tabularNumberNav } from '@/lib/modal-nav'
 import { pushUndoAction } from '@/lib/undo-stack'
+import { getGroupAnchorCode } from '@/lib/aggregate-groups'
 
 /**
  * 300: Delta input cell — raw string state + auto-select + allow negative
@@ -141,6 +142,10 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
   const [reasonCategory, setReasonCategory] = useState<CarryOverReasonCategory>('human_error')
   const [reason, setReason] = useState<string>('')
   const [showInCustomerReport, setShowInCustomerReport] = useState<boolean>(false)
+  // 340.2: Redistribute mode — auto-balance anchor delta = -sum(non-anchor delta)
+  //   default ON สำหรับลูกค้าที่ใช้ aggregate group (เคส 42)
+  //   ปิดถ้า user ตั้งใจ "เพิ่มผ้าค้างใหม่" (ไม่ใช่ redistribute)
+  const [autoBalanceAnchor, setAutoBalanceAnchor] = useState<boolean>(true)
 
   // Reset state when modal opens
   useEffect(() => {
@@ -152,6 +157,7 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
       setReasonCategory(editing.reasonCategory)
       setReason(editing.reason)
       setShowInCustomerReport(editing.showInCustomerReport)
+      setAutoBalanceAnchor(false) // edit mode: ไม่ auto-balance เพราะอาจ overwrite ค่าเดิม
     } else {
       setType('adjust')
       setDate(todayISO())
@@ -160,6 +166,7 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
       setReasonCategory('human_error')
       setReason('')
       setShowInCustomerReport(false)
+      setAutoBalanceAnchor(true) // new adjustment: default ON
     }
   }, [open, editing])
 
@@ -175,6 +182,95 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
       4: getCarryOver(customerId, date, 4),
     } as Record<CarryOverMode, Record<string, number>>
   }, [customerId, date, getCarryOver])
+
+  // 340.2: aggregate group meta — anchor + group members per code
+  const aggGroupMeta = useMemo(() => {
+    const meta = new Map<string, { groupKey: string; anchorCode: string; memberCodes: string[]; isAnchor: boolean }>()
+    if (!customer?.aggregateSizeGroups || customer.aggregateSizeGroups.length === 0) return meta
+    for (const cfg of customer.aggregateSizeGroups) {
+      const col5Agg = (cfg.col5Mode ?? 'aggregate') === 'aggregate'
+      const col2Agg = cfg.col2Mode === 'aggregate'
+      if (!col5Agg && !col2Agg) continue
+      const groupItems = linenCatalog.filter(i => i.sizeGroup === cfg.groupKey)
+      if (groupItems.length === 0) continue
+      const anchorCode = getGroupAnchorCode(groupItems, cfg.anchorCode)
+      const memberCodes = groupItems.map(i => i.code)
+      for (const code of memberCodes) {
+        meta.set(code, { groupKey: cfg.groupKey, anchorCode, memberCodes, isAnchor: code === anchorCode })
+      }
+    }
+    return meta
+  }, [customer, linenCatalog])
+
+  const hasAggregateGroups = aggGroupMeta.size > 0
+
+  // 340.2: Derived anchor delta จาก non-anchor sums (auto-balance)
+  //   ตัวอย่าง: user ใส่ 3.5ft=-1, 6ft=-1 → derived 5ft (anchor) = +2
+  //   เพื่อให้ group sum ก่อน/หลัง adj คงที่ (เป็นการ "redistribute" ไม่ใช่ "add")
+  const derivedAnchorDeltas = useMemo(() => {
+    const m = new Map<string, number>()
+    if (!autoBalanceAnchor || type !== 'adjust') return m
+    const groupSum = new Map<string, { anchor: string; sum: number }>()
+    for (const [code, delta] of selectedItems.entries()) {
+      const meta = aggGroupMeta.get(code)
+      if (!meta || meta.isAnchor) continue
+      const existing = groupSum.get(meta.groupKey) ?? { anchor: meta.anchorCode, sum: 0 }
+      existing.sum += delta
+      groupSum.set(meta.groupKey, existing)
+    }
+    for (const { anchor, sum } of groupSum.values()) {
+      if (sum !== 0) m.set(anchor, -sum)
+    }
+    return m
+  }, [selectedItems, autoBalanceAnchor, type, aggGroupMeta])
+
+  /** Item is effectively selected (user-selected OR auto-balanced anchor) */
+  const isEffectivelySelected = (code: string): boolean => {
+    if (selectedItems.has(code)) return true
+    if (autoBalanceAnchor && derivedAnchorDeltas.has(code)) return true
+    return false
+  }
+
+  /** 340.2: Group sum preview — แสดง group total ก่อน vs หลัง adj
+   *  ช่วย user ตรวจว่า "redistribute" หรือ "add" — ใช้ในการตัดสินใจ
+   */
+  const groupSumPreview = useMemo(() => {
+    type GroupPreview = {
+      groupKey: string; anchorCode: string; groupName: string
+      beforeSum: number; afterSum: number; userImbalance: number
+      memberDeltas: { code: string; delta: number; isAnchor: boolean; isDerived: boolean }[]
+    }
+    const previews: GroupPreview[] = []
+    if (type !== 'adjust' || !hasAggregateGroups) return previews
+    const groups = new Map<string, GroupPreview>()
+    for (const [, meta] of aggGroupMeta) {
+      if (!groups.has(meta.groupKey)) {
+        const item = linenCatalog.find(i => i.code === meta.anchorCode)
+        groups.set(meta.groupKey, {
+          groupKey: meta.groupKey, anchorCode: meta.anchorCode,
+          groupName: item?.sizeGroup || meta.groupKey,
+          beforeSum: 0, afterSum: 0, userImbalance: 0,
+          memberDeltas: [],
+        })
+      }
+    }
+    for (const [code, meta] of aggGroupMeta) {
+      const g = groups.get(meta.groupKey)!
+      const before = currentCarryOver[referenceMode]?.[code] || 0
+      g.beforeSum += before
+      const isDerived = autoBalanceAnchor && derivedAnchorDeltas.has(code)
+      const delta = isDerived ? derivedAnchorDeltas.get(code)! : (selectedItems.get(code) ?? 0)
+      g.afterSum += before + delta
+      if (isEffectivelySelected(code) || delta !== 0) {
+        g.memberDeltas.push({ code, delta, isAnchor: meta.isAnchor, isDerived })
+      }
+    }
+    for (const g of groups.values()) {
+      g.userImbalance = g.afterSum - g.beforeSum
+      if (g.memberDeltas.length > 0) previews.push(g)
+    }
+    return previews
+  }, [aggGroupMeta, currentCarryOver, referenceMode, selectedItems, autoBalanceAnchor, derivedAnchorDeltas, type, hasAggregateGroups, linenCatalog])
 
   // ---- Item handlers ----
   const toggleItem = (code: string) => {
@@ -208,10 +304,17 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
 
   const handleSave = () => {
     if (!canSave) return
-    const items = [...selectedItems.entries()].map(([code, delta]) => ({
-      code,
-      delta: type === 'adjust' ? delta : 0,
-    }))
+    // 340.2: Merge auto-balanced anchor delta into items (ถ้า autoBalanceAnchor ON)
+    const itemMap = new Map<string, number>()
+    for (const [code, delta] of selectedItems.entries()) {
+      itemMap.set(code, type === 'adjust' ? delta : 0)
+    }
+    if (autoBalanceAnchor && type === 'adjust') {
+      for (const [anchorCode, derivedDelta] of derivedAnchorDeltas) {
+        itemMap.set(anchorCode, derivedDelta) // override user input ถ้ามี
+      }
+    }
+    const items = [...itemMap.entries()].map(([code, delta]) => ({ code, delta }))
     const typeLabel = type === 'reset' ? 'Reset' : 'Adjust'
     if (editing) {
       // 296: snapshot oldData ก่อน update → push undo
@@ -304,13 +407,99 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
           </div>
         )}
 
+        {/* 340.2: Aggregate group section — เฉพาะลูกค้าที่ใช้ aggregate */}
+        {hasAggregateGroups && type === 'adjust' && (
+          <div className="rounded-lg border-2 border-indigo-200 bg-indigo-50/40 p-3 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex gap-2 flex-1">
+                <Package className="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-indigo-900">ลูกค้าใช้ aggregate group (รวมไซส์)</p>
+                  <p className="text-[11px] text-indigo-700 mt-0.5 leading-snug">
+                    ใส่ delta ที่ size ที่ทราบจริง → ระบบ <strong>auto-balance</strong> anchor เพื่อ keep group sum
+                    คงที่ (redistribute pattern จากเคส 42)
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                <input type="checkbox" checked={autoBalanceAnchor}
+                  onChange={e => setAutoBalanceAnchor(e.target.checked)}
+                  className="rounded" />
+                <span className="text-xs font-medium text-indigo-900 flex items-center gap-1">
+                  <Scale className="w-3 h-3" /> Auto-balance
+                </span>
+              </label>
+            </div>
+
+            {groupSumPreview.length > 0 && (
+              <div className="space-y-1.5">
+                {groupSumPreview.map(g => {
+                  const drift = g.afterSum - g.beforeSum
+                  return (
+                    <div key={g.groupKey} className="bg-white rounded-md border border-indigo-200 px-3 py-2 text-xs">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="font-semibold text-slate-800">{g.groupName}</span>
+                        <span className="text-[10px] text-slate-500">
+                          group sum (เคสอ้างอิง {CARRY_OVER_MODE_CONFIG[referenceMode].short}):
+                          <code className="mx-1 px-1 rounded bg-slate-100">{g.beforeSum > 0 ? `+${g.beforeSum}` : g.beforeSum}</code>
+                          → <code className={cn(
+                            'mx-1 px-1 rounded',
+                            drift === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700',
+                          )}>{g.afterSum > 0 ? `+${g.afterSum}` : g.afterSum}</code>
+                          {drift === 0
+                            ? <span className="text-emerald-600">✓ consistent</span>
+                            : <span className="text-amber-700 font-medium">⚠ drift {drift > 0 ? '+' : ''}{drift}</span>}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {g.memberDeltas.map(md => {
+                          const item = linenCatalog.find(i => i.code === md.code)
+                          return (
+                            <span key={md.code} className={cn(
+                              'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border',
+                              md.isAnchor
+                                ? (md.isDerived
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-indigo-100 text-indigo-800 border-indigo-300')
+                                : 'bg-slate-50 text-slate-700 border-slate-200',
+                            )}>
+                              {md.isAnchor && <span title="anchor">⚓</span>}
+                              {md.isDerived && <span title="auto-balanced">⚖</span>}
+                              {md.code} ({item?.name || md.code}): {md.delta > 0 ? '+' : ''}{md.delta}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+                {!autoBalanceAnchor && groupSumPreview.some(g => g.afterSum - g.beforeSum !== 0) && (
+                  <div className="bg-amber-50 border border-amber-300 rounded-md px-3 py-1.5 text-[11px] text-amber-800 flex items-start gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                    <span>
+                      auto-balance ปิดอยู่ → group sum กำลังเปลี่ยน (ตีความว่า &quot;เพิ่ม/ลดผ้าค้างใหม่&quot;)
+                      ถ้าตั้งใจแค่ &quot;กระจาย&quot; (redistribute) → ติ๊ก auto-balance
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Toggle all */}
         <div className="flex items-center justify-between">
           <button onClick={toggleAll}
             className="px-3 py-1.5 text-xs bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium">
             {allSelected ? '✗ ยกเลิกเลือกทั้งหมด' : '☑ เลือกทุกรายการ'}
           </button>
-          <span className="text-xs text-slate-500">{selectedItems.size}/{enabledItems.length} รายการที่เลือก</span>
+          <span className="text-xs text-slate-500">
+            {/* 340.2: นับ effective items (รวม anchor ที่ auto-balance) */}
+            {Math.max(selectedItems.size, [...selectedItems.keys(), ...derivedAnchorDeltas.keys()].filter((v, i, a) => a.indexOf(v) === i).length)}/{enabledItems.length} รายการที่เลือก
+            {derivedAnchorDeltas.size > 0 && (
+              <span className="ml-1 text-indigo-600">(+{derivedAnchorDeltas.size} auto-balance)</span>
+            )}
+          </span>
         </div>
 
         {/* Items list */}
@@ -336,20 +525,36 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
                 const v2 = currentCarryOver[2][item.code] || 0
                 const v3 = currentCarryOver[3][item.code] || 0
                 const v4 = currentCarryOver[4][item.code] || 0
-                const isSelected = selectedItems.has(item.code)
-                const delta = selectedItems.get(item.code) || 0
+                const aggMeta = aggGroupMeta.get(item.code)
+                // 340.2: auto-balance anchor — show derived delta, lock manual input
+                const isAutoBalanced = autoBalanceAnchor && type === 'adjust' && derivedAnchorDeltas.has(item.code)
+                const isSelected = selectedItems.has(item.code) || isAutoBalanced
+                const userDelta = selectedItems.get(item.code) || 0
+                const displayDelta = isAutoBalanced ? derivedAnchorDeltas.get(item.code)! : userDelta
                 const refValue = currentCarryOver[referenceMode][item.code] || 0
-                const shortcutDelta = -refValue // delta ที่ทำให้เคสอ้างอิงเป็น 0
+                const shortcutDelta = -refValue
                 return (
-                  <tr key={item.code} className={cn('border-t border-slate-100', isSelected && 'bg-[#3DD8D8]/5')}>
+                  <tr key={item.code} className={cn(
+                    'border-t border-slate-100',
+                    isSelected && (isAutoBalanced ? 'bg-emerald-50/40' : 'bg-[#3DD8D8]/5'),
+                    aggMeta && 'border-l-2 border-l-indigo-200',
+                  )}>
                     <td className="text-center px-2 py-1.5">
                       <input type="checkbox" checked={isSelected}
                         onChange={() => toggleItem(item.code)}
-                        className="rounded" />
+                        disabled={isAutoBalanced}
+                        title={isAutoBalanced ? 'Auto-balanced anchor — ปิด auto-balance เพื่อ edit เอง' : ''}
+                        className="rounded disabled:opacity-50" />
                     </td>
                     <td className="px-3 py-1.5">
                       <span className="font-mono text-slate-400 mr-1.5">{item.code}</span>
                       <span className="text-slate-700">{item.name}</span>
+                      {aggMeta?.isAnchor && (
+                        <span className="ml-1.5 text-[10px] text-indigo-700 font-medium" title="Anchor ของ aggregate group">⚓ anchor</span>
+                      )}
+                      {aggMeta && !aggMeta.isAnchor && (
+                        <span className="ml-1.5 text-[10px] text-slate-400" title={`รวมที่ ${aggMeta.anchorCode}`}>↑ {aggMeta.anchorCode}</span>
+                      )}
                     </td>
                     <td className={cn('text-right px-2 py-1.5 font-mono', colorOf(v1))}>{fmt(v1)}</td>
                     <td className={cn('text-right px-2 py-1.5 font-mono', colorOf(v2))}>{fmt(v2)}</td>
@@ -357,18 +562,24 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
                     <td className={cn('text-right px-2 py-1.5 font-mono', colorOf(v4))}>{fmt(v4)}</td>
                     {type === 'adjust' && <>
                       <td className="px-2 py-1.5">
-                        {/* 300: DeltaInput — รับติดลบได้, พิมพ์ทันที, ↑↓ Enter เลื่อน row, auto-select on type */}
-                        <DeltaInput
-                          rowIndex={rowIndex}
-                          maxIndex={enabledItems.length - 1}
-                          delta={delta}
-                          isSelected={isSelected}
-                          onSelectChange={() => toggleItem(item.code)}
-                          onChange={n => setItemDelta(item.code, n)}
-                        />
+                        {isAutoBalanced ? (
+                          <div className="flex items-center justify-end gap-1" title="Auto-balanced (จาก non-anchor delta)">
+                            <Scale className="w-3 h-3 text-emerald-600" />
+                            <span className={cn('font-mono text-sm', colorOf(displayDelta))}>{fmt(displayDelta)}</span>
+                          </div>
+                        ) : (
+                          <DeltaInput
+                            rowIndex={rowIndex}
+                            maxIndex={enabledItems.length - 1}
+                            delta={displayDelta}
+                            isSelected={isSelected}
+                            onSelectChange={() => toggleItem(item.code)}
+                            onChange={n => setItemDelta(item.code, n)}
+                          />
+                        )}
                       </td>
                       <td className="px-2 py-1.5 text-right">
-                        {isSelected && shortcutDelta !== 0 && (
+                        {!isAutoBalanced && isSelected && shortcutDelta !== 0 && (
                           <button onClick={() => setItemDelta(item.code, shortcutDelta)}
                             title={`Reset เคส ${referenceMode}: ${fmt(shortcutDelta)}`}
                             className="px-2 py-0.5 text-[10px] bg-amber-100 text-amber-800 rounded hover:bg-amber-200 font-mono">
