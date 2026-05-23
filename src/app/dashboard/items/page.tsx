@@ -7,7 +7,7 @@ import { cn, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import { highlightText } from '@/lib/highlight'
 import { useSearchParams } from 'next/navigation'
 import type { LinenItemDef, LinenCategoryDef } from '@/types'
-import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown, Printer, GripVertical } from 'lucide-react'
+import { Plus, Trash2, Edit2, Check, X, Search, ChevronUp, ChevronDown, ArrowUpDown, Printer, GripVertical, Lock, LockOpen } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import ExportButtons from '@/components/ExportButtons'
@@ -99,6 +99,9 @@ export default function ItemsPage() {
   const [activeCode, setActiveCode] = useState<string | null>(null)
   // 278: catalog item delete modal — replaces native confirm() with reference count + Merge suggest
   const [deleteConfirmCode, setDeleteConfirmCode] = useState<string | null>(null)
+  // 347.2: lock/unlock modal
+  const [lockModalCode, setLockModalCode] = useState<string | null>(null)
+  const [lockReasonInput, setLockReasonInput] = useState<string>('')
   // 173.1: reorder mode + drag tracking
   const [reorderMode, setReorderMode] = useState(false)
   const [dragCode, setDragCode] = useState<string | null>(null)
@@ -723,6 +726,14 @@ export default function ItemsPage() {
                         ) : (
                           <span className="inline-flex items-center gap-1.5 flex-wrap">
                             {highlightText(item.name, highlightQ)}
+                            {/* 347.2: locked badge */}
+                            {item.isProtected && (
+                              <span
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 border border-purple-200"
+                                title={`ล็อคโดย ${item.protectedBy || '?'}${item.protectedAt ? ` · ${item.protectedAt.slice(0, 10)}` : ''}${item.protectedReason ? `\nเหตุผล: ${item.protectedReason}` : ''}`}>
+                                <Lock className="w-2.5 h-2.5" /> locked
+                              </span>
+                            )}
                             {/* 188 ขั้น B + 191: drift indicator พร้อม breakdown */}
                             {(() => {
                               const drift = driftMap.get(item.code)
@@ -817,12 +828,28 @@ export default function ItemsPage() {
                           </div>
                         ) : (
                           <div className="flex gap-1 justify-end">
+                            {/* 347.2: lock/unlock toggle */}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setLockModalCode(item.code); setLockReasonInput(item.protectedReason || '') }}
+                              title={item.isProtected
+                                ? `🔒 ล็อค: ${item.protectedReason || '(ไม่ระบุเหตุผล)'}${item.protectedBy ? ` — โดย ${item.protectedBy}` : ''}`
+                                : 'ล็อครายการนี้ (กัน admin คนอื่นแก้/merge)'}
+                              className={cn(
+                                'p-1 transition-colors',
+                                item.isProtected ? 'text-purple-600 hover:text-purple-800' : 'text-slate-400 hover:text-purple-600',
+                              )}>
+                              {item.isProtected ? <Lock className="w-3.5 h-3.5" /> : <LockOpen className="w-3.5 h-3.5" />}
+                            </button>
                             <button onClick={() => handleStartEdit(item)}
-                              className="text-slate-400 hover:text-blue-600 p-1">
+                              disabled={item.isProtected}
+                              title={item.isProtected ? '🔒 รายการถูกล็อค — ปลดล็อคก่อน' : 'แก้ไข'}
+                              className="text-slate-400 hover:text-blue-600 p-1 disabled:opacity-30 disabled:cursor-not-allowed">
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button onClick={() => handleDeleteItem(item.code, item.name)}
-                              className="text-slate-400 hover:text-red-500 p-1">
+                              disabled={item.isProtected}
+                              title={item.isProtected ? '🔒 รายการถูกล็อค — ปลดล็อคก่อน' : 'ลบ'}
+                              className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30 disabled:cursor-not-allowed">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -1192,6 +1219,126 @@ export default function ItemsPage() {
                   className="w-full inline-flex items-center justify-center px-4 py-2 text-slate-500 hover:text-slate-700 text-sm"
                 >
                   ยกเลิก
+                </button>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* 347.2: Lock/Unlock modal — admin lock catalog item to communicate "don't touch" */}
+      <Modal
+        open={!!lockModalCode}
+        onClose={() => { setLockModalCode(null); setLockReasonInput('') }}
+        title={(() => {
+          const item = lockModalCode ? linenCatalog.find(i => i.code === lockModalCode) : null
+          return item?.isProtected ? '🔓 ปลดล็อครายการ' : '🔒 ล็อครายการ'
+        })()}
+        size="md"
+        closeLabel="cancel"
+      >
+        {lockModalCode && (() => {
+          const item = linenCatalog.find(i => i.code === lockModalCode)
+          if (!item) return null
+          const isLocked = !!item.isProtected
+          const handleConfirm = () => {
+            if (isLocked) {
+              updateLinenItem(item.code, {
+                isProtected: false,
+                protectedReason: undefined,
+                protectedBy: undefined,
+                protectedAt: undefined,
+              })
+            } else {
+              const reason = lockReasonInput.trim()
+              if (!reason) {
+                alert('กรุณาใส่เหตุผลของการล็อค')
+                return
+              }
+              updateLinenItem(item.code, {
+                isProtected: true,
+                protectedReason: reason,
+                protectedBy: currentUser?.name || 'admin',
+                protectedAt: new Date().toISOString(),
+              })
+            }
+            setLockModalCode(null)
+            setLockReasonInput('')
+          }
+          return (
+            <div className="space-y-4">
+              <div className="bg-slate-50 rounded-lg px-4 py-3">
+                <p className="text-xs text-slate-500">รายการ</p>
+                <p className="text-sm font-semibold text-slate-800">
+                  <span className="font-mono text-slate-500 mr-1.5">{item.code}</span>
+                  {item.name}
+                </p>
+              </div>
+
+              {isLocked ? (
+                <>
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-1.5">
+                    <p className="text-sm font-medium text-purple-900 flex items-center gap-1.5">
+                      <Lock className="w-4 h-4" />ปัจจุบัน: ถูกล็อค
+                    </p>
+                    {item.protectedReason && (
+                      <p className="text-xs text-purple-800">
+                        <strong>เหตุผล:</strong> {item.protectedReason}
+                      </p>
+                    )}
+                    <p className="text-[11px] text-purple-700">
+                      ล็อคโดย <strong>{item.protectedBy || '?'}</strong>
+                      {item.protectedAt && <> · {item.protectedAt.slice(0, 10)}</>}
+                    </p>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+                    <AlertTriangle className="w-3.5 h-3.5 inline mr-1" />
+                    การปลดล็อคจะทำให้ admin คนอื่น สามารถแก้ไข / merge / ลบ ได้อีกครั้ง
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-600">
+                    การล็อคจะป้องกัน admin คนอื่นไม่ให้แก้ไข / merge / ลบ รายการนี้
+                    โดยจะแสดงเหตุผลเมื่อพวกเขาเปิด tool ที่กระทบ
+                  </p>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      เหตุผลของการล็อค <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={lockReasonInput}
+                      onChange={e => setLockReasonInput(e.target.value)}
+                      rows={2}
+                      placeholder="เช่น รายการเฉพาะลูกค้ารามบุตรี — ห้ามใช้ข้ามลูกค้า / ห้าม merge"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      ข้อความนี้จะแสดงให้ admin คนอื่นเห็นใน tool ต่างๆ (Merge, Items page)
+                    </p>
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => { setLockModalCode(null); setLockReasonInput('') }}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  disabled={!isLocked && !lockReasonInput.trim()}
+                  className={cn(
+                    'px-4 py-2 text-sm rounded-lg font-semibold flex items-center gap-1.5',
+                    isLocked
+                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      : 'bg-purple-600 text-white hover:bg-purple-700',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                  )}
+                >
+                  {isLocked ? <><LockOpen className="w-4 h-4" />ปลดล็อค</> : <><Lock className="w-4 h-4" />ล็อครายการ</>}
                 </button>
               </div>
             </div>
