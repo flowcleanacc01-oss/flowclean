@@ -242,11 +242,19 @@ export default function AggregateModeAudit() {
 
   const goToLF = (lfId: string) => router.push(`/dashboard/linen-forms?detail=${lfId}`)
 
-  // Sync snapshot: set LF.aggregateSnapshot = customer ปัจจุบัน
-  // - snapshot_missing → safe (เพิ่ม field) แต่อาจเปลี่ยน carry-over calc → ยืนยันก่อน
-  // - อื่นๆ → confirm เพราะ overwrite snapshot อาจเปลี่ยน carry-over
+  // 337: Sync snapshot — set LF.aggregateSnapshot = customer ปัจจุบัน
+  // - snapshot_missing (🟢 SAFE) → fallback already uses current = sync sets same value → no calc change. Apply directly.
+  // - อื่นๆ (🔴 RISKY) → overwrite snapshot → carry-over recalc → confirm modal
+  const isSafeReason = (r: AggReason | null): boolean => r === 'snapshot_missing'
+
   const handleSync = (row: typeof sortedRows[number]) => {
     if (row.reason === null) return
+    if (isSafeReason(row.reason)) {
+      // 🟢 SAFE — no current calc change, just freezes future behavior
+      updateLinenForm(row.lfId, { aggregateSnapshot: row.curSnap })
+      return
+    }
+    // 🔴 RISKY — opens confirm modal
     setPendingFix({
       lfId: row.lfId,
       lfNumber: row.lfNumber,
@@ -429,22 +437,28 @@ export default function AggregateModeAudit() {
                     )}
                   </td>
                   <td className="px-2 py-2 text-center">
-                    <div className="inline-flex items-center gap-1">
-                      {r.reason !== null && (
-                        <button
-                          type="button"
-                          onClick={() => handleSync(r)}
-                          title="Sync snapshot ของ LF ให้ตรง customer ปัจจุบัน (confirm ก่อน)"
-                          className={cn(
-                            'p-1 rounded transition-colors',
-                            r.severity === 'high'
-                              ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50'
-                              : 'text-amber-600 hover:text-amber-700 hover:bg-amber-50',
-                          )}
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                    <div className="inline-flex items-center gap-1.5">
+                      {r.reason !== null && (() => {
+                        const safe = isSafeReason(r.reason)
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleSync(r)}
+                            title={safe
+                              ? `🟢 Safe sync — ใส่ snapshot ที่ขาด (ไม่กระทบ calc ปัจจุบัน)`
+                              : `🔴 Risky sync — overwrite snapshot → carry-over จะ recalc (confirm ก่อน)`}
+                            className={cn(
+                              'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-colors',
+                              safe
+                                ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200'
+                                : 'text-red-700 bg-red-50 hover:bg-red-100 border-red-200',
+                            )}
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            {safe ? 'Safe' : '⚠ Risky'}
+                          </button>
+                        )
+                      })()}
                       <button
                         type="button"
                         onClick={() => goToLF(r.lfId)}
@@ -470,9 +484,19 @@ export default function AggregateModeAudit() {
         )}
       </div>
 
-      <div className="text-xs text-slate-400 italic mt-2 px-2">
-        <strong>Feat 330</strong>: LF.aggregateSnapshot = config ตอน create. customer.aggregateSizeGroups = ปัจจุบัน.
-        <br />Mismatch ไม่ใช่ bug — calc carry-over ใช้ snapshot ของ LF เป็นหลัก · Sync เฉพาะเมื่อตั้งใจปรับ LF ใบนี้ให้ใช้ config ใหม่
+      <div className="text-xs text-slate-400 italic mt-2 px-2 space-y-1">
+        <div>
+          <strong>Feat 330 + 337</strong>: LF.aggregateSnapshot = config ตอน create. customer.aggregateSizeGroups = ปัจจุบัน.
+        </div>
+        <div>Mismatch ไม่ใช่ bug — calc carry-over ใช้ snapshot ของ LF เป็นหลัก</div>
+        <div className="not-italic flex flex-wrap gap-3 pt-1">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200">
+            <RefreshCw className="w-3 h-3" /> Safe = ไม่กระทบ calc (snapshot ขาด — เพิ่ม field)
+          </span>
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border bg-red-50 text-red-700 border-red-200">
+            <RefreshCw className="w-3 h-3" /> ⚠ Risky = recalc carry-over (snapshot ≠ ปัจจุบัน)
+          </span>
+        </div>
       </div>
 
       <FloatingTotalBar show={sortedRows.length > 0}>

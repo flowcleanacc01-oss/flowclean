@@ -14,10 +14,12 @@
  * Workflow: Source + Target → Preview → Confirm → Execute
  */
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
+import { ArrowRight, AlertTriangle, CheckCircle2, Loader2, Lock, Users, FileCheck } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { pushUndoAction, type SnapshotChange } from '@/lib/undo-stack'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
+import { isProtectedCode, PROTECTED_CODE_REASON } from '@/lib/protected-codes'
+import { cn } from '@/lib/utils'
 
 type Stat = { label: string; count: number; affectedIds: string[] }
 
@@ -77,18 +79,25 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
   const sourceOptions = useMemo(() => {
     const catItems = sortedCatalog.map(i => ({
       code: i.code, name: i.name, isOrphan: false, defaultPrice: i.defaultPrice,
+      isProtected: isProtectedCode(i.code),
     }))
     const orphanItems = orphans.map(e => ({
       code: e.code,
       name: e.names[0] || '(ไม่พบชื่อ — orphan)',
       isOrphan: true,
       defaultPrice: e.avgPrice,
+      isProtected: isProtectedCode(e.code),
     }))
     return [...catItems, ...orphanItems].sort((a, b) => a.code.localeCompare(b.code))
   }, [sortedCatalog, orphans])
 
   const sourceItem = sourceOptions.find(i => i.code === sourceCode)
   const targetItem = linenCatalog.find(i => i.code === targetCode)
+
+  // 338: Protected code lock — block merge ทั้งสองทิศ (source + target)
+  const sourceProtected = isProtectedCode(sourceCode)
+  const targetProtected = isProtectedCode(targetCode)
+  const isProtectedBlocked = sourceProtected || targetProtected
 
   // Build preview stats
   const stats = useMemo<Stat[]>(() => {
@@ -124,10 +133,55 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
   }, [sourceCode, targetCode, quotations, customers, deliveryNotes, linenForms, carryOverAdjustments, billingStatements, taxInvoices, includeWB, includeIV])
 
   const totalAffected = stats.reduce((s, x) => s + x.count, 0)
-  const canPreview = sourceCode && targetCode && sourceCode !== targetCode
+  const canPreview = sourceCode && targetCode && sourceCode !== targetCode && !isProtectedBlocked
+
+  // 338: LF impact warning — true เมื่อมี LF ที่ใช้ source code (= ลูกค้าเห็นไปแล้ว)
+  const lfImpactStat = stats.find(s => s.label.startsWith('Linen Form'))
+  const custImpactStat = stats.find(s => s.label.startsWith('Customer'))
+  const dnImpactStat = stats.find(s => s.label.startsWith('Delivery Note'))
+  const wbImpactStat = stats.find(s => s.label.startsWith('Billing'))
+  const ivImpactStat = stats.find(s => s.label.startsWith('Tax Invoice'))
+  const lfImpactCount = lfImpactStat?.count ?? 0
+  const custImpactCount = custImpactStat?.count ?? 0
+  const dnImpactCount = dnImpactStat?.count ?? 0
+  const wbImpactCount = wbImpactStat?.count ?? 0
+  const ivImpactCount = ivImpactStat?.count ?? 0
+
+  // High-impact = customer-facing docs (DN/WB/IV) ออกไปแล้ว หรือ LF + customer ≥ 5
+  const isHighImpact = dnImpactCount > 0 || (includeWB && wbImpactCount > 0) || (includeIV && ivImpactCount > 0) ||
+    (lfImpactCount + custImpactCount >= 5)
+
+  // ดึงรายชื่อลูกค้าที่กระทบจาก LF + DN + Customer (deduped)
+  const affectedCustomerNames = useMemo<string[]>(() => {
+    if (!canPreview) return []
+    const src = sourceCode
+    const names = new Set<string>()
+    const custById = new Map(customers.map(c => [c.id, c.shortName]))
+    for (const f of linenForms) {
+      if ((f.rows || []).some(r => r.code === src)) {
+        names.add(custById.get(f.customerId) || f.customerId.slice(0, 8))
+      }
+    }
+    for (const d of deliveryNotes) {
+      const hasSrc = (d.items || []).some(it => it.code === src) ||
+        (d.priceSnapshot && Object.prototype.hasOwnProperty.call(d.priceSnapshot, src))
+      if (hasSrc) names.add(custById.get(d.customerId) || d.customerId.slice(0, 8))
+    }
+    for (const c of customers) {
+      if ((c.enabledItems || []).includes(src) ||
+          (c.priceList || []).some(p => p.code === src)) {
+        names.add(c.shortName)
+      }
+    }
+    return Array.from(names).sort()
+  }, [canPreview, sourceCode, linenForms, deliveryNotes, customers])
 
   const execute = async () => {
     if (!canPreview) return
+    if (isProtectedBlocked) {
+      alert(PROTECTED_CODE_REASON)
+      return
+    }
     setRunning(true)
     const src = sourceCode
     const tgt = targetCode
@@ -317,9 +371,12 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
             >
               <option value="">— เลือกรหัสต้นทาง —</option>
               {/* 240 fix: รวม catalog + orphan (orphan tag ⚠ — ไม่อยู่ใน catalog แล้ว) */}
+              {/* 338: tag protected (X-prefix) */}
               {sourceOptions.map(i => (
                 <option key={i.code} value={i.code}>
-                  {i.code} — {i.name}{i.isOrphan ? ' ⚠ (orphan)' : ''}
+                  {i.code} — {i.name}
+                  {i.isOrphan ? ' ⚠ (orphan)' : ''}
+                  {i.isProtected ? ' 🔒 (protected)' : ''}
                 </option>
               ))}
             </select>
@@ -328,6 +385,7 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
                 {sourceItem.name}
                 {sourceItem.defaultPrice > 0 && <> · ราคา {sourceItem.defaultPrice}</>}
                 {sourceItem.isOrphan && <span className="ml-1 text-orange-600">· orphan (ไม่อยู่ใน catalog แล้ว)</span>}
+                {sourceItem.isProtected && <span className="ml-1 text-purple-700">· 🔒 protected (X-prefix)</span>}
               </p>
             )}
           </div>
@@ -340,13 +398,43 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
             >
               <option value="">— เลือกรหัสปลายทาง —</option>
-              {sortedCatalog.filter(i => i.code !== sourceCode).map(i => (
-                <option key={i.code} value={i.code}>{i.code} — {i.name}</option>
-              ))}
+              {sortedCatalog.filter(i => i.code !== sourceCode).map(i => {
+                const tProt = isProtectedCode(i.code)
+                return (
+                  <option key={i.code} value={i.code}>
+                    {i.code} — {i.name}{tProt ? ' 🔒 (protected)' : ''}
+                  </option>
+                )
+              })}
             </select>
-            {targetItem && <p className="text-[11px] text-slate-500 mt-1">{targetItem.name} · ราคา {targetItem.defaultPrice}</p>}
+            {targetItem && (
+              <p className="text-[11px] text-slate-500 mt-1">
+                {targetItem.name} · ราคา {targetItem.defaultPrice}
+                {targetProtected && <span className="ml-1 text-purple-700">· 🔒 protected (X-prefix)</span>}
+              </p>
+            )}
           </div>
         </div>
+
+        {/* 338: Protected code block — แสดงเมื่อ source/target เป็น X-prefix */}
+        {isProtectedBlocked && (
+          <div className="bg-purple-50 border-2 border-purple-300 rounded-lg px-4 py-3 text-sm flex items-start gap-2">
+            <Lock className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+            <div className="text-purple-900">
+              <strong>🔒 รหัสนี้ถูกป้องกัน — ไม่สามารถ merge ได้</strong>
+              <p className="mt-1 text-xs text-purple-700">{PROTECTED_CODE_REASON}</p>
+              <p className="mt-1 text-xs text-purple-700">
+                ติ๊ดใช้ X-prefix เก็บ variety ของลูกค้าเฉพาะราย (เช่น SEN) — การ merge อาจทำให้ลูกค้ารายอื่นได้รับของผิด
+              </p>
+              {sourceProtected && (
+                <p className="mt-1 text-xs">→ ยกเลิก source <code className="px-1 rounded bg-purple-100">{sourceCode}</code></p>
+              )}
+              {targetProtected && (
+                <p className="mt-1 text-xs">→ ยกเลิก target <code className="px-1 rounded bg-purple-100">{targetCode}</code></p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Options */}
         <div className="border-t border-slate-100 pt-3 space-y-2">
@@ -414,12 +502,16 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
       </div>
 
       {/* Confirm modal — inline (not Modal component, since we are in a page) */}
+      {/* 338: เพิ่ม LF impact warning + รายชื่อลูกค้า + "ตรวจกับลูกค้าก่อน" callout */}
       {showConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4 animate-fadeIn">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[5vh] px-4 animate-fadeIn">
           <div className="fixed inset-0 bg-black/40" onClick={() => !running && setShowConfirm(false)} />
-          <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+          <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-auto">
             <div className="flex items-start gap-3 mb-4">
-              <AlertTriangle className="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" />
+              <AlertTriangle className={cn(
+                'w-6 h-6 flex-shrink-0 mt-0.5',
+                isHighImpact ? 'text-red-500' : 'text-amber-500',
+              )} />
               <div>
                 <h3 className="text-lg font-semibold text-slate-800">ยืนยันการรวมรหัส</h3>
                 <p className="text-sm text-slate-600 mt-1">
@@ -428,14 +520,61 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
                 </p>
               </div>
             </div>
-            <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 mb-4 space-y-1">
-              <div>• กระทบ <strong>{totalAffected}</strong> เอกสาร</div>
+
+            {/* 338: High-impact callout — เน้นเรื่อง "ลูกค้าเห็นไปแล้ว" */}
+            {isHighImpact && (
+              <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-red-900">
+                  <FileCheck className="w-5 h-5" />
+                  ⚠ ตรวจกับลูกค้าก่อน — เอกสารส่งไปแล้ว
+                </div>
+                <p className="text-xs text-red-800">
+                  รหัสนี้อยู่ในเอกสารที่ออกให้ลูกค้าเรียบร้อยแล้ว
+                  ถ้า merge ผิด ลูกค้าจะเห็นรายการที่เปลี่ยนแปลง — ตามแก้ยาก (ต้องลบ + สร้างใหม่)
+                </p>
+                <ul className="text-xs text-red-700 ml-4 list-disc space-y-0.5">
+                  {dnImpactCount > 0 && <li><strong>{dnImpactCount}</strong> ใบส่งของ (SD)</li>}
+                  {includeWB && wbImpactCount > 0 && <li><strong>{wbImpactCount}</strong> ใบวางบิล (WB) — ⚠ ส่งลูกค้าแล้ว</li>}
+                  {includeIV && ivImpactCount > 0 && <li><strong>{ivImpactCount}</strong> ใบกำกับภาษี (IV) — ⚠ compliance impact</li>}
+                  {lfImpactCount > 0 && <li><strong>{lfImpactCount}</strong> ใบรับส่งผ้า (LF)</li>}
+                  {custImpactCount > 0 && <li><strong>{custImpactCount}</strong> ลูกค้า (priceList/enabled)</li>}
+                </ul>
+              </div>
+            )}
+
+            {/* 338: Affected customer list — ให้รู้ว่ากระทบลูกค้าไหนบ้าง */}
+            {affectedCustomerNames.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                <div className="flex items-center gap-2 text-xs font-semibold text-amber-900 mb-2">
+                  <Users className="w-4 h-4" />
+                  ลูกค้าที่กระทบ ({affectedCustomerNames.length} ราย)
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {affectedCustomerNames.slice(0, 30).map(n => (
+                    <span key={n} className="inline-block bg-white border border-amber-200 text-amber-800 text-[11px] px-1.5 py-0.5 rounded font-mono">
+                      {n}
+                    </span>
+                  ))}
+                  {affectedCustomerNames.length > 30 && (
+                    <span className="text-[11px] text-amber-700 italic">+ อีก {affectedCustomerNames.length - 30} ราย</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-amber-700 mt-2 italic">
+                  💡 ตัดสินใจร่วมกับติ๊ดและปิ่นก่อน merge — ลูกค้าแต่ละรายอาจใช้รหัสนี้ทำของต่างกัน
+                </p>
+              </div>
+            )}
+
+            <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-700 mb-4 space-y-1">
+              <div className="font-semibold text-slate-800 mb-1">สรุปการกระทบ</div>
+              <div>• เอกสารที่จะถูกแก้ไข: <strong>{totalAffected}</strong></div>
               {includeWB && <div className="text-amber-700">• รวม WB ที่ออกแล้วด้วย</div>}
               {includeIV && <div className="text-red-700">• รวม IV ที่ออกแล้วด้วย</div>}
               {deleteSource && <div>• ลบ {sourceCode} จาก catalog</div>}
             </div>
+
             <p className="text-xs text-slate-500 mb-4">
-              ⚠ การรวมไม่สามารถ undo อัตโนมัติได้ — ตรวจสอบให้ถูกต้องก่อน
+              ⚠ การรวมจะถูกบันทึกใน Undo (7 วัน) — แต่ถ้าทำใหม่ทับซ้ำหลายครั้ง อาจ revert ยาก
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -448,9 +587,14 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
               <button
                 onClick={execute}
                 disabled={running}
-                className="px-4 py-2 text-sm bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] disabled:opacity-50 flex items-center gap-1.5"
+                className={cn(
+                  'px-4 py-2 text-sm rounded-lg disabled:opacity-50 flex items-center gap-1.5 font-medium',
+                  isHighImpact
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-[#1B3A5C] text-white hover:bg-[#122740]',
+                )}
               >
-                {running ? <><Loader2 className="w-4 h-4 animate-spin" />กำลังรวม...</> : 'ยืนยัน'}
+                {running ? <><Loader2 className="w-4 h-4 animate-spin" />กำลังรวม...</> : isHighImpact ? '⚠ ยืนยัน merge (high impact)' : 'ยืนยัน'}
               </button>
             </div>
           </div>

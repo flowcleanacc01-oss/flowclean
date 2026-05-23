@@ -173,9 +173,9 @@ export default function TrustModeAudit() {
 
   const goToLF = (lfId: string) => router.push(`/dashboard/linen-forms?detail=${lfId}`)
 
-  // 316: Sync snapshot — set LF.workflowMode = customer.workflowMode (current)
-  // - snapshot_missing → safe (เพิ่ม field เปล่า)
-  // - snapshot_mismatch → ต้อง confirm เพราะอาจ overwrite snapshot ที่ถูกต้องอยู่แล้ว
+  // 316 + 337: Sync snapshot — set LF.workflowMode = customer.workflowMode (current)
+  // - snapshot_missing (🟢 SAFE) → no calc change now (fallback = sync target). Apply directly.
+  // - snapshot_mismatch (🔴 RISKY) → carry-over recalc. Confirm modal with explicit warning.
   const handleSync = (row: typeof sortedRows[number]) => {
     if (row.reason === null) return
     const fix: PendingFix = {
@@ -187,10 +187,10 @@ export default function TrustModeAudit() {
       reason: row.reason,
     }
     if (row.reason === 'snapshot_missing') {
-      // safe — apply ทันที (ใส่ snapshot ที่ขาดหายไป)
+      // 🟢 SAFE — no current calc change, just freezes future behavior
       updateLinenForm(row.lfId, { workflowMode: row.currentMode as 'cross_check' | 'trust_customer' })
     } else {
-      // mismatch — เปิด confirm modal เพราะมีความเสี่ยง
+      // 🔴 RISKY — opens confirm modal
       setPendingFix(fix)
     }
   }
@@ -365,22 +365,23 @@ export default function TrustModeAudit() {
                     )}
                   </td>
                   <td className="px-2 py-2 text-center">
-                    <div className="inline-flex items-center gap-1">
+                    <div className="inline-flex items-center gap-1.5">
                       {r.reason !== null && (
                         <button
                           type="button"
                           onClick={() => handleSync(r)}
                           title={r.reason === 'snapshot_missing'
-                            ? `ใส่ snapshot ที่ขาด → ${r.currentMode}`
-                            : `เปลี่ยน snapshot จาก ${r.lfMode} → ${r.currentMode} (มีความเสี่ยง — confirm ก่อน)`}
+                            ? `🟢 Safe sync — ใส่ snapshot ที่ขาด (ไม่กระทบ calc ปัจจุบัน)`
+                            : `🔴 Risky sync — เปลี่ยน snapshot ${r.lfMode} → ${r.currentMode} (carry-over จะ recalc — confirm ก่อน)`}
                           className={cn(
-                            'p-1 rounded transition-colors',
+                            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-colors',
                             r.reason === 'snapshot_missing'
-                              ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'
-                              : 'text-orange-600 hover:text-orange-700 hover:bg-orange-50',
+                              ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200'
+                              : 'text-red-700 bg-red-50 hover:bg-red-100 border-red-200',
                           )}
                         >
-                          <RefreshCw className="w-3.5 h-3.5" />
+                          <RefreshCw className="w-3 h-3" />
+                          {r.reason === 'snapshot_missing' ? 'Safe' : '⚠ Risky'}
                         </button>
                       )}
                       <button
@@ -408,9 +409,21 @@ export default function TrustModeAudit() {
         )}
       </div>
 
-      <div className="text-xs text-slate-400 italic mt-2 px-2">
-        <strong>Feat 265 + 268 + 316</strong>: customer.workflowMode = current setting · LF.workflowMode = snapshot ตอน create.
-        <br />Mismatch ไม่ใช่ bug — calc carry-over ใช้ snapshot ของ LF เป็นหลัก · คลิก <RefreshCw className="w-3 h-3 inline mb-0.5" /> เพื่อ sync snapshot
+      <div className="text-xs text-slate-400 italic mt-2 px-2 space-y-1">
+        <div>
+          <strong>Feat 265 + 268 + 316 + 337</strong>: customer.workflowMode = current setting · LF.workflowMode = snapshot ตอน create.
+        </div>
+        <div>
+          Mismatch ไม่ใช่ bug — calc carry-over ใช้ snapshot ของ LF เป็นหลัก
+        </div>
+        <div className="not-italic flex flex-wrap gap-3 pt-1">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200">
+            <RefreshCw className="w-3 h-3" /> Safe = ไม่กระทบ calc (snapshot ขาด — เพิ่ม field)
+          </span>
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border bg-red-50 text-red-700 border-red-200">
+            <RefreshCw className="w-3 h-3" /> ⚠ Risky = recalc carry-over (snapshot ≠ ปัจจุบัน)
+          </span>
+        </div>
       </div>
 
       <FloatingTotalBar show={sortedRows.length > 0}>
