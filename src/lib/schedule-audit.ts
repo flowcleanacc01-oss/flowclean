@@ -3,7 +3,7 @@
 // expand schedule → expected dates ใน date range
 // แล้วเทียบกับ SD จริง (regular vs extra round)
 
-import type { Customer, DeliveryNote } from '@/types'
+import type { Customer, DeliveryNote, ScheduleType } from '@/types'
 
 export interface ScheduleAuditDayResult {
   date: string                  // ISO date
@@ -63,7 +63,7 @@ function* dateRange(start: string, end: string): Generator<string> {
 
 function isScheduledDay(
   date: string,
-  scheduleType: 'none' | 'weekly' | 'daily' | undefined,
+  scheduleType: ScheduleType | undefined,
   scheduleDays: number[] | undefined,
   scheduleStartDate: string | undefined,
 ): boolean {
@@ -74,6 +74,7 @@ function isScheduledDay(
     const dow = parseLocalDate(date).getDay()
     return (scheduleDays || []).includes(dow)
   }
+  // 311 P2.3 — every_n_days + biweekly จะ implement ต่อใน P2.3 (commit ต่อไป)
   return false
 }
 

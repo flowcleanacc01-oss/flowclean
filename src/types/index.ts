@@ -206,12 +206,16 @@ export interface Customer {
   workflowMode?: WorkflowMode
   defaultCarryOverMode?: CarryOverMode
   // 311 — Schedule-based SD Audit
-  // scheduleType: 'none' (default skip audit) | 'weekly' (use scheduleDays) | 'daily' (ทุกวัน)
-  // scheduleDays: 0=อาทิตย์, 1=จันทร์, ..., 6=เสาร์ — ใช้กับ weekly เท่านั้น
-  // scheduleStartDate: วันที่เริ่ม schedule (user ระบุ หรือ AI suggest)
+  // scheduleType: 'none' (default) | 'daily' | 'every_n_days' | 'weekly' | 'biweekly'
+  // scheduleDays: 0=อาทิตย์, 1=จันทร์, ..., 6=เสาร์ — ใช้กับ weekly + biweekly
+  // scheduleStartDate: anchor date (จำเป็น every_n_days + biweekly · optional weekly/daily)
+  // scheduleEveryNDays: step (วัน) สำหรับ every_n_days (เช่น 2 = ทุก 48hr)
+  // scheduleBiweeklyAnchorWeek: 0/1 parity จาก scheduleStartDate (P2.1)
   scheduleType?: ScheduleType
   scheduleDays?: number[]
   scheduleStartDate?: string // ISO date
+  scheduleEveryNDays?: number
+  scheduleBiweeklyAnchorWeek?: 0 | 1
   scheduleNote?: string
   // 317 Phase 1 — Aggregate Size Groups (per-customer opt-in)
   // ลูกค้า opt-in รายตัวว่า size group ไหน "นับรวมไซส์" บ้าง
@@ -237,16 +241,39 @@ export interface AggregateSizeGroupConfig {
 }
 
 // 311 — Schedule type สำหรับ Schedule-Based SD Audit
-export type ScheduleType = 'none' | 'weekly' | 'daily'
+export type ScheduleType = 'none' | 'daily' | 'every_n_days' | 'weekly' | 'biweekly'
 
 export const SCHEDULE_TYPE_CONFIG: Record<ScheduleType, { label: string; description: string }> = {
   none: { label: 'ไม่ตั้งคิว', description: 'ยังไม่ได้ตั้งคิวส่ง — ไม่อยู่ใน Schedule Audit' },
-  weekly: { label: 'รายสัปดาห์', description: 'ส่งตามวันในสัปดาห์ (เช่น จันทร์/พุธ/ศุกร์)' },
   daily: { label: 'ทุกวัน', description: 'ส่งทุกวัน' },
+  every_n_days: { label: 'ทุก N วัน', description: 'ส่งทุก N วัน (เช่น ทุก 48hr = 2 วัน) — ต้องมี anchor date' },
+  weekly: { label: 'รายสัปดาห์', description: 'ส่งตามวันในสัปดาห์ (เช่น จันทร์/พุธ/ศุกร์)' },
+  biweekly: { label: 'เว้นสัปดาห์', description: 'ส่งตามวันในสัปดาห์ เว้นสัปดาห์ — ใช้ anchor week parity' },
 }
 
 export const WEEKDAY_LABELS = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์']
 export const WEEKDAY_SHORT = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
+
+// 311 P2.1 — Schedule Override
+export type ScheduleOverrideType = 'skip' | 'extra' | 'reschedule_skip' | 'reschedule_add'
+
+export interface ScheduleOverride {
+  id: string
+  customerId: string
+  date: string                    // ISO YYYY-MM-DD — วันที่ถูก override
+  type: ScheduleOverrideType
+  reason: string                  // เหตุผล (เช่น "ลูกค้าขอข้าม", "ผ้าน้อย", "เลื่อนเป็นพรุ่งนี้")
+  rescheduledLinkId?: string      // pair link: reschedule_skip ↔ reschedule_add
+  createdAt: string
+  createdBy: string
+}
+
+export const SCHEDULE_OVERRIDE_TYPE_CONFIG: Record<ScheduleOverrideType, { label: string; short: string; color: string }> = {
+  skip:               { label: 'ข้ามคิว', short: 'Skip', color: 'amber' },
+  extra:              { label: 'รอบเสริม', short: 'Extra', color: 'blue' },
+  reschedule_skip:    { label: 'เลื่อนออก (skip)', short: 'R-Skip', color: 'purple' },
+  reschedule_add:     { label: 'เลื่อนเข้า (add)', short: 'R-Add', color: 'indigo' },
+}
 
 // 265 — Workflow mode สำหรับลูกค้า + LF
 export type WorkflowMode = 'cross_check' | 'trust_customer'
