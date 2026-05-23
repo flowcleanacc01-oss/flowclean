@@ -38,8 +38,9 @@ type AggReason =
 type Severity = 'critical' | 'high' | 'warning' | 'info'
 
 interface PendingFix {
-  lfId: string
-  lfNumber: string
+  sourceType: 'lf' | 'adj'
+  sourceId: string
+  sourceLabel: string  // LF# or "Adj YYYY-MM-DD"
   customerShortName: string
   fromSnap: AggregateSnapshot | undefined
   toSnap: AggregateSnapshot | undefined
@@ -122,7 +123,8 @@ function compareSnapshots(
 
 export default function AggregateModeAudit() {
   const router = useRouter()
-  const { linenForms, customers, updateLinenForm } = useStore()
+  // B1: include carryOverAdjustments scan
+  const { linenForms, customers, updateLinenForm, carryOverAdjustments, updateCarryOverAdjustment } = useStore()
   const [pendingFix, setPendingFix] = useState<PendingFix | null>(null)
 
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')
@@ -145,32 +147,61 @@ export default function AggregateModeAudit() {
 
   const rows = useMemo(() => {
     const custMap = new Map(customers.map(c => [c.id, c]))
-    const result: Array<{
-      id: string; lfId: string; lfNumber: string; date: string
+    type Row = {
+      id: string
+      sourceType: 'lf' | 'adj'   // B1: distinguish LF vs adj
+      sourceId: string
+      sourceLabel: string         // LF#XXX หรือ "Adj YYYY-MM-DD"
+      date: string
       customerId: string; customerShortName: string; customerName: string
       lfSnap: AggregateSnapshot | undefined; curSnap: AggregateSnapshot | undefined
       reason: AggReason | null; severity: Severity; detail: string
-    }> = []
+    }
+    const result: Row[] = []
+    // 1. LF rows
     for (const f of linenForms) {
       if (dateFrom && f.date < dateFrom) continue
       if (dateTo && f.date > dateTo) continue
       if (customerId !== 'all' && f.customerId !== customerId) continue
       const cust = custMap.get(f.customerId)
       if (!cust) continue
-      // Skip ลูกค้าที่ไม่เคยใช้ aggregate เลย (ลด noise)
       if (!f.aggregateSnapshot && (!cust.aggregateSizeGroups || cust.aggregateSizeGroups.length === 0)) continue
       const lfSnap = f.aggregateSnapshot
       const curSnap = buildAggregateSnapshot(cust.aggregateSizeGroups)
       const cmp = compareSnapshots(lfSnap, curSnap)
       result.push({
-        id: f.id, lfId: f.id, lfNumber: f.formNumber, date: f.date,
+        id: `lf__${f.id}`,
+        sourceType: 'lf', sourceId: f.id, sourceLabel: f.formNumber,
+        date: f.date,
         customerId: f.customerId, customerShortName: cust.shortName, customerName: cust.name,
         lfSnap, curSnap,
         reason: cmp.reason, severity: cmp.severity, detail: cmp.detail,
       })
     }
+    // 2. B1: Adjustment rows (scan aggregateSnapshot ที่บันทึก ตอน save adj)
+    for (const a of carryOverAdjustments) {
+      if (a.isDeleted) continue
+      if (dateFrom && a.date < dateFrom) continue
+      if (dateTo && a.date > dateTo) continue
+      if (customerId !== 'all' && a.customerId !== customerId) continue
+      const cust = custMap.get(a.customerId)
+      if (!cust) continue
+      // skip adj ที่ไม่เกี่ยว aggregate เลย (ลด noise)
+      if (!a.aggregateSnapshot && (!cust.aggregateSizeGroups || cust.aggregateSizeGroups.length === 0)) continue
+      const adjSnap = a.aggregateSnapshot
+      const curSnap = buildAggregateSnapshot(cust.aggregateSizeGroups)
+      const cmp = compareSnapshots(adjSnap, curSnap)
+      result.push({
+        id: `adj__${a.id}`,
+        sourceType: 'adj', sourceId: a.id, sourceLabel: `Adj ${a.date.slice(5)} (${a.type})`,
+        date: a.date,
+        customerId: a.customerId, customerShortName: cust.shortName, customerName: cust.name,
+        lfSnap: adjSnap, curSnap,
+        reason: cmp.reason, severity: cmp.severity, detail: cmp.detail,
+      })
+    }
     return result
-  }, [linenForms, customers, dateFrom, dateTo, customerId])
+  }, [linenForms, carryOverAdjustments, customers, dateFrom, dateTo, customerId])
 
   const filtered = useMemo(() => {
     let list = rows
@@ -184,7 +215,7 @@ export default function AggregateModeAudit() {
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter(r =>
-        r.lfNumber.toLowerCase().includes(q) ||
+        r.sourceLabel.toLowerCase().includes(q) ||
         r.customerShortName.toLowerCase().includes(q) ||
         r.customerName.toLowerCase().includes(q),
       )
@@ -200,7 +231,7 @@ export default function AggregateModeAudit() {
       switch (sortCol) {
         case 'severity': cmp = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]; if (cmp === 0) cmp = b.date.localeCompare(a.date); break
         case 'date': cmp = a.date.localeCompare(b.date); break
-        case 'lfNumber': cmp = a.lfNumber.localeCompare(b.lfNumber); break
+        case 'lfNumber': cmp = a.sourceLabel.localeCompare(b.sourceLabel); break
         case 'customer': cmp = a.customerShortName.localeCompare(b.customerShortName); break
       }
       return sortDir === 'asc' ? cmp : -cmp
@@ -231,33 +262,44 @@ export default function AggregateModeAudit() {
 
   const handleExportCSV = () => {
     if (sortedRows.length === 0) return
-    const headers = ['Severity', 'วันที่', 'LF#', 'ลูกค้า', 'LF snapshot', 'Customer now', 'Detail']
+    const headers = ['Severity', 'วันที่', 'Source', 'Label', 'ลูกค้า', 'Snapshot', 'Customer now', 'Detail']
     const data = sortedRows.map(r => [
-      r.severity, r.date, r.lfNumber, r.customerShortName,
+      r.severity, r.date, r.sourceType, r.sourceLabel, r.customerShortName,
       stringifySnap(r.lfSnap), stringifySnap(r.curSnap), r.detail,
     ])
     const range = dateFrom && dateTo ? `${dateFrom}_${dateTo}` : (dateFrom || 'all')
     exportCSV(headers, data, formatExportFilename('AggregateModeAudit', '', range))
   }
 
-  const goToLF = (lfId: string) => router.push(`/dashboard/linen-forms?detail=${lfId}`)
+  // B1: route to LF detail OR adjustment (reports page)
+  const goToSource = (row: typeof sortedRows[number]) => {
+    if (row.sourceType === 'lf') router.push(`/dashboard/linen-forms?detail=${row.sourceId}`)
+    else router.push(`/dashboard/reports?tab=carry-over`)
+  }
 
-  // 337: Sync snapshot — set LF.aggregateSnapshot = customer ปัจจุบัน
-  // - snapshot_missing (🟢 SAFE) → fallback already uses current = sync sets same value → no calc change. Apply directly.
-  // - อื่นๆ (🔴 RISKY) → overwrite snapshot → carry-over recalc → confirm modal
+  // 337 + B1: Sync snapshot — route ไปยัง update function ตาม sourceType
   const isSafeReason = (r: AggReason | null): boolean => r === 'snapshot_missing'
+
+  const applySnapshot = (sourceType: 'lf' | 'adj', sourceId: string, snap: AggregateSnapshot | undefined) => {
+    if (sourceType === 'lf') {
+      updateLinenForm(sourceId, { aggregateSnapshot: snap })
+    } else {
+      updateCarryOverAdjustment(sourceId, { aggregateSnapshot: snap }, 'sync aggregateSnapshot (Mode Audit)')
+    }
+  }
 
   const handleSync = (row: typeof sortedRows[number]) => {
     if (row.reason === null) return
     if (isSafeReason(row.reason)) {
-      // 🟢 SAFE — no current calc change, just freezes future behavior
-      updateLinenForm(row.lfId, { aggregateSnapshot: row.curSnap })
+      // 🟢 SAFE — apply ทันที (ทั้ง LF + adj)
+      applySnapshot(row.sourceType, row.sourceId, row.curSnap)
       return
     }
-    // 🔴 RISKY — opens confirm modal
+    // 🔴 RISKY — confirm modal
     setPendingFix({
-      lfId: row.lfId,
-      lfNumber: row.lfNumber,
+      sourceType: row.sourceType,
+      sourceId: row.sourceId,
+      sourceLabel: row.sourceLabel,
       customerShortName: row.customerShortName,
       fromSnap: row.lfSnap,
       toSnap: row.curSnap,
@@ -267,9 +309,7 @@ export default function AggregateModeAudit() {
 
   const confirmSync = () => {
     if (!pendingFix) return
-    updateLinenForm(pendingFix.lfId, {
-      aggregateSnapshot: pendingFix.toSnap,
-    })
+    applySnapshot(pendingFix.sourceType, pendingFix.sourceId, pendingFix.toSnap)
     setPendingFix(null)
   }
 
@@ -382,9 +422,9 @@ export default function AggregateModeAudit() {
               <tr>
                 <SortHeader col="severity" label="Severity" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} />
                 <SortHeader col="date" label="วันที่" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} />
-                <SortHeader col="lfNumber" label="LF#" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} />
+                <SortHeader col="lfNumber" label="ที่มา" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} />
                 <SortHeader col="customer" label="ลูกค้า" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} className="text-left" />
-                <th className="text-left px-2 py-2.5 font-medium text-slate-600 text-xs">LF snapshot</th>
+                <th className="text-left px-2 py-2.5 font-medium text-slate-600 text-xs">Snapshot</th>
                 <th className="text-left px-2 py-2.5 font-medium text-slate-600 text-xs">Customer now</th>
                 <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">Issue</th>
                 <th className="text-center px-2 py-2.5 font-medium text-slate-600 text-xs">Action</th>
@@ -398,10 +438,13 @@ export default function AggregateModeAudit() {
                   <td className="px-3 py-2"><SeverityBadge severity={r.severity} /></td>
                   <td className="px-3 py-2 text-xs text-slate-600 font-mono">{formatDate(r.date)}</td>
                   <td className="px-3 py-2">
-                    <button onClick={() => goToLF(r.lfId)}
+                    <button onClick={() => goToSource(r)}
                       className="font-mono font-semibold text-[#1B3A5C] hover:underline inline-flex items-center gap-1">
-                      {r.lfNumber}<ExternalLink className="w-3 h-3" />
+                      {r.sourceLabel}<ExternalLink className="w-3 h-3" />
                     </button>
+                    {r.sourceType === 'adj' && (
+                      <span className="ml-1.5 inline-block px-1 py-0.5 rounded text-[9px] bg-blue-50 text-blue-700 border border-blue-200">adj</span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <div className="font-medium text-slate-800">{r.customerShortName}</div>
@@ -461,8 +504,8 @@ export default function AggregateModeAudit() {
                       })()}
                       <button
                         type="button"
-                        onClick={() => goToLF(r.lfId)}
-                        title="เปิด LF detail"
+                        onClick={() => goToSource(r)}
+                        title={r.sourceType === 'lf' ? 'เปิด LF detail' : 'ไปยัง Carry-over Report'}
                         className="p-1 text-slate-400 hover:text-[#1B3A5C]"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -526,7 +569,10 @@ export default function AggregateModeAudit() {
             </div>
 
             <div className="space-y-2 text-sm">
-              <div className="flex gap-2"><span className="text-slate-500 min-w-[80px]">LF:</span><span className="font-mono font-semibold">{pendingFix.lfNumber}</span></div>
+              <div className="flex gap-2">
+                <span className="text-slate-500 min-w-[80px]">{pendingFix.sourceType === 'lf' ? 'LF:' : 'Adjustment:'}</span>
+                <span className="font-mono font-semibold">{pendingFix.sourceLabel}</span>
+              </div>
               <div className="flex gap-2"><span className="text-slate-500 min-w-[80px]">ลูกค้า:</span><span className="font-medium">{pendingFix.customerShortName}</span></div>
             </div>
 
