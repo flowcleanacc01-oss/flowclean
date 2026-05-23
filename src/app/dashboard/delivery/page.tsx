@@ -2590,7 +2590,7 @@ export default function DeliveryPage() {
                 <p className="font-medium mb-1">🖨️ พิมพ์ SD แยกตามลูกค้า — ทีเดียวจบ</p>
                 <ul className="list-disc list-inside space-y-0.5">
                   <li>คลิก <strong>&quot;พิมพ์&quot;</strong> ที่แถวลูกค้า → พิมพ์เฉพาะรายนั้น (pile per customer)</li>
-                  <li>หรือ ☑ เลือกหลายลูกค้า → <strong>&quot;พิมพ์รวมทั้งหมด&quot;</strong> → ระบบใส่ cover page แยกแต่ละลูกค้าให้</li>
+                  <li>หรือ ☑ เลือกหลายลูกค้า → <strong>&quot;พิมพ์รวมทั้งหมด&quot;</strong> → ขึ้นหน้าใหม่ระหว่างลูกค้า</li>
                   <li>SD ที่พิมพ์แล้วถูก mark <code>isPrinted=true</code> อัตโนมัติ + หายจาก list ครั้งต่อไป</li>
                 </ul>
               </div>
@@ -2732,28 +2732,13 @@ export default function DeliveryPage() {
               <div id="print-quick-dn">
                 {groups.map((g, gIdx) => (
                   <div key={g.customer.id}>
-                    {/* Multi-customer mode: cover page + page break ก่อนทุกลูกค้า (รวม group แรก ถ้ามี ≥2 customers) */}
-                    {quickPrintTarget.mode === 'multi' && groups.length > 1 && (
-                      <div style={gIdx > 0 ? { pageBreakBefore: 'always' } : undefined}
-                        className="cover-page text-center py-16 border-2 border-slate-300 rounded-lg my-6 bg-slate-50">
-                        <div className="text-xs text-slate-500 uppercase tracking-widest mb-3">Quick Print SD</div>
-                        <div className="text-3xl font-bold text-[#1B3A5C] mb-2">{g.customer.shortName || g.customer.name}</div>
-                        <div className="text-sm text-slate-600 mb-4">{g.customer.name}</div>
-                        <div className="text-sm">
-                          <span className="text-slate-500">จำนวน</span>{' '}
-                          <strong className="text-[#1B3A5C] text-lg">{g.dns.length}</strong>{' '}
-                          <span className="text-slate-500">ใบ</span>
-                        </div>
-                        <div className="text-xs text-slate-400 mt-2">
-                          {g.dns.length > 0 && <>วันที่ {formatDate(g.dns[0].date)} ถึง {formatDate(g.dns[g.dns.length - 1].date)}</>}
-                        </div>
-                        <div className="text-[10px] text-slate-400 mt-4">ลูกค้าที่ {gIdx + 1} จาก {groups.length}</div>
-                      </div>
-                    )}
+                    {/* 356: pageBreak ระหว่างลูกค้า (ลบ cover page ออกตาม feedback ติ๊ด)
+                        - group แรก: ไม่ break
+                        - group 2+: break ขึ้นหน้าใหม่
+                        - ระหว่าง SD ใน group เดียวกัน: break (เดิม) */}
                     {g.dns.map((dn, dnIdx) => (
                       <div key={dn.id}>
-                        {/* page break: ก่อน SD ตัวที่ ≥2 ใน group เดียวกัน, หรือ ก่อน group ใหม่ใน single-mode */}
-                        {(dnIdx > 0 || (gIdx > 0 && quickPrintTarget.mode !== 'multi')) && (
+                        {(dnIdx > 0 || gIdx > 0) && (
                           <div style={{ pageBreakBefore: 'always' }} />
                         )}
                         <DeliveryNotePrint note={dn} customer={g.customer} company={companyInfo} catalog={linenCatalog}
