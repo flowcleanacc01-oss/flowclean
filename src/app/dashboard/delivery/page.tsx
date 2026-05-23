@@ -105,6 +105,24 @@ export default function DeliveryPage() {
     setSelectedDnIds([])
     router.replace('/dashboard/delivery')
   }
+
+  // P5: มาจากปฏิทินขนส่ง (?createFor=custId&date=YYYY-MM-DD) → เปิด create modal prefilled (ครั้งเดียว)
+  const createForHandledRef = useRef(false)
+  useEffect(() => {
+    if (createForHandledRef.current) return
+    const createFor = searchParams.get('createFor')
+    if (!createFor) return
+    createForHandledRef.current = true
+    const date = searchParams.get('date') || todayISO()
+    setShowCreate(true); setBatchMode(false)
+    setSelCustomerId(createFor); setSelFormIds([]); setDeliveryItems([])
+    setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes('')
+    setDnDate(date)
+    setDnDiscount(0); setDnDiscountNote(''); setDnExtraCharge(0); setDnExtraChargeNote('')
+    setDnIsExtraRound(false)
+    router.replace('/dashboard/delivery')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
   const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false)
   const [showPrintList, setShowPrintList] = useState(false)
   const [showBulkPrint, setShowBulkPrint] = useState(false)

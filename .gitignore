@@ -53,3 +53,7 @@ AGENTS.md
 # Local data exports from diagnostic scripts (may contain customer names)
 scripts/*.json
 scripts/*.csv
+
+# Supabase CLI artifacts (token เก็บที่ ~/.supabase/, project-ref ไม่ secret แต่กัน noise)
+supabase/.temp/
+.supabase/

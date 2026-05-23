@@ -75,7 +75,7 @@ function daysBetween(fromIso: string, toIso: string): number {
   return Math.round(diffMs / (1000 * 60 * 60 * 24))
 }
 
-function isScheduledDay(
+export function isScheduledDay(
   date: string,
   customer: Pick<Customer, 'scheduleType' | 'scheduleDays' | 'scheduleStartDate' | 'scheduleEveryNDays' | 'scheduleBiweeklyAnchorWeek'>,
 ): boolean {
