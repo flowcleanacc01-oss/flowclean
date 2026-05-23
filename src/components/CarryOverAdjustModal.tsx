@@ -319,7 +319,7 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
     const items = [...itemMap.entries()].map(([code, delta]) => ({ code, delta }))
     // 340.3: Capture aggregate snapshot (กัน drift เมื่อ customer toggle config ภายหลัง)
     const snapshot = hasAggregateGroups
-      ? buildAggregateSnapshot(customer?.aggregateSizeGroups)
+      ? buildAggregateSnapshot(customer?.aggregateSizeGroups, linenCatalog)
       : undefined
     const typeLabel = type === 'reset' ? 'Reset' : 'Adjust'
     if (editing) {

@@ -27,22 +27,41 @@ import type {
 } from '@/types'
 import { getGroupAnchorCode } from './aggregate-groups'
 
-/** Snapshot ของ aggregate config ที่ LF บันทึกตอนสร้าง */
+/** Snapshot ของ aggregate config ที่ LF บันทึกตอนสร้าง
+ *  A1 (354.1): เพิ่ม anchorCode per group → drift-proof reprint
+ *  - LF เก่า ก่อน A1 → anchorCode undefined → fallback หาจาก catalog/customer
+ *  - LF ใหม่ → snapshot anchor ตั้งแต่สร้าง → reprint ใช้ anchor เดิม ไม่ใช่ปัจจุบัน
+ */
 export type AggregateSnapshot = Record<
   string,
-  { col2Mode: 'aggregate' | 'per_row'; col5Mode: 'aggregate' | 'per_row' }
+  {
+    col2Mode: 'aggregate' | 'per_row'
+    col5Mode: 'aggregate' | 'per_row'
+    /** A1: anchor code ตอน LF สร้าง — กัน drift เมื่อ customer config เปลี่ยน */
+    anchorCode?: string
+  }
 >
 
-/** สร้าง snapshot จาก customer.aggregateSizeGroups (สำหรับ LF ใหม่ + fallback ของ LF เก่า) */
+/** สร้าง snapshot จาก customer.aggregateSizeGroups (สำหรับ LF ใหม่ + fallback ของ LF เก่า)
+ *  A1: รับ catalog เป็น optional → ถ้าให้มา → คำนวณ anchor + snapshot ไว้ด้วย
+ */
 export function buildAggregateSnapshot(
   configs: AggregateSizeGroupConfig[] | undefined,
+  catalog?: LinenItemDef[],
 ): AggregateSnapshot | undefined {
   if (!configs || configs.length === 0) return undefined
   const snapshot: AggregateSnapshot = {}
   for (const c of configs) {
     snapshot[c.groupKey] = {
       col2Mode: c.col2Mode,
-      col5Mode: c.col5Mode ?? 'aggregate', // default aggregate ตามที่ระบุใน type
+      col5Mode: c.col5Mode ?? 'aggregate',
+    }
+    // A1: snapshot anchor ถ้ามี catalog
+    if (catalog) {
+      const groupItems = catalog.filter(i => i.sizeGroup === c.groupKey)
+      if (groupItems.length > 0) {
+        snapshot[c.groupKey].anchorCode = getGroupAnchorCode(groupItems, c.anchorCode)
+      }
     }
   }
   return snapshot

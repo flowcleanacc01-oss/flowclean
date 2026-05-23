@@ -375,9 +375,13 @@ export interface LinenForm {
   groupInputs?: Record<string, { col5?: number; col2?: number }>
   // 330 — snapshot ของ aggregateSizeGroups ตอนสร้าง LF (กัน drift เมื่อ customer toggle ภายหลัง)
   // Pattern เดียวกับ workflowMode snapshot (265) — getCarryOver ใช้ snapshot ของ LF แต่ละใบ
-  // - { [groupKey]: { col2Mode, col5Mode } }
-  // - ถ้าไม่มี (LF เก่าก่อน 330) → getCarryOver fallback ใช้ customer.aggregateSizeGroups ปัจจุบัน
-  aggregateSnapshot?: Record<string, { col2Mode: 'aggregate' | 'per_row'; col5Mode: 'aggregate' | 'per_row' }>
+  // A1 (354.1): เพิ่ม anchorCode → drift-proof reprint (ถ้า anchor ของ customer เปลี่ยน
+  //             LF เก่ายัง show anchor ของตัวเองตอนสร้าง)
+  aggregateSnapshot?: Record<string, {
+    col2Mode: 'aggregate' | 'per_row'
+    col5Mode: 'aggregate' | 'per_row'
+    anchorCode?: string
+  }>
 }
 
 // ============================================================
@@ -801,8 +805,13 @@ export interface CarryOverAdjustment {
    *  กัน drift เมื่อ customer toggle aggregate config ภายหลัง
    *  - แตะ adj ก่อนเปลี่ยน config: snapshot = config เดิม
    *  - แสดง audit ว่า adj นี้ apply ภายใต้ config แบบไหน
+   *  A1: เพิ่ม anchorCode เหมือน LF snapshot
    */
-  aggregateSnapshot?: Record<string, { col2Mode: 'aggregate' | 'per_row'; col5Mode: 'aggregate' | 'per_row' }>
+  aggregateSnapshot?: Record<string, {
+    col2Mode: 'aggregate' | 'per_row'
+    col5Mode: 'aggregate' | 'per_row'
+    anchorCode?: string
+  }>
   /** 340.3: บันทึกว่า adj นี้ใช้ auto-balance pattern (= redistribute, not add) */
   autoBalancedAnchor?: boolean
 }

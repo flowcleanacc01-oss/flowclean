@@ -444,8 +444,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // 330 — auto-snapshot aggregateSizeGroups ถ้า caller ไม่ระบุ + customer มี config
     // กัน drift ตามเหตุผลเดียวกับ workflowMode snapshot (265)
     const customer = customers.find(c => c.id === f.customerId)
+    // A1: pass linenCatalog → snapshot includes anchorCode (drift-proof reprint)
     const autoAggSnapshot = f.aggregateSnapshot
-      ?? buildAggregateSnapshot(customer?.aggregateSizeGroups)
+      ?? buildAggregateSnapshot(customer?.aggregateSizeGroups, linenCatalog)
     const newForm: LinenForm = {
       bagsSentCount: 0, bagsPackCount: 0,
       deptDrying: false, deptIroning: false, deptFolding: false, deptQc: false,

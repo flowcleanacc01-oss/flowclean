@@ -21,35 +21,49 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
   const catalogNameMap = Object.fromEntries(catalog.map(i => [i.code, i.name]))
   const nameMap = qtNameMap || catalogNameMap
 
-  // 341: aggregate group meta — anchor + col2Agg/col5Agg flags
-  //   ใช้ customer.aggregateSizeGroups (ปัจจุบัน) — print ไม่ใช้ form.aggregateSnapshot
-  //   เพราะ snapshot เก็บแค่ col2Mode/col5Mode ไม่มี anchorCode
+  // 341 + A1: aggregate group meta — anchor + col2Agg/col5Agg flags
+  //   A1: ใช้ form.aggregateSnapshot ก่อน (drift-proof) → fallback customer.aggregateSizeGroups
+  //   col2Mode/col5Mode มาจาก snapshot, anchorCode จาก snapshot ถ้ามี ไม่งั้น compute จาก catalog
   const aggMeta = useMemo(() => {
     const meta = new Map<string, {
       groupKey: string; anchorCode: string; isAnchor: boolean
       col2Agg: boolean; col5Agg: boolean
       groupSize: number; isFirstInGroup: boolean; isLastInGroup: boolean
     }>()
-    if (!customer.aggregateSizeGroups || customer.aggregateSizeGroups.length === 0) return meta
-    for (const cfg of customer.aggregateSizeGroups) {
-      const col5Agg = (cfg.col5Mode ?? 'aggregate') === 'aggregate'
-      const col2Agg = cfg.col2Mode === 'aggregate'
+    // A1: prefer LF snapshot (drift-proof) — fallback customer current
+    const snapshot = form.aggregateSnapshot
+    const cfgs = customer.aggregateSizeGroups || []
+    if (!snapshot && cfgs.length === 0) return meta
+    // กลุ่ม keys ที่จะ render (รวม snapshot + customer config)
+    const groupKeys = new Set<string>([
+      ...Object.keys(snapshot || {}),
+      ...cfgs.map(c => c.groupKey),
+    ])
+    for (const groupKey of groupKeys) {
+      // อ่าน col2/col5 mode + anchor จาก snapshot ก่อน
+      const snap = snapshot?.[groupKey]
+      const cfg = cfgs.find(c => c.groupKey === groupKey)
+      const col2Mode = snap?.col2Mode ?? cfg?.col2Mode ?? 'per_row'
+      const col5Mode = snap?.col5Mode ?? cfg?.col5Mode ?? 'aggregate'
+      const col5Agg = col5Mode === 'aggregate'
+      const col2Agg = col2Mode === 'aggregate'
       if (!col5Agg && !col2Agg) continue
       const groupItems = catalog
-        .filter(i => i.sizeGroup === cfg.groupKey)
+        .filter(i => i.sizeGroup === groupKey)
         .sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999))
       if (groupItems.length === 0) continue
-      const anchorCode = getGroupAnchorCode(groupItems, cfg.anchorCode)
+      // A1: anchor priority — snapshot.anchorCode → customer config anchor → catalog median
+      const anchorCode = snap?.anchorCode || getGroupAnchorCode(groupItems, cfg?.anchorCode)
       groupItems.forEach((item, idx) => {
         meta.set(item.code, {
-          groupKey: cfg.groupKey, anchorCode, isAnchor: item.code === anchorCode,
+          groupKey, anchorCode, isAnchor: item.code === anchorCode,
           col2Agg, col5Agg, groupSize: groupItems.length,
           isFirstInGroup: idx === 0, isLastInGroup: idx === groupItems.length - 1,
         })
       })
     }
     return meta
-  }, [customer.aggregateSizeGroups, catalog])
+  }, [form.aggregateSnapshot, customer.aggregateSizeGroups, catalog])
 
   const hasAggregate = aggMeta.size > 0
   const isTrustCustomer = form.workflowMode === 'trust_customer'
