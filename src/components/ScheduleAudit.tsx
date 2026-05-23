@@ -31,12 +31,14 @@ const STATUS_CONFIG: Record<ScheduleAuditDayResult['status'], { label: string; c
   'extra-only':      { label: 'มีแต่รอบเสริม',   color: 'text-amber-700',   bg: 'bg-amber-50',    border: 'border-amber-200',   icon: AlertTriangle },
   'multiple-regular':{ label: 'หลายใบในวันเดียว', color: 'text-orange-700', bg: 'bg-orange-50',   border: 'border-orange-200',  icon: AlertTriangle },
   'off-schedule':    { label: 'นอก schedule',    color: 'text-slate-600',   bg: 'bg-slate-50',    border: 'border-slate-200',   icon: Calendar },
+  skipped:           { label: 'ข้าม (skip)',     color: 'text-purple-700',  bg: 'bg-purple-50',   border: 'border-purple-200',  icon: Calendar },
+  'override-extra':  { label: 'เพิ่มรอบ (extra)', color: 'text-blue-700',    bg: 'bg-blue-50',     border: 'border-blue-200',    icon: CheckCircle2 },
 }
 
 export default function ScheduleAudit() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { customers, deliveryNotes, getCustomer, updateDeliveryNote } = useStore()
+  const { customers, deliveryNotes, getCustomer, updateDeliveryNote, scheduleOverrides } = useStore()
 
   const urlCustomerId = searchParams.get('customerId')
 
@@ -92,8 +94,10 @@ export default function ScheduleAudit() {
   const audit = useMemo(() => {
     if (!selectedCustomer) return null
     const customerDNs = deliveryNotes.filter(d => d.customerId === selectedCustomer.id)
-    return runScheduleAudit(selectedCustomer, customerDNs, dateFrom, dateTo)
-  }, [selectedCustomer, deliveryNotes, dateFrom, dateTo])
+    // P2.3: pass overrides → audit จะ adjust expected dates ตาม skip/extra
+    const overrides = scheduleOverrides.filter(o => o.customerId === selectedCustomer.id)
+    return runScheduleAudit(selectedCustomer, customerDNs, dateFrom, dateTo, overrides)
+  }, [selectedCustomer, deliveryNotes, dateFrom, dateTo, scheduleOverrides])
 
   // 311.5 — Migration section: วันที่มี regular SD ≥ 2 (อาจลืม tag extra)
   const multipleRegularGroups = useMemo(
