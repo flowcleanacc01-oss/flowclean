@@ -232,12 +232,13 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
                 ? (row.col6_factoryPackSend || 0) - (row.col2_hotelCountIn + row.col3_hotelClaimCount)
                 : (row.col6_factoryPackSend || 0) - row.col5_factoryClaimApproved
             }
-            // 341 + 352: visual brace — เส้นแนวนอน 1px slate-400 ที่ขอบบน/ล่างของกลุ่ม
-            //   ลบเส้นแนวตั้ง (border-l/r) ออก + ลดความหนา 2px → 1px (ติ๊ด feedback bac6a45)
+            // 341 + 352: visual brace — เส้นแนวนอน 2px slate-400 (เลย iter 2)
+            //   ลบเส้นแนวตั้ง (border-l/r) ออก · 2px slate-500 → 1px slate-400 (บางไป) →
+            //   2px slate-400: หนาเดิม + สีอ่อนกว่า = เห็นชัดแต่ไม่ดิ่ง
             const rowCls = m ? cn(
               'group-row',
-              m.isFirstInGroup && 'border-t border-t-slate-400',
-              m.isLastInGroup && 'border-b border-b-slate-400',
+              m.isFirstInGroup && 'border-t-2 border-t-slate-400',
+              m.isLastInGroup && 'border-b-2 border-b-slate-400',
             ) : ''
             return (
               <tr key={row.code} className={rowCls} style={{ breakInside: 'avoid' }}>
