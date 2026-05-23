@@ -446,7 +446,7 @@ function CellChip({
     <button
       type="button"
       draggable={draggable}
-      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart() }}
+      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', cell.date); onDragStart() }}
       onDragEnd={onDragEnd}
       onClick={onClick}
       disabled={!onClick && !draggable}
