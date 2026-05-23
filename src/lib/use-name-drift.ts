@@ -9,7 +9,6 @@
  */
 import { useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { isProtectedCode } from '@/lib/protected-codes'
 import type { QuotationStatus } from '@/types'
 
 export interface DriftEntry {
@@ -29,8 +28,6 @@ export function useNameDrift() {
     for (const qt of quotations) {
       for (const it of qt.items || []) {
         const code = it.code
-        // 338: X-prefix = protected variety → skip drift scan (อยู่นอก catalog โดยตั้งใจ)
-        if (isProtectedCode(code)) continue
         const catalogName = catalogByCode.get(code)
         // ถ้า code ไม่อยู่ใน catalog (orphan) → ข้าม (เป็นปัญหาคนละแบบ ใช้ MergeCodesTool)
         if (catalogName === undefined) continue

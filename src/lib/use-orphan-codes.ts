@@ -11,7 +11,6 @@
  */
 import { useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { isProtectedCode } from '@/lib/protected-codes'
 import type { QuotationStatus, CarryOverAdjustmentType } from '@/types'
 
 /** 226.A: customer.* fields ที่อาจมี orphan code */
@@ -60,8 +59,7 @@ export function useOrphanCodes() {
     for (const qt of quotations) {
       for (const it of qt.items || []) {
         const code = (it.code || '').trim()
-        // 338: X-prefix = protected variety → skip orphan scan
-        if (!code || catalogCodes.has(code) || isProtectedCode(code)) continue
+        if (!code || catalogCodes.has(code)) continue
         const e = ensure(code)
         addName(e, it.name)
         e.totalRows++
@@ -76,8 +74,7 @@ export function useOrphanCodes() {
     for (const lf of linenForms) {
       const orphanRows = (lf.rows || []).filter(r => {
         const code = (r.code || '').trim()
-        // 338: X-prefix = protected variety → skip orphan scan
-        return code && !catalogCodes.has(code) && !isProtectedCode(code)
+        return code && !catalogCodes.has(code)
       })
       if (orphanRows.length === 0) continue
       // group by code
@@ -104,8 +101,7 @@ export function useOrphanCodes() {
       for (const item of dn.items || []) {
         if (item.isAdhoc) continue
         const code = (item.code || '').trim()
-        // 338: X-prefix = protected variety → skip orphan scan
-        if (!code || catalogCodes.has(code) || isProtectedCode(code)) continue
+        if (!code || catalogCodes.has(code)) continue
         const e = ensure(code)
         e.totalRows++
         const itemName = (item as { name?: string }).name || ''
@@ -128,8 +124,7 @@ export function useOrphanCodes() {
       const caCust = custMap.get(ca.customerId)
       for (const it of ca.items || []) {
         const code = (it.code || '').trim()
-        // 338: X-prefix = protected variety → skip orphan scan
-        if (!code || catalogCodes.has(code) || isProtectedCode(code)) continue
+        if (!code || catalogCodes.has(code)) continue
         const e = ensure(code)
         e.totalRows++
         e.coas.push({
@@ -142,21 +137,20 @@ export function useOrphanCodes() {
     }
 
     // 5. Customer (226.A) — scan enabledItems / priceList / priceHistory
-    // 338: X-prefix = protected variety → skip orphan scan
     for (const c of customers) {
       const sources: { code: string; source: CustomerOrphanSource; price?: number }[] = []
       for (const code of c.enabledItems || []) {
         const trimmed = (code || '').trim()
-        if (trimmed && !catalogCodes.has(trimmed) && !isProtectedCode(trimmed)) sources.push({ code: trimmed, source: 'enabledItems' })
+        if (trimmed && !catalogCodes.has(trimmed)) sources.push({ code: trimmed, source: 'enabledItems' })
       }
       for (const p of c.priceList || []) {
         const trimmed = (p.code || '').trim()
-        if (trimmed && !catalogCodes.has(trimmed) && !isProtectedCode(trimmed)) sources.push({ code: trimmed, source: 'priceList', price: p.price })
+        if (trimmed && !catalogCodes.has(trimmed)) sources.push({ code: trimmed, source: 'priceList', price: p.price })
       }
       for (const p of c.priceHistory || []) {
         const ph = p as unknown as { code?: string }
         const trimmed = (ph.code || '').trim()
-        if (trimmed && !catalogCodes.has(trimmed) && !isProtectedCode(trimmed)) sources.push({ code: trimmed, source: 'priceHistory' })
+        if (trimmed && !catalogCodes.has(trimmed)) sources.push({ code: trimmed, source: 'priceHistory' })
       }
       // Group by code per customer (1 customer × 1 code = 1 entry, multiple sources)
       const byCode = new Map<string, { sources: Set<CustomerOrphanSource>; priceListPrice: number | null }>()

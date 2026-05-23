@@ -18,7 +18,7 @@ import { ArrowRight, AlertTriangle, CheckCircle2, Loader2, Lock, Users, FileChec
 import { useStore } from '@/lib/store'
 import { pushUndoAction, type SnapshotChange } from '@/lib/undo-stack'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
-import { isProtectedCode, PROTECTED_CODE_REASON } from '@/lib/protected-codes'
+import { isProtectedItem, PROTECTED_CODE_REASON } from '@/lib/protected-codes'
 import { cn } from '@/lib/utils'
 
 type Stat = { label: string; count: number; affectedIds: string[] }
@@ -79,14 +79,14 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
   const sourceOptions = useMemo(() => {
     const catItems = sortedCatalog.map(i => ({
       code: i.code, name: i.name, isOrphan: false, defaultPrice: i.defaultPrice,
-      isProtected: isProtectedCode(i.code),
+      isProtected: isProtectedItem(i),
     }))
     const orphanItems = orphans.map(e => ({
       code: e.code,
       name: e.names[0] || '(ไม่พบชื่อ — orphan)',
       isOrphan: true,
       defaultPrice: e.avgPrice,
-      isProtected: isProtectedCode(e.code),
+      isProtected: false, // orphan ไม่อยู่ใน catalog → lock ไม่ได้
     }))
     return [...catItems, ...orphanItems].sort((a, b) => a.code.localeCompare(b.code))
   }, [sortedCatalog, orphans])
@@ -94,9 +94,10 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
   const sourceItem = sourceOptions.find(i => i.code === sourceCode)
   const targetItem = linenCatalog.find(i => i.code === targetCode)
 
-  // 338: Protected code lock — block merge ทั้งสองทิศ (source + target)
-  const sourceProtected = isProtectedCode(sourceCode)
-  const targetProtected = isProtectedCode(targetCode)
+  // 347: Protected item lock — block merge ทั้งสองทิศ (source + target)
+  //      lookup จาก catalog ปัจจุบัน (field-based — ไม่ใช่ regex)
+  const sourceProtected = isProtectedItem(linenCatalog.find(i => i.code === sourceCode))
+  const targetProtected = isProtectedItem(linenCatalog.find(i => i.code === targetCode))
   const isProtectedBlocked = sourceProtected || targetProtected
 
   // Build preview stats
@@ -376,7 +377,7 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
                 <option key={i.code} value={i.code}>
                   {i.code} — {i.name}
                   {i.isOrphan ? ' ⚠ (orphan)' : ''}
-                  {i.isProtected ? ' 🔒 (protected)' : ''}
+                  {i.isProtected ? ' 🔒 (locked)' : ''}
                 </option>
               ))}
             </select>
@@ -385,7 +386,7 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
                 {sourceItem.name}
                 {sourceItem.defaultPrice > 0 && <> · ราคา {sourceItem.defaultPrice}</>}
                 {sourceItem.isOrphan && <span className="ml-1 text-orange-600">· orphan (ไม่อยู่ใน catalog แล้ว)</span>}
-                {sourceItem.isProtected && <span className="ml-1 text-purple-700">· 🔒 protected (X-prefix)</span>}
+                {sourceItem.isProtected && <span className="ml-1 text-purple-700">· 🔒 locked</span>}
               </p>
             )}
           </div>
@@ -399,10 +400,10 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
             >
               <option value="">— เลือกรหัสปลายทาง —</option>
               {sortedCatalog.filter(i => i.code !== sourceCode).map(i => {
-                const tProt = isProtectedCode(i.code)
+                const tProt = isProtectedItem(i)
                 return (
                   <option key={i.code} value={i.code}>
-                    {i.code} — {i.name}{tProt ? ' 🔒 (protected)' : ''}
+                    {i.code} — {i.name}{tProt ? ' 🔒 (locked)' : ''}
                   </option>
                 )
               })}
@@ -410,31 +411,53 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
             {targetItem && (
               <p className="text-[11px] text-slate-500 mt-1">
                 {targetItem.name} · ราคา {targetItem.defaultPrice}
-                {targetProtected && <span className="ml-1 text-purple-700">· 🔒 protected (X-prefix)</span>}
+                {targetProtected && <span className="ml-1 text-purple-700">· 🔒 locked</span>}
               </p>
             )}
           </div>
         </div>
 
-        {/* 338: Protected code block — แสดงเมื่อ source/target เป็น X-prefix */}
-        {isProtectedBlocked && (
-          <div className="bg-purple-50 border-2 border-purple-300 rounded-lg px-4 py-3 text-sm flex items-start gap-2">
-            <Lock className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
-            <div className="text-purple-900">
-              <strong>🔒 รหัสนี้ถูกป้องกัน — ไม่สามารถ merge ได้</strong>
-              <p className="mt-1 text-xs text-purple-700">{PROTECTED_CODE_REASON}</p>
-              <p className="mt-1 text-xs text-purple-700">
-                ติ๊ดใช้ X-prefix เก็บ variety ของลูกค้าเฉพาะราย (เช่น SEN) — การ merge อาจทำให้ลูกค้ารายอื่นได้รับของผิด
-              </p>
-              {sourceProtected && (
-                <p className="mt-1 text-xs">→ ยกเลิก source <code className="px-1 rounded bg-purple-100">{sourceCode}</code></p>
-              )}
-              {targetProtected && (
-                <p className="mt-1 text-xs">→ ยกเลิก target <code className="px-1 rounded bg-purple-100">{targetCode}</code></p>
-              )}
+        {/* 347: Protected item block — แสดงเมื่อ source/target ถูกล็อค (is_protected=true) */}
+        {isProtectedBlocked && (() => {
+          const srcLocked = linenCatalog.find(i => i.code === sourceCode)
+          const tgtLocked = linenCatalog.find(i => i.code === targetCode)
+          return (
+            <div className="bg-purple-50 border-2 border-purple-300 rounded-lg px-4 py-3 text-sm flex items-start gap-2">
+              <Lock className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+              <div className="text-purple-900 flex-1">
+                <strong>🔒 รายการนี้ถูกล็อค — ไม่สามารถ merge ได้</strong>
+                <p className="mt-1 text-xs text-purple-700">{PROTECTED_CODE_REASON}</p>
+                {sourceProtected && srcLocked && (
+                  <div className="mt-1.5 text-xs bg-white/50 rounded px-2 py-1 border border-purple-200">
+                    <strong>Source {sourceCode}</strong> ({srcLocked.name})
+                    {srcLocked.protectedReason && <span className="block mt-0.5 text-purple-600">📝 {srcLocked.protectedReason}</span>}
+                    {srcLocked.protectedBy && (
+                      <span className="block mt-0.5 text-[10px] text-purple-500">
+                        ล็อคโดย {srcLocked.protectedBy}
+                        {srcLocked.protectedAt && ` · ${srcLocked.protectedAt.slice(0, 10)}`}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {targetProtected && tgtLocked && (
+                  <div className="mt-1.5 text-xs bg-white/50 rounded px-2 py-1 border border-purple-200">
+                    <strong>Target {targetCode}</strong> ({tgtLocked.name})
+                    {tgtLocked.protectedReason && <span className="block mt-0.5 text-purple-600">📝 {tgtLocked.protectedReason}</span>}
+                    {tgtLocked.protectedBy && (
+                      <span className="block mt-0.5 text-[10px] text-purple-500">
+                        ล็อคโดย {tgtLocked.protectedBy}
+                        {tgtLocked.protectedAt && ` · ${tgtLocked.protectedAt.slice(0, 10)}`}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <p className="mt-1.5 text-[11px] text-purple-600 italic">
+                  ถ้าต้องการ merge จริงๆ → ไปที่หน้ารายการผ้า → คลิก 🔓 ปลดล็อคก่อน
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* Options */}
         <div className="border-t border-slate-100 pt-3 space-y-2">

@@ -1,26 +1,21 @@
 /**
- * 338 — Protected Codes (X-prefix convention)
+ * 338 → 347 — Item-level Lock (replaces X-prefix regex)
  *
- * X-prefix = "customer-specific variety placeholder"
- * Pattern: `X` followed by one or more digits (X1, X12, X001, X042, ...)
+ * History:
+ * - 338: hardcoded regex /^X\d/ → ตั้งใจ block X-prefix variety codes
+ *        แต่ "ดูแปลกๆ" (ติ๊ด feedback) — ผูก convention ของระบบกับ pattern ของ user
+ * - 347: admin lock/unlock per linen_item ผ่าน is_protected field
+ *        + protected_reason / by / at audit
+ *        admin คนอื่นเห็น "อย่าแตะ" แต่ยังปลดล็อคได้ถ้าจำเป็น
  *
- * นโยบายของ X-prefix:
- * - ห้าม merge / clean / rename (ติ๊ดใช้เก็บ variety ของลูกค้าเฉพาะราย เช่น SEN)
- * - ห้าม flag เป็น orphan (อยู่นอก catalog โดยตั้งใจ)
- * - ห้าม flag เป็น name drift / code reuse
- *
- * เหตุผล: AI/tool รู้ pattern นี้ → ไม่ไป suggest merge ผิดเคส (เคย wreck SEN config มาแล้ว)
- *
- * Note: legacy customer codes (X0058 ฯลฯ) ใน LegacyDocument.customerCode ไม่ใช่ linen item code
- * → helper นี้ใช้กับ linen item code เท่านั้น ไม่กระทบ legacy customer scan
+ * Usage:
+ *   const item = catalogMap.get(code)
+ *   if (isProtectedItem(item)) { ... block / warn ... }
  */
+import type { LinenItemDef } from '@/types'
 
-const X_PREFIX_PATTERN = /^X\d/
-
-export function isProtectedCode(code: string | undefined | null): boolean {
-  if (!code) return false
-  return X_PREFIX_PATTERN.test(code.trim())
+export function isProtectedItem(item: LinenItemDef | undefined | null): boolean {
+  return !!item?.isProtected
 }
 
-export const PROTECTED_CODE_LABEL = '🔒 Protected (X-prefix)'
-export const PROTECTED_CODE_REASON = 'X-prefix = customer-specific variety — ห้าม merge / clean / rename'
+export const PROTECTED_CODE_REASON = 'รายการนี้ถูกล็อคโดย admin — ใช้ปุ่ม Unlock ก่อนถ้าต้องการแก้ไข'

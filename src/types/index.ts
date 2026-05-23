@@ -73,6 +73,13 @@ export interface LinenItemDef {
   // เช่น S/T, S/Q, S/K → sizeGroup="BEDSHEET"
   // ใช้กับรายการที่แยกไซส์ตอนนับเข้ายาก (ผ้าใหญ่/ผ้าหลายสี)
   sizeGroup?: string
+  // 347 — Admin Lock (replaces 338 X-prefix regex)
+  // is_protected = TRUE → block merge / warn ที่ tools ต่างๆ
+  // ใช้สื่อสาร admin คนอื่นว่า "อย่าแตะ" + แต่ยังปลดล็อคได้ถ้าจำเป็น
+  isProtected?: boolean
+  protectedReason?: string
+  protectedBy?: string         // user id หรือ name ที่ lock
+  protectedAt?: string         // ISO timestamp
 }
 
 // Standard 21 items + 3 custom slots
