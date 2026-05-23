@@ -26,6 +26,9 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
     customer.scheduleStartDate || new Date().toISOString().slice(0, 10)
   )
   const [scheduleNote, setScheduleNote] = useState<string>(customer.scheduleNote || '')
+  // P2.4 — additional fields for new schedule types
+  const [scheduleEveryNDays, setScheduleEveryNDays] = useState<number>(customer.scheduleEveryNDays || 2)
+  const [scheduleBiweeklyAnchorWeek, setScheduleBiweeklyAnchorWeek] = useState<0 | 1>(customer.scheduleBiweeklyAnchorWeek ?? 0)
   const [aiSuggestion, setAiSuggestion] = useState<ReturnType<typeof detectSchedulePattern> | null>(null)
 
   const customerDNs = useMemo(
@@ -51,16 +54,23 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
     )
   }
 
-  const canSave = scheduleType === 'none'
-    || scheduleType === 'daily'
-    || (scheduleType === 'weekly' && scheduleDays.length > 0)
+  // P2.4 — canSave logic ขยายตาม schedule types
+  const canSave =
+    scheduleType === 'none' ||
+    scheduleType === 'daily' ||
+    (scheduleType === 'weekly' && scheduleDays.length > 0) ||
+    (scheduleType === 'every_n_days' && scheduleEveryNDays >= 1 && !!scheduleStartDate) ||
+    (scheduleType === 'biweekly' && scheduleDays.length > 0 && !!scheduleStartDate)
 
   const handleSave = () => {
     if (!canSave) return
+    const needsWeekdays = scheduleType === 'weekly' || scheduleType === 'biweekly'
     updateCustomer(customer.id, {
       scheduleType,
-      scheduleDays: scheduleType === 'weekly' ? scheduleDays : [],
+      scheduleDays: needsWeekdays ? scheduleDays : [],
       scheduleStartDate: scheduleType === 'none' ? undefined : scheduleStartDate,
+      scheduleEveryNDays: scheduleType === 'every_n_days' ? scheduleEveryNDays : undefined,
+      scheduleBiweeklyAnchorWeek: scheduleType === 'biweekly' ? scheduleBiweeklyAnchorWeek : undefined,
       scheduleNote,
     })
     onClose()
@@ -142,8 +152,8 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
         {/* ประเภท schedule */}
         <div>
           <label className="block text-sm font-semibold text-slate-700 mb-2">ประเภทตารางคิว</label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {(['none', 'weekly', 'daily'] as ScheduleType[]).map(type => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {(['none', 'daily', 'every_n_days', 'weekly', 'biweekly'] as ScheduleType[]).map(type => (
               <button
                 key={type}
                 type="button"
@@ -162,8 +172,8 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
           </div>
         </div>
 
-        {/* วันในสัปดาห์ — แสดงเฉพาะ weekly */}
-        {scheduleType === 'weekly' && (
+        {/* วันในสัปดาห์ — แสดง weekly + biweekly */}
+        {(scheduleType === 'weekly' || scheduleType === 'biweekly') && (
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">วันที่ส่งของ</label>
             <div className="grid grid-cols-7 gap-1.5">
@@ -187,6 +197,66 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
             {scheduleDays.length === 0 && (
               <p className="text-xs text-amber-600 mt-1">เลือกอย่างน้อย 1 วัน</p>
             )}
+          </div>
+        )}
+
+        {/* P2.4 — every_n_days: step input */}
+        {scheduleType === 'every_n_days' && (
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">ส่งทุกกี่วัน</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={scheduleEveryNDays}
+                onChange={e => {
+                  const v = parseInt(e.target.value, 10)
+                  if (!isNaN(v) && v >= 1) setScheduleEveryNDays(v)
+                }}
+                className="w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm text-center font-mono focus:outline-none focus:border-[#3DD8D8] focus:ring-2 focus:ring-[#3DD8D8]/30"
+              />
+              <span className="text-sm text-slate-600">วัน</span>
+              <span className="text-xs text-slate-400 italic">
+                เช่น 2 = ทุก 48hr · 3 = ทุก 72hr · 7 = ทุกสัปดาห์
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* P2.4 — biweekly: anchor week parity */}
+        {scheduleType === 'biweekly' && (
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">สัปดาห์ที่เริ่ม</label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setScheduleBiweeklyAnchorWeek(0)}
+                className={cn(
+                  'px-3 py-2 rounded-lg border text-sm transition-colors',
+                  scheduleBiweeklyAnchorWeek === 0
+                    ? 'border-[#3DD8D8] bg-[#3DD8D8] text-[#1B3A5C] font-semibold'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                )}
+              >
+                สัปดาห์ที่ 1 (เริ่มทันที)
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleBiweeklyAnchorWeek(1)}
+                className={cn(
+                  'px-3 py-2 rounded-lg border text-sm transition-colors',
+                  scheduleBiweeklyAnchorWeek === 1
+                    ? 'border-[#3DD8D8] bg-[#3DD8D8] text-[#1B3A5C] font-semibold'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                )}
+              >
+                สัปดาห์ที่ 2 (เว้นก่อน)
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              ตัดสินจากวันที่เริ่ม schedule: anchor week = สัปดาห์ที่ส่งจริง
+            </p>
           </div>
         )}
 

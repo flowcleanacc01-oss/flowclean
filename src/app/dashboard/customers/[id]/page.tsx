@@ -19,6 +19,7 @@ import RevenueTrendChart from '@/components/RevenueTrendChart'
 import CustomerSearchInline from '@/components/CustomerSearchInline'
 import Modal from '@/components/Modal'
 import ScheduleSetupModal from '@/components/ScheduleSetupModal'
+import ScheduleOverrideList from '@/components/ScheduleOverrideList'
 import AggregateGroupsModal from '@/components/AggregateGroupsModal'
 import { groupCarryOver, customerUsesAggregateGroups } from '@/lib/carry-over-groups'
 
@@ -429,6 +430,11 @@ export default function CustomerDetailPage() {
               </p>
             )}
           </div>
+
+          {/* 311 P2.4 — Schedule Override List (skip/extra/reschedule) */}
+          {customer.scheduleType && customer.scheduleType !== 'none' && (
+            <ScheduleOverrideList customerId={customer.id} />
+          )}
 
           {/* 317: Aggregate Size Groups Card */}
           <div className={cn(
