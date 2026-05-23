@@ -455,6 +455,57 @@ export default function LinenFormGrid({
         </div>
       )}
 
+      {/* 342: Aggregate Groups status — แสดงทุก opt-in group + flag groups ที่ "ไม่ active" ใน LF
+           เคส 42: opt-in 4 groups (BEDSHEET/DUVET_COVER/DUVET_INSERT/MATTRESS_PAD)
+                  แต่ LF แสดง 3 → ต้องรู้ว่ากลุ่ม MATTRESS_PAD ไม่มี items ใน QT */}
+      {customer.aggregateSizeGroups && customer.aggregateSizeGroups.length > 0 && (
+        (() => {
+          const activeGroups: { key: string; size: number }[] = []
+          const inactiveGroups: { key: string; catalogCount: number; reason: string }[] = []
+          for (const cfg of customer.aggregateSizeGroups) {
+            const catalogInGroup = catalog.filter(i => i.sizeGroup === cfg.groupKey)
+            const enabledInGroup = enabledItems.filter(it => catalogMap.get(it.code)?.sizeGroup === cfg.groupKey)
+            if (enabledInGroup.length > 0) {
+              activeGroups.push({ key: cfg.groupKey, size: enabledInGroup.length })
+            } else {
+              inactiveGroups.push({
+                key: cfg.groupKey,
+                catalogCount: catalogInGroup.length,
+                reason: catalogInGroup.length === 0 ? 'ไม่มีใน catalog' : 'ไม่มีใน QT',
+              })
+            }
+          }
+          if (activeGroups.length === 0 && inactiveGroups.length === 0) return null
+          return (
+            <div className="mb-3 bg-indigo-50/40 border border-indigo-200 rounded-lg px-3 py-2 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-indigo-900">📦 Aggregate groups ({customer.aggregateSizeGroups.length}):</span>
+                {activeGroups.map(g => (
+                  <span key={g.key} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-mono">
+                    {g.key} <span className="text-indigo-600">({g.size})</span>
+                  </span>
+                ))}
+                {inactiveGroups.map(g => (
+                  <span key={g.key}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-mono border border-amber-300"
+                    title={`${g.reason} — catalog ${g.catalogCount} items`}>
+                    ⚠ {g.key} <span className="text-amber-700">({g.reason})</span>
+                  </span>
+                ))}
+              </div>
+              {inactiveGroups.length > 0 && (
+                <p className="text-[10px] text-amber-700 mt-1">
+                  💡 กลุ่มที่มีเครื่องหมาย ⚠ ไม่แสดงในตารางด้านล่าง — แก้โดย
+                  {inactiveGroups.some(g => g.catalogCount === 0)
+                    ? ' เพิ่มรายการใน catalog (กำหนด sizeGroup)'
+                    : ' เพิ่มรายการของกลุ่มนั้นใน QT ของลูกค้า'}
+                </p>
+              )}
+            </div>
+          )
+        })()
+      )}
+
       {/* Grid — no overflow wrapper; sticky thead works relative to parent scroll (modal body) */}
       <div className="border border-slate-200 rounded-lg">
         <table className="w-full text-sm">

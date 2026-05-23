@@ -454,12 +454,31 @@ export default function CustomerDetailPage() {
               <div className="space-y-2 text-sm">
                 {customer.aggregateSizeGroups.map(cfg => {
                   const itemsInGroup = linenCatalog.filter(i => i.sizeGroup === cfg.groupKey)
-                  const col5Mode = cfg.col5Mode ?? 'aggregate'  // 321: backward compat
+                  // 342: QT items count — items ที่ active จริงใน LF (จาก accepted QT)
+                  const qtCodes = new Set((linkedQT?.items ?? []).map(it => it.code))
+                  const itemsInQT = itemsInGroup.filter(i => qtCodes.has(i.code))
+                  const isEmptyInLF = itemsInQT.length === 0
+                  const col5Mode = cfg.col5Mode ?? 'aggregate'
                   return (
-                    <div key={cfg.groupKey} className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-2">
+                    <div key={cfg.groupKey} className={cn(
+                      'rounded-lg border p-2',
+                      isEmptyInLF ? 'border-amber-300 bg-amber-50/40' : 'border-indigo-100 bg-indigo-50/30',
+                    )}>
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className="font-mono font-bold text-indigo-700 text-xs">{cfg.groupKey}</span>
-                        <span className="text-[10px] text-slate-500">· {itemsInGroup.length} รายการ</span>
+                        <span className="text-[10px] text-slate-500">
+                          · catalog {itemsInGroup.length} · QT {itemsInQT.length}
+                          {isEmptyInLF && itemsInGroup.length > 0 && (
+                            <span className="ml-1 text-amber-700 font-medium" title="กลุ่มนี้มีรายการใน catalog แต่ไม่มีใน QT — จะไม่แสดงใน LF Grid">
+                              ⚠ ไม่มีใน QT
+                            </span>
+                          )}
+                          {itemsInGroup.length === 0 && (
+                            <span className="ml-1 text-red-700 font-medium" title="ไม่มีรายการใน catalog เลย — เพิ่มรายการที่ใช้ sizeGroup นี้ก่อน">
+                              ⚠ ไม่มีใน catalog
+                            </span>
+                          )}
+                        </span>
                         <span className="ml-auto flex gap-1 flex-wrap">
                           <span
                             title="col2 — ลูกค้าส่งซัก"
@@ -479,12 +498,20 @@ export default function CustomerDetailPage() {
                           </span>
                         </span>
                       </div>
+                      {/* 342: แสดง code + tag ว่ามีใน QT หรือไม่ */}
                       <div className="flex flex-wrap gap-1">
-                        {itemsInGroup.map(it => (
-                          <span key={it.code} className="text-[10px] font-mono text-slate-500">
-                            {it.code}
-                          </span>
-                        ))}
+                        {itemsInGroup.map(it => {
+                          const inQT = qtCodes.has(it.code)
+                          return (
+                            <span key={it.code} className={cn(
+                              'text-[10px] font-mono px-1 rounded',
+                              inQT ? 'text-slate-600' : 'text-slate-400 line-through',
+                            )}
+                            title={inQT ? 'มีใน QT' : 'ไม่มีใน QT — จะไม่แสดงใน LF'}>
+                              {it.code}
+                            </span>
+                          )
+                        })}
                       </div>
                     </div>
                   )
