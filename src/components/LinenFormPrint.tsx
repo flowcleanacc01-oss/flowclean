@@ -147,8 +147,9 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
       return <span className="text-slate-400 text-sm" title={`รวมที่ ${m.anchorCode}`}>{arrowFor(row.code)}</span>
     }
     if (m && aggColumn && m.isAnchor) {
-      const displayVal = value === 0 ? '-' :
-        signed ? (value > 0 ? `+${value}` : `${value}`) : formatNumber(value)
+      // 355: "รวม" label แสดงเฉพาะ value ≠ 0 (clean — ไม่มีค่า ก็ไม่ใส่ label)
+      if (value === 0) return '-'
+      const displayVal = signed ? (value > 0 ? `+${value}` : `${value}`) : formatNumber(value)
       return (
         <div className="flex flex-col items-center leading-none">
           <span className="text-[8px] text-slate-500 mb-0.5">รวม</span>

@@ -312,6 +312,8 @@ export default function CarryOverReportPrint(props: Props) {
       return signed ? (v > 0 ? `+${v}` : `${v}`) : String(v)
     }
     if (m?.isInGroup && m.isAnchor) {
+      // 355: "รวม" label แสดงเฉพาะ value ≠ 0 (clean)
+      if (value === 0) return '-'
       return (
         <div className="flex flex-col items-end leading-none">
           <span className="text-[8px] text-slate-500 mb-0.5">รวม</span>
