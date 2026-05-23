@@ -247,6 +247,13 @@ export default function LinenFormGrid({
     return focusedAgg?.groupKey === groupKey && focusedAgg?.col === col
   }
 
+  // 345: ค้าง/คืน active เมื่อ EITHER col2 หรือ col5 ของ group นี้ focused
+  //      (เพราะ ค้าง = derived จาก col6 - baseline ใช้ค่าทั้งสอง col)
+  const isAggCarryActive = (groupKey: string | undefined) => {
+    if (!groupKey) return false
+    return focusedAgg?.groupKey === groupKey
+  }
+
   // 328.1: clear active states when focus leaves grid entirely
   //   relatedTarget ถ้าอยู่ใน grid = user แค่เลื่อน cell → ไม่ clear
   //   ถ้าอยู่นอก grid (click ออกข้างนอก) = clear ทั้ง row + col
@@ -843,30 +850,49 @@ export default function LinenFormGrid({
                   {/* Calculated - ค้าง(-)/คืน(+) · 333.1: group-aware (theme เดียวกับ col2/col5) */}
                   {/* 265 — trust_customer: ใช้ col6 − (col2+col3) แทน col6 − col5 */}
                   {/* 333.1 — เมื่อ col ที่ใช้คำนวณ (col5/col2) เป็น aggregate → group sum ที่ anchor */}
+                  {/* 345 — เพิ่ม "รวม" label เหนือ anchor cell (theme เดียวกับ col2/col5) */}
                   <td className="px-1 py-1 text-center">
                     {(() => {
-                      // ตรวจว่าควรแสดงแบบ group หรือ per-row
-                      // cross_check + col5Aggregate → group / trust + col2Aggregate → group / ที่เหลือ → per-row
                       const isAggForCarry = !!(aggMeta && (
                         (!isTrustCustomer && aggMeta.col5Aggregate) ||
                         (isTrustCustomer && aggMeta.col2Aggregate)
                       ))
                       if (isAggForCarry && aggMeta) {
                         if (aggMeta.isAnchor) {
-                          // Anchor: group net (sum col6 ทั้งกลุ่ม − baseline ของกลุ่ม)
+                          // Anchor: group net + "รวม" label เหนือ value (theme col2/col5)
                           const gs = groupSums[aggMeta.groupKey]
                           const val = gs ? gs.col6 - gs.baseline : 0
-                          if (val === 0) return <span className="text-slate-400">-</span>
+                          const active = isAggCarryActive(aggMeta.groupKey)
                           return (
-                            <span className={cn(val < 0 ? 'text-red-600 font-medium' : 'text-emerald-600 font-medium')}>
-                              {val > 0 ? `+${val}` : val}
-                            </span>
+                            <div className="flex flex-col items-center">
+                              <div className={cn(
+                                'text-[10px] leading-none mb-0.5 transition-colors',
+                                active ? 'text-[#3DD8D8] font-semibold' : 'text-slate-500',
+                              )}>
+                                รวม
+                              </div>
+                              {val === 0 ? (
+                                <span className="text-slate-400">-</span>
+                              ) : (
+                                <span className={cn(val < 0 ? 'text-red-600 font-medium' : 'text-emerald-600 font-medium')}>
+                                  {val > 0 ? `+${val}` : val}
+                                </span>
+                              )}
+                            </div>
                           )
                         } else {
-                          // Non-anchor: ลูกศรชี้ไป anchor (theme เดียวกับ col2/col5)
+                          // Non-anchor: arrow ↓/↑ → anchor (theme col2/col5)
                           const anchorIdx = enabledItems.findIndex(it => it.code === aggMeta.anchorCode)
                           const dir = rowIndex < anchorIdx ? '↓' : '↑'
-                          return <span className="text-slate-400 text-sm">{dir}</span>
+                          const active = isAggCarryActive(aggMeta.groupKey)
+                          return (
+                            <span className={cn(
+                              'text-sm transition-colors',
+                              active ? 'text-[#3DD8D8]' : 'text-slate-400',
+                            )}>
+                              {dir}
+                            </span>
+                          )
                         }
                       }
                       // Default: per-row diff (เดิม)
