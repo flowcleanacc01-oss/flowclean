@@ -210,21 +210,154 @@ export default function ReportsPage() {
     if (acceptedQT) {
       for (const it of acceptedQT.items) codes.add(it.code)
     }
-    // 336: collapse non-anchor codes ของ aggregate group → แสดงเฉพาะ anchor
-    const collapsed = new Set<string>()
+    // 339: รักษา non-anchor rows + expand group ให้ครบ (เห็น size อื่นในกลุ่ม)
+    //   336 เดิม collapse → ลบ row → ใช้ pattern LF (326-332) คือเก็บ row + arrow ↑/↓ ชี้ anchor
+    //   เพื่อให้ visual brace ทำงาน expand ให้ครบทุก size ใน group ที่ active
+    const expanded = new Set<string>(codes)
     for (const c of codes) {
       const agg = getAggInfoForCode(c)
-      collapsed.add(agg ? agg.anchorCode : c)
+      if (!agg) continue
+      const groupItems = linenCatalog.filter(i => i.sizeGroup === agg.groupKey)
+      for (const gi of groupItems) expanded.add(gi.code)
     }
-    // Sort by catalog order
+    // Sort with group cohesion: groups contiguous (anchor + members ติดกัน — ตาม LF Grid pattern)
     const orderMap = new Map(linenCatalog.map((it, i) => [it.code, i]))
-    return [...collapsed].sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999))
+    const baseSorted = [...expanded].sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999))
+    const result: string[] = []
+    const seen = new Set<string>()
+    for (const code of baseSorted) {
+      if (seen.has(code)) continue
+      const agg = getAggInfoForCode(code)
+      if (agg) {
+        // dump group members sorted by sortOrder
+        const groupCodes = linenCatalog
+          .filter(i => i.sizeGroup === agg.groupKey && expanded.has(i.code))
+          .map(i => i.code)
+          .sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999))
+        for (const gc of groupCodes) {
+          if (!seen.has(gc)) {
+            result.push(gc)
+            seen.add(gc)
+          }
+        }
+      } else {
+        result.push(code)
+        seen.add(code)
+      }
+    }
+    return result
   }, [selCustomerId, linenForms, carryOverAdjustments, linenCatalog, coStartDate, coEndDate, quotations, getAggInfoForCode])
+
+  /** 339: per-code metadata สำหรับ render arrow pattern + visual brace
+   *  isAnchor / isInGroup / first/last in group → drive arrow direction + border classes
+   */
+  const coRowAggMeta = useMemo(() => {
+    type RowMeta = {
+      isInGroup: boolean
+      isAnchor: boolean
+      anchorCode: string
+      anchorIndex: number       // index ใน coActiveCodes
+      indexInList: number       // index ของ row นี้ใน coActiveCodes
+      groupSize: number
+      groupKey: string
+      isFirstInGroup: boolean
+      isLastInGroup: boolean
+    }
+    const meta = new Map<string, RowMeta>()
+    // หา anchor index ของแต่ละ group
+    const groupAnchors = new Map<string, { anchorCode: string; anchorIndex: number }>()
+    coActiveCodes.forEach((code, idx) => {
+      const info = getAggInfoForCode(code)
+      if (info && info.anchorCode === code) {
+        groupAnchors.set(info.groupKey, { anchorCode: code, anchorIndex: idx })
+      }
+    })
+    // หา first/last index ของแต่ละ group ใน coActiveCodes
+    const groupRange = new Map<string, { first: number; last: number; size: number }>()
+    coActiveCodes.forEach((code, idx) => {
+      const info = getAggInfoForCode(code)
+      if (!info) return
+      const existing = groupRange.get(info.groupKey)
+      if (!existing) groupRange.set(info.groupKey, { first: idx, last: idx, size: 1 })
+      else { existing.last = idx; existing.size++ }
+    })
+    coActiveCodes.forEach((code, idx) => {
+      const info = getAggInfoForCode(code)
+      if (!info) {
+        meta.set(code, {
+          isInGroup: false, isAnchor: false, anchorCode: code, anchorIndex: idx,
+          indexInList: idx, groupSize: 0, groupKey: '',
+          isFirstInGroup: false, isLastInGroup: false,
+        })
+        return
+      }
+      const anchor = groupAnchors.get(info.groupKey)
+      const range = groupRange.get(info.groupKey)
+      meta.set(code, {
+        isInGroup: true,
+        isAnchor: info.anchorCode === code,
+        anchorCode: info.anchorCode,
+        anchorIndex: anchor?.anchorIndex ?? idx,
+        indexInList: idx,
+        groupSize: range?.size ?? info.groupSize,
+        groupKey: info.groupKey,
+        isFirstInGroup: range ? idx === range.first : false,
+        isLastInGroup: range ? idx === range.last : false,
+      })
+    })
+    return meta
+  }, [coActiveCodes, getAggInfoForCode])
 
   const itemNameMap = useMemo(
     () => Object.fromEntries(linenCatalog.map(it => [it.code, it.name])),
     [linenCatalog],
   )
+
+  /** 339: row classes สำหรับ visual brace ของ aggregate group (pattern LF 326-332)
+   *  - In-group: bg-indigo tint + border-l-4 indigo
+   *  - First in group: border-t-2 indigo
+   *  - Last in group: border-b-2 indigo
+   */
+  const coRowClasses = (code: string, baseClasses = ''): string => {
+    const m = coRowAggMeta.get(code)
+    return cn(
+      baseClasses || 'border-t border-slate-100',
+      m?.isInGroup && 'bg-indigo-50/40 border-l-4 border-l-indigo-300',
+      m?.isFirstInGroup && '!border-t-2 !border-t-indigo-300',
+      m?.isLastInGroup && '!border-b-2 !border-b-indigo-300',
+    )
+  }
+
+  /** 339: render label cell (code + name + arrow ↑/↓ ถ้า non-anchor) */
+  const renderCoLabel = (code: string) => {
+    const m = coRowAggMeta.get(code)
+    if (m?.isInGroup && !m.isAnchor) {
+      const dir = m.indexInList < m.anchorIndex ? '↓' : '↑'
+      return (
+        <span className="inline-flex items-center gap-1">
+          <span className="text-indigo-400 text-sm font-bold">{dir}</span>
+          <span className="font-mono text-slate-300 mr-0.5">{code}</span>
+          <span className="text-slate-400">{itemNameMap[code]}</span>
+          <span className="ml-1 text-[10px] text-indigo-400 italic">รวมที่ {m.anchorCode}</span>
+        </span>
+      )
+    }
+    return (
+      <>
+        <span className="font-mono text-slate-400 mr-1">{code}</span>
+        <span className="text-slate-700">{itemNameMap[code]}</span>
+        {m?.isInGroup && m.isAnchor && (
+          <span className="ml-1.5 text-[10px] text-indigo-600 font-medium">📦 รวม {m.groupSize} ไซส์</span>
+        )}
+      </>
+    )
+  }
+
+  /** 339: helper — non-anchor cell แสดง dim "·" แทนเลข (ค่าจริงรวมอยู่ที่ anchor row แล้ว) */
+  const isCoNonAnchorRow = (code: string): boolean => {
+    const m = coRowAggMeta.get(code)
+    return !!(m?.isInGroup && !m.isAnchor)
+  }
 
   /** Compute per-day diff for one item code in current mode
    *  336: group-aware — ถ้า code = anchor ของ aggregate group → sum diff ทุก code ใน group
@@ -888,20 +1021,26 @@ export default function ReportsPage() {
                     const v2 = coCompareValues[2][code] || 0
                     const v3 = coCompareValues[3][code] || 0
                     const v4 = coCompareValues[4][code] || 0
+                    const isNonAnchor = isCoNonAnchorRow(code)
+                    const dim = 'text-right px-4 py-2 font-mono text-slate-300'
                     return (
-                      <tr key={code} className="border-t border-slate-100">
-                        <td className="px-4 py-2">
-                          <span className="font-mono text-slate-400 mr-1.5">{code}</span>
-                          <span className="text-slate-700">{itemNameMap[code]}</span>
-                          {(() => {
-                            const agg = getAggInfoForCode(code)
-                            return agg ? <span className="ml-1.5 text-[10px] text-indigo-600 font-medium">📦 รวม {agg.groupSize} ไซส์</span> : null
-                          })()}
-                        </td>
-                        <td className={cn('text-right px-4 py-2 font-mono', v1 < 0 ? 'text-red-600' : v1 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v1 > 0 ? '+' : ''}{v1}</td>
-                        <td className={cn('text-right px-4 py-2 font-mono', v2 < 0 ? 'text-red-600' : v2 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v2 > 0 ? '+' : ''}{v2}</td>
-                        <td className={cn('text-right px-4 py-2 font-mono', v3 < 0 ? 'text-red-600' : v3 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v3 > 0 ? '+' : ''}{v3}</td>
-                        <td className={cn('text-right px-4 py-2 font-mono', v4 < 0 ? 'text-red-600' : v4 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v4 > 0 ? '+' : ''}{v4}</td>
+                      <tr key={code} className={coRowClasses(code)}>
+                        <td className="px-4 py-2">{renderCoLabel(code)}</td>
+                        {isNonAnchor ? (
+                          <>
+                            <td className={dim}>·</td>
+                            <td className={dim}>·</td>
+                            <td className={dim}>·</td>
+                            <td className={dim}>·</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className={cn('text-right px-4 py-2 font-mono', v1 < 0 ? 'text-red-600' : v1 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v1 > 0 ? '+' : ''}{v1}</td>
+                            <td className={cn('text-right px-4 py-2 font-mono', v2 < 0 ? 'text-red-600' : v2 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v2 > 0 ? '+' : ''}{v2}</td>
+                            <td className={cn('text-right px-4 py-2 font-mono', v3 < 0 ? 'text-red-600' : v3 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v3 > 0 ? '+' : ''}{v3}</td>
+                            <td className={cn('text-right px-4 py-2 font-mono', v4 < 0 ? 'text-red-600' : v4 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v4 > 0 ? '+' : ''}{v4}</td>
+                          </>
+                        )}
                       </tr>
                     )
                   })}
@@ -932,33 +1071,43 @@ export default function ReportsPage() {
                     const brought = coBroughtForward[code] || 0
                     const carried = coCarriedAfter[code] || 0
                     const monthTotal = carried - brought
+                    const isNonAnchor = isCoNonAnchorRow(code)
+                    const dim = 'text-right px-2 py-1.5 font-mono text-slate-300'
+                    const dimTotal = 'text-right px-2 py-1.5 font-mono bg-slate-50 text-slate-300'
                     return (
-                      <tr key={code} className="border-t border-slate-100">
-                        <td className="px-3 py-1.5 sticky left-0 bg-white z-10">
-                          <span className="font-mono text-slate-400 mr-1">{code}</span>
-                          <span className="text-slate-700">{itemNameMap[code]}</span>
-                          {(() => {
-                            const agg = getAggInfoForCode(code)
-                            return agg ? <span className="ml-1.5 text-[10px] text-indigo-600 font-medium">📦 รวม {agg.groupSize} ไซส์</span> : null
-                          })()}
+                      <tr key={code} className={coRowClasses(code)}>
+                        <td className={cn('px-3 py-1.5 sticky left-0 z-10',
+                          coRowAggMeta.get(code)?.isInGroup ? 'bg-indigo-50/40' : 'bg-white')}>
+                          {renderCoLabel(code)}
                         </td>
-                        <td className={cn('text-right px-2 py-1.5 font-mono', brought < 0 ? 'text-red-600' : brought > 0 ? 'text-emerald-600' : 'text-slate-400')}>
-                          {brought > 0 ? '+' : ''}{brought}
-                        </td>
-                        {coDaysInRange.map(day => {
-                          const d = computeDailyDiff(selCustomerId, code, day, coMode as CarryOverMode)
-                          return (
-                            <td key={day} className={cn('text-right px-2 py-1.5 font-mono', d < 0 ? 'text-red-600' : d > 0 ? 'text-emerald-600' : 'text-slate-300')}>
-                              {d === 0 ? '·' : (d > 0 ? '+' : '') + d}
+                        {isNonAnchor ? (
+                          <>
+                            <td className={dim}>·</td>
+                            {coDaysInRange.map(day => <td key={day} className={dim}>·</td>)}
+                            <td className={dimTotal}>·</td>
+                            <td className={dimTotal}>·</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className={cn('text-right px-2 py-1.5 font-mono', brought < 0 ? 'text-red-600' : brought > 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                              {brought > 0 ? '+' : ''}{brought}
                             </td>
-                          )
-                        })}
-                        <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50', monthTotal < 0 ? 'text-red-600' : monthTotal > 0 ? 'text-emerald-600' : 'text-slate-400')}>
-                          {monthTotal > 0 ? '+' : ''}{monthTotal}
-                        </td>
-                        <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50 font-semibold', carried < 0 ? 'text-red-600' : carried > 0 ? 'text-emerald-600' : 'text-slate-400')}>
-                          {carried > 0 ? '+' : ''}{carried}
-                        </td>
+                            {coDaysInRange.map(day => {
+                              const d = computeDailyDiff(selCustomerId, code, day, coMode as CarryOverMode)
+                              return (
+                                <td key={day} className={cn('text-right px-2 py-1.5 font-mono', d < 0 ? 'text-red-600' : d > 0 ? 'text-emerald-600' : 'text-slate-300')}>
+                                  {d === 0 ? '·' : (d > 0 ? '+' : '') + d}
+                                </td>
+                              )
+                            })}
+                            <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50', monthTotal < 0 ? 'text-red-600' : monthTotal > 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                              {monthTotal > 0 ? '+' : ''}{monthTotal}
+                            </td>
+                            <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50 font-semibold', carried < 0 ? 'text-red-600' : carried > 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                              {carried > 0 ? '+' : ''}{carried}
+                            </td>
+                          </>
+                        )}
                       </tr>
                     )
                   })}
@@ -989,16 +1138,24 @@ export default function ReportsPage() {
                     const brought = coBroughtForward[code] || 0
                     const carried = coCarriedAfter[code] || 0
                     const yearTotal = carried - brought
+                    const isNonAnchor = isCoNonAnchorRow(code)
+                    const dim = 'text-right px-2 py-1.5 font-mono text-slate-300'
+                    const dimTotal = 'text-right px-2 py-1.5 font-mono bg-slate-50 text-slate-300'
                     return (
-                      <tr key={code} className="border-t border-slate-100">
-                        <td className="px-3 py-1.5 sticky left-0 bg-white z-10">
-                          <span className="font-mono text-slate-400 mr-1">{code}</span>
-                          <span className="text-slate-700">{itemNameMap[code]}</span>
-                          {(() => {
-                            const agg = getAggInfoForCode(code)
-                            return agg ? <span className="ml-1.5 text-[10px] text-indigo-600 font-medium">📦 รวม {agg.groupSize} ไซส์</span> : null
-                          })()}
+                      <tr key={code} className={coRowClasses(code)}>
+                        <td className={cn('px-3 py-1.5 sticky left-0 z-10',
+                          coRowAggMeta.get(code)?.isInGroup ? 'bg-indigo-50/40' : 'bg-white')}>
+                          {renderCoLabel(code)}
                         </td>
+                        {isNonAnchor ? (
+                          <>
+                            <td className={dim}>·</td>
+                            {coMonthsInRange.map(month => <td key={month} className={dim}>·</td>)}
+                            <td className={dimTotal}>·</td>
+                            <td className={dimTotal}>·</td>
+                          </>
+                        ) : (
+                          <>
                         <td className={cn('text-right px-2 py-1.5 font-mono', brought < 0 ? 'text-red-600' : brought > 0 ? 'text-emerald-600' : 'text-slate-400')}>
                           {brought > 0 ? '+' : ''}{brought}
                         </td>
@@ -1046,6 +1203,8 @@ export default function ReportsPage() {
                         <td className={cn('text-right px-2 py-1.5 font-mono bg-slate-50 font-semibold', carried < 0 ? 'text-red-600' : carried > 0 ? 'text-emerald-600' : 'text-slate-400')}>
                           {carried > 0 ? '+' : ''}{carried}
                         </td>
+                          </>
+                        )}
                       </tr>
                     )
                   })}
