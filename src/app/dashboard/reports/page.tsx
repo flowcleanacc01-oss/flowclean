@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatNumber, cn, buildPriceMapFromQT, formatDate, todayISO, startOfMonthISO, endOfMonthISO } from '@/lib/utils'
 import { FileDown, ExternalLink, Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react'
@@ -13,6 +13,7 @@ import MonthlyConsolidationPrint from '@/components/MonthlyConsolidationPrint'
 import CustomerPicker from '@/components/CustomerPicker'
 import CarryOverReportPrint from '@/components/CarryOverReportPrint'
 import { groupCarryOver, customerUsesAggregateGroups } from '@/lib/carry-over-groups'
+import { getGroupAnchorCode } from '@/lib/aggregate-groups'
 import Modal from '@/components/Modal'
 import CarryOverAdjustModal from '@/components/CarryOverAdjustModal'
 import UndoPanel from '@/components/UndoPanel'
@@ -173,6 +174,23 @@ export default function ReportsPage() {
    *  (กัน edge case: เพิ่มรายการใน QT หลัง LF ถูกสร้าง — รายการใหม่ไม่มีใน LF.rows
    *   แต่ user ต้องเห็นใน carry-over report เพื่อตรวจ)
    */
+  // 336: helper — เช็คว่า code นี้อยู่ใน aggregate group ของ customer ไหม
+  //   ใช้ filter coActiveCodes + decide aggregation ใน computeDailyDiff
+  const getAggInfoForCode = useCallback((code: string): { groupKey: string; anchorCode: string; groupSize: number } | null => {
+    if (!selCustomer?.aggregateSizeGroups || selCustomer.aggregateSizeGroups.length === 0) return null
+    const item = linenCatalog.find(c => c.code === code)
+    if (!item?.sizeGroup) return null
+    const cfg = selCustomer.aggregateSizeGroups.find(c => c.groupKey === item.sizeGroup)
+    if (!cfg) return null
+    // ต้องมีอย่างน้อย col5 หรือ col2 = aggregate
+    const col5Agg = (cfg.col5Mode ?? 'aggregate') === 'aggregate'
+    const col2Agg = cfg.col2Mode === 'aggregate'
+    if (!col5Agg && !col2Agg) return null
+    const groupItems = linenCatalog.filter(i => i.sizeGroup === item.sizeGroup)
+    const anchorCode = getGroupAnchorCode(groupItems, cfg.anchorCode)
+    return { groupKey: item.sizeGroup, anchorCode, groupSize: groupItems.length }
+  }, [selCustomer, linenCatalog])
+
   const coActiveCodes = useMemo(() => {
     if (!selCustomerId) return [] as string[]
     const codes = new Set<string>()
@@ -192,25 +210,42 @@ export default function ReportsPage() {
     if (acceptedQT) {
       for (const it of acceptedQT.items) codes.add(it.code)
     }
+    // 336: collapse non-anchor codes ของ aggregate group → แสดงเฉพาะ anchor
+    const collapsed = new Set<string>()
+    for (const c of codes) {
+      const agg = getAggInfoForCode(c)
+      collapsed.add(agg ? agg.anchorCode : c)
+    }
     // Sort by catalog order
     const orderMap = new Map(linenCatalog.map((it, i) => [it.code, i]))
-    return [...codes].sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999))
-  }, [selCustomerId, linenForms, carryOverAdjustments, linenCatalog, coStartDate, coEndDate, quotations])
+    return [...collapsed].sort((a, b) => (orderMap.get(a) ?? 999) - (orderMap.get(b) ?? 999))
+  }, [selCustomerId, linenForms, carryOverAdjustments, linenCatalog, coStartDate, coEndDate, quotations, getAggInfoForCode])
 
   const itemNameMap = useMemo(
     () => Object.fromEntries(linenCatalog.map(it => [it.code, it.name])),
     [linenCatalog],
   )
 
-  /** Compute per-day diff for one item code in current mode */
+  /** Compute per-day diff for one item code in current mode
+   *  336: group-aware — ถ้า code = anchor ของ aggregate group → sum diff ทุก code ใน group
+   *       (non-anchor codes ถูก filter ออกแล้วใน coActiveCodes)
+   */
   const computeDailyDiff = (customerId: string, code: string, day: string, mode: CarryOverMode): number => {
+    const aggInfo = getAggInfoForCode(code)
+    const isAggAnchor = !!(aggInfo && aggInfo.anchorCode === code)
+    // สร้าง set ของ codes ที่อยู่ใน group นี้ (สำหรับ match LF rows + adjustments)
+    const groupCodes = isAggAnchor && aggInfo
+      ? new Set(linenCatalog.filter(i => i.sizeGroup === aggInfo.groupKey).map(i => i.code))
+      : null
+
     let diff = 0
     for (const f of linenForms) {
       if (f.customerId !== customerId || f.date !== day) continue
       // 265: trust LF บังคับ Mode 2
       const effectiveMode: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : mode
       for (const r of f.rows) {
-        if (r.code !== code) continue
+        const matches = groupCodes ? groupCodes.has(r.code) : r.code === code
+        if (!matches) continue
         switch (effectiveMode) {
           case 1: diff += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
           case 2: diff += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
@@ -224,7 +259,8 @@ export default function ReportsPage() {
       if (a.isDeleted || a.customerId !== customerId || a.date !== day || a.type !== 'adjust') continue
       if (!coShowAdjustments && !a.showInCustomerReport) continue
       for (const it of a.items) {
-        if (it.code === code) diff += it.delta || 0
+        const matches = groupCodes ? groupCodes.has(it.code) : it.code === code
+        if (matches) diff += it.delta || 0
       }
     }
     return diff
@@ -857,6 +893,10 @@ export default function ReportsPage() {
                         <td className="px-4 py-2">
                           <span className="font-mono text-slate-400 mr-1.5">{code}</span>
                           <span className="text-slate-700">{itemNameMap[code]}</span>
+                          {(() => {
+                            const agg = getAggInfoForCode(code)
+                            return agg ? <span className="ml-1.5 text-[10px] text-indigo-600 font-medium">📦 รวม {agg.groupSize} ไซส์</span> : null
+                          })()}
                         </td>
                         <td className={cn('text-right px-4 py-2 font-mono', v1 < 0 ? 'text-red-600' : v1 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v1 > 0 ? '+' : ''}{v1}</td>
                         <td className={cn('text-right px-4 py-2 font-mono', v2 < 0 ? 'text-red-600' : v2 > 0 ? 'text-emerald-600' : 'text-slate-400')}>{v2 > 0 ? '+' : ''}{v2}</td>
@@ -897,6 +937,10 @@ export default function ReportsPage() {
                         <td className="px-3 py-1.5 sticky left-0 bg-white z-10">
                           <span className="font-mono text-slate-400 mr-1">{code}</span>
                           <span className="text-slate-700">{itemNameMap[code]}</span>
+                          {(() => {
+                            const agg = getAggInfoForCode(code)
+                            return agg ? <span className="ml-1.5 text-[10px] text-indigo-600 font-medium">📦 รวม {agg.groupSize} ไซส์</span> : null
+                          })()}
                         </td>
                         <td className={cn('text-right px-2 py-1.5 font-mono', brought < 0 ? 'text-red-600' : brought > 0 ? 'text-emerald-600' : 'text-slate-400')}>
                           {brought > 0 ? '+' : ''}{brought}
@@ -950,19 +994,29 @@ export default function ReportsPage() {
                         <td className="px-3 py-1.5 sticky left-0 bg-white z-10">
                           <span className="font-mono text-slate-400 mr-1">{code}</span>
                           <span className="text-slate-700">{itemNameMap[code]}</span>
+                          {(() => {
+                            const agg = getAggInfoForCode(code)
+                            return agg ? <span className="ml-1.5 text-[10px] text-indigo-600 font-medium">📦 รวม {agg.groupSize} ไซส์</span> : null
+                          })()}
                         </td>
                         <td className={cn('text-right px-2 py-1.5 font-mono', brought < 0 ? 'text-red-600' : brought > 0 ? 'text-emerald-600' : 'text-slate-400')}>
                           {brought > 0 ? '+' : ''}{brought}
                         </td>
                         {coMonthsInRange.map(month => {
-                          // Sum daily diffs for this month
+                          // 336: group-aware — ถ้า code = anchor → sum ทุก code ใน group
+                          const aggInfo = getAggInfoForCode(code)
+                          const isAggAnchor = !!(aggInfo && aggInfo.anchorCode === code)
+                          const groupCodes = isAggAnchor && aggInfo
+                            ? new Set(linenCatalog.filter(i => i.sizeGroup === aggInfo.groupKey).map(i => i.code))
+                            : null
                           let monthSum = 0
                           for (const f of linenForms) {
                             if (f.customerId !== selCustomerId || !f.date.startsWith(month)) continue
                             // 265: trust LF บังคับ Mode 2
                             const m: CarryOverMode = f.workflowMode === 'trust_customer' ? 2 : (coMode as CarryOverMode)
                             for (const r of f.rows) {
-                              if (r.code !== code) continue
+                              const matches = groupCodes ? groupCodes.has(r.code) : r.code === code
+                              if (!matches) continue
                               switch (m) {
                                 case 1: monthSum += (r.col6_factoryPackSend || 0) - r.col5_factoryClaimApproved; break
                                 case 2: monthSum += (r.col6_factoryPackSend || 0) - (r.col2_hotelCountIn + r.col3_hotelClaimCount); break
@@ -971,12 +1025,13 @@ export default function ReportsPage() {
                               }
                             }
                           }
-                          // Add adjustments in this month
+                          // Add adjustments in this month (group-aware)
                           for (const a of carryOverAdjustments) {
                             if (a.isDeleted || a.customerId !== selCustomerId || !a.date.startsWith(month) || a.type !== 'adjust') continue
                             if (!coShowAdjustments && !a.showInCustomerReport) continue
                             for (const it of a.items) {
-                              if (it.code === code) monthSum += it.delta || 0
+                              const matches = groupCodes ? groupCodes.has(it.code) : it.code === code
+                              if (matches) monthSum += it.delta || 0
                             }
                           }
                           return (
