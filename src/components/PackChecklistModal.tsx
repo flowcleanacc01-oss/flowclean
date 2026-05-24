@@ -10,12 +10,12 @@ import { cn } from '@/lib/utils'
 import { extractChecklist } from '@/lib/ai-scan-client'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import type { CustomerItemHint } from '@/lib/ai-extract-types'
-import { Upload, Loader2, Sparkles, AlertTriangle, Check, RefreshCw, ImageOff, Plus } from 'lucide-react'
+import { Upload, Loader2, Sparkles, AlertTriangle, Check, RefreshCw, Plus } from 'lucide-react'
 
 interface ChecklistEditRow {
   code: string
   name_raw: string
-  bags: number[]
+  bagsRaw: string        // raw text user พิมพ์ เช่น "14+1" — source of truth (พิมพ์ + ได้ ไม่ snap-back)
   reference: number | null
   confidence: number
 }
@@ -38,6 +38,9 @@ function confidenceClass(c: number): string {
   return 'bg-red-50 text-red-700 border-red-200'
 }
 const sum = (a: number[]) => a.reduce((s, n) => s + n, 0)
+// "14+1+2" → [14,1,2] · ตัด segment ว่าง/ไม่ใช่ตัวเลข (ระหว่างพิมพ์ "14+" จะได้ [14])
+const parseBags = (raw: string): number[] =>
+  raw.split('+').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n >= 0)
 
 function resolveCode(aiCode: string | null, nameRaw: string, items: CustomerItemHint[]): string {
   if (aiCode && items.some(i => i.code === aiCode)) return aiCode
@@ -82,9 +85,11 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
           for (const r of data.rows) {
             const code = resolveCode(r.code, r.name_raw || '', items)
             const bags = (r.bags || []).filter(n => typeof n === 'number' && n >= 0)
-            const row: ChecklistEditRow = { code, name_raw: r.name_raw || '', bags, reference: r.reference, confidence: r.confidence ?? 0 }
+            const bagsRaw = bags.join('+')
+            const row: ChecklistEditRow = { code, name_raw: r.name_raw || '', bagsRaw, reference: r.reference, confidence: r.confidence ?? 0 }
             if (code && merged.has(code)) {
-              merged.get(code)!.bags.push(...bags)   // หลายใบ/หลายถุง code เดียวกัน → รวมถุง
+              const ex = merged.get(code)!                              // หลายใบ/หลายถุง code เดียวกัน → ต่อ "+" กัน
+              ex.bagsRaw = [ex.bagsRaw, bagsRaw].filter(Boolean).join('+')
             } else if (code) {
               merged.set(code, row)
             } else {
@@ -115,14 +120,18 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
 
   const apply = () => {
     const updates = rows
+      .map(r => ({ code: r.code, bags: parseBags(r.bagsRaw) }))
       .filter(r => r.code && r.bags.length > 0)
       .map(r => ({ code: r.code, col6: sum(r.bags), breakdown: r.bags }))
     onApply(updates)
     handleClose()
   }
 
-  const applicable = rows.filter(r => r.code && r.bags.length > 0).length
-  const mismatches = rows.filter(r => r.code && r.bags.length > 0 && sum(r.bags) !== (currentCol6[r.code] || 0)).length
+  const applicable = rows.filter(r => r.code && parseBags(r.bagsRaw).length > 0).length
+  const mismatches = rows.filter(r => {
+    const b = parseBags(r.bagsRaw)
+    return r.code && b.length > 0 && sum(b) !== (currentCol6[r.code] || 0)
+  }).length
 
   return (
     <Modal open={open} onClose={handleClose} title="📋 ตรวจใบเช็คผ้า (แพคส่ง)" size="xl" closeLabel="cancel">
@@ -191,9 +200,10 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
               </thead>
               <tbody>
                 {rows.map((r, idx) => {
-                  const total = sum(r.bags)
+                  const bags = parseBags(r.bagsRaw)
+                  const total = sum(bags)
                   const lfVal = r.code ? (currentCol6[r.code] || 0) : null
-                  const mismatch = r.code && r.bags.length > 0 && total !== lfVal
+                  const mismatch = r.code && bags.length > 0 && total !== lfVal
                   return (
                     <tr key={idx} className={cn('border-t border-slate-100', !r.code && 'bg-slate-50/60')}>
                       <td className="px-2 py-1.5 text-slate-600 max-w-[110px] truncate" title={r.name_raw}>{r.name_raw || '—'}</td>
@@ -205,15 +215,15 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
                         </select>
                       </td>
                       <td className="px-2 py-1.5">
-                        <input type="text" inputMode="numeric"
-                          value={r.bags.join('+')} placeholder="เช่น 43+36"
-                          onChange={e => patchRow(idx, { bags: e.target.value.split('+').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n >= 0) })}
+                        <input type="text" inputMode="text"
+                          value={r.bagsRaw} placeholder="เช่น 43+36"
+                          onChange={e => patchRow(idx, { bagsRaw: e.target.value })}
                           className="w-full text-center text-xs font-mono border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-[#3DD8D8]" />
                       </td>
                       <td className="px-2 py-1.5 text-right font-semibold text-[#1B3A5C]">{total}</td>
                       <td className="px-2 py-1.5 text-right text-slate-500">{lfVal ?? '—'}</td>
                       <td className="px-2 py-1.5 text-center">
-                        {r.code && r.bags.length > 0 && (
+                        {r.code && bags.length > 0 && (
                           mismatch
                             ? <span className="text-[10px] px-1 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300" title={`ต่าง ${total - (lfVal || 0)}`}>⚠</span>
                             : <span className="text-[10px] text-emerald-600">✓</span>
