@@ -224,7 +224,9 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
                           onChange={e => patchRow(idx, { bagsRaw: e.target.value })}
                           className="w-full text-center text-xs font-mono border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-[#3DD8D8]" />
                       </td>
-                      <td className="px-2 py-1.5 text-right font-semibold text-[#1B3A5C]">{total}</td>
+                      <td className="px-2 py-1.5 text-right font-semibold text-[#1B3A5C]">
+                        {bags.length > 0 ? total : <span className="text-slate-300 font-normal">—</span>}
+                      </td>
                       <td className="px-2 py-1.5 text-right">
                         {r.reference != null
                           ? <span className={cn('inline-flex items-center gap-0.5', refMismatch ? 'text-amber-600 font-medium' : 'text-slate-400')}
@@ -242,6 +244,14 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
                             ? <span className="text-[10px] px-1 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300" title={`ต่าง ${total - (lfVal || 0)}`}>⚠</span>
                             : <span className="text-[10px] text-emerald-600">✓</span>
                         )}
+                        {/* ใบไม่ได้ระบุยอด (ว่าง) แต่ LF มีค่า → ชวนตั้งเป็น 0 (1 คลิก) แทนการเดา auto-zero */}
+                        {r.code && bags.length === 0 && (lfVal ?? 0) > 0 && (
+                          <button type="button" onClick={() => patchRow(idx, { bagsRaw: '0' })}
+                            title={`ใบเช็คผ้าไม่ได้ระบุยอดนี้ แต่ LF มี ${lfVal} — กดเพื่อตั้งโรงซักแพคส่ง = 0 (ลบยอดใน LF)`}
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors whitespace-nowrap">
+                            ตั้ง 0
+                          </button>
+                        )}
                         {!r.code && <span className={cn('text-[9px] px-1 py-0.5 rounded border', confidenceClass(r.confidence))}>{Math.round(r.confidence * 100)}%</span>}
                       </td>
                     </tr>
@@ -254,6 +264,7 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
           <p className="text-xs text-slate-400">
             ระบบบวก &quot;ต่อถุง&quot; ให้อัตโนมัติ → ลงช่อง <span className="font-medium">โรงซักแพคส่ง</span> + เก็บ breakdown ไว้ตรวจสอบ · ⚠ = ยอดที่บวกได้ต่างจากที่กรอกใน LF
             <br /><span className="text-amber-600">ยอดนับในใบ</span> = เลขอ้างอิงที่เขียนในใบ (ก่อน =) · <span className="text-amber-600">≠</span> = ต่างจากผลบวก — ชวนเช็คว่า AI อ่านเลขถูก หรือมียอดค้างยกมา (ไม่ได้แปลว่าผิดเสมอ)
+            <br />ช่องต่อถุง<span className="font-medium">เว้นว่าง (—)</span> = ไม่แตะยอดใน LF · ต้องการตั้งแพคส่งเป็น <span className="font-medium">0</span> ให้พิมพ์ 0 หรือกดปุ่ม <span className="text-amber-700">ตั้ง 0</span>
           </p>
 
           <div className="flex justify-end gap-2 pt-1">
