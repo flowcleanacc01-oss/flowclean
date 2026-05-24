@@ -27,6 +27,7 @@ import AddItemWizard from '@/components/AddItemWizard'
 import CodeConflictWarning from '@/components/CodeConflictWarning'
 import { getCodeReferences, detectConflict } from '@/lib/code-reference-check'
 import { canManageSettings } from '@/lib/permissions'
+import { getGroupAnchorCode } from '@/lib/aggregate-groups'
 import { useAutoScrollOnDrag } from '@/lib/use-auto-scroll-on-drag'
 import { useNameDrift } from '@/lib/use-name-drift'
 import { useOrphanCodes } from '@/lib/use-orphan-codes'
@@ -39,7 +40,7 @@ import FloatingTotalBar from '@/components/FloatingTotalBar'
 import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle, Shuffle, Ghost, Tags, Package } from 'lucide-react'
 import FacetVocabEditor from '@/components/FacetVocabEditor'
 
-type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse' | 'ghost' | 'facets' | 'namedup' | 'catalogaudit'
+type TabKey = 'hygiene' | 'items' | 'categories' | 'groups' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse' | 'ghost' | 'facets' | 'namedup' | 'catalogaudit'
 type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder' | 'group'
 type SortDir = 'asc' | 'desc'
 
@@ -59,7 +60,7 @@ export default function ItemsPage() {
     currentUser, defaultPrices, updateDefaultPrice,
     linenCatalog, addLinenItem, updateLinenItem, deleteLinenItem,
     linenCategories, addCategory, updateCategory, deleteCategory, getCategoryLabel,
-    quotations, linenForms, deliveryNotes, customers,
+    quotations, linenForms, deliveryNotes, customers, updateCustomer,
   } = useStore()
   const sp = useSearchParams()
   const router = useRouter()
@@ -80,7 +81,7 @@ export default function ItemsPage() {
   // 240.3: เพิ่ม tab 'reuse' — Code Reuse Detector
   // 242: เพิ่ม tab 'ghost' — Ghost LF Cleanup (per-LF row.code rewrite ไม่กระทบ catalog)
   const [tab, setTab] = useTabUrlSync<TabKey>(
-    ['hygiene', 'items', 'categories', 'merge', 'sync', 'vocab', 'orphan', 'reuse', 'ghost', 'facets'] as const,
+    ['hygiene', 'items', 'categories', 'groups', 'merge', 'sync', 'vocab', 'orphan', 'reuse', 'ghost', 'facets'] as const,
     'items',
   )
   // 180: scroll to first <mark> when arriving from global search with ?q=
@@ -241,6 +242,56 @@ export default function ItemsPage() {
   const sortedCategories = useMemo(() =>
     [...linenCategories].sort((a, b) => a.sortOrder - b.sortOrder)
   , [linenCategories])
+
+  // 365: Size Group management — derive groups + members + anchor + customers ที่ opt-in
+  const groupRows = useMemo(() => {
+    const map = new Map<string, LinenItemDef[]>()
+    for (const it of linenCatalog) {
+      if (!it.sizeGroup) continue
+      if (!map.has(it.sizeGroup)) map.set(it.sizeGroup, [])
+      map.get(it.sizeGroup)!.push(it)
+    }
+    return Array.from(map.entries())
+      .map(([key, items]) => {
+        const sorted = [...items].sort((a, b) => a.sortOrder - b.sortOrder)
+        return {
+          key,
+          items: sorted,
+          anchorCode: getGroupAnchorCode(sorted),
+          customersUsing: customers.filter(c => c.aggregateSizeGroups?.some(g => g.groupKey === key)),
+        }
+      })
+      .sort((a, b) => a.key.localeCompare(b.key))
+  }, [linenCatalog, customers])
+
+  // 365: rename group → cascade sizeGroup ของ items + groupKey ใน config ลูกค้า (กัน orphan)
+  const handleRenameGroup = (oldKey: string) => {
+    const input = prompt(`เปลี่ยนชื่อกลุ่ม "${oldKey}" เป็น:`, oldKey)
+    if (input == null) return
+    const newKey = input.toUpperCase().trim()
+    if (!newKey || newKey === oldKey) return
+    const members = linenCatalog.filter(i => i.sizeGroup === oldKey)
+    const custs = customers.filter(c => c.aggregateSizeGroups?.some(g => g.groupKey === oldKey))
+    const mergeWarn = linenCatalog.some(i => i.sizeGroup === newKey) ? `\n\n⚠ กลุ่ม "${newKey}" มีอยู่แล้ว — จะรวมเข้าด้วยกัน` : ''
+    if (!confirm(`เปลี่ยนชื่อกลุ่ม "${oldKey}" → "${newKey}"\n• รายการผ้า ${members.length} รายการ\n• config ลูกค้า ${custs.length} ราย${mergeWarn}\n\nยืนยัน?`)) return
+    members.forEach(m => updateLinenItem(m.code, { sizeGroup: newKey }))
+    custs.forEach(c => updateCustomer(c.id, {
+      aggregateSizeGroups: (c.aggregateSizeGroups || []).map(g => g.groupKey === oldKey ? { ...g, groupKey: newKey } : g),
+    }))
+  }
+
+  // 365: delete group → unset sizeGroup จาก items (ไม่ลบรายการผ้า) + ลบ config ที่อ้างถึงออกจากลูกค้า
+  const handleDeleteGroup = (key: string) => {
+    const members = linenCatalog.filter(i => i.sizeGroup === key)
+    const custs = customers.filter(c => c.aggregateSizeGroups?.some(g => g.groupKey === key))
+    let msg = `ลบกลุ่ม "${key}"?\n• unset จากรายการผ้า ${members.length} รายการ (ไม่ลบรายการผ้า)`
+    if (custs.length > 0) msg += `\n• ลบ config นับรวมจากลูกค้า ${custs.length} ราย`
+    if (!confirm(msg + '\n\nยืนยัน?')) return
+    members.forEach(m => updateLinenItem(m.code, { sizeGroup: undefined }))
+    custs.forEach(c => updateCustomer(c.id, {
+      aggregateSizeGroups: (c.aggregateSizeGroups || []).filter(g => g.groupKey !== key),
+    }))
+  }
 
   const handleSort = (col: SortColumn) => {
     if (sortCol === col) {
@@ -426,6 +477,7 @@ export default function ItemsPage() {
     ...(canManageSettings(currentUser) ? [{ key: 'hygiene' as TabKey, label: 'Hygiene Center', icon: <Shield className="w-3.5 h-3.5" /> }] : []),
     { key: 'items', label: 'รายการผ้า' },
     { key: 'categories', label: 'หมวด' },
+    ...(canManageSettings(currentUser) ? [{ key: 'groups' as TabKey, label: '📦 กลุ่มไซส์' }] : []),
     ...(canManageSettings(currentUser) ? [
       { key: 'merge' as TabKey, label: 'รวมรหัส' },
       { key: 'sync' as TabKey, label: 'ซิงก์ชื่อ', badge: driftCodeCount },
@@ -1039,6 +1091,81 @@ export default function ItemsPage() {
       )}
 
       {/* 194/196: Catalog Hygiene Center tab — รวม dashboard + wizard + manual */}
+      {/* 365: Size Group management tab */}
+      {tab === 'groups' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+              <h3 className="font-medium text-slate-700">กลุ่มไซส์ ({groupRows.length} กลุ่ม)</h3>
+              <p className="text-xs text-slate-400 mt-0.5">รวมไซส์ที่ลูกค้านับรวมตอนรับเข้า · เปลี่ยนชื่อ/ลบ จะมีผลกับรายการผ้า + config ลูกค้าที่ opt-in</p>
+            </div>
+            {groupRows.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-slate-400">
+                ยังไม่มีกลุ่มไซส์ — กำหนด group ให้รายการผ้าได้ที่แท็บ &quot;รายการผ้า&quot; (คอลัมน์ 📦 Group)
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600">
+                    <th className="text-left px-4 py-2 font-medium">กลุ่ม</th>
+                    <th className="text-left px-4 py-2 font-medium">รายการในกลุ่ม (⚓ = anchor)</th>
+                    <th className="text-center px-4 py-2 font-medium w-24">ลูกค้าใช้</th>
+                    <th className="text-right px-4 py-2 font-medium w-24"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupRows.map(g => (
+                    <tr key={g.key} className="border-t border-slate-100 hover:bg-slate-50/60">
+                      <td className="px-4 py-2 align-top">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[11px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">{g.key}</span>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{g.items.length} ไซส์</div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          {g.items.map(it => (
+                            <span key={it.code}
+                              title={it.code === g.anchorCode ? `${it.name} (anchor — เก็บยอดรวม)` : it.name}
+                              className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono border',
+                                it.code === g.anchorCode
+                                  ? 'bg-amber-100 text-amber-800 border-amber-300 font-semibold'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200')}>
+                              {it.code === g.anchorCode && '⚓ '}{it.code}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-center align-top">
+                        {g.customersUsing.length > 0 ? (
+                          <span className="text-xs text-slate-600" title={g.customersUsing.map(c => c.shortName || c.name).join(', ')}>
+                            {g.customersUsing.length} ราย
+                          </span>
+                        ) : <span className="text-xs text-slate-300">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right align-top">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => handleRenameGroup(g.key)} title="เปลี่ยนชื่อกลุ่ม"
+                            className="p-1.5 text-slate-400 hover:text-[#1B3A5C] hover:bg-slate-100 rounded transition-colors">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDeleteGroup(g.key)} title="ลบกลุ่ม"
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div className="text-xs text-slate-400 px-1 leading-relaxed">
+            💡 <span className="font-medium">Anchor (⚓)</span> = แถวที่เก็บยอดรวมของกลุ่มตอนนับรวม (default = ไซส์กลางตาม sortOrder) · ตั้ง anchor เองรายลูกค้าได้ที่หน้าตั้งค่าลูกค้า<br />
+            ลบกลุ่ม = unset ออกจากรายการผ้า (ไม่ลบตัวรายการ) · ลูกค้าที่เคยตั้งนับรวมกลุ่มนี้จะถูกลบ config ให้อัตโนมัติ
+          </div>
+        </div>
+      )}
+
       {tab === 'hygiene' && (
         <CatalogHygieneCenter onOpenTab={(t) => setTab(t)} />
       )}
