@@ -30,6 +30,12 @@ import { buildAggregateSnapshot, computeAnchorByGroup, diffsForForm } from './ca
 // ============================================================
 // Store Interface
 // ============================================================
+
+// 372: input type ของ addLinenForm — reuse กับ addLinenFormsBatch (closure-stale batch fix)
+type AddLinenFormInput =
+  Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt' | 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>
+  & Partial<Pick<LinenForm, 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>>
+
 interface StoreContextType {
   // Auth
   currentUser: AppUser | null
@@ -45,7 +51,9 @@ interface StoreContextType {
 
   // Linen Forms
   linenForms: LinenForm[]
-  addLinenForm: (f: Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt' | 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'> & Partial<Pick<LinenForm, 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>>) => LinenForm
+  addLinenForm: (f: AddLinenFormInput) => LinenForm
+  /** 372: batch add (1 HTTP call + running counter) — กันเลขเอกสารซ้ำตอนสร้างหลายใบรวดเดียว */
+  addLinenFormsBatch: (items: AddLinenFormInput[]) => LinenForm[]
   updateLinenForm: (id: string, f: Partial<LinenForm>) => void
   updateLinenFormStatus: (id: string, status: LinenFormStatus) => void
   deleteLinenForm: (id: string) => void
@@ -232,6 +240,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // P5.2: routePlansRef — upsert by date ใน setRouteOrder ต้องอ่าน list ปัจจุบัน (กัน closure stale)
   const routePlansRef = useRef<RoutePlan[]>([])
   routePlansRef.current = routePlans
+  // 372: linenFormsRef — addLinenFormsBatch อ่าน list ล่าสุด sync กัน gen formNumber ซ้ำใน batch loop
+  const linenFormsRef = useRef<LinenForm[]>([])
+  linenFormsRef.current = linenForms
 
   // Keep ref in sync for use in callbacks without dependency
   useEffect(() => { currentUserRef.current = currentUser }, [currentUser])
@@ -459,7 +470,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [customers])
 
   // ---- Linen Forms ----
-  const addLinenForm = useCallback((f: Omit<LinenForm, 'id' | 'formNumber' | 'createdBy' | 'updatedAt' | 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'> & Partial<Pick<LinenForm, 'bagsSentCount' | 'bagsPackCount' | 'deptDrying' | 'deptIroning' | 'deptFolding' | 'deptQc'>>): LinenForm => {
+  const addLinenForm = useCallback((f: AddLinenFormInput): LinenForm => {
     // 330 — auto-snapshot aggregateSizeGroups ถ้า caller ไม่ระบุ + customer มี config
     // กัน drift ตามเหตุผลเดียวกับ workflowMode snapshot (265)
     const customer = customers.find(c => c.id === f.customerId)
@@ -480,6 +491,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     logAudit('create', 'linen_form', newForm.id, newForm.formNumber)
     return newForm
   }, [logAudit, linenForms, customers])
+
+  // 372 — batch add LF: ref + running counter กัน formNumber ซ้ำ (closure-stale fix, ตาม addDeliveryNotesBatch)
+  //   เดิม handleBatchComplete loop addLinenForm → ทุก call อ่าน linenForms (closure) เดิม → gen เลขซ้ำ
+  const addLinenFormsBatch = useCallback((items: AddLinenFormInput[]): LinenForm[] => {
+    if (items.length === 0) return []
+    const userId = currentUserRef.current?.id || 'unknown'
+    const now = todayISO()
+    const current = linenFormsRef.current                       // อ่าน sync จาก ref (ไม่ stale ใน loop)
+    const existingNumbers = current.map(x => x.formNumber)
+    const newNumbers: string[] = []
+    const newForms: LinenForm[] = items.map(f => {
+      const customer = customers.find(c => c.id === f.customerId)
+      const autoAggSnapshot = f.aggregateSnapshot ?? buildAggregateSnapshot(customer?.aggregateSizeGroups, linenCatalog)
+      const formNumber = genLinenFormNumber([...existingNumbers, ...newNumbers])  // running counter → ไม่ซ้ำ
+      newNumbers.push(formNumber)
+      return {
+        bagsSentCount: 0, bagsPackCount: 0,
+        deptDrying: false, deptIroning: false, deptFolding: false, deptQc: false,
+        ...f, id: genId(), formNumber,
+        createdBy: userId, updatedAt: now,
+        aggregateSnapshot: autoAggSnapshot,
+      }
+    })
+    linenFormsRef.current = [...newForms, ...current]            // sync ref ทันทีก่อน setState
+    setLinenForms(prev => [...newForms, ...prev])
+    dbSave(db.insertLinenFormsBatch(newForms), () => {           // 1 HTTP call (กัน fire-and-forget race)
+      const failedIds = new Set(newForms.map(f => f.id))
+      linenFormsRef.current = linenFormsRef.current.filter(x => !failedIds.has(x.id))
+      setLinenForms(prev => prev.filter(x => !failedIds.has(x.id)))
+    })
+    for (const form of newForms) logAudit('create', 'linen_form', form.id, form.formNumber)
+    return newForms
+  }, [logAudit, customers, linenCatalog])
 
   const updateLinenForm = useCallback((id: string, f: Partial<LinenForm>) => {
     const updates = { ...f, updatedAt: todayISO() }
@@ -1213,7 +1257,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     <StoreContext.Provider value={{
       currentUser, login, logout,
       customers, addCustomer, updateCustomer, deleteCustomer, getCustomer,
-      linenForms, addLinenForm, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
+      linenForms, addLinenForm, addLinenFormsBatch, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
       deliveryNotes, addDeliveryNote, addDeliveryNotesBatch, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
       billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
       taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,

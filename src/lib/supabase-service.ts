@@ -439,6 +439,13 @@ export async function insertLinenForm(form: LinenForm): Promise<void> {
   await dbWrite({ table: 'linen_forms', operation: 'insert', data: toSnakeCase(form as unknown as Record<string, unknown>) })
 }
 
+// 372: Batch insert LF — 1 HTTP call (PostgREST รับ array) → กัน fire-and-forget race ตอน batch
+export async function insertLinenFormsBatch(forms: LinenForm[]): Promise<void> {
+  if (forms.length === 0) return
+  const rows = forms.map(f => toSnakeCase(f as unknown as Record<string, unknown>))
+  await dbWrite({ table: 'linen_forms', operation: 'insert', data: rows })
+}
+
 export async function updateLinenFormDB(id: string, updates: Partial<LinenForm>): Promise<void> {
   await dbWrite({ table: 'linen_forms', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
 }

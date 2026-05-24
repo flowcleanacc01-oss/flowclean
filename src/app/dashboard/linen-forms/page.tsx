@@ -36,7 +36,7 @@ import DiscrepancyHelperModal from '@/components/DiscrepancyHelperModal'
 export default function LinenFormsPage() {
   const {
     currentUser,
-    linenForms, addLinenForm, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
+    linenForms, addLinenForm, addLinenFormsBatch, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
     customers, getCustomer, getCarryOver, linenCatalog, quotations, deliveryNotes, companyInfo,
   } = useStore()
 
@@ -379,16 +379,18 @@ export default function LinenFormsPage() {
   }
   const hasExistingLFBatch = (custId: string, date: string) => linenForms.some(f => f.customerId === custId && f.date === date)
   const handleBatchComplete = (items: { customerId: string; date: string; fill: AiFillMap }[]) => {
-    let created = 0, skipped = 0
+    // 372: รวบเป็น array แล้วเรียก batch ครั้งเดียว — กัน formNumber ซ้ำ (closure-stale) + fire-and-forget race
+    const toCreate: Parameters<typeof addLinenFormsBatch>[0] = []
+    let skipped = 0
     for (const it of items) {
       const cust = getCustomer(it.customerId)
       const qt = cust ? getLinkedQT(cust.name, it.customerId) : null
       if (!cust || !qt) { skipped++; continue }  // MPD: ไม่มี QT → สร้างไม่ได้
       const rows = applyAiFillToRows(buildRows(qt.items.map(i => i.code)), it.fill, cust, linenCatalog)
-      addLinenForm({ customerId: it.customerId, date: it.date, status: 'washing', rows, notes: 'นำเข้าด้วย AI (batch)', bagsSentCount: 0, workflowMode: cust.workflowMode ?? 'cross_check' })
-      created++
+      toCreate.push({ customerId: it.customerId, date: it.date, status: 'washing', rows, notes: 'นำเข้าด้วย AI (batch)', bagsSentCount: 0, workflowMode: cust.workflowMode ?? 'cross_check' })
     }
-    alert(`สร้าง LF สำเร็จ ${created} ใบ (สถานะ 4/7 ซักอบเสร็จ)${skipped ? `\nข้าม ${skipped} ใบ (ไม่มีลูกค้า/QT)` : ''}`)
+    addLinenFormsBatch(toCreate)
+    alert(`สร้าง LF สำเร็จ ${toCreate.length} ใบ (สถานะ 4/7 ซักอบเสร็จ)${skipped ? `\nข้าม ${skipped} ใบ (ไม่มีลูกค้า/QT)` : ''}`)
   }
 
   // 363 — ลงยอด col6 (โรงซักแพคส่ง) + เก็บ breakdown จากใบเช็คผ้า
