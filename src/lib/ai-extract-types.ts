@@ -40,5 +40,6 @@ export interface LFExtractResponse {
   error?: string
 }
 
-/** ค่าที่ accept แล้วส่งกลับไปเติม LF: code → counts (4 คอลัมน์) */
-export type AiFillMap = Record<string, { col2: number; col3: number; col5: number; col6: number }>
+/** ค่าที่ accept แล้วส่งกลับไปเติม LF: code → counts (4 คอลัมน์)
+ *  null = AI ไม่เห็นคอลัมน์นั้นบนเอกสาร → ห้ามเขียนทับค่าเดิม (กัน data loss ตอนสแกนเอกสารไม่ครบช่อง) */
+export type AiFillMap = Record<string, { col2: number | null; col3: number | null; col5: number | null; col6: number | null }>

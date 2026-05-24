@@ -23,7 +23,8 @@ function item(code: string, sortOrder: number, sizeGroup?: string): LinenItemDef
 function cust(groups: AggregateSizeGroupConfig[]): Pick<Customer, 'aggregateSizeGroups'> {
   return { aggregateSizeGroups: groups }
 }
-const f = (col2: number, col3 = 0, col5 = 0, col6 = 0) => ({ col2, col3, col5, col6 })
+const f = (col2: number | null, col3: number | null = null, col5: number | null = null, col6: number | null = null) =>
+  ({ col2, col3, col5, col6 })
 
 // BEDSHEET group [S/T(1), S/Q(2), S/K(3)] — anchor = median = S/Q
 const BED = [item('S/T', 1, 'BED'), item('S/Q', 2, 'BED'), item('S/K', 3, 'BED')]
@@ -80,6 +81,22 @@ describe('applyAiFillToRows', () => {
     expect(get(out, 'S/T').col6_factoryPackSend).toBe(5)
     expect(get(out, 'S/Q').col6_factoryPackSend).toBe(8)
     expect(get(out, 'S/K').col6_factoryPackSend).toBe(6)
+  })
+
+  it('null-safe: คอลัมน์ที่สแกนไม่เห็น (null) ไม่ wipe ค่าเดิม', () => {
+    const rows = [row('A', { col5_factoryClaimApproved: 9, col6_factoryPackSend: 8 })]
+    const out = applyAiFillToRows(rows, { A: f(10) }, cust([]), [item('A', 1)]) // f(10): col3/col5/col6 = null
+    expect(out[0].col2_hotelCountIn).toBe(10) // อัปเดต
+    expect(out[0].col5_factoryClaimApproved).toBe(9) // คงเดิม
+    expect(out[0].col6_factoryPackSend).toBe(8) // คงเดิม
+  })
+
+  it('null-safe aggregate: สแกนไม่มี col2 → ไม่ทับ col2 เดิมของกลุ่ม (เติมแค่ col5)', () => {
+    const customer = cust([{ groupKey: 'BED', col2Mode: 'aggregate' }]) // col5Mode default aggregate
+    const rows = [row('S/T'), row('S/Q', { col2_hotelCountIn: 12 }), row('S/K')] // col2 เดิม=12 ที่ anchor
+    const out = applyAiFillToRows(rows, { 'S/Q': f(null, null, 13) }, customer, BED) // เห็นแค่ col5
+    expect(get(out, 'S/Q').col2_hotelCountIn).toBe(12) // คงเดิม (col2 ไม่อยู่ในสแกน)
+    expect(get(out, 'S/Q').col5_factoryClaimApproved).toBe(13) // col5 consolidate ที่ anchor
   })
 
   it('untouched group preserved (ไม่แตะกลุ่มที่ AI ไม่ได้อ่าน)', () => {

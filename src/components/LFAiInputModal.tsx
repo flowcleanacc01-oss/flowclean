@@ -17,12 +17,12 @@ interface Props {
 }
 
 interface EditRow {
-  code: string          // '' = ไม่เติม
+  code: string               // '' = ไม่เติม
   name_raw: string
-  col2: number          // ลูกค้านับส่ง
-  col3: number          // เคลม
-  col5: number          // โรงซักนับเข้า
-  col6: number          // โรงซักแพคส่ง
+  col2: number | null        // ลูกค้านับส่ง (null = AI ไม่เห็นช่องนี้)
+  col3: number | null        // เคลม
+  col5: number | null        // โรงซักนับเข้า
+  col6: number | null        // โรงซักแพคส่ง
   confidence: number
 }
 
@@ -64,6 +64,13 @@ function confidenceClass(c: number): string {
   return 'bg-red-50 text-red-700 border-red-200'
 }
 
+// รวมค่า null-aware (กรณี code ซ้ำในรูปเดียว): null+null=null · null+n=n · a+b
+function addN(a: number | null, b: number | null): number | null {
+  if (a == null) return b
+  if (b == null) return a
+  return a + b
+}
+
 export default function LFAiInputModal({ open, onClose, items, onAccept }: Props) {
   const [phase, setPhase] = useState<Phase>('upload')
   const [preview, setPreview] = useState<string | null>(null)
@@ -101,10 +108,10 @@ export default function LFAiInputModal({ open, onClose, items, onAccept }: Props
       setEditRows(data.rows.map(r => ({
         code: r.code && validCodes.has(r.code) ? r.code : '',
         name_raw: r.name_raw || '',
-        col2: r.col2_send ?? 0,
-        col3: r.col3_claim ?? 0,
-        col5: r.col5_countedIn ?? 0,
-        col6: r.col6_packSend ?? 0,
+        col2: r.col2_send,        // คง null ถ้า AI ไม่เห็นช่อง → แสดงว่าง + ไม่เขียนทับตอนเติม
+        col3: r.col3_claim,
+        col5: r.col5_countedIn,
+        col6: r.col6_packSend,
         confidence: r.confidence ?? 0,
       })))
       setWarnings(data.warnings || [])
@@ -128,8 +135,12 @@ export default function LFAiInputModal({ open, onClose, items, onAccept }: Props
     for (const r of editRows) {
       if (!r.code) continue
       const prev = fill[r.code]
-      if (prev) { prev.col2 += r.col2; prev.col3 += r.col3; prev.col5 += r.col5; prev.col6 += r.col6 }
-      else { fill[r.code] = { col2: r.col2, col3: r.col3, col5: r.col5, col6: r.col6 }; count++ }
+      if (prev) {
+        prev.col2 = addN(prev.col2, r.col2); prev.col3 = addN(prev.col3, r.col3)
+        prev.col5 = addN(prev.col5, r.col5); prev.col6 = addN(prev.col6, r.col6)
+      } else {
+        fill[r.code] = { col2: r.col2, col3: r.col3, col5: r.col5, col6: r.col6 }; count++
+      }
     }
     onAccept(fill, count)
     handleClose()
@@ -249,23 +260,23 @@ export default function LFAiInputModal({ open, onClose, items, onAccept }: Props
                       </select>
                     </td>
                     <td className="px-2 py-1.5">
-                      <input type="number" min={0} value={r.col2}
-                        onChange={e => setEditRows(rows => rows.map((x, i) => i === idx ? { ...x, col2: Math.max(0, parseInt(e.target.value, 10) || 0) } : x))}
+                      <input type="number" min={0} value={r.col2 ?? ''} placeholder="—"
+                        onChange={e => { const v = e.target.value; setEditRows(rows => rows.map((x, i) => i === idx ? { ...x, col2: v === '' ? null : Math.max(0, parseInt(v, 10) || 0) } : x)) }}
                         className="w-full text-right text-xs border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-[#3DD8D8]" />
                     </td>
                     <td className="px-2 py-1.5">
-                      <input type="number" min={0} value={r.col3}
-                        onChange={e => setEditRows(rows => rows.map((x, i) => i === idx ? { ...x, col3: Math.max(0, parseInt(e.target.value, 10) || 0) } : x))}
+                      <input type="number" min={0} value={r.col3 ?? ''} placeholder="—"
+                        onChange={e => { const v = e.target.value; setEditRows(rows => rows.map((x, i) => i === idx ? { ...x, col3: v === '' ? null : Math.max(0, parseInt(v, 10) || 0) } : x)) }}
                         className="w-full text-right text-xs border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-[#3DD8D8]" />
                     </td>
                     <td className="px-2 py-1.5">
-                      <input type="number" min={0} value={r.col5}
-                        onChange={e => setEditRows(rows => rows.map((x, i) => i === idx ? { ...x, col5: Math.max(0, parseInt(e.target.value, 10) || 0) } : x))}
+                      <input type="number" min={0} value={r.col5 ?? ''} placeholder="—"
+                        onChange={e => { const v = e.target.value; setEditRows(rows => rows.map((x, i) => i === idx ? { ...x, col5: v === '' ? null : Math.max(0, parseInt(v, 10) || 0) } : x)) }}
                         className="w-full text-right text-xs border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-[#3DD8D8]" />
                     </td>
                     <td className="px-2 py-1.5">
-                      <input type="number" min={0} value={r.col6}
-                        onChange={e => setEditRows(rows => rows.map((x, i) => i === idx ? { ...x, col6: Math.max(0, parseInt(e.target.value, 10) || 0) } : x))}
+                      <input type="number" min={0} value={r.col6 ?? ''} placeholder="—"
+                        onChange={e => { const v = e.target.value; setEditRows(rows => rows.map((x, i) => i === idx ? { ...x, col6: v === '' ? null : Math.max(0, parseInt(v, 10) || 0) } : x)) }}
                         className="w-full text-right text-xs border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-[#3DD8D8]" />
                     </td>
                     <td className="px-2 py-1.5 text-center">
