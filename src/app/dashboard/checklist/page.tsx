@@ -4,7 +4,6 @@ import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO, sanitizeNumber } from '@/lib/utils'
 import { tabularNumberNav } from '@/lib/modal-nav'
-import { getCustomerEnabledCodes } from '@/lib/customer-pricing'
 import { highlightText } from '@/lib/highlight'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import {
@@ -14,14 +13,13 @@ import {
 import { Plus, Search, FileDown, X, ChevronRight, ClipboardCheck } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ChecklistPrint from '@/components/ChecklistPrint'
-import BlankChecklistPrint from '@/components/BlankChecklistPrint'
-import BlankLinenFormPrint from '@/components/BlankLinenFormPrint'
+import BlankFormModal from '@/components/BlankFormModal'
 import ExportButtons from '@/components/ExportButtons'
 
 export default function ChecklistPage() {
   const {
     checklists, addChecklist, updateChecklist, updateChecklistStatus, deleteChecklist,
-    linenForms, deliveryNotes, customers, getCustomer, linenCatalog, companyInfo, quotations,
+    linenForms, deliveryNotes, getCustomer, linenCatalog, companyInfo,
   } = useStore()
 
   const [search, setSearch] = useState('')
@@ -31,8 +29,6 @@ export default function ChecklistPage() {
   const [showPrint, setShowPrint] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [showBlankPrint, setShowBlankPrint] = useState(false)
-  const [blankCustomerId, setBlankCustomerId] = useState('')
-  const [blankFormType, setBlankFormType] = useState<'checklist' | 'lf'>('checklist')
 
   // Create form state
   const [newType, setNewType] = useState<ChecklistType>('qc')
@@ -172,7 +168,7 @@ export default function ChecklistPage() {
           <p className="text-sm text-slate-500 mt-0.5">ใบเช็คคุณภาพ (QC) และขึ้นรถ (Loading)</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { setBlankCustomerId(''); setShowBlankPrint(true) }}
+          <button onClick={() => setShowBlankPrint(true)}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium">
             <FileDown className="w-4 h-4" />พิมพ์ฟอร์มเปล่า
           </button>
@@ -513,59 +509,8 @@ export default function ChecklistPage() {
         )}
       </Modal>
 
-      {/* Blank Checklist Print Modal */}
-      <Modal open={showBlankPrint} onClose={() => setShowBlankPrint(false)} title="พิมพ์ฟอร์มเปล่า (ใบเช็คผ้า / ใบส่งรับผ้า)" size="xl" className="print-target">
-        <div className="space-y-4">
-          {!blankCustomerId ? (
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-2">เลือกลูกค้า</label>
-              <div className="grid gap-2">
-                {customers.filter(c => c.isActive).map(c => {
-                  const codes = getCustomerEnabledCodes(c.id, quotations)
-                  return (
-                    <button key={c.id} onClick={() => setBlankCustomerId(c.id)}
-                      className="text-left px-4 py-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-                      <span className="font-medium text-slate-800">{c.shortName || c.name}</span>
-                      <span className="text-xs text-slate-500 ml-2">({codes.length} รายการ)</span>
-                      {codes.length === 0 && <span className="text-xs text-amber-600 ml-2">⚠ ยังไม่มี QT</span>}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ) : (
-            <div>
-              <div className="flex justify-between items-center mb-4 no-print">
-                <button onClick={() => setBlankCustomerId('')}
-                  className="text-sm text-slate-500 hover:text-slate-700">← เลือกลูกค้าอื่น</button>
-                <div className="flex items-center gap-2">
-                  <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
-                    <button onClick={() => setBlankFormType('checklist')}
-                      className={blankFormType === 'checklist' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>ใบเช็คผ้า</button>
-                    <button onClick={() => setBlankFormType('lf')}
-                      className={blankFormType === 'lf' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>ใบส่งรับผ้า</button>
-                  </div>
-                  <ExportButtons targetId={blankFormType === 'lf' ? 'print-blank-lf' : 'print-blank-checklist'} filename={blankFormType === 'lf' ? 'blank-lf' : 'blank-checklist'} showPrint={true} />
-                </div>
-              </div>
-              {(() => {
-                const cust = getCustomer(blankCustomerId)
-                if (!cust) return null
-                const codes = getCustomerEnabledCodes(cust.id, quotations)
-                const items = linenCatalog.filter(i => codes.includes(i.code))
-                if (items.length === 0) {
-                  return <div className="p-6 text-center text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
-                    ⚠ ลูกค้านี้ยังไม่มี accepted QT — กรุณาสร้าง QT ก่อนพิมพ์ใบเช็ค
-                  </div>
-                }
-                return blankFormType === 'lf'
-                  ? <BlankLinenFormPrint customer={cust} company={companyInfo} items={items} date={todayISO()} />
-                  : <BlankChecklistPrint customer={cust} company={companyInfo} items={items} date={todayISO()} />
-              })()}
-            </div>
-          )}
-        </div>
-      </Modal>
+      {/* 366.1 — Form Generator (extract → BlankFormModal, reuse กับหน้า LF) */}
+      <BlankFormModal open={showBlankPrint} onClose={() => setShowBlankPrint(false)} />
     </div>
   )
 }

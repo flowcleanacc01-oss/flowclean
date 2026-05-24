@@ -10,6 +10,7 @@ import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import LFAiInputModal from '@/components/LFAiInputModal'
 import LFBatchScanModal from '@/components/LFBatchScanModal'
+import BlankFormModal from '@/components/BlankFormModal'
 import PackChecklistModal from '@/components/PackChecklistModal'
 import AuditLFModal from '@/components/AuditLFModal'
 import type { AiFillMap } from '@/lib/ai-extract-types'
@@ -56,6 +57,7 @@ export default function LinenFormsPage() {
   const [showAiInput, setShowAiInput] = useState(false)
   const [showAiInputDetail, setShowAiInputDetail] = useState(false)
   const [showBatch, setShowBatch] = useState(false)
+  const [showBlankForm, setShowBlankForm] = useState(false)  // 366.1 — Form Generator (ฟอร์มเปล่าล้อ QT)
   const [showChecklist, setShowChecklist] = useState(false)
   const [showAudit, setShowAudit] = useState(false)
   // 297.1: Discrepancy helper — ย้ายมาจาก dashboard (เกี่ยวข้องกับสถานะ ลูกค้านับผ้ากลับแล้ว)
@@ -541,6 +543,11 @@ export default function LinenFormsPage() {
             className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />สร้างใบส่งรับผ้าใหม่
           </button>
+          <button onClick={() => setShowBlankForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
+            title="พิมพ์ฟอร์มเปล่า (ใบเช็คผ้า/ใบส่งรับผ้า) รายการล้อ QT ลูกค้า — ให้พนักงานกรอก แล้ว scan กลับ ลดภาระ AI + audit ตรง">
+            <FileDown className="w-4 h-4" />พิมพ์ฟอร์มเปล่า
+          </button>
           <button onClick={() => setShowBatch(true)}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium"
             title="อัปโหลดใบส่งรับผ้าหลายใบ → AI อ่านลูกค้า/วันที่/ยอด → สร้าง LF ที่ 4/7 รวดเดียว">
@@ -551,6 +558,8 @@ export default function LinenFormsPage() {
 
       {/* 297.1: Discrepancy Helper Modal (moved from dashboard) */}
       <DiscrepancyHelperModal open={helperOpen} onClose={() => setHelperOpen(false)} />
+      {/* 366.1 — Form Generator (ฟอร์มเปล่าล้อ QT — เริ่มจากข้อมูลต้นทางที่ดีก่อน scan) */}
+      <BlankFormModal open={showBlankForm} onClose={() => setShowBlankForm(false)} />
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
