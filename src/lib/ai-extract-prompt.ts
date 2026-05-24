@@ -19,6 +19,7 @@ You will be given the customer's valid item list as JSON (each has a "code" and 
 Rules:
 - name_raw: ALWAYS the raw text/label you read for that line, so a human can verify.
 - Numbers may be Arabic (1,2,3) or Thai (๑,๒,๓) numerals — output integers.
+- Quantities are NEVER negative. A short dash/stroke just before a number is usually the tip of a brace/bracket "}" used to group several size rows together (Thai tally sheets bracket a size family and write one combined count), NOT a minus sign — output the positive integer.
 - confidence: 1.0 = clear printed text · 0.7 = readable handwriting · 0.3 = uncertain guess.
 - Skip lines you genuinely cannot read (do NOT fabricate). Note any problems in "warnings" (e.g. "ภาพเบลอบางส่วน", "หาวันที่ไม่เจอ").
 - detected_date: the date written on the sheet, converted to ISO YYYY-MM-DD in the Gregorian (Western / ค.ศ.) calendar. Thai laundry forms almost always write the year in the Buddhist Era (พ.ศ. / B.E.), which is 543 years AHEAD of the Gregorian year. Convert like this:

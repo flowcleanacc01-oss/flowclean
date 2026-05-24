@@ -10,6 +10,7 @@ import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import LFAiInputModal from '@/components/LFAiInputModal'
 import type { AiFillMap } from '@/lib/ai-extract-types'
+import { getOptInGroupsForCustomer, applyAggregateTotal } from '@/lib/aggregate-groups'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer } from '@/lib/recent-customers'
@@ -321,19 +322,37 @@ export default function LinenFormsPage() {
     setShowCreate(false)
   }
 
-  // 358 — เติมผล AI ลง newRows (match by code → col2 ลูกค้านับส่ง + col3 เคลม)
-  const handleAiAccept = (fill: AiFillMap) => {
-    setNewRows(rows => rows.map(r => (
-      fill[r.code]
-        ? { ...r, col2_hotelCountIn: fill[r.code].col2, col3_hotelClaimCount: fill[r.code].col3 }
-        : r
-    )))
-  }
   const aiCust = newCustomerId ? getCustomer(newCustomerId) : null
   const aiItems = newRows.map(r => ({
     code: r.code,
     name: aiCust?.itemNicknames?.[r.code] || linenCatalog.find(c => c.code === r.code)?.name || r.code,
   }))
+
+  // 358 — เติมผล AI ลง newRows (match by code → col2 ลูกค้านับส่ง + col3 เคลม)
+  // 364.1 — aggregate-aware: ลูกค้าที่ตั้ง col2Mode='aggregate' → รวม col2 ทั้งกลุ่มไปไว้ที่ anchor
+  //   customer config = source of truth → ทนทานแม้ AI อ่านปีกกาไม่ออก / ลงเลขผิดแถว / ลืมเขียนปีกกา
+  const handleAiAccept = (fill: AiFillMap) => {
+    setNewRows(rows => {
+      // 1) เติมตาม code ที่จับคู่ได้ (clamp ≥0 กันกรณีหัวปีกกาถูกอ่านเป็นเครื่องหมายลบ)
+      let next = rows.map(r => (
+        fill[r.code]
+          ? { ...r, col2_hotelCountIn: Math.max(0, fill[r.code].col2), col3_hotelClaimCount: Math.max(0, fill[r.code].col3) }
+          : r
+      ))
+      // 2) รวม col2 ของกลุ่ม aggregate ไปไว้ที่ anchor (shape เดียวกับ group-input UI)
+      if (aiCust) {
+        const groups = getOptInGroupsForCustomer(aiCust, linenCatalog, next.map(r => r.code))
+        for (const g of groups) {
+          if (g.config.col2Mode !== 'aggregate') continue
+          if (!g.items.some(i => fill[i.code])) continue   // เฉพาะกลุ่มที่ AI อ่านเจอ — ไม่แตะกลุ่มที่ไม่ได้นำเข้า
+          const memberCodes = new Set(g.items.map(i => i.code))
+          const total = next.reduce((s, r) => memberCodes.has(r.code) ? s + (r.col2_hotelCountIn || 0) : s, 0)
+          next = applyAggregateTotal(next, g.items, g.anchorCode, 'col2_hotelCountIn', total)
+        }
+      }
+      return next
+    })
+  }
 
   const detailForm = showDetail ? linenForms.find(f => f.id === showDetail) : null
   const detailCustomer = detailForm ? getCustomer(detailForm.customerId) : null
