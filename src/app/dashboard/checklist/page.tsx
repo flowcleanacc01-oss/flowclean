@@ -15,6 +15,7 @@ import { Plus, Search, FileDown, X, ChevronRight, ClipboardCheck } from 'lucide-
 import Modal from '@/components/Modal'
 import ChecklistPrint from '@/components/ChecklistPrint'
 import BlankChecklistPrint from '@/components/BlankChecklistPrint'
+import BlankLinenFormPrint from '@/components/BlankLinenFormPrint'
 import ExportButtons from '@/components/ExportButtons'
 
 export default function ChecklistPage() {
@@ -31,6 +32,7 @@ export default function ChecklistPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [showBlankPrint, setShowBlankPrint] = useState(false)
   const [blankCustomerId, setBlankCustomerId] = useState('')
+  const [blankFormType, setBlankFormType] = useState<'checklist' | 'lf'>('checklist')
 
   // Create form state
   const [newType, setNewType] = useState<ChecklistType>('qc')
@@ -172,7 +174,7 @@ export default function ChecklistPage() {
         <div className="flex gap-2">
           <button onClick={() => { setBlankCustomerId(''); setShowBlankPrint(true) }}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium">
-            <FileDown className="w-4 h-4" />พิมพ์ใบเช็คของ
+            <FileDown className="w-4 h-4" />พิมพ์ฟอร์มเปล่า
           </button>
           <button onClick={handleCreateOpen}
             className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
@@ -512,7 +514,7 @@ export default function ChecklistPage() {
       </Modal>
 
       {/* Blank Checklist Print Modal */}
-      <Modal open={showBlankPrint} onClose={() => setShowBlankPrint(false)} title="พิมพ์ใบเช็คของ" size="xl" className="print-target">
+      <Modal open={showBlankPrint} onClose={() => setShowBlankPrint(false)} title="พิมพ์ฟอร์มเปล่า (ใบเช็คผ้า / ใบส่งรับผ้า)" size="xl" className="print-target">
         <div className="space-y-4">
           {!blankCustomerId ? (
             <div>
@@ -536,7 +538,15 @@ export default function ChecklistPage() {
               <div className="flex justify-between items-center mb-4 no-print">
                 <button onClick={() => setBlankCustomerId('')}
                   className="text-sm text-slate-500 hover:text-slate-700">← เลือกลูกค้าอื่น</button>
-                <ExportButtons targetId="print-blank-checklist" filename="blank-checklist" showPrint={true} />
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
+                    <button onClick={() => setBlankFormType('checklist')}
+                      className={blankFormType === 'checklist' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>ใบเช็คผ้า</button>
+                    <button onClick={() => setBlankFormType('lf')}
+                      className={blankFormType === 'lf' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>ใบส่งรับผ้า</button>
+                  </div>
+                  <ExportButtons targetId={blankFormType === 'lf' ? 'print-blank-lf' : 'print-blank-checklist'} filename={blankFormType === 'lf' ? 'blank-lf' : 'blank-checklist'} showPrint={true} />
+                </div>
               </div>
               {(() => {
                 const cust = getCustomer(blankCustomerId)
@@ -548,7 +558,9 @@ export default function ChecklistPage() {
                     ⚠ ลูกค้านี้ยังไม่มี accepted QT — กรุณาสร้าง QT ก่อนพิมพ์ใบเช็ค
                   </div>
                 }
-                return <BlankChecklistPrint customer={cust} company={companyInfo} items={items} date={todayISO()} />
+                return blankFormType === 'lf'
+                  ? <BlankLinenFormPrint customer={cust} company={companyInfo} items={items} date={todayISO()} />
+                  : <BlankChecklistPrint customer={cust} company={companyInfo} items={items} date={todayISO()} />
               })()}
             </div>
           )}

@@ -43,27 +43,26 @@ export default function BlankChecklistPrint({ customer, company, items, date }: 
       <table className="w-full text-sm border border-slate-400 mb-4">
         <thead>
           <tr className="bg-[#e8eef5]">
-            <th className="text-center px-2 py-2 border border-slate-400 w-10">ลำดับ</th>
-            <th className="text-left px-2 py-2 border border-slate-400 w-14">รหัส</th>
-            <th className="text-left px-2 py-2 border border-slate-400 w-36">รายการ</th>
-            <th className="text-center px-2 py-2 border border-slate-400">จำนวนนับ (เขียนมือ)</th>
-            <th className="text-center px-2 py-2 border border-slate-400 w-20">ยอดรวม</th>
+            <th className="text-center px-2 py-2 border border-slate-400 w-8">#</th>
+            <th className="text-left px-2 py-2 border border-slate-400 w-12">รหัส</th>
+            <th className="text-left px-2 py-2 border border-slate-400 w-32">รายการ</th>
+            <th className="text-center px-2 py-2 border border-slate-400 w-20">นับส่ง<br /><span className="text-[9px] font-normal text-slate-500">(อ้างอิง)</span></th>
+            <th className="text-center px-2 py-2 border border-slate-400">จำนวนต่อถุง — แพคส่ง<br /><span className="text-[9px] font-normal text-slate-500">(หลายถุงคั่นด้วย + เช่น 43+36)</span></th>
+            <th className="text-center px-2 py-2 border border-slate-400 w-16">รวม</th>
           </tr>
         </thead>
         <tbody>
           {items.map((item, idx) => (
             <tr key={item.code}>
-              <td className="text-center px-2 py-3 border border-slate-400">{idx + 1}</td>
+              <td className="text-center px-2 py-3 border border-slate-400 text-slate-400">{idx + 1}</td>
               <td className="px-2 py-3 border border-slate-400 font-mono text-xs">{item.code}</td>
               <td className="px-2 py-3 border border-slate-400">{item.name}</td>
+              <td className="px-2 py-3 border border-slate-400"></td>
               <td className="px-2 py-3 border border-slate-400">
-                {/* Wide blank space for tally marks */}
+                {/* Wide blank for per-bag pack counts (เลขน้ำเงิน 43+36) */}
                 <div className="min-h-[28px]"></div>
               </td>
-              <td className="px-2 py-3 border border-slate-400">
-                {/* Blank for total */}
-                <div className="min-h-[28px]"></div>
-              </td>
+              <td className="px-2 py-3 border border-slate-400"></td>
             </tr>
           ))}
         </tbody>
