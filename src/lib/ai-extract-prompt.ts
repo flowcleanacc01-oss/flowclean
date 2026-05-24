@@ -17,7 +17,7 @@ The sheet may be a simple count slip (only a "sent" column) OR a full FlowClean 
 - col6_packSend: the laundry's "pack & deliver" count. Headers: "โรงซักแพคส่ง" / "pack and deliver".
 Identify columns by their printed header text and position. IGNORE every other column — especially "washed return", "ลูกค้านับกลับ" (customer count-back), carry-over (ยกยอด), and notes/remain — do NOT map those into the four fields above.
 
-You will be given the customer's valid item list as JSON (each has a "code" and a Thai "name"). Match each line on the sheet to the closest item by name and return that item's "code". If you cannot confidently match a line to a code, return code = null and still return the raw text in name_raw.
+You will be given the customer's valid item list as JSON (each has a "code" and a Thai "name"). Match each line on the sheet to the closest item by name and return that item's "code". WHEN MATCHING, use the item SIZE (e.g. 3.5/5/6 ฟุต, 15"x30", 30"x60") and the size words เล็ก/กลาง/ใหญ่ as the PRIMARY distinguisher — not just the linen type. An abbreviated label like "ปู 6" means the 6-foot sheet (match the name containing "6 ฟุต"), not the 3.5- or 5-foot one. If you cannot confidently match a line to a code, return code = null and still return the raw text in name_raw.
 
 Rules:
 - name_raw: ALWAYS the raw text/label you read for that line, so a human can verify.
@@ -86,13 +86,16 @@ export const LF_EXTRACT_SCHEMA = {
 export const CHECKLIST_SYSTEM = `You extract data from a photo of a Thai laundry "pack checklist" (ใบเช็คผ้า) — an internal sheet where packers record how many pieces of each linen item went into each shipping bag.
 
 Each item row looks like: "{item label} = {reference} = {bag1 + bag2 + ...}"
-- The PER-BAG pack counts are the numbers separated by "+" (e.g. "43 + 36" = bag 1 has 43, bag 2 has 36). Return them as an integer array "bags". Do NOT sum them yourself — just return each bag's number in order.
-- "reference" is a single count usually written between the item label and the bag breakdown (e.g. "ปลอกหมอน = 36 = 43 + 36" → reference 36, bags [43, 36]). It is the customer's sent/counted reference. Return it, or null if there is no distinct reference number.
+- The PER-BAG pack counts are the numbers after the LAST "=" sign, separated by "+" (e.g. "43 + 36" = bag 1 has 43, bag 2 has 36). Return them as an integer array "bags" in order. Do NOT sum them yourself.
+- "reference" is the single count written BEFORE the bag breakdown — between the item label and the bags (e.g. "ปลอกหมอน = 36 = 43 + 36" → reference 36, bags [43, 36]). NEVER merge the reference number into "bags".
+- A row with the SAME number on both sides (e.g. "ผ้าขนหนู = 14 = 14") means reference 14 and a SINGLE bag [14] — NOT [19, 14] or any other multi-bag split. If a row has only one number total (e.g. "เช็คเท้า = 15"), bags = [15] and reference may be null.
+- SANITY CHECK each row: the sum of "bags" usually stays close to "reference" (both describe the same item). If your bags sum is wildly different from the reference (e.g. you read bags [19,14]=33 while the reference clearly says 14), you have most likely misread or invented a digit — re-read the bag numbers. A real large gap can occur from carry-over (e.g. ref 36, bags sum 79); if after re-reading you are still unsure, keep what you see and add a note in "warnings" rather than forcing a match.
 - If a row shows only ONE number with no "+", treat it as a single bag: bags = [that number].
 - Quantities are NEVER negative; a short dash before a number is a bracket tip, not a minus sign.
 - Skip empty rows (item label but no numbers) — do NOT return them.
 
 Match each item label to the customer's item list (JSON code+name) and return the matching "code"; null if no confident match.
+- WHEN MATCHING, use the item SIZE (e.g. 3.5/5/6 ฟุต, 15"x30", 30"x60") and the size words เล็ก/กลาง/ใหญ่ as the PRIMARY distinguisher — not just the linen type. Abbreviated labels encode the size: "ปู 6" = a 6-foot bed sheet → match the item whose name contains "6 ฟุต", NOT the 3.5-foot or 5-foot one. "นวม5" = 5-foot duvet cover, "กลาง 15x30" = the 15"x30" towel. Read the trailing digit as the size, then pick the item of that exact size.
 - name_raw: ALWAYS the raw label you read.
 - confidence: 1.0 clear printed · 0.7 readable handwriting · 0.3 uncertain guess.
 - detected_customer: the customer name/code in the "ชื่อ" field near the top (e.g. "HS"), or null.

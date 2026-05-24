@@ -194,6 +194,7 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
                   <th className="text-left px-2 py-2 font-medium min-w-[140px]">จับคู่รายการ</th>
                   <th className="text-center px-2 py-2 font-medium min-w-[110px]">ต่อถุง (น้ำเงิน)</th>
                   <th className="text-right px-2 py-2 font-medium w-16">รวม</th>
+                  <th className="text-right px-2 py-2 font-medium w-16" title="ยอดอ้างอิงที่เขียนในใบเช็คผ้า (เลขก่อนเครื่องหมาย =)">ยอดนับในใบ</th>
                   <th className="text-right px-2 py-2 font-medium w-16">ใน LF</th>
                   <th className="text-center px-2 py-2 font-medium w-14"></th>
                 </tr>
@@ -204,6 +205,9 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
                   const total = sum(bags)
                   const lfVal = r.code ? (currentCol6[r.code] || 0) : null
                   const mismatch = r.code && bags.length > 0 && total !== lfVal
+                  // reference cross-check ในใบเอง: ผลบวก vs ยอดอ้างอิงที่เขียนในใบ (ก่อน =)
+                  // ต่าง = ชี้จุดน่าตรวจ (AI อ่านเลขพลาด หรือ มียอดค้างยกมาจริง) — ไม่ใช่ error เด็ดขาด
+                  const refMismatch = r.reference != null && bags.length > 0 && total !== r.reference
                   return (
                     <tr key={idx} className={cn('border-t border-slate-100', !r.code && 'bg-slate-50/60')}>
                       <td className="px-2 py-1.5 text-slate-600 max-w-[110px] truncate" title={r.name_raw}>{r.name_raw || '—'}</td>
@@ -221,6 +225,16 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
                           className="w-full text-center text-xs font-mono border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-[#3DD8D8]" />
                       </td>
                       <td className="px-2 py-1.5 text-right font-semibold text-[#1B3A5C]">{total}</td>
+                      <td className="px-2 py-1.5 text-right">
+                        {r.reference != null
+                          ? <span className={cn('inline-flex items-center gap-0.5', refMismatch ? 'text-amber-600 font-medium' : 'text-slate-400')}
+                              title={refMismatch
+                                ? `ผลบวกต่อถุง (${total}) ต่างจากยอดนับในใบ (${r.reference}) — เช็คว่า AI อ่านเลขถูก หรือเป็นยอดค้างยกมา`
+                                : 'ยอดนับในใบตรงกับผลบวก'}>
+                              {refMismatch && '≠'}{r.reference}
+                            </span>
+                          : <span className="text-slate-300">—</span>}
+                      </td>
                       <td className="px-2 py-1.5 text-right text-slate-500">{lfVal ?? '—'}</td>
                       <td className="px-2 py-1.5 text-center">
                         {r.code && bags.length > 0 && (
@@ -239,6 +253,7 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
 
           <p className="text-xs text-slate-400">
             ระบบบวก &quot;ต่อถุง&quot; ให้อัตโนมัติ → ลงช่อง <span className="font-medium">โรงซักแพคส่ง</span> + เก็บ breakdown ไว้ตรวจสอบ · ⚠ = ยอดที่บวกได้ต่างจากที่กรอกใน LF
+            <br /><span className="text-amber-600">ยอดนับในใบ</span> = เลขอ้างอิงที่เขียนในใบ (ก่อน =) · <span className="text-amber-600">≠</span> = ต่างจากผลบวก — ชวนเช็คว่า AI อ่านเลขถูก หรือมียอดค้างยกมา (ไม่ได้แปลว่าผิดเสมอ)
           </p>
 
           <div className="flex justify-end gap-2 pt-1">
