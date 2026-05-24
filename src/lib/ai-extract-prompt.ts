@@ -21,11 +21,21 @@ Rules:
 - Numbers may be Arabic (1,2,3) or Thai (๑,๒,๓) numerals — output integers.
 - confidence: 1.0 = clear printed text · 0.7 = readable handwriting · 0.3 = uncertain guess.
 - Skip lines you genuinely cannot read (do NOT fabricate). Note any problems in "warnings" (e.g. "ภาพเบลอบางส่วน", "หาวันที่ไม่เจอ").
-- detected_date: if a date is visible, return ISO YYYY-MM-DD; otherwise null.
+- detected_date: the date written on the sheet, converted to ISO YYYY-MM-DD in the Gregorian (Western / ค.ศ.) calendar. Thai laundry forms almost always write the year in the Buddhist Era (พ.ศ. / B.E.), which is 543 years AHEAD of the Gregorian year. Convert like this:
+    · 4-digit year >= 2500 (e.g. 2569) is B.E. -> subtract 543 (2569 -> 2026).
+    · 2-digit year (e.g. 69, often written after the month as DD/MM/YY) means B.E. 25YY = 2500 + YY -> then subtract 543 (69 -> 2569 -> 2026). NEVER read a 2-digit year as a 19xx year or as a Gregorian year directly.
+    · A 4-digit Gregorian year (19xx / 20xx) is rare on these forms; if clearly written that way, use it as-is.
+  Sanity check: the converted Gregorian year MUST be within about 1 year of today's date (given in the user message). If your result lands far away (e.g. 1996, 2053), you have almost certainly misread a digit — handwritten Thai 6 and 9 are very easily swapped (69 <-> 96) — so re-read and pick the plausible recent date.
+  If you cannot read the date confidently, return null and add a warning (e.g. "อ่านวันที่ไม่ชัด"). Do NOT output a specific date you are unsure of.
 - Do NOT return header rows, column titles, totals/รวม, or signatures as item rows.`
 
 export function buildUserText(items: CustomerItemHint[]): string {
+  // วันนี้ตามเวลาไทย (Asia/Bangkok) — anchor ให้ AI sanity-check การแปลง พ.ศ.→ค.ศ.
+  // อยู่ใน user message (volatile) ไม่ใช่ system prompt → ไม่ทำลาย cache + ไม่ค้างปี
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date()) // YYYY-MM-DD
   return [
+    `Today's date (Gregorian, Asia/Bangkok timezone): ${today}. The date written on the sheet should be close to this — use it to sanity-check your พ.ศ.→ค.ศ. conversion.`,
+    '',
     "Customer's valid item list (match by name, return the matching code):",
     JSON.stringify(items),
     '',
