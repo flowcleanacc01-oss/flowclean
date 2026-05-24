@@ -13,7 +13,7 @@ import {
   type LogisticsCell, type LogisticsRow,
 } from '@/lib/logistics-week'
 import { todayISO, genId, cn, formatExportFilename } from '@/lib/utils'
-import { WEEKDAY_SHORT, SCHEDULE_TYPE_CONFIG, type DeliveryNote } from '@/types'
+import { WEEKDAY_SHORT, SCHEDULE_TYPE_CONFIG, type DeliveryNote, type ScheduleOverride } from '@/types'
 import { canViewSD } from '@/lib/permissions'
 import Modal from '@/components/Modal'
 import RouteSheetPrint, { type RouteStop } from '@/components/RouteSheetPrint'
@@ -50,10 +50,19 @@ interface PendingReschedule {
   toDate: string
   regularSDs: DeliveryNote[]
   mode: 'move-sd' | 'move-expectation'
+  fromBaseScheduled: boolean        // 371 — from เป็นวันคิวจริง (มีคิวให้ skip) ไหม
+}
+
+// 371 — undo: เก็บ inverse ของ reschedule ล่าสุด เพื่อ "เลิกทำ"
+interface ReschedAction {
+  label: string
+  addedOverrideIds: string[]                                     // ที่เพิ่ง add → undo: delete
+  deletedOverrides: ScheduleOverride[]                           // ที่เพิ่ง delete → undo: re-add
+  movedSDs: { id: string; noteNumber: string; fromDate: string }[] // SD ที่ย้าย → undo: ย้ายกลับ
 }
 
 export default function LogisticsPage() {
-  const { currentUser, customers, deliveryNotes, scheduleOverrides, updateDeliveryNote, addScheduleOverride, routePlans, setRouteOrder, companyInfo } = useStore()
+  const { currentUser, customers, deliveryNotes, scheduleOverrides, updateDeliveryNote, addScheduleOverride, deleteScheduleOverride, routePlans, setRouteOrder, companyInfo } = useStore()
   const router = useRouter()
 
   const today = todayISO()
@@ -67,6 +76,7 @@ export default function LogisticsPage() {
   // reschedule confirm
   const [pending, setPending] = useState<PendingReschedule | null>(null)
   const [reason, setReason] = useState('')
+  const [lastAction, setLastAction] = useState<ReschedAction | null>(null)  // 371 — undo
 
   const week = useMemo(
     () => buildLogisticsWeek(customers, deliveryNotes, scheduleOverrides, anchor, today),
@@ -138,23 +148,53 @@ export default function LogisticsPage() {
       toDate: cell.date,
       regularSDs: srcCell.regularSDs,
       mode: movingSD ? 'move-sd' : 'move-expectation',
+      fromBaseScheduled: srcCell.baseScheduled,
     })
     setReason(`เลื่อนคิว ${fmtShort(src.date)} → ${fmtShort(cell.date)}`)
   }
 
   const confirmReschedule = () => {
     if (!pending) return
+    const cid = pending.customerId
     const linkId = genId()
-    // วันเดิม: บันทึก "เลื่อนออก" เสมอ — กันวันเดิมโชว์ "ขาด" (แดง) ทั้งที่ตั้งใจเลื่อน
-    addScheduleOverride({ customerId: pending.customerId, date: pending.fromDate, type: 'reschedule_skip', reason, rescheduledLinkId: linkId })
-    if (pending.mode === 'move-sd') {
-      // มี SD จริง: ย้ายวันที่ SD ไปวันใหม่ (SD = หลักฐานว่าส่งวันใหม่ ไม่ต้อง add override)
-      pending.regularSDs.forEach(sd => updateDeliveryNote(sd.id, { date: pending.toDate }))
-    } else {
-      // ยังไม่มี SD: ทำเครื่องหมาย "เลื่อนเข้า" ที่วันใหม่ (คู่กับ skip ผ่าน linkId)
-      addScheduleOverride({ customerId: pending.customerId, date: pending.toDate, type: 'reschedule_add', reason, rescheduledLinkId: linkId })
+    const addedOverrideIds: string[] = []
+    const deletedOverrides: ScheduleOverride[] = []
+    const movedSDs: { id: string; noteNumber: string; fromDate: string }[] = []
+
+    // 371 — หักล้าง override ที่ขัดแย้ง ณ 2 ปลายทางก่อน (กัน duplicate ตอนเลื่อนย้อนกลับ)
+    // ถ้าไม่ทำ: เลื่อน 18→19 (skip@18+add@19) แล้วเลื่อน 19→18 จะได้ add@18+skip@19 ทับซ้อน
+    //           → ทั้ง 2 วันมี skip+add → audit ตีว่า expected ทั้งคู่ → โชว์คิวซ้ำ
+    const toSkipOv = scheduleOverrides.find(o => o.customerId === cid && o.date === pending.toDate && o.type === 'reschedule_skip')
+    const fromAddOv = scheduleOverrides.find(o => o.customerId === cid && o.date === pending.fromDate && o.type === 'reschedule_add')
+    if (toSkipOv) { deleteScheduleOverride(toSkipOv.id); deletedOverrides.push(toSkipOv) }   // ปลายทางจะมีคิว → ลบ "เลื่อนออก" ที่ค้าง
+    if (fromAddOv) { deleteScheduleOverride(fromAddOv.id); deletedOverrides.push(fromAddOv) } // ต้นทางจะเลื่อนออก → ลบ "เลื่อนเข้า" ที่ค้าง
+
+    // ต้นทาง: mark "เลื่อนออก" — เฉพาะวันคิวจริง + ไม่ได้เพิ่งหักล้าง add (กันวันเดิมโชว์ "ขาด")
+    if (!fromAddOv && pending.fromBaseScheduled) {
+      const o = addScheduleOverride({ customerId: cid, date: pending.fromDate, type: 'reschedule_skip', reason, rescheduledLinkId: linkId })
+      addedOverrideIds.push(o.id)
     }
+    // ปลายทาง
+    if (pending.mode === 'move-sd') {
+      // มี SD จริง: ย้ายวันที่ SD ไปวันใหม่ (SD = หลักฐานว่าส่งวันใหม่)
+      pending.regularSDs.forEach(sd => { updateDeliveryNote(sd.id, { date: pending.toDate }); movedSDs.push({ id: sd.id, noteNumber: sd.noteNumber, fromDate: pending.fromDate }) })
+    } else if (!toSkipOv) {
+      // ยังไม่มี SD + ปลายทางไม่ได้หักล้าง skip → ทำเครื่องหมาย "เลื่อนเข้า"
+      const o = addScheduleOverride({ customerId: cid, date: pending.toDate, type: 'reschedule_add', reason, rescheduledLinkId: linkId })
+      addedOverrideIds.push(o.id)
+    }
+
+    setLastAction({ label: `${pending.customerName}: ${fmtShort(pending.fromDate)} → ${fmtShort(pending.toDate)}`, addedOverrideIds, deletedOverrides, movedSDs })
     setPending(null)
+  }
+
+  // 371 — เลิกทำ reschedule ล่าสุด (reverse ทุก operation)
+  const undoReschedule = () => {
+    if (!lastAction) return
+    lastAction.addedOverrideIds.forEach(id => deleteScheduleOverride(id))
+    lastAction.deletedOverrides.forEach(o => addScheduleOverride({ customerId: o.customerId, date: o.date, type: o.type, reason: o.reason, rescheduledLinkId: o.rescheduledLinkId }))
+    lastAction.movedSDs.forEach(m => updateDeliveryNote(m.id, { date: m.fromDate }))
+    setLastAction(null)
   }
 
   // ── route reorder (day-detail) ──
@@ -267,18 +307,18 @@ export default function LogisticsPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-auto max-h-[calc(100vh-15rem)]">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                <th className="sticky left-0 z-10 bg-slate-50 border-b border-r border-slate-200 px-3 py-2.5 text-left font-semibold text-slate-600 min-w-[160px]">
+                <th className="sticky left-0 top-0 z-30 bg-slate-50 border-b border-r border-slate-200 px-3 py-2.5 text-left font-semibold text-slate-600 min-w-[160px]">
                   ลูกค้า
                 </th>
                 {week.days.map(d => (
                   <th
                     key={d.date}
                     className={cn(
-                      'border-b border-slate-200 px-1 py-1.5 text-center font-semibold min-w-[96px]',
+                      'sticky top-0 z-20 border-b border-slate-200 px-1 py-1.5 text-center font-semibold min-w-[96px]',
                       d.isToday ? 'bg-[#3DD8D8]/15 text-[#1B3A5C]' : 'bg-slate-50 text-slate-600',
                     )}
                   >
@@ -331,7 +371,6 @@ export default function LogisticsPage() {
                       >
                         <CellChip
                           cell={cell}
-                          row={row}
                           today={today}
                           draggable={isDraggableStatus(cell.status)}
                           onDragStart={() => onDragStart(row, cell)}
@@ -359,6 +398,16 @@ export default function LogisticsPage() {
         <LegendDot cls="bg-purple-400" label="ข้าม / เลื่อน" />
         <span className="text-slate-400 inline-flex items-center gap-1"><Info className="w-3.5 h-3.5" />ลาก cell ที่มีคิว ไปวางวันอื่น = เลื่อนคิว</span>
       </div>
+
+      {/* 371 — Undo banner (เลิกทำ reschedule ล่าสุด) */}
+      {lastAction && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[#1B3A5C] text-white shadow-lg text-sm max-w-[92vw]">
+          <CornerDownRight className="w-4 h-4 text-[#3DD8D8] flex-shrink-0" />
+          <span className="truncate">เลื่อนคิวแล้ว · {lastAction.label}</span>
+          <button type="button" onClick={undoReschedule} className="font-semibold text-[#3DD8D8] hover:underline flex-shrink-0">เลิกทำ</button>
+          <button type="button" onClick={() => setLastAction(null)} className="text-white/50 hover:text-white flex-shrink-0" aria-label="ปิด">✕</button>
+        </div>
+      )}
 
       {/* Reschedule confirm modal */}
       <Modal open={!!pending} onClose={() => setPending(null)} title="ยืนยันการเลื่อนคิว" size="md" closeLabel="cancel">
@@ -508,10 +557,9 @@ export default function LogisticsPage() {
 
 // ── Cell chip ──
 function CellChip({
-  cell, row, today, draggable, onDragStart, onDragEnd, onCreate, onView,
+  cell, today, draggable, onDragStart, onDragEnd, onCreate, onView,
 }: {
   cell: LogisticsCell
-  row: LogisticsRow
   today: string
   draggable: boolean
   onDragStart: () => void
