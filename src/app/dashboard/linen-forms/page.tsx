@@ -11,6 +11,7 @@ import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LIN
 import LFAiInputModal from '@/components/LFAiInputModal'
 import LFBatchScanModal from '@/components/LFBatchScanModal'
 import PackChecklistModal from '@/components/PackChecklistModal'
+import AuditLFModal from '@/components/AuditLFModal'
 import type { AiFillMap } from '@/lib/ai-extract-types'
 import { applyAiFillToRows } from '@/lib/ai-fill'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
@@ -56,6 +57,7 @@ export default function LinenFormsPage() {
   const [showAiInputDetail, setShowAiInputDetail] = useState(false)
   const [showBatch, setShowBatch] = useState(false)
   const [showChecklist, setShowChecklist] = useState(false)
+  const [showAudit, setShowAudit] = useState(false)
   // 297.1: Discrepancy helper — ย้ายมาจาก dashboard (เกี่ยวข้องกับสถานะ ลูกค้านับผ้ากลับแล้ว)
   const [helperOpen, setHelperOpen] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
@@ -399,6 +401,24 @@ export default function LinenFormsPage() {
     const newRows = detailForm.rows.map(r => {
       const u = m.get(r.code)
       return u ? { ...r, col6_factoryPackSend: u.col6, col6Breakdown: u.breakdown } : r
+    })
+    updateLinenForm(detailForm.id, { rows: newRows })
+  }
+
+  // 366.2 — Audit LF: apply ค่าจากเอกสารที่สแกน (form 4col + checklist col6) ลง LF
+  const handleAuditApply = (updates: { code: string; vals: Partial<{ col2: number | null; col3: number | null; col5: number | null; col6: number | null }>; col6Breakdown?: number[] }[]) => {
+    if (!detailForm) return
+    const m = new Map(updates.map(u => [u.code, u]))
+    const newRows = detailForm.rows.map(r => {
+      const u = m.get(r.code)
+      if (!u) return r
+      const patch: Partial<LinenFormRow> = {}
+      if (u.vals.col2 != null) patch.col2_hotelCountIn = u.vals.col2
+      if (u.vals.col3 != null) patch.col3_hotelClaimCount = u.vals.col3
+      if (u.vals.col5 != null) patch.col5_factoryClaimApproved = u.vals.col5
+      if (u.vals.col6 != null) patch.col6_factoryPackSend = u.vals.col6
+      if (u.col6Breakdown) patch.col6Breakdown = u.col6Breakdown
+      return { ...r, ...patch }
     })
     updateLinenForm(detailForm.id, { rows: newRows })
   }
@@ -788,6 +808,17 @@ export default function LinenFormsPage() {
         expectCustomer={detailCustomer?.shortName || detailCustomer?.name}
         expectDate={detailForm?.date}
         onApply={handleChecklistApply}
+      />
+      {/* 366.2 — Audit LF (สแกน 2 ใบเทียบ) */}
+      <AuditLFModal
+        open={showAudit}
+        onClose={() => setShowAudit(false)}
+        lfRows={detailForm?.rows || []}
+        items={aiItemsDetail}
+        itemName={(code) => linenCatalog.find(c => c.code === code)?.name || code}
+        expectCustomer={detailCustomer?.shortName || detailCustomer?.name}
+        expectDate={detailForm?.date}
+        onApply={handleAuditApply}
       />
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งรับผ้าใหม่ (Create New LF)" size="wide" closeLabel="cancel">
@@ -1229,6 +1260,15 @@ export default function LinenFormsPage() {
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#1B3A5C]/10 text-[#1B3A5C] border border-[#1B3A5C]/30 rounded-lg hover:bg-[#1B3A5C]/15 transition-colors"
                     title="สแกนใบเช็คผ้า → AI อ่านจำนวนต่อถุง → บวกลงช่องแพคส่ง + ตรวจยอด">
                     📋 ตรวจใบเช็คผ้า
+                  </button>
+                )}
+                {['washing', 'packed', 'delivered', 'confirmed'].includes(detailForm.status) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAudit(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+                    title="สแกนใบส่งรับผ้า + ใบเช็คผ้า → เทียบกับ LF ทุกคอลัมน์ + ยืนยันลูกค้า/วันที่">
+                    🔍 ตรวจสอบ LF
                   </button>
                 )}
               </div>
