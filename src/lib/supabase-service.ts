@@ -174,7 +174,9 @@ function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(obj)) {
     const snakeKey = FIELD_MAP[key] || key
-    result[snakeKey] = value
+    // undefined → null: ให้ clear column ได้จริง (ตรงกับ optimistic state {...i,...updates})
+    // JSON.stringify ทิ้ง undefined → เดิม update {sizeGroup: undefined} ไม่ clear DB → reload ค่าเก่ากลับมา
+    result[snakeKey] = value === undefined ? null : value
   }
   return result
 }

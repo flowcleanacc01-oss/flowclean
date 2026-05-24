@@ -40,7 +40,7 @@ import { RefreshCcw, Shield, BookOpen, Sparkles, AlertTriangle, Shuffle, Ghost, 
 import FacetVocabEditor from '@/components/FacetVocabEditor'
 
 type TabKey = 'hygiene' | 'items' | 'categories' | 'merge' | 'sync' | 'vocab' | 'orphan' | 'reuse' | 'ghost' | 'facets' | 'namedup' | 'catalogaudit'
-type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder'
+type SortColumn = 'code' | 'name' | 'nameEn' | 'category' | 'unit' | 'defaultPrice' | 'sortOrder' | 'group'
 type SortDir = 'asc' | 'desc'
 
 const EMPTY_NEW_ITEM: LinenItemDef = {
@@ -214,6 +214,7 @@ export default function ItemsPage() {
         case 'unit': cmp = a.unit.localeCompare(b.unit); break
         case 'defaultPrice': cmp = (defaultPrices[a.code] ?? a.defaultPrice) - (defaultPrices[b.code] ?? b.defaultPrice); break
         case 'sortOrder': cmp = a.sortOrder - b.sortOrder; break
+        case 'group': cmp = (a.sizeGroup || '').localeCompare(b.sizeGroup || ''); break
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
@@ -658,9 +659,9 @@ export default function ItemsPage() {
                     <th className={cn("text-left px-4 py-2 font-medium cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('unit'))} onClick={() => handleSort('unit')}>
                       <span className="flex items-center">หน่วย<SortIcon col="unit" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
-                    {/* 317: Size Group — รวมไซส์ตอนนับเข้า */}
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">
-                      <span className="flex items-center" title="กลุ่มรวมไซส์ — codes ที่อยู่ใน group เดียวกัน ลูกค้า opt-in นับรวมตอนรับเข้าได้">📦 Group</span>
+                    {/* 317: Size Group — รวมไซส์ตอนนับเข้า · 365.1: sortable */}
+                    <th className={cn("text-left px-4 py-2 font-medium cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('group'))} onClick={() => handleSort('group')}>
+                      <span className="flex items-center" title="กลุ่มรวมไซส์ — codes ที่อยู่ใน group เดียวกัน ลูกค้า opt-in นับรวมตอนรับเข้าได้">📦 Group<SortIcon col="group" sortCol={sortCol} sortDir={sortDir} /></span>
                     </th>
                     <th className={cn("text-right px-4 py-2 font-medium w-28 cursor-pointer select-none transition-colors hover:bg-slate-100", sortedThBg('defaultPrice'))} onClick={() => handleSort('defaultPrice')}>
                       <span className="flex items-center justify-end">ราคา default<SortIcon col="defaultPrice" sortCol={sortCol} sortDir={sortDir} /></span>
@@ -800,7 +801,7 @@ export default function ItemsPage() {
                       <td className="px-4 py-2 text-xs">
                         {editingCode === item.code ? (
                           <input
-                            value={editItem.sizeGroup ?? item.sizeGroup ?? ''}
+                            value={editItem.sizeGroup ?? ''}
                             onChange={e => setEditItem({ ...editItem, sizeGroup: e.target.value.toUpperCase().trim() || undefined })}
                             placeholder="เช่น BEDSHEET"
                             list="size-group-suggestions"
