@@ -31,6 +31,7 @@ Rules:
     · A 4-digit Gregorian year (19xx / 20xx) is rare on these forms; if clearly written that way, use it as-is.
   Sanity check: the converted Gregorian year MUST be within about 1 year of today's date (given in the user message). If your result lands far away (e.g. 1996, 2053), you have almost certainly misread a digit — handwritten Thai 6 and 9 are very easily swapped (69 <-> 96) — so re-read and pick the plausible recent date.
   If you cannot read the date confidently, return null and add a warning (e.g. "อ่านวันที่ไม่ชัด"). Do NOT output a specific date you are unsure of.
+- detected_customer: the customer / hotel name or code written on the sheet — usually in a "ชื่อ" or "Business Name" field near the top (e.g. "HS", "HT", a hotel name). Return the raw text exactly as read, or null if none is visible.
 - Do NOT return header rows, column titles, totals/รวม, or signatures as item rows.`
 
 export function buildUserText(items: CustomerItemHint[]): string {
@@ -54,6 +55,7 @@ export const LF_EXTRACT_SCHEMA = {
   additionalProperties: false,
   properties: {
     detected_date: { type: ['string', 'null'] },
+    detected_customer: { type: ['string', 'null'] },
     warnings: { type: 'array', items: { type: 'string' } },
     rows: {
       type: 'array',
@@ -74,5 +76,5 @@ export const LF_EXTRACT_SCHEMA = {
       },
     },
   },
-  required: ['detected_date', 'warnings', 'rows'],
+  required: ['detected_date', 'detected_customer', 'warnings', 'rows'],
 }

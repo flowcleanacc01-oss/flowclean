@@ -7,6 +7,7 @@ import { useState, useRef, useCallback } from 'react'
 import Modal from '@/components/Modal'
 import { cn } from '@/lib/utils'
 import type { CustomerItemHint, ExtractedLF, LFExtractResponse, AiFillMap } from '@/lib/ai-extract-types'
+import { sessionUserId, compressImage } from '@/lib/ai-scan-client'
 import { Camera, Upload, Loader2, Sparkles, AlertTriangle, Check, RefreshCw, ImageOff } from 'lucide-react'
 
 interface Props {
@@ -27,36 +28,6 @@ interface EditRow {
 }
 
 type Phase = 'upload' | 'loading' | 'review' | 'error'
-
-function sessionUserId(): string {
-  try {
-    const s = sessionStorage.getItem('flowclean_session')
-    return s ? (JSON.parse(s)?.userId || '') : ''
-  } catch {
-    return ''
-  }
-}
-
-// ย่อ + auto-orient ด้วย canvas (ไม่พึ่ง dependency) → JPEG base64
-async function compressImage(file: File): Promise<{ base64: string; dataUrl: string }> {
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions)
-  const maxDim = 2000
-  let { width, height } = bitmap
-  if (Math.max(width, height) > maxDim) {
-    const scale = maxDim / Math.max(width, height)
-    width = Math.round(width * scale)
-    height = Math.round(height * scale)
-  }
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('canvas not supported')
-  ctx.drawImage(bitmap, 0, 0, width, height)
-  bitmap.close?.()
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
-  return { base64: dataUrl.split(',')[1], dataUrl }
-}
 
 function confidenceClass(c: number): string {
   if (c >= 0.8) return 'bg-emerald-50 text-emerald-700 border-emerald-200'

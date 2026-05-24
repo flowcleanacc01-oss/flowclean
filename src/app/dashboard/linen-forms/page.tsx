@@ -9,6 +9,7 @@ import { highlightText } from '@/lib/highlight'
 import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import LFAiInputModal from '@/components/LFAiInputModal'
+import LFBatchScanModal from '@/components/LFBatchScanModal'
 import type { AiFillMap } from '@/lib/ai-extract-types'
 import { applyAiFillToRows } from '@/lib/ai-fill'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
@@ -52,6 +53,7 @@ export default function LinenFormsPage() {
   // 358 — LF Input by AI
   const [showAiInput, setShowAiInput] = useState(false)
   const [showAiInputDetail, setShowAiInputDetail] = useState(false)
+  const [showBatch, setShowBatch] = useState(false)
   // 297.1: Discrepancy helper — ย้ายมาจาก dashboard (เกี่ยวข้องกับสถานะ ลูกค้านับผ้ากลับแล้ว)
   const [helperOpen, setHelperOpen] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
@@ -354,6 +356,37 @@ export default function LinenFormsPage() {
     updateLinenForm(detailForm.id, { rows: applyAiFillToRows(detailForm.rows, fill, detailCustomer, linenCatalog) })
   }
 
+  // 368 — Batch Scan Wizard helpers
+  const batchCatalogHints = useMemo(() => linenCatalog.map(c => ({ code: c.code, name: c.name })), [linenCatalog])
+  const matchCustomerByName = (nameRaw: string): string => {
+    const q = (nameRaw || '').trim()
+    if (!q) return ''
+    const exact = customers.find(c => [c.customerCode, c.shortName, c.name].some(f => f && f.toLowerCase() === q.toLowerCase()))
+    if (exact) return exact.id
+    return customers.find(c => matchesThaiQueryAnyField([c.name, c.shortName, c.customerCode, c.nameEn], q))?.id || ''
+  }
+  const itemsForCustomerBatch = (custId: string) => {
+    const cust = getCustomer(custId)
+    if (!cust) return []
+    const qt = getLinkedQT(cust.name, custId)
+    return (qt ? qt.items.map(i => i.code) : []).map(code => ({
+      code, name: cust.itemNicknames?.[code] || linenCatalog.find(c => c.code === code)?.name || code,
+    }))
+  }
+  const hasExistingLFBatch = (custId: string, date: string) => linenForms.some(f => f.customerId === custId && f.date === date)
+  const handleBatchComplete = (items: { customerId: string; date: string; fill: AiFillMap }[]) => {
+    let created = 0, skipped = 0
+    for (const it of items) {
+      const cust = getCustomer(it.customerId)
+      const qt = cust ? getLinkedQT(cust.name, it.customerId) : null
+      if (!cust || !qt) { skipped++; continue }  // MPD: ไม่มี QT → สร้างไม่ได้
+      const rows = applyAiFillToRows(buildRows(qt.items.map(i => i.code)), it.fill, cust, linenCatalog)
+      addLinenForm({ customerId: it.customerId, date: it.date, status: 'washing', rows, notes: 'นำเข้าด้วย AI (batch)', bagsSentCount: 0, workflowMode: cust.workflowMode ?? 'cross_check' })
+      created++
+    }
+    alert(`สร้าง LF สำเร็จ ${created} ใบ (สถานะ 4/7 ซักอบเสร็จ)${skipped ? `\nข้าม ${skipped} ใบ (ไม่มีลูกค้า/QT)` : ''}`)
+  }
+
   /**
    * 261: Re-sort LF rows ตามลำดับ accepted QT ล่าสุด
    * — สำหรับ LFs ที่สร้างก่อน QT reorder
@@ -469,6 +502,11 @@ export default function LinenFormsPage() {
           <button onClick={handleCreateOpen}
             className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />สร้างใบส่งรับผ้าใหม่
+          </button>
+          <button onClick={() => setShowBatch(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium"
+            title="อัปโหลดใบส่งรับผ้าหลายใบ → AI อ่านลูกค้า/วันที่/ยอด → สร้าง LF ที่ 4/7 รวดเดียว">
+            📷 นำเข้าหลายใบ (AI)
           </button>
         </div>
       </div>
@@ -713,6 +751,17 @@ export default function LinenFormsPage() {
         onClose={() => setShowAiInputDetail(false)}
         items={aiItemsDetail}
         onAccept={handleAiAcceptDetail}
+      />
+      {/* 368 — Batch Scan Wizard */}
+      <LFBatchScanModal
+        open={showBatch}
+        onClose={() => setShowBatch(false)}
+        customers={customers}
+        catalogHints={batchCatalogHints}
+        matchCustomer={matchCustomerByName}
+        itemsForCustomer={itemsForCustomerBatch}
+        hasExistingLF={hasExistingLFBatch}
+        onComplete={handleBatchComplete}
       />
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งรับผ้าใหม่ (Create New LF)" size="wide" closeLabel="cancel">

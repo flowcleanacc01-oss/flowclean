@@ -23,7 +23,8 @@ export interface ExtractedRow {
 }
 
 export interface ExtractedLF {
-  detected_date: string | null   // วันที่ถ้าเห็นในรูป (ISO)
+  detected_date: string | null      // วันที่ถ้าเห็นในรูป (ISO)
+  detected_customer: string | null  // 368: ชื่อ/รหัสลูกค้าที่เขียนบนใบ (ช่อง "ชื่อ") — ดิบ ไว้ auto-match
   rows: ExtractedRow[]
   warnings: string[]
 }
