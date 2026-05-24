@@ -8,6 +8,8 @@ import { formatDate, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumbe
 import { highlightText } from '@/lib/highlight'
 import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
+import LFAiInputModal from '@/components/LFAiInputModal'
+import type { AiFillMap } from '@/lib/ai-extract-types'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer } from '@/lib/recent-customers'
@@ -46,6 +48,8 @@ export default function LinenFormsPage() {
   })
   const [customerFilter, setCustomerFilter] = useState<string>('all')
   const [showCreate, setShowCreate] = useState(false)
+  // 358 — LF Input by AI
+  const [showAiInput, setShowAiInput] = useState(false)
   // 297.1: Discrepancy helper — ย้ายมาจาก dashboard (เกี่ยวข้องกับสถานะ ลูกค้านับผ้ากลับแล้ว)
   const [helperOpen, setHelperOpen] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
@@ -316,6 +320,20 @@ export default function LinenFormsPage() {
     scrollToActiveRow(newLF.id)
     setShowCreate(false)
   }
+
+  // 358 — เติมผล AI ลง newRows (match by code → col2 ลูกค้านับส่ง + col3 เคลม)
+  const handleAiAccept = (fill: AiFillMap) => {
+    setNewRows(rows => rows.map(r => (
+      fill[r.code]
+        ? { ...r, col2_hotelCountIn: fill[r.code].col2, col3_hotelClaimCount: fill[r.code].col3 }
+        : r
+    )))
+  }
+  const aiCust = newCustomerId ? getCustomer(newCustomerId) : null
+  const aiItems = newRows.map(r => ({
+    code: r.code,
+    name: aiCust?.itemNicknames?.[r.code] || linenCatalog.find(c => c.code === r.code)?.name || r.code,
+  }))
 
   const detailForm = showDetail ? linenForms.find(f => f.id === showDetail) : null
   const detailCustomer = detailForm ? getCustomer(detailForm.customerId) : null
@@ -671,6 +689,13 @@ export default function LinenFormsPage() {
       </FloatingTotalBar>
 
       {/* Create Modal */}
+      <LFAiInputModal
+        open={showAiInput}
+        onClose={() => setShowAiInput(false)}
+        items={aiItems}
+        onAccept={handleAiAccept}
+      />
+
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งรับผ้าใหม่ (Create New LF)" size="wide" closeLabel="cancel">
         {/* 181.1: min-h ให้ panel ของ CustomerPicker (~400px) ไม่ดูใหญ่กว่า modal */}
         <div className="space-y-4 min-h-[480px]">
@@ -723,7 +748,14 @@ export default function LinenFormsPage() {
                   className="w-32 px-3 py-2 border border-teal-300 rounded-lg text-sm text-center font-medium focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
                   placeholder="0" />
               </div>
-              <div className="flex items-center justify-end">
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAiInput(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#3DD8D8]/15 text-[#1B3A5C] border border-[#3DD8D8] rounded-lg hover:bg-[#3DD8D8]/25 transition-colors"
+                  title="ถ่ายรูป/อัปโหลดใบนับผ้า → AI อ่าน + กรอกให้ (ตรวจก่อนบันทึก)">
+                  📷 กรอกด้วย AI
+                </button>
                 <button
                   type="button"
                   onClick={() => {
