@@ -246,9 +246,9 @@ export type ScheduleType = 'none' | 'daily' | 'every_n_days' | 'weekly' | 'biwee
 export const SCHEDULE_TYPE_CONFIG: Record<ScheduleType, { label: string; description: string }> = {
   none: { label: 'ไม่ตั้งคิว', description: 'ยังไม่ได้ตั้งคิวส่ง — ไม่อยู่ใน Schedule Audit' },
   daily: { label: 'ทุกวัน', description: 'ส่งทุกวัน' },
-  every_n_days: { label: 'ทุก N วัน', description: 'ส่งทุก N วัน (เช่น ทุก 48hr = 2 วัน) — ต้องมี anchor date' },
+  every_n_days: { label: 'วันเว้นวัน', description: 'ส่งวันเว้นวัน (48 ชม. = ทุก 2 วัน) — ปรับเป็นทุก N วันได้' },
   weekly: { label: 'รายสัปดาห์', description: 'ส่งตามวันในสัปดาห์ (เช่น จันทร์/พุธ/ศุกร์)' },
-  biweekly: { label: 'เว้นสัปดาห์', description: 'ส่งตามวันในสัปดาห์ เว้นสัปดาห์ — ใช้ anchor week parity' },
+  biweekly: { label: '2 สัปดาห์ครั้ง', description: 'ส่งทุก 2 สัปดาห์ (เว้นสัปดาห์) — เลือกวันในสัปดาห์' },
 }
 
 export const WEEKDAY_LABELS = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์']

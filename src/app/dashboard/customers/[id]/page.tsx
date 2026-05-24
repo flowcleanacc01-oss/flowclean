@@ -396,7 +396,7 @@ export default function CustomerDetailPage() {
                   <span className="text-slate-500">ประเภท:</span>
                   <span className="font-semibold text-indigo-700">{SCHEDULE_TYPE_CONFIG[customer.scheduleType].label}</span>
                 </div>
-                {customer.scheduleType === 'weekly' && customer.scheduleDays && customer.scheduleDays.length > 0 && (
+                {(customer.scheduleType === 'weekly' || customer.scheduleType === 'biweekly') && customer.scheduleDays && customer.scheduleDays.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1">
                     <span className="text-slate-500">วันส่ง:</span>
                     {customer.scheduleDays.map(day => (
@@ -404,6 +404,15 @@ export default function CustomerDetailPage() {
                         {WEEKDAY_SHORT[day]}
                       </span>
                     ))}
+                    {customer.scheduleType === 'biweekly' && <span className="text-xs text-slate-400">(เว้นสัปดาห์)</span>}
+                  </div>
+                )}
+                {customer.scheduleType === 'every_n_days' && customer.scheduleEveryNDays && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500">ความถี่:</span>
+                    <span className="font-semibold text-indigo-700">
+                      ทุก {customer.scheduleEveryNDays} วัน{customer.scheduleEveryNDays === 2 ? ' (48 ชม.)' : ''}
+                    </span>
                   </div>
                 )}
                 {customer.scheduleStartDate && (

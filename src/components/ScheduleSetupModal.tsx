@@ -217,9 +217,24 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
                 className="w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm text-center font-mono focus:outline-none focus:border-[#3DD8D8] focus:ring-2 focus:ring-[#3DD8D8]/30"
               />
               <span className="text-sm text-slate-600">วัน</span>
-              <span className="text-xs text-slate-400 italic">
-                เช่น 2 = ทุก 48hr · 3 = ทุก 72hr · 7 = ทุกสัปดาห์
-              </span>
+            </div>
+            <div className="flex items-center flex-wrap gap-1.5 mt-2">
+              <span className="text-xs text-slate-400">ทางลัด:</span>
+              {[{ n: 2, l: 'วันเว้นวัน (48ชม.)' }, { n: 3, l: 'ทุก 3 วัน' }, { n: 7, l: 'ทุกสัปดาห์' }].map(p => (
+                <button
+                  key={p.n}
+                  type="button"
+                  onClick={() => setScheduleEveryNDays(p.n)}
+                  className={cn(
+                    'px-2.5 py-1 rounded-md text-xs border transition-colors',
+                    scheduleEveryNDays === p.n
+                      ? 'border-[#3DD8D8] bg-[#3DD8D8]/10 text-[#1B3A5C] font-medium'
+                      : 'border-slate-200 text-slate-500 hover:border-slate-300',
+                  )}
+                >
+                  {p.l}
+                </button>
+              ))}
             </div>
           </div>
         )}
