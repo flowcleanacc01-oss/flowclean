@@ -51,6 +51,7 @@ export default function LinenFormsPage() {
   const [showCreate, setShowCreate] = useState(false)
   // 358 — LF Input by AI
   const [showAiInput, setShowAiInput] = useState(false)
+  const [showAiInputDetail, setShowAiInputDetail] = useState(false)
   // 297.1: Discrepancy helper — ย้ายมาจาก dashboard (เกี่ยวข้องกับสถานะ ลูกค้านับผ้ากลับแล้ว)
   const [helperOpen, setHelperOpen] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
@@ -340,6 +341,18 @@ export default function LinenFormsPage() {
   const nextDetailStatus = detailForm ? NEXT_LINEN_STATUS[detailForm.status] : null
   const linkedDN = detailForm ? deliveryNotes.find(dn => dn.linenFormIds.includes(detailForm.id)) : null
   const isLockedByDN = !!linkedDN && detailForm?.status === 'confirmed'
+
+  // 362.2 — AI input ใน LF detail (ใช้ได้ถึง 4/7) — เติม col2/col3/col5/col6 ของ detailForm
+  const aiItemsDetail = detailForm
+    ? detailForm.rows.map(r => ({
+        code: r.code,
+        name: detailCustomer?.itemNicknames?.[r.code] || linenCatalog.find(c => c.code === r.code)?.name || r.code,
+      }))
+    : []
+  const handleAiAcceptDetail = (fill: AiFillMap) => {
+    if (!detailForm || !detailCustomer) return
+    updateLinenForm(detailForm.id, { rows: applyAiFillToRows(detailForm.rows, fill, detailCustomer, linenCatalog) })
+  }
 
   /**
    * 261: Re-sort LF rows ตามลำดับ accepted QT ล่าสุด
@@ -693,6 +706,13 @@ export default function LinenFormsPage() {
         onClose={() => setShowAiInput(false)}
         items={aiItems}
         onAccept={handleAiAccept}
+      />
+      {/* Detail Modal (362.2 — ใช้ได้ถึง 4/7) */}
+      <LFAiInputModal
+        open={showAiInputDetail}
+        onClose={() => setShowAiInputDetail(false)}
+        items={aiItemsDetail}
+        onAccept={handleAiAcceptDetail}
       />
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งรับผ้าใหม่ (Create New LF)" size="wide" closeLabel="cancel">
@@ -1116,6 +1136,17 @@ export default function LinenFormsPage() {
                 )
               })()}
             </div>
+            {['draft', 'received', 'sorting', 'washing'].includes(detailForm.status) && (
+              <div className="flex items-center justify-end mb-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAiInputDetail(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#3DD8D8]/15 text-[#1B3A5C] border border-[#3DD8D8] rounded-lg hover:bg-[#3DD8D8]/25 transition-colors"
+                  title="ถ่ายรูป/อัปโหลดใบนับ → AI อ่าน + กรอก นับส่ง/เคลม/นับเข้า/แพคส่ง (ตรวจก่อนบันทึก)">
+                  📷 กรอกด้วย AI
+                </button>
+              </div>
+            )}
             <LinenFormGrid
               customer={detailCustomer}
               rows={detailForm.rows}
@@ -1131,7 +1162,7 @@ export default function LinenFormsPage() {
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
                 detailForm.status === 'received' ? ['col2', 'col3', 'col5', 'note'] :
                 PROCESS_STATUSES.includes(detailForm.status) ? [] :
-                detailForm.status === 'washing' ? ['col6', 'note'] :
+                detailForm.status === 'washing' ? ['col2', 'col3', 'col5', 'col6', 'note'] :
                 detailForm.status === 'delivered' ? ['col4'] :
                 []
               }
