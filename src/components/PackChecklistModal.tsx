@@ -244,13 +244,23 @@ export default function PackChecklistModal({ open, onClose, items, currentCol6, 
                             ? <span className="text-[10px] px-1 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300" title={`ต่าง ${total - (lfVal || 0)}`}>⚠</span>
                             : <span className="text-[10px] text-emerald-600">✓</span>
                         )}
-                        {/* ใบไม่ได้ระบุยอด (ว่าง) แต่ LF มีค่า → ชวนตั้งเป็น 0 (1 คลิก) แทนการเดา auto-zero */}
-                        {r.code && bags.length === 0 && (lfVal ?? 0) > 0 && (
-                          <button type="button" onClick={() => patchRow(idx, { bagsRaw: '0' })}
-                            title={`ใบเช็คผ้าไม่ได้ระบุยอดนี้ แต่ LF มี ${lfVal} — กดเพื่อตั้งโรงซักแพคส่ง = 0 (ลบยอดใน LF)`}
-                            className="text-[10px] px-1.5 py-0.5 rounded border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors whitespace-nowrap">
-                            ตั้ง 0
-                          </button>
+                        {/* bags ว่าง: row ที่ในใบมีแต่ยอดนับเข้า (สีแดง) ไม่มีแพค (น้ำเงิน) — เตือน + ปุ่มตั้ง 0 */}
+                        {r.code && bags.length === 0 && (
+                          <div className="flex flex-col items-center gap-1">
+                            {r.reference != null && (
+                              <span className="text-[9px] px-1 py-0.5 rounded bg-sky-50 text-sky-600 border border-sky-200 whitespace-nowrap"
+                                title={`ในใบ row นี้มีแต่ยอดนับเข้า (${r.reference}) ไม่มียอดแพค (สีน้ำเงิน) — ปกติไม่ต้องลงยอด`}>
+                                นับเข้าเท่านั้น
+                              </span>
+                            )}
+                            {(lfVal ?? 0) > 0 && (
+                              <button type="button" onClick={() => patchRow(idx, { bagsRaw: '0' })}
+                                title={`ใบเช็คผ้าไม่ได้ระบุยอดแพคนี้ แต่ LF มี ${lfVal} — กดเพื่อตั้งโรงซักแพคส่ง = 0 (ลบยอดใน LF)`}
+                                className="text-[10px] px-1.5 py-0.5 rounded border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors whitespace-nowrap">
+                                ตั้ง 0
+                              </button>
+                            )}
+                          </div>
                         )}
                         {!r.code && <span className={cn('text-[9px] px-1 py-0.5 rounded border', confidenceClass(r.confidence))}>{Math.round(r.confidence * 100)}%</span>}
                       </td>
