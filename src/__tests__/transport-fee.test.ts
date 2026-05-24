@@ -28,6 +28,10 @@ function makeDN(overrides: Partial<DeliveryNote> = {}): DeliveryNote {
   }
 }
 
+// 226.B: calculateDNSubtotal/Month อ่านราคาจาก priceMap (ไม่ใช่ customer.priceList) → สร้างจาก fixture
+const pmFrom = (c: Customer): Record<string, number> =>
+  Object.fromEntries(c.priceList.map(p => [p.code, p.price]))
+
 // ============================================================
 // ตัวอย่างที่ 1-7 จากพี่จ๊อบ
 // ============================================================
@@ -105,7 +109,7 @@ describe('Transport Fee Per Month (ค่ารถ เดือน)', () => {
     }))
     // Each DN subtotal = 62*8 + 4*5 = 516, 10 DNs = 5160
     // Current DN subtotal=300, tripFee=40 → monthTotal = 5160 + 300 + 40 = 5500
-    const fee = calculateTransportFeeMonth(simpleDNs, customer, 300, 40)
+    const fee = calculateTransportFeeMonth(simpleDNs, customer, 300, 40, pmFrom(customer))
     expect(fee).toBe(500)
   })
 
@@ -133,12 +137,12 @@ describe('calculateDNSubtotal', () => {
   it('calculates item subtotal correctly', () => {
     const customer = makeCustomer()
     const dn = makeDN({ items: [{ code: 'B/T', quantity: 10, isClaim: false }, { code: 'B/H', quantity: 5, isClaim: false }] })
-    expect(calculateDNSubtotal(dn, customer)).toBe(10 * 8 + 5 * 5) // 105
+    expect(calculateDNSubtotal(dn, customer, pmFrom(customer))).toBe(10 * 8 + 5 * 5) // 105
   })
 
-  it('excludes claim items', () => {
+  it('subtracts claim items (Feat 266: claim = discount)', () => {
     const customer = makeCustomer()
     const dn = makeDN({ items: [{ code: 'B/T', quantity: 10, isClaim: false }, { code: 'B/H', quantity: 5, isClaim: true }] })
-    expect(calculateDNSubtotal(dn, customer)).toBe(80) // only B/T
+    expect(calculateDNSubtotal(dn, customer, pmFrom(customer))).toBe(10 * 8 - 5 * 5) // 80 − 25 = 55 (claim หักเป็นส่วนลด)
   })
 })

@@ -64,6 +64,10 @@ const CATALOG: LinenItemDef[] = [
   { code: 'S/K', name: 'Bed Sheet 6ft', nameEn: 'Bed Sheet 6ft', category: 'bedsheet', unit: 'pcs', defaultPrice: 12, sortOrder: 4 },
 ]
 
+// 226.B: aggregateDeliveryItems อ่านราคาจาก qtItems (ไม่ใช่ customer.priceList) → สร้างจาก priceList ของ fixture
+const qtFrom = (c: Customer) =>
+  c.priceList.map(p => ({ code: p.code, name: CATALOG.find(x => x.code === p.code)?.name || p.code, pricePerUnit: p.price }))
+
 // ============================================================
 // Unit Tests: aggregateDeliveryItems
 // ============================================================
@@ -79,7 +83,7 @@ describe('aggregateDeliveryItems', () => {
       }),
     ]
 
-    const result = aggregateDeliveryItems(notes, customer, CATALOG)
+    const result = aggregateDeliveryItems(notes, customer, CATALOG, qtFrom(customer))
 
     expect(result).toHaveLength(2)
     expect(result[0]).toEqual({ code: 'B/T', name: 'ค่าบริการซัก Bath Towel', quantity: 100, pricePerUnit: 8, amount: 800 })
@@ -105,7 +109,7 @@ describe('aggregateDeliveryItems', () => {
       }),
     ]
 
-    const result = aggregateDeliveryItems(notes, customer, CATALOG)
+    const result = aggregateDeliveryItems(notes, customer, CATALOG, qtFrom(customer))
 
     expect(result).toHaveLength(3)
     const bt = result.find(r => r.code === 'B/T')!

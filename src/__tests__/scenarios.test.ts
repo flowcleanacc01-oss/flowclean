@@ -25,6 +25,10 @@ const CATALOG: LinenItemDef[] = [
   { code: 'B/M', name: 'Bath Mat', nameEn: 'Bath Mat', category: 'other', unit: 'pcs', defaultPrice: 6, sortOrder: 7 },
 ]
 
+// 226.B: aggregateDeliveryItems อ่านราคาจาก qtItems (ไม่ใช่ customer.priceList) → สร้างจาก fixture
+const qtFrom = (c: Customer) =>
+  c.priceList.map(p => ({ code: p.code, name: CATALOG.find(x => x.code === p.code)?.name || p.code, pricePerUnit: p.price }))
+
 function makeRow(code: string, overrides: Partial<LinenFormRow> = {}): LinenFormRow {
   return {
     code,
@@ -217,7 +221,7 @@ describe('S1: Happy Path — Per-Piece Billing', () => {
       updatedAt: '2026-03-01',
     }
 
-    const lineItems = aggregateDeliveryItems([deliveryNote], customer, CATALOG)
+    const lineItems = aggregateDeliveryItems([deliveryNote], customer, CATALOG, qtFrom(customer))
     const totals = calculateBillingTotals(lineItems)
 
     // B/T: 200*8=1600, B/H: 100*5=500, P/C: 80*5=400, S/K: 60*12=720
@@ -695,14 +699,14 @@ describe('S6: Mixed Billing — Multi-Customer, Multi-Delivery', () => {
     ]
 
     // Customer A billing
-    const itemsA = aggregateDeliveryItems(notesA, customerA, CATALOG)
+    const itemsA = aggregateDeliveryItems(notesA, customerA, CATALOG, qtFrom(customerA))
     const totalsA = calculateBillingTotals(itemsA)
 
     // B/T: (80+60)*8 = 1120, B/H: (40+30)*5 = 350, subtotal = 1470
     expect(totalsA.subtotal).toBe(1470)
 
     // Customer B billing
-    const itemsB = aggregateDeliveryItems(notesB, customerB, CATALOG)
+    const itemsB = aggregateDeliveryItems(notesB, customerB, CATALOG, qtFrom(customerB))
     const totalsB = calculateBillingTotals(itemsB)
 
     // B/T: 150*10 = 1500, P/C: 100*6 = 600, subtotal = 2100
@@ -736,7 +740,7 @@ describe('S6: Mixed Billing — Multi-Customer, Multi-Delivery', () => {
 
     // Filter by customer (this is what the UI should do before calling aggregateDeliveryItems)
     const notesForA = allNotes.filter(n => n.customerId === customerA.id)
-    const itemsA = aggregateDeliveryItems(notesForA, customerA, CATALOG)
+    const itemsA = aggregateDeliveryItems(notesForA, customerA, CATALOG, qtFrom(customerA))
 
     expect(itemsA).toHaveLength(1)
     expect(itemsA[0].quantity).toBe(50) // only customer A's notes
@@ -1022,7 +1026,7 @@ describe('S8: Full Lifecycle — Realistic 3-Day Operation', () => {
       },
     ]
 
-    const lineItems = aggregateDeliveryItems(deliveryNotes, customer, CATALOG)
+    const lineItems = aggregateDeliveryItems(deliveryNotes, customer, CATALOG, qtFrom(customer))
     const totals = calculateBillingTotals(lineItems)
 
     // B/T: 90+95+85 = 270, price 8 → 2160
@@ -1040,11 +1044,11 @@ describe('S8: Full Lifecycle — Realistic 3-Day Operation', () => {
     expect(pc.quantity).toBe(90) // 3 claim items excluded
     expect(pc.amount).toBe(450)
 
-    // Total billing: 2160 + 675 + 450 = 3285
-    expect(totals.subtotal).toBe(3285)
-    expect(totals.vat).toBe(229.95) // 3285 * 0.07
-    expect(totals.grandTotal).toBe(3514.95)
-    expect(totals.withholdingTax).toBe(98.55) // 3285 * 0.03
-    expect(totals.netPayable).toBe(3416.4) // 3514.95 - 98.55
+    // Total billing (Feat 266): 2160 + 675 + 450 − 15 (P/C claim discount line) = 3270
+    expect(totals.subtotal).toBe(3270)
+    expect(totals.vat).toBe(228.9) // 3270 * 0.07
+    expect(totals.grandTotal).toBe(3498.9)
+    expect(totals.withholdingTax).toBe(98.1) // 3270 * 0.03
+    expect(totals.netPayable).toBe(3400.8) // 3498.9 - 98.1
   })
 })
