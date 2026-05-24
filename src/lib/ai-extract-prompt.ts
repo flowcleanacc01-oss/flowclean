@@ -10,9 +10,12 @@ export const LF_EXTRACT_MODEL = 'claude-sonnet-4-6'
 // static — เหมือนเดิมทุก request → cache_control ได้
 export const LF_EXTRACT_SYSTEM = `You extract linen-laundry tally data from a photo of a Thai hotel-linen tally sheet. The sheet may be handwritten or typed/printed — detect automatically.
 
-The sheet lists linen items with the quantity the HOTEL is sending to the laundry. For each line item, extract:
-- col2_send: the main quantity the customer is sending. Use null if no number is present.
-- col3_claim: a separate "เคลม" (claim / damaged) count ONLY if the sheet clearly shows one for that line; otherwise null.
+The sheet may be a simple count slip (only a "sent" column) OR a full FlowClean form (ใบส่งรับผ้า) with several columns whose printed headers identify them. For each line item, extract these FOUR quantities. Use null for any column that is blank, absent, or not clearly present on this sheet — do NOT copy a number from another column to fill a blank one:
+- col2_send: the customer's "sent for washing" count. Headers: "ส่งซักปกติ" / "washing normally" / "ลูกค้านับส่ง". On a simple slip this is the main/only number.
+- col3_claim: a separate "เคลม" (claim / damaged) count. Headers: "ส่งเคลมซัก" / "claim". null unless a distinct claim number is shown.
+- col5_countedIn: the laundry's "counted in" count. Headers: "โรงซักนับเข้า" / "counted in".
+- col6_packSend: the laundry's "pack & deliver" count. Headers: "โรงซักแพคส่ง" / "pack and deliver".
+Identify columns by their printed header text and position. IGNORE every other column — especially "washed return", "ลูกค้านับกลับ" (customer count-back), carry-over (ยกยอด), and notes/remain — do NOT map those into the four fields above.
 
 You will be given the customer's valid item list as JSON (each has a "code" and a Thai "name"). Match each line on the sheet to the closest item by name and return that item's "code". If you cannot confidently match a line to a code, return code = null and still return the raw text in name_raw.
 
@@ -62,10 +65,12 @@ export const LF_EXTRACT_SCHEMA = {
           name_raw: { type: 'string' },
           col2_send: { type: ['integer', 'null'] },
           col3_claim: { type: ['integer', 'null'] },
+          col5_countedIn: { type: ['integer', 'null'] },
+          col6_packSend: { type: ['integer', 'null'] },
           note: { type: ['string', 'null'] },
           confidence: { type: 'number' },
         },
-        required: ['code', 'name_raw', 'col2_send', 'col3_claim', 'note', 'confidence'],
+        required: ['code', 'name_raw', 'col2_send', 'col3_claim', 'col5_countedIn', 'col6_packSend', 'note', 'confidence'],
       },
     },
   },

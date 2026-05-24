@@ -19,8 +19,10 @@ interface Props {
 interface EditRow {
   code: string          // '' = ไม่เติม
   name_raw: string
-  col2: number
-  col3: number
+  col2: number          // ลูกค้านับส่ง
+  col3: number          // เคลม
+  col5: number          // โรงซักนับเข้า
+  col6: number          // โรงซักแพคส่ง
   confidence: number
 }
 
@@ -101,6 +103,8 @@ export default function LFAiInputModal({ open, onClose, items, onAccept }: Props
         name_raw: r.name_raw || '',
         col2: r.col2_send ?? 0,
         col3: r.col3_claim ?? 0,
+        col5: r.col5_countedIn ?? 0,
+        col6: r.col6_packSend ?? 0,
         confidence: r.confidence ?? 0,
       })))
       setWarnings(data.warnings || [])
@@ -124,8 +128,8 @@ export default function LFAiInputModal({ open, onClose, items, onAccept }: Props
     for (const r of editRows) {
       if (!r.code) continue
       const prev = fill[r.code]
-      if (prev) { prev.col2 += r.col2; prev.col3 += r.col3 }
-      else { fill[r.code] = { col2: r.col2, col3: r.col3 }; count++ }
+      if (prev) { prev.col2 += r.col2; prev.col3 += r.col3; prev.col5 += r.col5; prev.col6 += r.col6 }
+      else { fill[r.code] = { col2: r.col2, col3: r.col3, col5: r.col5, col6: r.col6 }; count++ }
     }
     onAccept(fill, count)
     handleClose()
@@ -134,7 +138,7 @@ export default function LFAiInputModal({ open, onClose, items, onAccept }: Props
   const fillableCount = editRows.filter(r => r.code).length
 
   return (
-    <Modal open={open} onClose={handleClose} title="📷 กรอกใบนับด้วย AI" size="lg" closeLabel="cancel">
+    <Modal open={open} onClose={handleClose} title="📷 กรอกใบนับด้วย AI" size="xl" closeLabel="cancel">
       {/* hidden inputs */}
       <input ref={fileRef} type="file" accept="image/*" onChange={onPick} className="hidden" />
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={onPick} className="hidden" />
@@ -222,10 +226,12 @@ export default function LFAiInputModal({ open, onClose, items, onAccept }: Props
               <thead className="bg-slate-50 sticky top-0">
                 <tr className="text-slate-500 text-xs">
                   <th className="text-left px-2 py-2 font-medium">อ่านได้</th>
-                  <th className="text-left px-2 py-2 font-medium min-w-[150px]">จับคู่รายการ</th>
-                  <th className="text-right px-2 py-2 font-medium w-20">นับส่ง</th>
-                  <th className="text-right px-2 py-2 font-medium w-20">เคลม</th>
-                  <th className="text-center px-2 py-2 font-medium w-16">มั่นใจ</th>
+                  <th className="text-left px-2 py-2 font-medium min-w-[140px]">จับคู่รายการ</th>
+                  <th className="text-right px-2 py-2 font-medium w-16">นับส่ง</th>
+                  <th className="text-right px-2 py-2 font-medium w-16">เคลม</th>
+                  <th className="text-right px-2 py-2 font-medium w-16">นับเข้า</th>
+                  <th className="text-right px-2 py-2 font-medium w-16">แพคส่ง</th>
+                  <th className="text-center px-2 py-2 font-medium w-14">มั่นใจ</th>
                 </tr>
               </thead>
               <tbody>
@@ -250,6 +256,16 @@ export default function LFAiInputModal({ open, onClose, items, onAccept }: Props
                     <td className="px-2 py-1.5">
                       <input type="number" min={0} value={r.col3}
                         onChange={e => setEditRows(rows => rows.map((x, i) => i === idx ? { ...x, col3: Math.max(0, parseInt(e.target.value, 10) || 0) } : x))}
+                        className="w-full text-right text-xs border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-[#3DD8D8]" />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input type="number" min={0} value={r.col5}
+                        onChange={e => setEditRows(rows => rows.map((x, i) => i === idx ? { ...x, col5: Math.max(0, parseInt(e.target.value, 10) || 0) } : x))}
+                        className="w-full text-right text-xs border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-[#3DD8D8]" />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input type="number" min={0} value={r.col6}
+                        onChange={e => setEditRows(rows => rows.map((x, i) => i === idx ? { ...x, col6: Math.max(0, parseInt(e.target.value, 10) || 0) } : x))}
                         className="w-full text-right text-xs border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-[#3DD8D8]" />
                     </td>
                     <td className="px-2 py-1.5 text-center">

@@ -1,7 +1,8 @@
-// 358 / LF Input by AI (Phase 1) — shared types
+// 358 / LF Input by AI — shared types
 //
-// ถ่ายรูปใบนับผ้า → Claude Sonnet vision สกัดเป็น rows → review → เติม col2/col3 ของ LF
-// Phase 1 โฟกัส col2 (ลูกค้านับส่ง) + col3 (เคลม) — เพราะ "ตอนสร้าง LF" = ลูกค้านับส่ง (draft)
+// ถ่ายรูปใบนับผ้า → Claude Sonnet vision สกัดเป็น rows → review → เติม LF
+// 362: สกัด 4 คอลัมน์ในสแกนเดียว — col2 (ลูกค้านับส่ง) · col3 (เคลม) · col5 (โรงซักนับเข้า) · col6 (โรงซักแพคส่ง)
+//   ใช้ได้ตั้งแต่ draft → washing (4/7) — ฟอร์มที่กรอกครบจะสแกนทีเดียวได้ทุกช่อง
 
 /** item ของลูกค้าที่ส่งให้ AI ใช้ match (code + ชื่อที่ลูกค้าใช้) */
 export interface CustomerItemHint {
@@ -11,12 +12,14 @@ export interface CustomerItemHint {
 
 /** 1 แถวที่ AI สกัดได้จากรูป */
 export interface ExtractedRow {
-  code: string | null        // item code ที่ AI match ได้ (null = match ไม่ได้)
-  name_raw: string           // ข้อความดิบที่อ่านจากรูป (ให้คนตรวจ)
-  col2_send: number | null   // ลูกค้านับส่ง
-  col3_claim: number | null  // เคลม (ถ้ามี)
+  code: string | null          // item code ที่ AI match ได้ (null = match ไม่ได้)
+  name_raw: string             // ข้อความดิบที่อ่านจากรูป (ให้คนตรวจ)
+  col2_send: number | null     // ลูกค้านับส่ง (ส่งซักปกติ / washing normally)
+  col3_claim: number | null    // เคลม (ส่งเคลมซัก / claim)
+  col5_countedIn: number | null // โรงซักนับเข้า (counted in)
+  col6_packSend: number | null  // โรงซักแพคส่ง (pack and deliver)
   note: string | null
-  confidence: number         // 0-1
+  confidence: number           // 0-1
 }
 
 export interface ExtractedLF {
@@ -37,5 +40,5 @@ export interface LFExtractResponse {
   error?: string
 }
 
-/** ค่าที่ accept แล้วส่งกลับไปเติม LF: code → counts */
-export type AiFillMap = Record<string, { col2: number; col3: number }>
+/** ค่าที่ accept แล้วส่งกลับไปเติม LF: code → counts (4 คอลัมน์) */
+export type AiFillMap = Record<string, { col2: number; col3: number; col5: number; col6: number }>
