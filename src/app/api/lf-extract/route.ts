@@ -5,8 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { LF_EXTRACT_MODEL, LF_EXTRACT_SYSTEM, LF_EXTRACT_SCHEMA, buildUserText } from '@/lib/ai-extract-prompt'
-import type { LFExtractRequest, ExtractedLF } from '@/lib/ai-extract-types'
+import { LF_EXTRACT_MODEL, LF_EXTRACT_SYSTEM, LF_EXTRACT_SCHEMA, buildUserText, CHECKLIST_SYSTEM, CHECKLIST_SCHEMA, buildChecklistUserText } from '@/lib/ai-extract-prompt'
+import type { LFExtractRequest, ExtractedLF, ExtractedChecklist } from '@/lib/ai-extract-types'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -46,17 +46,25 @@ export async function POST(request: NextRequest) {
 
   const client = new Anthropic({ apiKey })
 
+  // 363: mode 'checklist' = ใบเช็คผ้า (per-bag) · default 'form' = ใบส่งรับผ้า (4 cols)
+  const isChecklist = body.mode === 'checklist'
+  const sys = isChecklist ? CHECKLIST_SYSTEM : LF_EXTRACT_SYSTEM
+  const schema = isChecklist ? CHECKLIST_SCHEMA : LF_EXTRACT_SCHEMA
+  const userText = isChecklist
+    ? buildChecklistUserText(Array.isArray(items) ? items : [])
+    : buildUserText(Array.isArray(items) ? items : [])
+
   try {
     const resp = await client.messages.create({
       model: LF_EXTRACT_MODEL,
       max_tokens: 16000,
-      system: [{ type: 'text', text: LF_EXTRACT_SYSTEM, cache_control: { type: 'ephemeral' } }],
-      output_config: { format: { type: 'json_schema', schema: LF_EXTRACT_SCHEMA } },
+      system: [{ type: 'text', text: sys, cache_control: { type: 'ephemeral' } }],
+      output_config: { format: { type: 'json_schema', schema } },
       messages: [
         {
           role: 'user',
           content: [
-            { type: 'text', text: buildUserText(Array.isArray(items) ? items : []) },
+            { type: 'text', text: userText },
             { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
           ],
         },
@@ -68,7 +76,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'AI ไม่ได้ส่งผลลัพธ์กลับมา' }, { status: 502 })
     }
 
-    let data: ExtractedLF
+    let data: ExtractedLF | ExtractedChecklist
     try {
       data = JSON.parse(textBlock.text)
     } catch {

@@ -315,6 +315,9 @@ export interface LinenFormRow {
   col4_factoryApproved: number     // โรงงาน approved (auto-fill=col2, editable)
   col5_factoryClaimApproved: number // โรงซักนับเข้า (auto-fill=col3, editable)
   col6_factoryPackSend: number     // โรงซักแพคส่ง
+  // 363 — per-bag breakdown ของ col6 จากใบเช็คผ้า (audit trail) เช่น [43, 36] · col6 = sum
+  //   เก็บใน rows JSONB (ไม่ต้อง migration) · ไว้ชี้แจงลูกค้าเวลาแย้ง "ส่งกี่ถุง"
+  col6Breakdown?: number[]
   note: string                      // หมายเหตุ
   // 70+73+74+75 — Discrepancy sync tracking
   // เมื่อ user "approve" col4 ↔ col6 sync — เก็บค่าเดิมไว้สำหรับ history + รายงาน Type 2 (Resolved)

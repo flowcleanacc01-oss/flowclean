@@ -78,3 +78,61 @@ export const LF_EXTRACT_SCHEMA = {
   },
   required: ['detected_date', 'detected_customer', 'warnings', 'rows'],
 }
+
+// ════════════════════════════════════════════════════════════
+// 363 — ใบเช็คผ้า (Pack Checklist) extraction: per item อ่านเลขต่อถุง
+// ════════════════════════════════════════════════════════════
+
+export const CHECKLIST_SYSTEM = `You extract data from a photo of a Thai laundry "pack checklist" (ใบเช็คผ้า) — an internal sheet where packers record how many pieces of each linen item went into each shipping bag.
+
+Each item row looks like: "{item label} = {reference} = {bag1 + bag2 + ...}"
+- The PER-BAG pack counts are the numbers separated by "+" (e.g. "43 + 36" = bag 1 has 43, bag 2 has 36). Return them as an integer array "bags". Do NOT sum them yourself — just return each bag's number in order.
+- "reference" is a single count usually written between the item label and the bag breakdown (e.g. "ปลอกหมอน = 36 = 43 + 36" → reference 36, bags [43, 36]). It is the customer's sent/counted reference. Return it, or null if there is no distinct reference number.
+- If a row shows only ONE number with no "+", treat it as a single bag: bags = [that number].
+- Quantities are NEVER negative; a short dash before a number is a bracket tip, not a minus sign.
+- Skip empty rows (item label but no numbers) — do NOT return them.
+
+Match each item label to the customer's item list (JSON code+name) and return the matching "code"; null if no confident match.
+- name_raw: ALWAYS the raw label you read.
+- confidence: 1.0 clear printed · 0.7 readable handwriting · 0.3 uncertain guess.
+- detected_customer: the customer name/code in the "ชื่อ" field near the top (e.g. "HS"), or null.
+- detected_date: the date on the sheet → ISO YYYY-MM-DD (Gregorian). Thai sheets use the Buddhist Era (พ.ศ.): a 4-digit year >= 2500 OR a 2-digit year (e.g. 69 = พ.ศ. 2569) → subtract 543 (→ 2026). NEVER interpret as 19xx. null if unsure.
+- Note any problems in "warnings".`
+
+export function buildChecklistUserText(items: CustomerItemHint[]): string {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date())
+  return [
+    `Today's date (Gregorian, Asia/Bangkok timezone): ${today}. The sheet's date should be close to this — use it to sanity-check the พ.ศ.→ค.ศ. conversion.`,
+    '',
+    "Customer's valid item list (match by name, return the matching code):",
+    JSON.stringify(items),
+    '',
+    'Extract the pack-checklist data from the attached image into the required JSON structure.',
+  ].join('\n')
+}
+
+export const CHECKLIST_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    detected_customer: { type: ['string', 'null'] },
+    detected_date: { type: ['string', 'null'] },
+    warnings: { type: 'array', items: { type: 'string' } },
+    rows: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          code: { type: ['string', 'null'] },
+          name_raw: { type: 'string' },
+          reference: { type: ['integer', 'null'] },
+          bags: { type: 'array', items: { type: 'integer' } },
+          confidence: { type: 'number' },
+        },
+        required: ['code', 'name_raw', 'reference', 'bags', 'confidence'],
+      },
+    },
+  },
+  required: ['detected_customer', 'detected_date', 'warnings', 'rows'],
+}

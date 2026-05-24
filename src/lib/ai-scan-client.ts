@@ -1,7 +1,7 @@
 // 368 — client helpers สำหรับ AI scan (ใช้ร่วม single LFAiInputModal + batch LFBatchScanModal)
 // แยกออกมาเป็น util ตอน use ที่ 2 (กัน compressImage/extract drift)
 
-import type { CustomerItemHint, ExtractedLF, LFExtractResponse } from './ai-extract-types'
+import type { CustomerItemHint, ExtractedLF, LFExtractResponse, ExtractedChecklist, LFChecklistResponse } from './ai-extract-types'
 
 export function sessionUserId(): string {
   try {
@@ -46,6 +46,23 @@ export async function extractSheet(
     body: JSON.stringify({ imageBase64: base64, mediaType: 'image/jpeg', items }),
   })
   const json: LFExtractResponse = await res.json()
+  if (!json.ok || !json.data) throw new Error(json.error || 'สกัดข้อมูลไม่สำเร็จ')
+  return { data: json.data, dataUrl }
+}
+
+/** 363 — สแกนใบเช็คผ้า (mode 'checklist') → ExtractedChecklist (per-bag) */
+export async function extractChecklist(
+  file: File,
+  items: CustomerItemHint[],
+): Promise<{ data: ExtractedChecklist; dataUrl: string }> {
+  if (!file.type.startsWith('image/')) throw new Error('ไฟล์ไม่ใช่รูปภาพ')
+  const { base64, dataUrl } = await compressImage(file)
+  const res = await fetch('/api/lf-extract', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-fc-session': sessionUserId() },
+    body: JSON.stringify({ imageBase64: base64, mediaType: 'image/jpeg', items, mode: 'checklist' }),
+  })
+  const json: LFChecklistResponse = await res.json()
   if (!json.ok || !json.data) throw new Error(json.error || 'สกัดข้อมูลไม่สำเร็จ')
   return { data: json.data, dataUrl }
 }

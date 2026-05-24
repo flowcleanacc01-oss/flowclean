@@ -10,6 +10,7 @@ import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import LFAiInputModal from '@/components/LFAiInputModal'
 import LFBatchScanModal from '@/components/LFBatchScanModal'
+import PackChecklistModal from '@/components/PackChecklistModal'
 import type { AiFillMap } from '@/lib/ai-extract-types'
 import { applyAiFillToRows } from '@/lib/ai-fill'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
@@ -54,6 +55,7 @@ export default function LinenFormsPage() {
   const [showAiInput, setShowAiInput] = useState(false)
   const [showAiInputDetail, setShowAiInputDetail] = useState(false)
   const [showBatch, setShowBatch] = useState(false)
+  const [showChecklist, setShowChecklist] = useState(false)
   // 297.1: Discrepancy helper — ย้ายมาจาก dashboard (เกี่ยวข้องกับสถานะ ลูกค้านับผ้ากลับแล้ว)
   const [helperOpen, setHelperOpen] = useState(false)
   const [showDetail, setShowDetail] = useState<string | null>(() => searchParams.get('detail'))
@@ -385,6 +387,20 @@ export default function LinenFormsPage() {
       created++
     }
     alert(`สร้าง LF สำเร็จ ${created} ใบ (สถานะ 4/7 ซักอบเสร็จ)${skipped ? `\nข้าม ${skipped} ใบ (ไม่มีลูกค้า/QT)` : ''}`)
+  }
+
+  // 363 — ลงยอด col6 (โรงซักแพคส่ง) + เก็บ breakdown จากใบเช็คผ้า
+  const checklistCurrentCol6 = detailForm
+    ? Object.fromEntries(detailForm.rows.map(r => [r.code, r.col6_factoryPackSend]))
+    : {}
+  const handleChecklistApply = (updates: { code: string; col6: number; breakdown: number[] }[]) => {
+    if (!detailForm) return
+    const m = new Map(updates.map(u => [u.code, u]))
+    const newRows = detailForm.rows.map(r => {
+      const u = m.get(r.code)
+      return u ? { ...r, col6_factoryPackSend: u.col6, col6Breakdown: u.breakdown } : r
+    })
+    updateLinenForm(detailForm.id, { rows: newRows })
   }
 
   /**
@@ -762,6 +778,16 @@ export default function LinenFormsPage() {
         itemsForCustomer={itemsForCustomerBatch}
         hasExistingLF={hasExistingLFBatch}
         onComplete={handleBatchComplete}
+      />
+      {/* 363 — Pack Checklist audit */}
+      <PackChecklistModal
+        open={showChecklist}
+        onClose={() => setShowChecklist(false)}
+        items={aiItemsDetail}
+        currentCol6={checklistCurrentCol6}
+        expectCustomer={detailCustomer?.shortName || detailCustomer?.name}
+        expectDate={detailForm?.date}
+        onApply={handleChecklistApply}
       />
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="สร้างใบส่งรับผ้าใหม่ (Create New LF)" size="wide" closeLabel="cancel">
@@ -1185,15 +1211,26 @@ export default function LinenFormsPage() {
                 )
               })()}
             </div>
-            {['draft', 'received', 'sorting', 'washing'].includes(detailForm.status) && (
-              <div className="flex items-center justify-end mb-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAiInputDetail(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#3DD8D8]/15 text-[#1B3A5C] border border-[#3DD8D8] rounded-lg hover:bg-[#3DD8D8]/25 transition-colors"
-                  title="ถ่ายรูป/อัปโหลดใบนับ → AI อ่าน + กรอก นับส่ง/เคลม/นับเข้า/แพคส่ง (ตรวจก่อนบันทึก)">
-                  📷 กรอกด้วย AI
-                </button>
+            {['draft', 'received', 'sorting', 'washing', 'packed', 'delivered', 'confirmed'].includes(detailForm.status) && (
+              <div className="flex items-center justify-end gap-2 mb-2">
+                {['draft', 'received', 'sorting', 'washing'].includes(detailForm.status) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAiInputDetail(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#3DD8D8]/15 text-[#1B3A5C] border border-[#3DD8D8] rounded-lg hover:bg-[#3DD8D8]/25 transition-colors"
+                    title="ถ่ายรูป/อัปโหลดใบนับ → AI อ่าน + กรอก นับส่ง/เคลม/นับเข้า/แพคส่ง (ตรวจก่อนบันทึก)">
+                    📷 กรอกด้วย AI
+                  </button>
+                )}
+                {['washing', 'packed', 'delivered', 'confirmed'].includes(detailForm.status) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowChecklist(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#1B3A5C]/10 text-[#1B3A5C] border border-[#1B3A5C]/30 rounded-lg hover:bg-[#1B3A5C]/15 transition-colors"
+                    title="สแกนใบเช็คผ้า → AI อ่านจำนวนต่อถุง → บวกลงช่องแพคส่ง + ตรวจยอด">
+                    📋 ตรวจใบเช็คผ้า
+                  </button>
+                )}
               </div>
             )}
             <LinenFormGrid

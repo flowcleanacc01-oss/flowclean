@@ -33,6 +33,27 @@ export interface LFExtractRequest {
   imageBase64: string            // base64 (ไม่รวม data: prefix)
   mediaType: 'image/jpeg' | 'image/png' | 'image/webp'
   items: CustomerItemHint[]
+  mode?: 'form' | 'checklist'    // 363: 'checklist' = ใบเช็คผ้า (per-bag) · default 'form'
+}
+
+// 363 — ใบเช็คผ้า (pack checklist): per item อ่านเลขต่อถุง (น้ำเงิน) + reference (แดง)
+export interface ExtractedChecklistRow {
+  code: string | null
+  name_raw: string
+  reference: number | null   // เลขแดง (ลูกค้านับส่ง/นับเข้า) — cross-check
+  bags: number[]             // เลขน้ำเงินต่อถุง เช่น [43, 36] · col6 = sum(bags)
+  confidence: number
+}
+export interface ExtractedChecklist {
+  detected_customer: string | null
+  detected_date: string | null
+  rows: ExtractedChecklistRow[]
+  warnings: string[]
+}
+export interface LFChecklistResponse {
+  ok: boolean
+  data?: ExtractedChecklist
+  error?: string
 }
 
 export interface LFExtractResponse {
