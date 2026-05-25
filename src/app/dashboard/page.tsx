@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { formatNumber, formatCurrency, formatDateShort, cn, todayISO, buildPriceMapFromQT } from '@/lib/utils'
 import { LINEN_FORM_STATUS_CONFIG, ALL_LINEN_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus } from '@/types'
@@ -25,7 +25,7 @@ export default function DashboardPage() {
   const {
     currentUser,
     linenForms, billingStatements, deliveryNotes, quotations,
-    customers, getCustomer, getCarryOver,
+    getCustomer,
     legacyDocuments,
   } = useStore()
 
@@ -163,9 +163,6 @@ export default function DashboardPage() {
 
   const coVal = stats.carryOverAll
   const coDisplay = coVal === 0 ? '0' : coVal > 0 ? `+${formatNumber(coVal)}` : formatNumber(coVal)
-
-  // Total LF in process (non-confirmed)
-  const totalInProcess = ALL_LINEN_STATUSES.reduce((s, st) => st !== 'confirmed' ? s + pipeline[st] : s, 0)
 
   const statCards = [
     { label: 'จำนวนผ้านับเข้าแล้วรอซัก (3/7)', value: formatNumber(stats.countedInWaiting), unit: 'ผืน', icon: Package, color: 'bg-red-50 text-red-600' },

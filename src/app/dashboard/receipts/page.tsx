@@ -28,8 +28,8 @@ type RCFilter = 'all' | 'not-printed' | 'printed' | 'not-paid' | 'paid'
  */
 export default function ReceiptsPage() {
   const {
-    currentUser, receipts, billingStatements, customers, getCustomer,
-    updateReceipt, deleteReceipt, addReceipt, deliveryNotes, taxInvoices, companyInfo,
+    currentUser, receipts, billingStatements, getCustomer,
+    updateReceipt, deleteReceipt, addReceipt, deliveryNotes,
   } = useStore()
 
   const router = useRouter()

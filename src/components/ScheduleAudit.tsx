@@ -12,7 +12,7 @@
  */
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
 import { runScheduleAudit, findMultipleRegularGroups, type ScheduleAuditDayResult } from '@/lib/schedule-audit'
@@ -37,7 +37,6 @@ const STATUS_CONFIG: Record<ScheduleAuditDayResult['status'], { label: string; c
 }
 
 export default function ScheduleAudit() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const { customers, deliveryNotes, getCustomer, updateDeliveryNote, scheduleOverrides, addScheduleOverride } = useStore()
   // P4 — Quick-add skip modal state

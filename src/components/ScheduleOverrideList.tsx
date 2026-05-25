@@ -8,7 +8,7 @@
  * - Add override modal (skip/extra/reschedule)
  * - Edit/Delete (reschedule pair → ลบทั้งคู่)
  */
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { formatDate, cn, todayISO } from '@/lib/utils'
 import { genId } from '@/lib/utils'
@@ -142,8 +142,8 @@ function OverrideFormModal({ open, onClose, customerId, editingOverride, onAdd, 
   // Reschedule: paired date (skip from → add to)
   const [pairedDate, setPairedDate] = useState<string>('')
 
-  // reset when modal opens
-  useMemo(() => {
+  // reset when modal opens — useEffect (side-effect) ไม่ใช่ useMemo (กัน set-state-in-render)
+  useEffect(() => {
     if (open) {
       setType(editingOverride?.type || 'skip')
       setDate(editingOverride?.date || todayISO())

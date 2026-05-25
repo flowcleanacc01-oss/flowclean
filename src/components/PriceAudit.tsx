@@ -7,7 +7,6 @@
  */
 import { useState, useMemo, useEffect } from 'react'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
-import { useStore } from '@/lib/store'
 import {
   usePriceAudit,
   REASON_CONFIG,
@@ -16,7 +15,7 @@ import {
   type PriceAuditReason,
 } from '@/lib/use-price-audit'
 import { exportCSV } from '@/lib/export'
-import { formatDate, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, formatExportFilename } from '@/lib/utils'
+import { formatDate, formatCurrency, cn, startOfMonthISO, endOfMonthISO, formatExportFilename } from '@/lib/utils'
 import DateFilter from '@/components/DateFilter'
 import CustomerPicker from '@/components/CustomerPicker'
 import {

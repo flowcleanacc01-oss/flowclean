@@ -1,16 +1,15 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { useTabUrlSync } from '@/lib/use-tab-url-sync'
 import { canManageSettings } from '@/lib/permissions'
 import { cn, formatDate } from '@/lib/utils'
 import { validatePassword } from '@/lib/auth'
 import { fetchAuditLogs } from '@/lib/supabase-service'
-import type { AuditLog, BankAccount, UserRole } from '@/types'
+import type { AuditLog, UserRole } from '@/types'
 import { USER_ROLE_CONFIG } from '@/types'
-import { Plus, Trash2, RotateCcw, Check, KeyRound, X, Eye, EyeOff, Info, ChevronDown, UserX } from 'lucide-react'
+import { Plus, RotateCcw, Check, KeyRound, X, Eye, EyeOff, Info, ChevronDown, UserX } from 'lucide-react'
 import { genId } from '@/lib/utils'
 import { blockNumberArrowKeys } from '@/lib/modal-nav'
 
@@ -47,7 +46,6 @@ export default function SettingsPage() {
     companyInfo, updateCompanyInfo,
   } = useStore()
 
-  const searchParams = useSearchParams()
   // 219: tab synced with URL — supports browser back/forward
   const [tab, setTab] = useTabUrlSync<TabKey>(
     ['users', 'company', 'documents', 'auditlog'] as const,

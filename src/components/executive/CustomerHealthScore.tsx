@@ -6,7 +6,7 @@
  */
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { Heart, AlertTriangle, AlertOctagon, ChevronDown, ChevronUp } from 'lucide-react'
+import { Heart, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import type { HealthScoreRow } from '@/lib/use-executive-dashboard'
 
 interface Props {
@@ -73,7 +73,7 @@ export default function CustomerHealthScore({ rows }: Props) {
   )
 }
 
-function Section({ title, rows, expanded, toggle, collapsed, footer }: {
+function Section({ title, rows, expanded, toggle, footer }: {
   title: string; rows: HealthScoreRow[]; expanded: Set<string>; toggle: (id: string) => void
   collapsed?: boolean; footer?: string
 }) {

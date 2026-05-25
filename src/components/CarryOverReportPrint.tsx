@@ -35,7 +35,6 @@ export default function CarryOverReportPrint(props: Props) {
     d.setDate(d.getDate() + 1)
     return d.toISOString().slice(0, 10)
   }
-  const fmt = (n: number) => n > 0 ? `+${n}` : `${n}`
   const colorOf = (n: number) => n < 0 ? 'text-red-700' : n > 0 ? 'text-emerald-700' : 'text-slate-400'
 
   // 353: aggregate group meta — per code (pattern เดียวกับ reports/page.tsx post-349)

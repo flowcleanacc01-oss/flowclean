@@ -231,21 +231,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // 295: deliveryNotes ref — sync update ใน batch loop กัน closure stale
   //   (functional setState ของ Fix 293 ไม่พอ — React 18 defer updater เมื่อ queue ไม่ว่าง
   //    ทำให้ assign-inside-updater pattern อ่านค่า [] เมื่อ caller return)
+  // batch-number refs (Fix 295/312/372) — ให้ batch fns อ่าน list ล่าสุด sync กัน closure-stale
+  //   sync ใน useEffect ไม่ใช่ render body (กัน react-hooks/refs) — batch fns ถูกเรียกจาก user event
+  //   (หลัง render+effect commit) จึงอ่าน ref ที่ตรงเสมอ + batch fns เองก็ update ref in-place หลัง insert
   const deliveryNotesRef = useRef<DeliveryNote[]>([])
-  deliveryNotesRef.current = deliveryNotes
-  // Internal audit: billingStatementsRef — same closure-stale fix สำหรับ Quick Batch WB
-  //   (Phase B: addBillingStatement ถูกเรียกใน loop ต่อลูกค้า → ถ้าใช้ closure จะ gen WB number ซ้ำ)
   const billingStatementsRef = useRef<BillingStatement[]>([])
-  billingStatementsRef.current = billingStatements
-  // P5.2: routePlansRef — upsert by date ใน setRouteOrder ต้องอ่าน list ปัจจุบัน (กัน closure stale)
   const routePlansRef = useRef<RoutePlan[]>([])
-  routePlansRef.current = routePlans
-  // 372: linenFormsRef — addLinenFormsBatch อ่าน list ล่าสุด sync กัน gen formNumber ซ้ำใน batch loop
   const linenFormsRef = useRef<LinenForm[]>([])
-  linenFormsRef.current = linenForms
 
-  // Keep ref in sync for use in callbacks without dependency
+  // Keep refs in sync for use in callbacks without dependency
   useEffect(() => { currentUserRef.current = currentUser }, [currentUser])
+  useEffect(() => { deliveryNotesRef.current = deliveryNotes }, [deliveryNotes])
+  useEffect(() => { billingStatementsRef.current = billingStatements }, [billingStatements])
+  useEffect(() => { routePlansRef.current = routePlans }, [routePlans])
+  useEffect(() => { linenFormsRef.current = linenForms }, [linenForms])
 
   // ---- Audit Log Helper (fire-and-forget) ----
   const logAudit = useCallback((

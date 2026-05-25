@@ -14,7 +14,7 @@ export function useFindMatches(active: boolean) {
   const [matches, setMatches] = useState<HTMLElement[]>([])
   const [index, setIndex] = useState(0)
   const indexRef = useRef(0)
-  indexRef.current = index
+  useEffect(() => { indexRef.current = index }, [index])
 
   // Scan <mark> elements (skip ones inside the FindBar itself)
   const scan = useCallback(() => {

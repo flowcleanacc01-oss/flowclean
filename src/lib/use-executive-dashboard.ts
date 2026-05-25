@@ -247,8 +247,6 @@ function computeExecutive(
       legacyDocsUsed++
     }
   }
-  const getLegacyRev = (cid: string, ym: string): number =>
-    legacyRevByCustomerMonth.get(cid)?.get(ym) || 0
   let legacyRevenueIncluded = 0
 
   // ── Build accepted QT map (latest per customer)

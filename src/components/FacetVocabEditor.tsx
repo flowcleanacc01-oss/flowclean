@@ -314,7 +314,7 @@ function TypesEditor({ vocab, setVocab, usage }: {
             <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 rounded-t-lg">
               <GripVertical className="w-4 h-4 text-slate-400 cursor-grab" />
               <button onClick={() => setCollapsed(prev => {
-                const next = new Set(prev); next.has(g.key) ? next.delete(g.key) : next.add(g.key); return next
+                const next = new Set(prev); if (next.has(g.key)) next.delete(g.key); else next.add(g.key); return next
               })} className="text-slate-500 hover:text-slate-700">
                 {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>

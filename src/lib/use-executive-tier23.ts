@@ -221,7 +221,7 @@ export function useExecutiveTier23(filters: Tier23Filters): Tier23Data {
     return {
       itemMix: computeItemMix(filters, deliveryNotes, linenCatalog),
       seasonality: computeSeasonality(filters, billingStatements, legacyDocuments),
-      cohorts: computeCohorts(filters, billingStatements, legacyDocuments, customers),
+      cohorts: computeCohorts(filters, billingStatements, legacyDocuments),
       churnRisk: computeChurnRisk(filters, billingStatements, legacyDocuments, customers),
       capacity: computeCapacity(filters, linenForms),
       winLoss: computeWinLoss(filters, quotations, legacyDocuments),
@@ -355,7 +355,7 @@ function computeSeasonality(filters: Tier23Filters, bills: BillingStatement[], l
 // Customer Cohort Retention
 // ────────────────────────────────────────────────────────────────
 
-function computeCohorts(filters: Tier23Filters, bills: BillingStatement[], legacyDocs: LegacyDocument[], customers: Customer[]): CohortData {
+function computeCohorts(filters: Tier23Filters, bills: BillingStatement[], legacyDocs: LegacyDocument[]): CohortData {
   const monthlyRev = buildCombinedMonthlyRevenue(bills, legacyDocs, filters.includeLegacy)
 
   // For each customer: firstSeen month + active months set

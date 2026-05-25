@@ -1,15 +1,15 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import FocusBanner from '@/components/FocusBanner'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatDate, formatNumber, cn, todayISO, startOfMonthISO, endOfMonthISO, sanitizeNumber, buildPriceMapFromQT, scrollToActiveRow, formatExportFilename } from '@/lib/utils'
 import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
 import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
-import { tabularNumberNav, blockNumberArrowKeys } from '@/lib/modal-nav'
+import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { format } from 'date-fns'
-import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type BillingStatus, type QuotationStatus, type QuotationItem, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
+import { BILLING_STATUS_CONFIG, QUOTATION_STATUS_CONFIG, type QuotationStatus, type DeliveryNote, type BillingStatement, type TaxInvoice } from '@/types'
 import { aggregateDeliveryItems, aggregateDeliveryItemsByDate, aggregateDeliveryItemsByTotal, calculateBillingTotals, createFlatRateBilling } from '@/lib/billing'
 import { calculateTransportFeeTrip } from '@/lib/transport-fee'
 import { isFlatRateCustomer } from '@/lib/customer-pricing'
@@ -40,7 +40,7 @@ type TabKey = 'billing' | 'invoice' | 'quotation'
 export default function BillingPage() {
   const {
     currentUser,
-    billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
+    billingStatements, addBillingStatement, updateBillingStatement, deleteBillingStatement,
     taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
     receipts, addReceipt, // 148
     quotations, addQuotation, updateQuotation, updateQuotationStatus, deleteQuotation,
@@ -49,7 +49,6 @@ export default function BillingPage() {
   } = useStore()
 
   const searchParams = useSearchParams()
-  const pathname = usePathname()
   const router = useRouter()
   const urlHighlightQ = searchParams.get('q') || '' // 147.2
   // 219: tab state synced with URL ?tab= + browser back/forward support
@@ -285,12 +284,6 @@ export default function BillingPage() {
   const [billingDiscountNote, setBillingDiscountNote] = useState('')
   const [billingExtraCharge, setBillingExtraCharge] = useState(0)
   const [billingExtraChargeNote, setBillingExtraChargeNote] = useState('')
-
-  const tabs: { key: TabKey; label: string }[] = [
-    { key: 'billing', label: 'ใบวางบิล (WB)' },
-    { key: 'invoice', label: 'ใบกำกับภาษี/ใบเสร็จ (IV)' },
-    { key: 'quotation', label: 'ใบเสนอราคา (QT)' },
-  ]
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')

@@ -229,7 +229,11 @@ export default function LFBatchScanModal({
           {/* sheet card */}
           <div className="border border-slate-200 rounded-xl p-3 space-y-3">
             <div className="flex items-start gap-3">
-              {s.preview && <img src={s.preview} alt="preview" className="w-20 h-20 object-cover rounded-lg border border-slate-200 flex-shrink-0" />}
+              {s.preview && (
+                // base64 data URL preview (dynamic, no fixed dimensions) — next/image ไม่เหมาะกับ data URL
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={s.preview} alt="preview" className="w-20 h-20 object-cover rounded-lg border border-slate-200 flex-shrink-0" />
+              )}
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <label className="block text-xs">
                   <span className="text-slate-500">ลูกค้า {s.customerNameRaw && <span className="text-slate-400">(AI อ่าน: &quot;{s.customerNameRaw}&quot;)</span>}</span>

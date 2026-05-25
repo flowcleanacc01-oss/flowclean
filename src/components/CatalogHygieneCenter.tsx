@@ -54,7 +54,7 @@ function saveValidation(prefs: ValidationPrefs) {
 export default function CatalogHygieneCenter({ onOpenTab }: Props) {
   const { linenCatalog, quotations } = useStore()
   const { driftMap, totalCodes: driftCodes, totalQts: driftQts } = useNameDrift()
-  const { orphans, totalCodes: orphanCodes, totalRows: orphanRows } = useOrphanCodes()
+  const { totalCodes: orphanCodes, totalRows: orphanRows } = useOrphanCodes()
   // 240.3: code reuse suspect (drift name with low similarity)
   const { totalCodes: reuseCodes, highSeverity: reuseHighSeverity, totalQtsAffected: reuseQts } = useCodeReuse()
   // 348: Name Duplicate Detector — catalog cross-code name overlap (trap reducer)
@@ -84,7 +84,6 @@ export default function CatalogHygieneCenter({ onOpenTab }: Props) {
     return Math.max(0, Math.round((1 - ratio) * 100))
   }, [totalCatalog, driftQts, orphanRows, quotations])
 
-  const healthColor = healthScore >= 90 ? 'emerald' : healthScore >= 70 ? 'amber' : 'red'
   const healthLabel = healthScore >= 90 ? 'แข็งแรง' : healthScore >= 70 ? 'ต้องดูแล' : 'ต้องแก้ด่วน'
 
   // Validation prefs

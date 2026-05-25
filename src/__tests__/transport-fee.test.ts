@@ -91,17 +91,7 @@ describe('Transport Fee Per Month (ค่ารถ เดือน)', () => {
   // ตัวอย่าง 8: monthTotal=5500, minPerMonth=6000 → monthFee=500
   it('example 8: monthTotal=5500 < 6000 → monthFee=500', () => {
     const customer = makeCustomer({ enableMinPerMonth: true, monthlyFlatRate: 6000 })
-    // 10 existing DNs each with subtotal=500 + tripFee=50 = 550 each → total 5500
-    const existingDNs = Array.from({ length: 10 }, (_, i) => makeDN({
-      id: `dn-${i}`,
-      items: [{ code: 'B/T', quantity: 50, isClaim: false }], // 50*8=400 subtotal
-      transportFeeTrip: 50,
-    }))
-    // Current DN: subtotal + tripFee already counted in monthTotal
-    // monthTotal = existingDNs + currentDN = 5500
-    // existingDNs: 10 * (400+50) = 4500 → wait, that doesn't add up
-    // Let me simplify: make monthTotal = 5500
-    // 11 DNs total: 10 existing with (500+0) each = 5000, current=500+0
+    // monthTotal = 5500: 10 DNs each subtotal=516 (5160) + current DN subtotal=300 + tripFee=40
     const simpleDNs = Array.from({ length: 10 }, (_, i) => makeDN({
       id: `dn-${i}`,
       items: [{ code: 'B/T', quantity: 62, isClaim: false }, { code: 'B/H', quantity: 4, isClaim: false }], // 62*8+4*5=516

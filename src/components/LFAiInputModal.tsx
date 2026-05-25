@@ -170,7 +170,11 @@ export default function LFAiInputModal({ open, onClose, items, onAccept }: Props
       {/* LOADING */}
       {phase === 'loading' && (
         <div className="py-10 text-center">
-          {preview && <img src={preview} alt="preview" className="max-h-40 mx-auto rounded-lg border border-slate-200 mb-4" />}
+          {preview && (
+            // base64 data URL preview (dynamic, no fixed dimensions) — next/image ไม่เหมาะกับ data URL
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={preview} alt="preview" className="max-h-40 mx-auto rounded-lg border border-slate-200 mb-4" />
+          )}
           <Loader2 className="w-7 h-7 text-[#3DD8D8] animate-spin mx-auto mb-2" />
           <p className="text-sm text-slate-500">AI กำลังอ่านใบนับ...</p>
         </div>
@@ -191,7 +195,11 @@ export default function LFAiInputModal({ open, onClose, items, onAccept }: Props
       {phase === 'review' && (
         <div className="space-y-3">
           <div className="flex items-start gap-3">
-            {preview && <img src={preview} alt="preview" className="w-24 h-24 object-cover rounded-lg border border-slate-200 flex-shrink-0" />}
+            {preview && (
+              // base64 data URL preview (dynamic, no fixed dimensions) — next/image ไม่เหมาะกับ data URL
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={preview} alt="preview" className="w-24 h-24 object-cover rounded-lg border border-slate-200 flex-shrink-0" />
+            )}
             <div className="flex-1 text-sm">
               <p className="text-slate-600">AI สกัดได้ <span className="font-semibold text-[#1B3A5C]">{editRows.length}</span> แถว · จะเติม <span className="font-semibold text-emerald-700">{fillableCount}</span> รายการที่จับคู่รหัสได้</p>
               {detectedDate && <p className="text-xs text-slate-400 mt-0.5">วันที่ในรูป: {detectedDate}</p>}

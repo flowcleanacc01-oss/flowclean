@@ -3,7 +3,7 @@
 // expand schedule → expected dates ใน date range
 // แล้วเทียบกับ SD จริง (regular vs extra round)
 
-import type { Customer, DeliveryNote, ScheduleType, ScheduleOverride } from '@/types'
+import type { Customer, DeliveryNote, ScheduleOverride } from '@/types'
 
 export interface ScheduleAuditDayResult {
   date: string                  // ISO date

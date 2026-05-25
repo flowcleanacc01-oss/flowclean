@@ -13,7 +13,7 @@ const ov = (customerId: string, date: string, type: ScheduleOverride['type']): S
 
 // derive a known Monday + weekday offsets (ไม่ hardcode วันในสัปดาห์)
 const MON = getWeekStart('2026-05-20')
-const TUE = addDays(MON, 1), WED = addDays(MON, 2), THU = addDays(MON, 3), FRI = addDays(MON, 4)
+const TUE = addDays(MON, 1), WED = addDays(MON, 2), FRI = addDays(MON, 4)
 
 describe('isScheduledDay — schedule math', () => {
   it('daily = ทุกวัน', () => {

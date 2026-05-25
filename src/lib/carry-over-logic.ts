@@ -21,7 +21,6 @@
 import type {
   LinenItemDef,
   LinenFormRow,
-  Customer,
   CarryOverMode,
   AggregateSizeGroupConfig,
 } from '@/types'

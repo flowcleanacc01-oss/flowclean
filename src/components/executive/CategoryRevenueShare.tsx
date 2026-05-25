@@ -4,7 +4,7 @@
  * 220.2 — Category Revenue Share (by customerType)
  */
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { formatCurrency, cn } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
 import { Building2 } from 'lucide-react'
 import type { CategoryShareRow } from '@/lib/use-executive-dashboard'
 

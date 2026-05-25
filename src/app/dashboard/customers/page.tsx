@@ -6,7 +6,7 @@ import { cn, formatCurrency, sanitizeNumber, scrollToActiveRow } from '@/lib/uti
 import { highlightText } from '@/lib/highlight'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
-import type { Customer, CustomerCategoryDef, CarryOverMode } from '@/types'
+import type { Customer, CarryOverMode } from '@/types'
 import { CARRY_OVER_MODE_CONFIG, WORKFLOW_MODE_CONFIG } from '@/types'
 import { Plus, Search, Edit2, Trash2, Check, FileText, X, Link2, Printer, FileDown } from 'lucide-react'
 import ExportButtons from '@/components/ExportButtons'
@@ -23,7 +23,6 @@ import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { listTrustCandidates } from '@/lib/trust-candidate'
 
 type PageTab = 'customers' | 'categories' | 'workflow' | 'schedule' | 'aggregate'
-type SortKey = 'shortName' | 'name' | 'customerType' | 'billingModel' | 'creditDays' | 'tax' | 'qt' | 'contact' | 'isActive'
 
 const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   customerCode: '', customerType: 'hotel',

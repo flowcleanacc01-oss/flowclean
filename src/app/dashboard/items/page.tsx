@@ -163,7 +163,7 @@ export default function ItemsPage() {
   // 240.3: code reuse suspect count for tab badge
   const { totalCodes: reuseCodeCount } = useCodeReuse()
   // 348: Name Duplicate Detector — catalog cross-code name overlap (trap reducer)
-  const { total: nameDupTotal, aggregateRisk: nameDupAggregateRisk } = useNameDuplicates()
+  const { total: nameDupTotal } = useNameDuplicates()
   // A2: Item Catalog Audit — multi-subtype scan (unused, orphan group, no size group, no facets)
   const { total: catalogAuditTotal } = useItemCatalogAudit()
   // 240.3: รับ ?focus=<code> URL → set syncFocusCode (เปิดจาก CodeReuseDetector)
@@ -332,7 +332,7 @@ export default function ItemsPage() {
   }
 
   // 278: Open Modal showing reference counts + Merge-vs-Delete choice
-  const handleDeleteItem = (code: string, _name: string) => {
+  const handleDeleteItem = (code: string) => {
     setDeleteConfirmCode(code)
   }
 
@@ -909,7 +909,7 @@ export default function ItemsPage() {
                               className="text-slate-400 hover:text-blue-600 p-1 disabled:opacity-30 disabled:cursor-not-allowed">
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
-                            <button onClick={() => handleDeleteItem(item.code, item.name)}
+                            <button onClick={() => handleDeleteItem(item.code)}
                               disabled={item.isProtected}
                               title={item.isProtected ? '🔒 รายการถูกล็อค — ปลดล็อคก่อน' : 'ลบ'}
                               className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30 disabled:cursor-not-allowed">

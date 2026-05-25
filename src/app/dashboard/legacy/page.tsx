@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { formatDate, formatCurrency, cn, startOfMonthISO, endOfMonthISO } from '@/lib/utils'
+import { formatDate, formatCurrency, cn } from '@/lib/utils'
 import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { Search, Archive, FileCheck, Receipt as ReceiptIcon, Truck, FileText, Info } from 'lucide-react'
@@ -27,7 +27,7 @@ const KIND_CONFIG: Record<LegacyDocKind, { label: string; color: string; bgColor
  * ไม่กระทบ workflow ปัจจุบัน — search/filter/audit เท่านั้น
  */
 export default function LegacyPage() {
-  const { currentUser, legacyDocuments, customers, getCustomer } = useStore()
+  const { currentUser, legacyDocuments, getCustomer } = useStore()
 
   const [search, setSearch] = useState('')
   const [kindFilter, setKindFilter] = useState<LegacyDocKind | 'all'>('all')
@@ -39,10 +39,6 @@ export default function LegacyPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [detailId, setDetailId] = useState<string | null>(null)
 
-  if (!canViewBilling(currentUser)) {
-    return <div className="text-center text-slate-400 py-20">ไม่มีสิทธิ์เข้าถึงหน้านี้</div>
-  }
-
   const matchesDate = (d: string) => {
     if (!dateFrom) return true
     if (dateFilterMode === 'single') return d === dateFrom
@@ -51,7 +47,6 @@ export default function LegacyPage() {
     return true
   }
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   const filtered = useMemo(() => {
     return legacyDocuments.filter(doc => {
       if (kindFilter !== 'all' && doc.kind !== kindFilter) return false
@@ -95,6 +90,11 @@ export default function LegacyPage() {
 
   const detail = detailId ? legacyDocuments.find(d => d.id === detailId) : null
   const detailCust = detail?.customerId ? getCustomer(detail.customerId) : null
+
+  // permission gate — ต้องอยู่หลัง hooks ทั้งหมด (กัน rules-of-hooks: hooks ต้องถูกเรียกทุก render)
+  if (!canViewBilling(currentUser)) {
+    return <div className="text-center text-slate-400 py-20">ไม่มีสิทธิ์เข้าถึงหน้านี้</div>
+  }
 
   return (
     <div>

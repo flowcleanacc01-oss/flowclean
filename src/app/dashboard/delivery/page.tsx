@@ -35,7 +35,7 @@ export default function DeliveryPage() {
   const {
     currentUser,
     deliveryNotes, addDeliveryNote, addDeliveryNotesBatch, updateDeliveryNote, deleteDeliveryNote,
-    linenForms, updateLinenForm, customers, getCustomer, companyInfo, linenCatalog,
+    linenForms, updateLinenForm, getCustomer, companyInfo, linenCatalog,
     billingStatements, quotations,
   } = useStore()
   const [showPrint, setShowPrint] = useState(false)

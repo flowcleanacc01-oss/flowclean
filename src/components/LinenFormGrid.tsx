@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Trash2, Zap, Check, Anchor } from 'lucide-react'
+import { Trash2, Zap, Check } from 'lucide-react'
 import type { LinenFormRow, Customer, LinenItemDef, LinenFormStatus, QuotationItem, WorkflowMode } from '@/types'
 import { cn } from '@/lib/utils'
 import { wasSynced } from '@/lib/sync-discrepancy'
