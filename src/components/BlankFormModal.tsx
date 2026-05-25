@@ -13,7 +13,8 @@ import { todayISO, genId, cn } from '@/lib/utils'
 import BlankLinenFormPrint from '@/components/BlankLinenFormPrint'
 import BlankChecklistPrint from '@/components/BlankChecklistPrint'
 import ExportButtons from '@/components/ExportButtons'
-import { Plus, X, FileText, Users, Check } from 'lucide-react'
+import { matchesThaiQueryAnyField } from '@/lib/thai-search'
+import { Plus, X, FileText, Users, Check, Search, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-react'
 import type { LinenItemDef } from '@/types'
 
 interface FormSheet { id: string; title: string; codes: string[] }
@@ -31,7 +32,7 @@ function suggestSheets(items: LinenItemDef[]): FormSheet[] {
 }
 
 export default function BlankFormModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { customers, quotations, linenCatalog, companyInfo, getCustomer } = useStore()
+  const { customers, quotations, linenCatalog, linenCategories, companyInfo, getCustomer } = useStore()
   const [customerId, setCustomerId] = useState('')   // '' = ยังไม่เลือก
   const [showCustomer, setShowCustomer] = useState(true)
   const [showDate, setShowDate] = useState(true)
@@ -39,8 +40,12 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   const [sheets, setSheets] = useState<FormSheet[]>([])
   const [activeSheet, setActiveSheet] = useState(0)
   const [printMode, setPrintMode] = useState<'a4-2up' | 'a5'>('a4-2up')
+  // 375 — item picker enhance (mirror QT picker)
+  const [itemSearch, setItemSearch] = useState('')
+  const [itemCat, setItemCat] = useState('all')
+  const [reorderMode, setReorderMode] = useState(false)
 
-  const reset = () => { setCustomerId(''); setSheets([]); setActiveSheet(0); setShowCustomer(true); setShowDate(true); setPrintMode('a4-2up') }
+  const reset = () => { setCustomerId(''); setSheets([]); setActiveSheet(0); setShowCustomer(true); setShowDate(true); setPrintMode('a4-2up'); setItemSearch(''); setItemCat('all'); setReorderMode(false) }
   const handleClose = () => { reset(); onClose() }
 
   // items ที่เลือกได้ (จาก QT ลูกค้า หรือ catalog ทั้งหมดถ้าฟอร์มกลาง)
@@ -66,8 +71,22 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
 
   const cust = customerId && customerId !== NONE ? (getCustomer(customerId) ?? null) : null
   const FormComp = formType === 'lf' ? BlankLinenFormPrint : BlankChecklistPrint
-  const sheetItems = (s: FormSheet) => linenCatalog.filter(i => s.codes.includes(i.code)).sort((a, b) => a.sortOrder - b.sortOrder)
+  const sheetItems = (s: FormSheet) => s.codes.map(code => linenCatalog.find(c => c.code === code)).filter((x): x is typeof linenCatalog[number] => !!x)  // 375: ตาม codes[] order (รองรับ reorder)
   const usableSheets = sheets.filter(s => s.codes.length > 0)
+
+  // 375 — picker helpers (search + category filter + select-all/none เคารพ filter + reorder)
+  const sortedCats = [...linenCategories].sort((a, b) => a.sortOrder - b.sortOrder)
+  const filteredAvail = availItems.filter(it =>
+    (itemCat === 'all' || it.category === itemCat) &&
+    (!itemSearch || matchesThaiQueryAnyField([it.code, it.name, it.nameEn], itemSearch)))
+  const selectAllFiltered = () => { if (!cur) return; const add = filteredAvail.map(i => i.code).filter(c => !cur.codes.includes(c)); setSheets(ss => ss.map((s, i) => i === activeSheet ? { ...s, codes: [...s.codes, ...add] } : s)) }
+  const selectNoneFiltered = () => { const rm = new Set(filteredAvail.map(i => i.code)); setSheets(ss => ss.map((s, i) => i === activeSheet ? { ...s, codes: s.codes.filter(c => !rm.has(c)) } : s)) }
+  const moveCode = (code: string, dir: -1 | 1) => setSheets(ss => ss.map((s, i) => {
+    if (i !== activeSheet) return s
+    const idx = s.codes.indexOf(code), j = idx + dir
+    if (idx < 0 || j < 0 || j >= s.codes.length) return s
+    const arr = [...s.codes]; [arr[idx], arr[j]] = [arr[j], arr[idx]]; return { ...s, codes: arr }
+  }))
   // จับคู่ 2-up: [[s1,s2],[s3]]
   const pairs: FormSheet[][] = []
   for (let i = 0; i < usableSheets.length; i += 2) pairs.push(usableSheets.slice(i, i + 2))
@@ -155,16 +174,49 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
               <div className="p-3 space-y-2">
                 <input value={cur.title} onChange={e => renameSheet(e.target.value)} placeholder="ชื่อใบ/แผนก เช่น ผ้าเรียบ"
                   className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#3DD8D8]" />
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 max-h-[28vh] overflow-y-auto">
-                  {availItems.map(it => (
-                    <label key={it.code} className={cn('flex items-center gap-1.5 px-2 py-1 rounded text-xs cursor-pointer border',
-                      cur.codes.includes(it.code) ? 'bg-[#3DD8D8]/10 border-[#3DD8D8]/40' : 'border-slate-100 hover:bg-slate-50')}>
-                      <input type="checkbox" checked={cur.codes.includes(it.code)} onChange={() => toggleCode(it.code)} className="flex-shrink-0" />
-                      <span className="font-mono text-[10px] text-slate-400">{it.code}</span>
-                      <span className="truncate">{it.name}</span>
-                    </label>
-                  ))}
+                {/* 375 toolbar: ค้นหา + หมวด + เลือกทั้งหมด/ไม่เลือก (เคารพ filter) + จัดลำดับ */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <div className="relative flex-1 min-w-[120px]">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
+                    <input value={itemSearch} onChange={e => setItemSearch(e.target.value)} placeholder="ค้นหารหัส/ชื่อ..." disabled={reorderMode}
+                      className="w-full pl-7 pr-2 py-1 border border-slate-200 rounded focus:outline-none focus:border-[#3DD8D8] disabled:bg-slate-50" />
+                  </div>
+                  <select value={itemCat} onChange={e => setItemCat(e.target.value)} disabled={reorderMode} className="border border-slate-200 rounded px-2 py-1 bg-white disabled:bg-slate-50">
+                    <option value="all">ทุกหมวด</option>
+                    {sortedCats.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                  </select>
+                  <button onClick={selectAllFiltered} disabled={reorderMode} className="px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 disabled:opacity-40">เลือกทั้งหมด</button>
+                  <button onClick={selectNoneFiltered} disabled={reorderMode} className="px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 disabled:opacity-40">ไม่เลือกเลย</button>
+                  <button onClick={() => setReorderMode(r => !r)} disabled={cur.codes.length === 0}
+                    className={cn('px-2 py-1 rounded inline-flex items-center gap-1 disabled:opacity-40', reorderMode ? 'bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
+                    {reorderMode ? <><Check className="w-3 h-3" />เสร็จ</> : <><ArrowUpDown className="w-3 h-3" />จัดลำดับ</>}
+                  </button>
                 </div>
+                {reorderMode ? (
+                  <div className="space-y-1 max-h-[28vh] overflow-y-auto">
+                    {sheetItems(cur).map((it, idx) => (
+                      <div key={it.code} className="flex items-center gap-2 px-2 py-1 rounded border border-slate-200 text-xs bg-white">
+                        <span className="w-5 text-center text-slate-400">{idx + 1}</span>
+                        <span className="font-mono text-[10px] text-slate-400">{it.code}</span>
+                        <span className="flex-1 truncate">{it.name}</span>
+                        <button onClick={() => moveCode(it.code, -1)} disabled={idx === 0} className="text-slate-400 hover:text-[#1B3A5C] disabled:opacity-30"><ChevronUp className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => moveCode(it.code, 1)} disabled={idx === cur.codes.length - 1} className="text-slate-400 hover:text-[#1B3A5C] disabled:opacity-30"><ChevronDown className="w-3.5 h-3.5" /></button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 max-h-[28vh] overflow-y-auto">
+                    {filteredAvail.map(it => (
+                      <label key={it.code} className={cn('flex items-center gap-1.5 px-2 py-1 rounded text-xs cursor-pointer border',
+                        cur.codes.includes(it.code) ? 'bg-[#3DD8D8]/10 border-[#3DD8D8]/40' : 'border-slate-100 hover:bg-slate-50')}>
+                        <input type="checkbox" checked={cur.codes.includes(it.code)} onChange={() => toggleCode(it.code)} className="flex-shrink-0" />
+                        <span className="font-mono text-[10px] text-slate-400">{it.code}</span>
+                        <span className="truncate">{it.name}</span>
+                      </label>
+                    ))}
+                    {filteredAvail.length === 0 && <p className="col-span-full text-center text-slate-400 text-xs py-3">ไม่พบรายการ</p>}
+                  </div>
+                )}
               </div>
             )}
           </div>
