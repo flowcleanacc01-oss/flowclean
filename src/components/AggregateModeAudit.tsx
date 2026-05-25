@@ -237,6 +237,8 @@ export default function AggregateModeAudit() {
       return sortDir === 'asc' ? cmp : -cmp
     })
     return list
+    // SEVERITY_RANK = constant literal (ค่าคงที่ทุก render) — ไม่ใส่ใน deps เลี่ยง recompute เปล่าทุก render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, sortCol, sortDir])
 
   const stats = useMemo(() => {

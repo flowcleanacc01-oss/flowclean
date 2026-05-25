@@ -65,7 +65,6 @@ export default function MergeCodesTool({ initialSource, initialDeleteSource, ini
   }, [initialTarget])
   useEffect(() => {
     if (initialDeleteSource !== undefined) setDeleteSource(initialDeleteSource)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialDeleteSource])
 
   const sortedCatalog = useMemo(

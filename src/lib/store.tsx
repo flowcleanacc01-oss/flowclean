@@ -489,7 +489,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
     logAudit('create', 'linen_form', newForm.id, newForm.formNumber)
     return newForm
-  }, [logAudit, linenForms, customers])
+  }, [logAudit, linenForms, customers, linenCatalog])
 
   // 372 — batch add LF: ref + running counter กัน formNumber ซ้ำ (closure-stale fix, ตาม addDeliveryNotesBatch)
   //   เดิม handleBatchComplete loop addLinenForm → ทุก call อ่าน linenForms (closure) เดิม → gen เลขซ้ำ
@@ -626,7 +626,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dbSave(db.updateDeliveryNoteDB(id, updates))
 
     // DN is created from confirmed LFs — no need to sync LF status back
-  }, [deliveryNotes, logAudit])
+  }, [logAudit])
 
   const deleteDeliveryNote = useCallback((id: string) => {
     // 272.5 revert: ติ๊ดเลือก keep LF status เดิม (7/7) แม้ลบ SD

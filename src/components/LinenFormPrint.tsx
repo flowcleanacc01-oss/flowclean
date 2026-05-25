@@ -94,7 +94,7 @@ export default function LinenFormPrint({ form, customer, company, catalog, carry
       }
     }
     return result
-  }, [form.rows, qtItems, aggMeta, catalog, hasAggregate])
+  }, [form, qtItems, aggMeta, catalog, hasAggregate])
 
   // 341: group-aware ค้าง/คืน ที่ anchor row (sum ทั้ง group)
   //   formula เลือก mode ตาม form.workflowMode:

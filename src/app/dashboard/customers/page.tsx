@@ -194,7 +194,6 @@ export default function CustomersPage() {
       setPageTab('customers')
       handleEdit(c)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlEditId, customers])
 
   // 322: ?focus=<id> URL trigger — highlight + scroll to customer row

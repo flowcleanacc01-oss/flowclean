@@ -271,6 +271,8 @@ export default function NotificationBell() {
       if (seenAlerts.length > 0) seenGroups.push({ ...g, alerts: seenAlerts })
     }
     return { newGroups, seenGroups }
+    // isAcked อ่าน acked ที่อยู่ใน deps แล้ว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups, acked])
 
   const newCount = useMemo(() => splitGroups.newGroups.reduce((s, g) => s + g.alerts.length, 0), [splitGroups])

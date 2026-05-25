@@ -269,7 +269,9 @@ export default function LinenFormsPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [linenForms, statusFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, alertFilter, linkedLFMap, focusMode, focusIds])
+    // getPiecesForStatus เป็น pure ต่อ argument (อ่านแค่ f.rows/f.status ไม่มี external state) / linenCatalog เพิ่มเป็น store value
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linenForms, statusFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, alertFilter, linkedLFMap, focusMode, focusIds, linenCatalog])
 
   const statuses: (LinenFormStatus | 'all')[] = ['all', ...ALL_LINEN_STATUSES]
 

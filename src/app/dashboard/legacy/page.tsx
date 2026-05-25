@@ -73,6 +73,8 @@ export default function LegacyPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
+    // matchesDate อ่าน dateFrom/dateTo/dateFilterMode ที่อยู่ใน deps แล้ว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [legacyDocuments, kindFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
 
   const handleSort = (key: string) => {

@@ -120,6 +120,8 @@ export default function GlobalSearchModal({ open, onClose }: Props) {
   // 250.2: cache highlight results per (tokens, text) — avoids recomputing on
   // every re-render (hover sets selectedIdx → all 40 buttons re-render).
   // Cache resets when tokens change.
+  // tokens เป็น invalidation key โดยตั้งใจ (factory ไม่ได้อ่าน tokens แต่ต้อง reset cache เมื่อ tokens เปลี่ยน)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const highlightCache = useMemo(() => new Map<string, React.ReactNode>(), [tokens])
 
   const highlight = (text: string): React.ReactNode => {

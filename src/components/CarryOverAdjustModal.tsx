@@ -271,6 +271,8 @@ export default function CarryOverAdjustModal({ open, onClose, customerId, custom
       if (g.memberDeltas.length > 0) previews.push(g)
     }
     return previews
+    // isEffectivelySelected อ่าน selectedItems/autoBalanceAnchor/derivedAnchorDeltas ที่อยู่ใน deps แล้ว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aggGroupMeta, currentCarryOver, referenceMode, selectedItems, autoBalanceAnchor, derivedAnchorDeltas, type, hasAggregateGroups, linenCatalog])
 
   // ---- Item handlers ----

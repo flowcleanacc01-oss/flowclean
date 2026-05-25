@@ -105,6 +105,8 @@ export default function BillingPage() {
       setShowInvoiceDetail(openiv)
       scrollToActiveRow(openiv)
     }
+    // setTab จาก useTabUrlSync ถูกสร้างใหม่ทุก render (ไม่ memoized) — ใส่ใน deps จะ re-fire effect ทุก render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
   const [showPrint, setShowPrint] = useState(false)
@@ -158,6 +160,8 @@ export default function BillingPage() {
       setActiveIvId(id)
       setShowInvoiceDetail(id)
     }
+    // setTab จาก useTabUrlSync ถูกสร้างใหม่ทุก render (ไม่ memoized) — ใส่ใน deps จะ re-fire effect ทุก render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusIds, billingStatements, taxInvoices])
 
   const exitFocus = () => {
@@ -362,6 +366,8 @@ export default function BillingPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
+    // matchesDateFilter อ่าน dateFrom/dateTo/dateFilterMode ที่อยู่ใน deps แล้ว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billingStatements, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, wbFilter, wbCustomerFilter, taxInvoices, focusMode, focusIds, tab])
 
   // Preview for billing creation
@@ -397,7 +403,6 @@ export default function BillingPage() {
 
   // Auto-select all available DNs when customer/month changes
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelDnIds(availableDNs.map(dn => dn.id))
   }, [availableDNs])
 
@@ -422,7 +427,7 @@ export default function BillingPage() {
           ? aggregateDeliveryItemsByTotal(selectedNotes, selCustomer, linkedQT?.items)
           : aggregateDeliveryItems(selectedNotes, selCustomer, linenCatalog, linkedQT?.items)
     }
-    let lineItems = [...baseItems]
+    const lineItems = [...baseItems]
     if (billingExtraCharge > 0) {
       lineItems.push({ code: 'EXTRA_CHARGE', name: `ค่าใช้จ่ายเพิ่มเติม${billingExtraChargeNote ? ` (${billingExtraChargeNote})` : ''}`, quantity: 1, pricePerUnit: billingExtraCharge, amount: billingExtraCharge })
     }
@@ -1122,6 +1127,8 @@ export default function BillingPage() {
       const cmp = String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
+    // matchesQtDateFilter อ่าน qtDateFrom/qtDateTo/qtDateFilterMode ที่อยู่ใน deps แล้ว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quotations, qtCustomerFilter, search, qtDateFrom, qtDateTo, qtDateFilterMode, sortKey, sortDir, getCustomer])
 
   // Invoice list (filtered + sorted)
@@ -1164,6 +1171,8 @@ export default function BillingPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
+    // matchesDateFilter อ่าน dateFrom/dateTo/dateFilterMode ที่อยู่ใน deps แล้ว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taxInvoices, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, ivFilter, ivCustomerFilter, billingStatements])
 
   // Map WB id → IV info (for badge in WB list/detail)

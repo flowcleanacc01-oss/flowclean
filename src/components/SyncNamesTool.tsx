@@ -193,6 +193,8 @@ export default function SyncNamesTool({ initialFocusCode }: Props) {
       n += countQtsForCode(e)
     }
     return n
+    // countQtsForCode อ่าน allowedStatuses ที่อยู่ใน deps แล้ว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCodes, driftMap, allowedStatuses])
 
   const toggleSelect = (code: string) => {

@@ -295,7 +295,9 @@ export default function DeliveryPage() {
       const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
       return sortDir === 'desc' ? -cmp : cmp
     })
-  }, [deliveryNotes, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter, billingStatements, selectedDnIds, focusMode, focusIds])
+    // getDNTotalAmount อ่าน getCustomer (ใน deps) + quotations — รักษา behavior เดิม / linenCatalog เพิ่มเป็น store value
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveryNotes, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter, billingStatements, selectedDnIds, focusMode, focusIds, linenCatalog])
 
   // Forms available for delivery (confirmed status) — sorted oldest first (122.4b)
   const availableForms = useMemo(() => {
