@@ -5,7 +5,7 @@
 //  374.3 พิมพ์ A4→2×A5 (แนวนอน ฉีกกลาง) หรือ A5 เดี่ยว
 //  374.4 แยกใบ/แผนก (เดาให้ตามหมวด + ปรับได้เต็มที่) → items ต่อใบน้อย fit A5
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Modal from '@/components/Modal'
 import { useStore } from '@/lib/store'
 import { getCustomerEnabledCodes } from '@/lib/customer-pricing'
@@ -14,7 +14,8 @@ import BlankLinenFormPrint from '@/components/BlankLinenFormPrint'
 import BlankChecklistPrint from '@/components/BlankChecklistPrint'
 import ExportButtons from '@/components/ExportButtons'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
-import { Plus, X, FileText, Users, Check, Search, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-react'
+import { loadFormTemplates, saveFormTemplates, type FormTemplate } from '@/lib/form-template-service'
+import { Plus, X, FileText, Users, Check, Search, ArrowUpDown, ChevronUp, ChevronDown, Save, Trash2, BookMarked } from 'lucide-react'
 import type { LinenItemDef } from '@/types'
 
 interface FormSheet { id: string; title: string; codes: string[] }
@@ -44,6 +45,9 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   const [itemSearch, setItemSearch] = useState('')
   const [itemCat, setItemCat] = useState('all')
   const [reorderMode, setReorderMode] = useState(false)
+  // 375.1 — form templates (บันทึกฟอร์มกลาง → reuse)
+  const [templates, setTemplates] = useState<FormTemplate[]>([])
+  useEffect(() => { if (open) loadFormTemplates().then(setTemplates).catch(() => {}) }, [open])
 
   const reset = () => { setCustomerId(''); setSheets([]); setActiveSheet(0); setShowCustomer(true); setShowDate(true); setPrintMode('a4-2up'); setItemSearch(''); setItemCat('all'); setReorderMode(false) }
   const handleClose = () => { reset(); onClose() }
@@ -87,6 +91,27 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
     if (idx < 0 || j < 0 || j >= s.codes.length) return s
     const arr = [...s.codes]; [arr[idx], arr[j]] = [arr[j], arr[idx]]; return { ...s, codes: arr }
   }))
+
+  // 375.1 — template save / apply / delete
+  const saveAsTemplate = async () => {
+    const name = prompt('ตั้งชื่อ template ฟอร์มนี้ (จะบันทึกหมวด+ใบ+ตัวเลือก):')?.trim()
+    if (!name) return
+    const t: FormTemplate = { id: genId(), name, formType, showCustomer, showDate, printMode, sheets: sheets.map(s => ({ title: s.title, codes: s.codes })), updatedAt: new Date().toISOString() }
+    const next = [...templates.filter(x => x.name !== name), t]   // ชื่อซ้ำ = ทับ
+    setTemplates(next)
+    try { await saveFormTemplates(next) } catch { alert('บันทึก template ไม่สำเร็จ') }
+  }
+  const applyTemplate = (t: FormTemplate) => {
+    setFormType(t.formType); setShowCustomer(t.showCustomer); setShowDate(t.showDate); setPrintMode(t.printMode)
+    setSheets(t.sheets.map(s => ({ id: genId(), title: s.title, codes: s.codes })))
+    setActiveSheet(0); setReorderMode(false)
+  }
+  const deleteTemplate = async (id: string) => {
+    if (!confirm('ลบ template นี้?')) return
+    const next = templates.filter(t => t.id !== id)
+    setTemplates(next)
+    try { await saveFormTemplates(next) } catch { /* ignore */ }
+  }
   // จับคู่ 2-up: [[s1,s2],[s3]]
   const pairs: FormSheet[][] = []
   for (let i = 0; i < usableSheets.length; i += 2) pairs.push(usableSheets.slice(i, i + 2))
@@ -152,6 +177,25 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
                 <button onClick={() => setPrintMode('a5')} className={printMode === 'a5' ? 'px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'px-2 py-1 text-slate-600 hover:bg-slate-50'}>A5 เดี่ยว</button>
               </div>
             </div>
+          </div>
+
+          {/* 375.1 — template bar (บันทึก/โหลดฟอร์มกลาง) */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs no-print bg-[#1B3A5C]/5 rounded-lg px-3 py-2">
+            <BookMarked className="w-3.5 h-3.5 text-[#1B3A5C] flex-shrink-0" />
+            <span className="text-slate-600 font-medium">Template:</span>
+            {templates.length === 0 ? (
+              <span className="text-slate-400">— ยังไม่มี (บันทึกรูปแบบที่จัดไว้เพื่อใช้ซ้ำ) —</span>
+            ) : (
+              templates.map(t => (
+                <span key={t.id} className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded px-2 py-0.5">
+                  <button onClick={() => applyTemplate(t)} className="text-[#1B3A5C] hover:underline" title="โหลด template นี้">{t.name}</button>
+                  <Trash2 className="w-3 h-3 text-slate-300 hover:text-red-500 cursor-pointer" onClick={() => deleteTemplate(t.id)} />
+                </span>
+              ))
+            )}
+            <button onClick={saveAsTemplate} className="ml-auto inline-flex items-center gap-1 px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] rounded hover:bg-[#2bb8b8] font-medium flex-shrink-0">
+              <Save className="w-3 h-3" />บันทึกเป็น template
+            </button>
           </div>
 
           {/* 374.4 Sheet editor — tabs + items checklist */}
