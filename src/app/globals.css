@@ -122,6 +122,24 @@ input[type="number"] {
 
   /* Dashboard layout: remove padding/margin for print */
   main { padding: 0 !important; margin: 0 !important; }
+
+  /* 374 — Form Generator: page breaks สำหรับ A4 2-up / A5 เดี่ยว
+   * @page size (A4 landscape / A5 portrait) ถูก inject โดย print-utils ตาม printMode */
+  .blank-a4-2up-page, .blank-a5-page {
+    page-break-after: always;
+    break-after: page;
+    box-shadow: none !important;
+    margin: 0 !important;
+    width: 100% !important;            /* เต็มพื้นที่พิมพ์ (A4 landscape หรือ A5) */
+  }
+  .blank-a4-2up-page:last-child, .blank-a5-page:last-child {
+    page-break-after: auto; break-after: auto;
+  }
+  .blank-a4-2up-page { display: flex !important; }
+  .blank-a4-2up-page > div, .blank-a5-half {
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  .blank-a4-2up-page > .blank-a5-half { width: 50% !important; }  /* ครึ่ง A4 landscape = A5 */
 }
 
 /* Custom animations */
