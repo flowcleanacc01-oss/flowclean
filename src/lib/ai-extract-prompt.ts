@@ -86,6 +86,11 @@ export const LF_EXTRACT_SCHEMA = {
 
 export const CHECKLIST_SYSTEM = `You extract data from a photo of a Thai laundry "pack checklist" (ใบเช็คผ้า) — an internal sheet where packers record how many pieces of each linen item went into each shipping bag.
 
+LAYOUT — the sheet may be a clean PRINTED FORM (table with columns) OR a customer's FREE-HAND NOTE on blank/lined paper (no table at all). Read BOTH equally well:
+- GROUP HEADERS: in free-hand notes a category word sits alone on a line as a header (e.g. "ผ้าปู", "นวม") and the size rows beneath belong to it. COMBINE them into one item label: header "ผ้าปู" + sub-rows "3.5ม" / "5ม" / "6ม" → items "ผ้าปู 3.5 ฟุต" / "ผ้าปู 5 ฟุต" / "ผ้าปู 6 ฟุต". The trailing digit (3.5/5/6, written with "ม" or "ฟุต") = the FOOT size. Same idea for "นวม" (ผ้านวม / duvet cover) → "นวม 5 ฟุต".
+- VERY SHORT labels are common in notes — "ล 15×30" (=ผ้าขนหนูกลาง 15"x30"), "ขาว 30×60" (=ผ้าขนหนู 30"x60"), "เท้า" (=ผ้าเช็ดเท้า), "คลุม" (=เสื้อคลุม), "ปลอกหมอน". Match each to the customer's item list by meaning + size.
+- Notes may have no "=" or table lines — the value still follows the label (often with a red reference number too). Apply the same number/color rules below.
+
 Each item row looks like: "{item label} = {reference} = {bag1 + bag2 + ...}"
 - The PER-BAG pack counts are the numbers after the LAST "=" sign, separated by "+" (e.g. "43 + 36" = bag 1 has 43, bag 2 has 36). Return them as an integer array "bags" in order. Do NOT sum them yourself.
 - "reference" is the single count written BEFORE the bag breakdown — between the item label and the bags (e.g. "ปลอกหมอน = 36 = 43 + 36" → reference 36, bags [43, 36]). NEVER merge the reference number into "bags".
