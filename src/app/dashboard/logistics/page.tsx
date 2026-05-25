@@ -307,7 +307,7 @@ export default function LogisticsPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-auto max-h-[calc(100vh-15rem)]">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-auto max-h-[calc(100vh-17rem)]">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>

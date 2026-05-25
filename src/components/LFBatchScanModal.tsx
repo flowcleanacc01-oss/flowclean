@@ -257,13 +257,13 @@ export default function LFBatchScanModal({
               </div>
             )}
             {s.warnings.length > 0 && (
-              <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 space-y-0.5">
-                {s.warnings.map((w, i) => <div key={i} className="flex items-center gap-1"><AlertTriangle className="w-3 h-3 flex-shrink-0" />{w}</div>)}
+              <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 space-y-0.5 max-h-[12vh] overflow-y-auto">
+                {s.warnings.map((w, i) => <div key={i} className="flex items-start gap-1"><AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5" />{w}</div>)}
               </div>
             )}
 
             {/* rows */}
-            <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[34vh] overflow-y-auto">
+            <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[26vh] overflow-y-auto">
               <table className="w-full text-xs">
                 <thead className="bg-slate-50 sticky top-0">
                   <tr className="text-slate-500">

@@ -24,7 +24,8 @@ Rules:
 - Numbers may be Arabic (1,2,3) or Thai (๑,๒,๓) numerals — output integers.
 - Quantities are NEVER negative. A short dash/stroke just before a number is usually the tip of a brace/bracket "}" used to group several size rows together (Thai tally sheets bracket a size family and write one combined count), NOT a minus sign — output the positive integer.
 - confidence: 1.0 = clear printed text · 0.7 = readable handwriting · 0.3 = uncertain guess.
-- Skip lines you genuinely cannot read (do NOT fabricate). Note any problems in "warnings" (e.g. "ภาพเบลอบางส่วน", "หาวันที่ไม่เจอ").
+- Skip lines you genuinely cannot read (do NOT fabricate). Note any problems in "warnings".
+- LANGUAGE — write EVERY "warnings" entry in **Thai (ภาษาไทย) only**. The end user is Thai and treats English / mixed-language messages as a bug. e.g. "ภาพเบลอบางส่วน", "หาวันที่ไม่เจอ", "แถวซ้าย 1,4,5 ไม่มีตัวเลข จึงข้าม", "ผ้าขนหนูแถว 3 ตัวเลขกำกวม อ่านได้ 19 หรือ 14". Item codes (เช่น H06) and the customer code may stay as-is, but the sentence MUST be natural Thai — never English.
 - detected_date: the date written on the sheet, converted to ISO YYYY-MM-DD in the Gregorian (Western / ค.ศ.) calendar. Thai laundry forms almost always write the year in the Buddhist Era (พ.ศ. / B.E.), which is 543 years AHEAD of the Gregorian year. Convert like this:
     · 4-digit year >= 2500 (e.g. 2569) is B.E. -> subtract 543 (2569 -> 2026).
     · 2-digit year (e.g. 69, often written after the month as DD/MM/YY) means B.E. 25YY = 2500 + YY -> then subtract 543 (69 -> 2569 -> 2026). NEVER read a 2-digit year as a 19xx year or as a Gregorian year directly.
@@ -101,7 +102,8 @@ Match each item label to the customer's item list (JSON code+name) and return th
 - confidence: 1.0 clear printed · 0.7 readable handwriting · 0.3 uncertain guess.
 - detected_customer: the customer name/code in the "ชื่อ" field near the top (e.g. "HS"), or null.
 - detected_date: the date on the sheet → ISO YYYY-MM-DD (Gregorian). Thai sheets use the Buddhist Era (พ.ศ.): a 4-digit year >= 2500 OR a 2-digit year (e.g. 69 = พ.ศ. 2569) → subtract 543 (→ 2026). NEVER interpret as 19xx. null if unsure.
-- Note any problems in "warnings".`
+- Note any problems in "warnings".
+- LANGUAGE — write EVERY "warnings" entry in **Thai (ภาษาไทย) only**. The end user is Thai and treats English / mixed-language messages as a bug. e.g. "ใบซ้าย แถว 1,4,5 ไม่มีตัวเลข จึงข้าม", "ปู5 อ่านยอดนับไม่ชัด", "นวม6 ตัวเลขต่อถุงกำกวม". Item codes (เช่น H06) may stay as-is, but the sentence MUST be natural Thai — never English.`
 
 export function buildChecklistUserText(items: CustomerItemHint[]): string {
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date())
