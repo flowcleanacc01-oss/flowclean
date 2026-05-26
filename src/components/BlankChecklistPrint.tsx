@@ -55,7 +55,7 @@ export default function BlankChecklistPrint({
 }: BlankChecklistPrintProps) {
   const pad = compact ? 'p-3' : 'p-8'
   const coTitle = compact ? 'text-sm' : 'text-xl'
-  const provVal = compact ? 'text-base' : 'text-2xl'
+  const provVal = compact ? 'text-sm' : 'text-2xl'   // 383 — เตี้ยลงให้ฟิต 2-up
   const d = DENSITY[density]
 
   const sortedCats = [...categories].sort((a, b) => a.sortOrder - b.sortOrder)
@@ -91,29 +91,29 @@ export default function BlankChecklistPrint({
         </div>
       </div>
 
-      {/* Provenance: ชื่อลูกค้า + วันที่ + จำนวนถุง */}
-      <div className={`flex justify-between items-stretch gap-2 ${compact ? 'mb-2' : 'mb-4'}`}>
+      {/* Provenance: ชื่อลูกค้า + วันที่ + จำนวนถุง (383 — เตี้ยลง: py-0.5 + label เล็ก + value text-sm) */}
+      <div className={`flex justify-between items-stretch gap-2 ${compact ? 'mb-1.5' : 'mb-4'}`}>
         <div className="flex gap-2 flex-1">
-          <div className={`border-2 border-[#1B3A5C] rounded-lg ${compact ? 'px-2 py-1' : 'px-4 py-2'} flex-1`}>
+          <div className={`border-2 border-[#1B3A5C] rounded-lg flex-1 ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-4 py-2'}`}>
             <Tri label={FL.customer} langs={langs} />
             {showCustomer && customer ? (
-              <p className={`font-bold text-slate-900 ${provVal} leading-tight`}>{customer.shortName || customer.name}</p>
+              <p className={`font-bold text-slate-900 ${provVal} leading-tight truncate`}>{customer.shortName || customer.name}</p>
             ) : (
-              <div className={`${compact ? 'h-6' : 'h-9'} border-b-2 border-dotted border-slate-400`}></div>
+              <div className={`${compact ? 'h-4' : 'h-9'} border-b-2 border-dotted border-slate-400`}></div>
             )}
           </div>
-          <div className={`border-2 border-[#1B3A5C] rounded-lg ${compact ? 'px-2 py-1' : 'px-4 py-2'}`}>
+          <div className={`border-2 border-[#1B3A5C] rounded-lg ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-4 py-2'}`}>
             <Tri label={FL.date} langs={langs} />
             {showDate ? (
               <p className={`font-bold text-slate-900 ${provVal} leading-tight`}>{formatDate(date)}</p>
             ) : (
-              <div className={`${compact ? 'h-6 w-20' : 'h-9 w-28'} border-b-2 border-dotted border-slate-400`}></div>
+              <div className={`${compact ? 'h-4 w-20' : 'h-9 w-28'} border-b-2 border-dotted border-slate-400`}></div>
             )}
           </div>
         </div>
-        <div className={`border-2 border-[#1B3A5C] rounded-lg ${compact ? 'px-2 py-1' : 'px-5 py-2'} text-center`}>
+        <div className={`border-2 border-[#1B3A5C] rounded-lg text-center ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-5 py-2'}`}>
           <Tri label={FL.bagCount} langs={langs} center />
-          <div className={`${compact ? 'w-12 h-5' : 'w-20 h-9'} border-b-2 border-dotted border-slate-400 mx-auto`}></div>
+          <div className={`${compact ? 'w-12 h-4' : 'w-20 h-9'} border-b-2 border-dotted border-slate-400 mx-auto`}></div>
         </div>
       </div>
 
@@ -127,18 +127,18 @@ export default function BlankChecklistPrint({
           <col style={{ width: COL_W.total }} />
         </colgroup>
         <thead>
-          <tr className="align-bottom">
-            <th className={`text-center px-0.5 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}><Tri label={FL.no} langs={langs} center /></th>
-            <th className={`text-left px-1 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}><Tri label={FL.item} langs={langs} /></th>
-            <th className={`text-center px-0.5 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}>
+          <tr className="align-bottom leading-none">
+            <th className={`text-center px-0.5 ${compact ? 'py-0.5' : 'py-2'} border border-slate-500`}><Tri label={FL.no} langs={langs} center /></th>
+            <th className={`text-left px-1 ${compact ? 'py-0.5' : 'py-2'} border border-slate-500`}><Tri label={FL.item} langs={langs} /></th>
+            <th className={`text-center px-0.5 ${compact ? 'py-0.5' : 'py-2'} border border-slate-500`}>
               <Tri label={FL.ckCountSend} langs={langs} center />
               <span className="block text-red-600 text-[0.8em]">{compact ? '(แดง)' : '(สีแดง)'}</span>
             </th>
-            <th className={`text-center px-0.5 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}>
+            <th className={`text-center px-0.5 ${compact ? 'py-0.5' : 'py-2'} border border-slate-500`}>
               <Tri label={FL.ckPerBagPack} langs={langs} center />
               <span className="block text-blue-600 text-[0.8em]">{compact ? '(น้ำเงิน · คั่น +)' : '(สีน้ำเงิน · หลายถุงคั่น + เช่น 43+36)'}</span>
             </th>
-            <th className={`text-center px-0.5 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}><Tri label={FL.total} langs={langs} center /></th>
+            <th className={`text-center px-0.5 ${compact ? 'py-0.5' : 'py-2'} border border-slate-500`}><Tri label={FL.total} langs={langs} center /></th>
           </tr>
         </thead>
         <tbody>
@@ -159,10 +159,10 @@ export default function BlankChecklistPrint({
                     <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-400`}>{rowNo}</td>
                     <td className={`px-1 ${d.cellPy} border border-slate-500`}>
                       <div className="flex items-start justify-between gap-1">
-                        <span className="min-w-0 leading-tight">
-                          {langs.includes('th') && <span className="block font-medium leading-tight">{item.name}</span>}
-                          {langs.includes('en') && item.nameEn && <span className="block opacity-60 leading-tight" style={{ fontSize: '0.82em' }}>{item.nameEn}</span>}
-                          {langs.includes('my') && my && <span className="block font-my opacity-60 leading-tight" style={{ fontSize: '0.82em' }}>{my}</span>}
+                        <span className="min-w-0 leading-none">
+                          {langs.includes('th') && <span className="block font-medium leading-none">{item.name}</span>}
+                          {langs.includes('en') && item.nameEn && <span className="block opacity-60 leading-none" style={{ fontSize: '0.82em' }}>{item.nameEn}</span>}
+                          {langs.includes('my') && my && <span className="block font-my opacity-60 leading-none" style={{ fontSize: '0.82em' }}>{my}</span>}
                         </span>
                         <span className="flex-shrink-0 font-mono font-bold border border-slate-400 rounded px-1 leading-tight">{item.code}</span>
                       </div>
@@ -189,18 +189,18 @@ export default function BlankChecklistPrint({
           })}
         </tbody>
       </table>
-      <p className={`${compact ? 'text-[8px]' : 'text-[10px]'} text-slate-400 ${compact ? 'mb-2' : 'mb-4'}`}>
+      <p className={`${compact ? 'text-[8px]' : 'text-[10px]'} text-slate-400 ${compact ? 'mb-1' : 'mb-4'}`}>
         💡 <span className="text-red-600 font-medium">นับส่ง = ปากกาแดง</span> · <span className="text-blue-600 font-medium">ต่อถุง = ปากกาน้ำเงิน</span> — ช่วยให้สแกนแม่นขึ้น
       </p>
 
-      {/* Signatures */}
-      <div className={`grid grid-cols-2 ${compact ? 'gap-6 mt-3' : 'gap-16 mt-8'} ${compact ? 'text-[9px]' : 'text-xs'} text-center`}>
+      {/* Signatures (383 — เตี้ยลง: gap/mt/ช่องเซ็นแคบลง ให้ฟิต 2-up) */}
+      <div className={`grid grid-cols-2 ${compact ? 'gap-4 mt-2' : 'gap-16 mt-8'} ${compact ? 'text-[9px]' : 'text-xs'} text-center`}>
         <div>
-          <div className={`border-b border-slate-400 ${compact ? 'pb-4' : 'pb-8'} mb-1`}></div>
+          <div className={`border-b border-slate-400 ${compact ? 'pb-2.5' : 'pb-8'} mb-1`}></div>
           <Tri label={FL.senderWash} langs={langs} center />
         </div>
         <div>
-          <div className={`border-b border-slate-400 ${compact ? 'pb-4' : 'pb-8'} mb-1`}></div>
+          <div className={`border-b border-slate-400 ${compact ? 'pb-2.5' : 'pb-8'} mb-1`}></div>
           <Tri label={FL.receiverWash} langs={langs} center />
         </div>
       </div>
