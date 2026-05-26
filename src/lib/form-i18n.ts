@@ -30,7 +30,7 @@ export const FL = {
   // LF data columns (1-6)
   sendNormal: { th: 'ส่งซักปกติ', en: 'Washing normally', my: 'ပုံမှန်လျှော်ရန်ပို့' },
   sendClaim: { th: 'ส่งเคลมซัก', en: 'Claim', my: 'တောင်းဆိုလျှော်' },
-  washedReturn: { th: 'ผ้าซักแล้วกลับมา', en: 'Washed return', my: 'လျှော်ပြီးပြန်လာ' },
+  washedReturn: { th: 'ลูกค้านับผ้ากลับ', en: 'Washed return', my: 'လျှော်ပြီးပြန်လာ' },
   countedIn: { th: 'โรงซักนับเข้า', en: 'Counted in', my: 'စက်ရုံရေတွက်ဝင်' },
   packDeliver: { th: 'โรงซักแพคส่ง', en: 'Pack & deliver', my: 'ထုပ်ပိုးပို့' },
   noteRemainReturn: { th: 'หมายเหตุ · ค้าง(-)/คืน(+)', en: 'Note · remain(-)/return(+)', my: 'မှတ်ချက် · ကျန်(-)/ပြန်(+)' },

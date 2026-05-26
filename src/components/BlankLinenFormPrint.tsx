@@ -30,15 +30,16 @@ interface Props {
   categories?: LinenCategoryDef[]
 }
 
-// 376.2b — column widths (รวม 100%) · ส่งซักปกติ กว้างสุด, แพคส่ง รอง
-const COL_W = { no: '4%', item: '28%', c1: '19%', c2: '8%', c3: '8%', c4: '8%', c5: '14%', c6: '11%' }
-const DATA_COLS: { num: number; label: TriLabel; w: string; customerFill?: boolean; emphasize?: boolean }[] = [
-  { num: 1, label: FL.sendNormal, w: COL_W.c1, customerFill: true, emphasize: true },
-  { num: 2, label: FL.sendClaim, w: COL_W.c2, customerFill: true },
-  { num: 3, label: FL.washedReturn, w: COL_W.c3 },
-  { num: 4, label: FL.countedIn, w: COL_W.c4 },
-  { num: 5, label: FL.packDeliver, w: COL_W.c5, emphasize: true },
-  { num: 6, label: FL.noteRemainReturn, w: COL_W.c6 },
+// 379/380.4 — column widths (รวม 100%) · ลูกค้านับส่ง กว้างสุด, แพคส่ง รอง · รายการ แคบลง (28→23)
+// 379 — เรียงตาม flow ในโปรแกรม: ลูกค้านับผ้ากลับ (Washed return) ย้ายไปขวาสุด
+const COL_W = { no: '4%', item: '23%' }
+const DATA_COLS: { num: number; label: TriLabel; w: string; emphasize?: boolean }[] = [
+  { num: 1, label: FL.sendNormal,       w: '21%', emphasize: true },  // ลูกค้านับส่ง (breakdown — กว้างสุด)
+  { num: 2, label: FL.sendClaim,        w: '8%' },
+  { num: 3, label: FL.countedIn,        w: '8%' },
+  { num: 4, label: FL.packDeliver,      w: '16%', emphasize: true },  // โรงซักแพคส่ง (รอง)
+  { num: 5, label: FL.noteRemainReturn, w: '12%' },
+  { num: 6, label: FL.washedReturn,     w: '8%' },                    // 379 — ลูกค้านับผ้ากลับ ขวาสุด
 ]
 
 // trilingual stack: ไทย (เด่น) / อังกฤษ (รอง) / พม่า (.font-my ถ้ามี)
@@ -68,9 +69,6 @@ export default function BlankLinenFormPrint({
 }: Props) {
   const pad = compact ? 'p-3' : 'p-8'
   const coTitle = compact ? 'text-sm' : 'text-xl'
-  const docTitle = compact ? 'text-sm' : 'text-lg'
-  const provVal = compact ? 'text-base' : 'text-2xl'
-  const provLabel = compact ? 'text-[9px]' : 'text-[11px]'
   const d = DENSITY[density]
 
   // 376.5 — จัดกลุ่มตามหมวด (เรียงตาม category sortOrder) หรือลำดับเดิม
@@ -95,17 +93,6 @@ export default function BlankLinenFormPrint({
   return (
     // 376: print:px-2 print:py-0 — คืน padding ที่ซ้ำกับ @page margin (กันล้นหน้า 2)
     <div className={`bg-white ${pad} mx-auto print:shadow-none print:px-2 print:py-0 w-full`} id={id}>
-      {/* Header: 2 กล่องนับถุง (376 match เอกสารเดิม) */}
-      <div className={`flex justify-end gap-2 ${compact ? 'mb-1' : 'mb-2'}`}>
-        {[FL.sacksForWashing, FL.packBagsDelivery].map((box, i) => (
-          <div key={i} className={`border border-slate-500 rounded ${compact ? 'px-2 py-0.5' : 'px-3 py-1'} flex items-center gap-1`}>
-            <Tri label={box} langs={langs} />
-            <span className="font-bold">=</span>
-            <span className={`inline-block ${compact ? 'w-10' : 'w-16'} border-b border-dotted border-slate-500`}>&nbsp;</span>
-          </div>
-        ))}
-      </div>
-
       {/* Title */}
       <div className={`flex justify-between items-start border-b-2 border-[#1B3A5C] ${compact ? 'mb-2 pb-1' : 'mb-4 pb-3'}`}>
         <div>
@@ -119,24 +106,33 @@ export default function BlankLinenFormPrint({
         </div>
       </div>
 
-      {/* Provenance: ชื่อลูกค้า + วันที่ */}
-      <div className={`flex gap-2 ${compact ? 'mb-2' : 'mb-3'}`}>
-        <div className={`border-2 border-[#1B3A5C] rounded-lg ${compact ? 'px-2 py-1' : 'px-4 py-2'} flex-1`}>
+      {/* Provenance + กล่องนับถุง — แถวเดียว (380.1 ชื่อแคบ/เตี้ย · วันที่กว้างขึ้น · 380.2 ย้ายกล่องนับถุงมารวม) */}
+      <div className={`flex items-stretch gap-1.5 ${compact ? 'mb-2' : 'mb-3'}`}>
+        <div className={cn('border-2 border-[#1B3A5C] rounded-lg w-[32%]', compact ? 'px-2 py-0.5 text-[10px]' : 'px-4 py-2')}>
           <Tri label={FL.customer} langs={langs} />
           {showCustomer && customer ? (
-            <p className={`font-bold text-slate-900 ${provVal} leading-tight`}>{customer.shortName || customer.name}</p>
+            <p className={cn('font-bold text-slate-900 leading-tight truncate', compact ? 'text-sm' : 'text-2xl')}>{customer.shortName || customer.name}</p>
           ) : (
-            <div className={`${compact ? 'h-6' : 'h-9'} border-b-2 border-dotted border-slate-400`}></div>
+            <div className={cn('border-b-2 border-dotted border-slate-400', compact ? 'h-4' : 'h-9')}></div>
           )}
         </div>
-        <div className={`border-2 border-[#1B3A5C] rounded-lg ${compact ? 'px-2 py-1' : 'px-4 py-2'}`}>
+        <div className={cn('border-2 border-[#1B3A5C] rounded-lg w-[22%]', compact ? 'px-2 py-0.5 text-[10px]' : 'px-4 py-2')}>
           <Tri label={FL.date} langs={langs} />
           {showDate ? (
-            <p className={`font-bold text-slate-900 ${provVal} leading-tight`}>{formatDate(date)}</p>
+            <p className={cn('font-bold text-slate-900 leading-tight', compact ? 'text-sm' : 'text-2xl')}>{formatDate(date)}</p>
           ) : (
-            <div className={`${compact ? 'h-6 w-20' : 'h-9 w-28'} border-b-2 border-dotted border-slate-400`}></div>
+            <div className={cn('border-b-2 border-dotted border-slate-400', compact ? 'h-4' : 'h-9')}></div>
           )}
         </div>
+        {[FL.sacksForWashing, FL.packBagsDelivery].map((box, i) => (
+          <div key={i} className={cn('border border-slate-500 rounded flex-1 flex flex-col justify-center leading-none', compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-1 text-[10px]')}>
+            <Tri label={box} langs={langs} />
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="font-bold">=</span>
+              <span className="flex-1 border-b border-dotted border-slate-500">&nbsp;</span>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Items Table — 8 cols · trilingual head · thead ซ้ำตอน paginate */}
@@ -147,20 +143,13 @@ export default function BlankLinenFormPrint({
           {DATA_COLS.map(c => <col key={c.num} style={{ width: c.w }} />)}
         </colgroup>
         <thead>
-          {/* (ลูกค้ากรอก) เหนือ col 1-2 */}
-          <tr className="bg-[#e8eef5] text-[#1B3A5C]">
-            <th className="border border-slate-500" colSpan={2}></th>
-            <th className="border border-slate-500 px-1 py-0.5" colSpan={DATA_COLS.filter(c => c.customerFill).length}>
-              <Tri label={FL.customerFills} langs={langs} center />
-            </th>
-            <th className="border border-slate-500" colSpan={DATA_COLS.filter(c => !c.customerFill).length}></th>
-          </tr>
-          <tr className="bg-[#e8eef5] text-[#1B3A5C] align-bottom">
-            <th className={`text-center px-0.5 ${compact ? 'py-1' : 'py-1.5'} border border-slate-500`}><Tri label={FL.no} langs={langs} center /></th>
-            <th className={`text-left px-1 ${compact ? 'py-1' : 'py-1.5'} border border-slate-500`}><Tri label={FL.item} langs={langs} /></th>
+          {/* 380.3 เอาแถว (ลูกค้ากรอก) ออก · 380.5 header row เตี้ยลง (py-0.5 + leading-none) */}
+          <tr className="bg-[#e8eef5] text-[#1B3A5C] align-bottom leading-none">
+            <th className={`text-center px-0.5 ${compact ? 'py-0.5' : 'py-1.5'} border border-slate-500`}><Tri label={FL.no} langs={langs} center /></th>
+            <th className={`text-left px-1 ${compact ? 'py-0.5' : 'py-1.5'} border border-slate-500`}><Tri label={FL.item} langs={langs} /></th>
             {DATA_COLS.map(c => (
-              <th key={c.num} className={cn('text-center px-0.5 border border-slate-500', compact ? 'py-1' : 'py-1.5', c.emphasize && 'bg-[#d9e4f0]')}>
-                <span className="block text-[0.85em] opacity-60">{c.num}</span>
+              <th key={c.num} className={cn('text-center px-0.5 border border-slate-500', compact ? 'py-0.5' : 'py-1.5', c.emphasize && 'bg-[#d9e4f0]')}>
+                <span className="block text-[0.8em] opacity-60">{c.num}</span>
                 <Tri label={c.label} langs={langs} center />
               </th>
             ))}
