@@ -41,7 +41,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   const [formType, setFormType] = useState<'checklist' | 'lf'>('checklist')
   const [sheets, setSheets] = useState<FormSheet[]>([])
   const [activeSheet, setActiveSheet] = useState(0)
-  const [printMode, setPrintMode] = useState<'a4-2up' | 'a5'>('a4-2up')
+  const [printMode, setPrintMode] = useState<'a4-2up' | 'a4'>('a4-2up')  // 381: a5 เดี่ยว → a4 เดี่ยว
   // 375 — item picker enhance (mirror QT picker)
   const [itemSearch, setItemSearch] = useState('')
   const [itemCat, setItemCat] = useState('all')
@@ -109,7 +109,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
     try { await saveFormTemplates(next) } catch { alert('บันทึก template ไม่สำเร็จ') }
   }
   const applyTemplate = (t: FormTemplate) => {
-    setFormType(t.formType); setShowCustomer(t.showCustomer); setShowDate(t.showDate); setPrintMode(t.printMode)
+    setFormType(t.formType); setShowCustomer(t.showCustomer); setShowDate(t.showDate); setPrintMode(t.printMode === 'a4-2up' ? 'a4-2up' : 'a4')  // 381: migrate 'a5' เก่า → 'a4'
     setSheets(t.sheets.map(s => ({ id: genId(), title: s.title, codes: s.codes })))
     setActiveSheet(0); setReorderMode(false)
   }
@@ -161,7 +161,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
               <ExportButtons
                 targetId="print-blank-area"
                 filename={`blank-${formType}`}
-                defaultSettings={printMode === 'a4-2up' ? { paperSize: 'A4', orientation: 'landscape', margin: 'narrow' } : { paperSize: 'A5', orientation: 'portrait', margin: 'narrow' }}
+                defaultSettings={printMode === 'a4-2up' ? { paperSize: 'A4', orientation: 'landscape', margin: 'narrow' } : { paperSize: 'A4', orientation: 'portrait', margin: 'narrow' }}
                 showPrint={true}
               />
             </div>
@@ -181,7 +181,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
               <span className="text-slate-500">พิมพ์:</span>
               <div className="flex rounded-lg border border-slate-200 overflow-hidden">
                 <button onClick={() => setPrintMode('a4-2up')} className={printMode === 'a4-2up' ? 'px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'px-2 py-1 text-slate-600 hover:bg-slate-50'}>A4 → 2×A5</button>
-                <button onClick={() => setPrintMode('a5')} className={printMode === 'a5' ? 'px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'px-2 py-1 text-slate-600 hover:bg-slate-50'}>A5 เดี่ยว</button>
+                <button onClick={() => setPrintMode('a4')} className={printMode === 'a4' ? 'px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'px-2 py-1 text-slate-600 hover:bg-slate-50'}>A4 เดี่ยว</button>
               </div>
             </div>
           </div>
@@ -307,9 +307,10 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
           ) : (
             <div className="border border-slate-200 rounded-lg p-3 bg-slate-100 max-h-[40vh] overflow-auto print:max-h-none print:overflow-visible print:border-0 print:p-0 print:bg-white">
               <div id="print-blank-area">
-                {printMode === 'a5' ? (
+                {printMode === 'a4' ? (
                   usableSheets.map(s => (
-                    <div key={s.id} className="blank-a5-page bg-white mx-auto mb-3 shadow-sm print:shadow-none print:mb-0" style={{ width: '148mm' }}>
+                    /* 381: A4 เดี่ยว (portrait 210mm) · .blank-a5-page = generic single-sheet class (print width:100% → ตาม @page A4) */
+                    <div key={s.id} className="blank-a5-page bg-white mx-auto mb-3 shadow-sm print:shadow-none print:mb-0" style={{ width: '210mm' }}>
                       <FormComp customer={cust} company={companyInfo} items={sheetItems(s)} date={todayISO()} showCustomer={showCustomer} showDate={showDate} sheetTitle={s.title} compact id={`bf-${s.id}`} langs={langs} density={density} extraRows={extraRows} grouped={grouped} categories={linenCategories} />
                     </div>
                   ))

@@ -16,7 +16,7 @@ export interface FormTemplate {
   formType: 'checklist' | 'lf'
   showCustomer: boolean
   showDate: boolean
-  printMode: 'a4-2up' | 'a5'
+  printMode: 'a4-2up' | 'a4'   // 381: a5 → a4 (template เก่าที่เป็น 'a5' ถูก migrate ตอนโหลด)
   sheets: { title: string; codes: string[] }[]
   updatedAt: string
 }
