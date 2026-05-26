@@ -18,7 +18,7 @@ import { applyAiFillToRows } from '@/lib/ai-fill'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer } from '@/lib/recent-customers'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileDown, ExternalLink, Sparkles, ArrowUpDown, Wrench, Pencil, Calendar } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileDown, ExternalLink, Sparkles, ArrowUpDown, Wrench, Pencil, Calendar, Loader2 } from 'lucide-react'
 import { sortByQTOrder } from '@/lib/sort-by-qt'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
@@ -87,6 +87,7 @@ export default function LinenFormsPage() {
 
   const [showPrint, setShowPrint] = useState(false)
   const [alertFilter, setAlertFilter] = useState<'all' | 'alert' | 'no-sd'>('all')
+  const [printFilter, setPrintFilter] = useState<'all' | 'unprinted' | 'printed'>('all')  // 384
 
   const [activeRowId, setActiveRowId] = useState<string | null>(null)
 
@@ -119,6 +120,13 @@ export default function LinenFormsPage() {
   }
   const [showLfPrintList, setShowLfPrintList] = useState(false)
   const [showLfBulkPrint, setShowLfBulkPrint] = useState(false)
+  // 384.1 — Quick Print LF (multi-customer) — mirror Quick Print SD (303/310)
+  const [showQuickPrintLf, setShowQuickPrintLf] = useState(false)
+  const [qpLfSelectedCusts, setQpLfSelectedCusts] = useState<Set<string>>(new Set())
+  const [qpLfDateMode, setQpLfDateMode] = useState<'this_month' | 'last_30d' | 'all'>('this_month')
+  const [qpLfShowPrinted, setQpLfShowPrinted] = useState(false)
+  const [qpLfTarget, setQpLfTarget] = useState<{ snapshotGroups: { customerId: string; lfIds: string[] }[]; mode: 'single' | 'multi' } | null>(null)
+  const [qpLfReady, setQpLfReady] = useState(false)
 
   // Map: lfId → deliveryNote (for SD badge)
   const linkedLFMap = useMemo(() => {
@@ -130,6 +138,52 @@ export default function LinenFormsPage() {
     }
     return map
   }, [deliveryNotes])
+
+  // 384.1 — Quick Print LF: group LF by customer (filtered by date + printed status)
+  type QpLf = (typeof linenForms)[number]
+  const printableLfByCustomer = useMemo(() => {
+    const today = new Date()
+    let cutoffISO: string | null = null
+    if (qpLfDateMode === 'this_month') cutoffISO = `${today.toISOString().slice(0, 7)}-01`
+    else if (qpLfDateMode === 'last_30d') { const d = new Date(today); d.setDate(d.getDate() - 30); cutoffISO = d.toISOString().slice(0, 10) }
+    const map = new Map<string, { all: QpLf[]; unprinted: QpLf[] }>()
+    for (const f of linenForms) {
+      if (cutoffISO && f.date < cutoffISO) continue
+      if (!qpLfShowPrinted && f.isPrinted) continue
+      const bucket = map.get(f.customerId) || { all: [], unprinted: [] }
+      bucket.all.push(f)
+      if (!f.isPrinted) bucket.unprinted.push(f)
+      map.set(f.customerId, bucket)
+    }
+    for (const b of map.values()) {
+      b.all.sort((a, c) => a.date.localeCompare(c.date) || a.formNumber.localeCompare(c.formNumber))
+      b.unprinted.sort((a, c) => a.date.localeCompare(c.date) || a.formNumber.localeCompare(c.formNumber))
+    }
+    return map
+  }, [linenForms, qpLfDateMode, qpLfShowPrinted])
+
+  // 310-style snapshot: lock lfIds ตอน click — กัน DOM clear เมื่อ mark isPrinted แล้ว filter ตัดออก
+  const quickPrintLfGroups = useMemo(() => {
+    if (!qpLfTarget) return []
+    const lfMap = new Map(linenForms.map(f => [f.id, f]))
+    return qpLfTarget.snapshotGroups.map(g => {
+      const c = getCustomer(g.customerId)
+      if (!c) return null
+      const forms = g.lfIds.map(id => lfMap.get(id)).filter((f): f is QpLf => f !== undefined)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.formNumber.localeCompare(b.formNumber))
+      return { customer: c, forms }
+    }).filter((g): g is NonNullable<typeof g> => g !== null)
+      .sort((a, b) => (a.customer.shortName || a.customer.name).localeCompare(b.customer.shortName || b.customer.name))
+  }, [qpLfTarget, linenForms, getCustomer])
+
+  // 308-style contentReady — block print จน DOM paint commit (กัน blank preview ครั้งแรก)
+  useEffect(() => {
+    if (!qpLfTarget) { setQpLfReady(false); return }
+    setQpLfReady(false)
+    let raf1 = 0, raf2 = 0, timer = 0
+    raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => { timer = window.setTimeout(() => setQpLfReady(true), 150) }) })
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); clearTimeout(timer) }
+  }, [qpLfTarget])
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -209,6 +263,9 @@ export default function LinenFormsPage() {
       if (focusMode) return focusIds.includes(f.id)
 
       if (statusFilter !== 'all' && f.status !== statusFilter) return false
+      // 384 — filter สถานะพิมพ์
+      if (printFilter === 'unprinted' && f.isPrinted) return false
+      if (printFilter === 'printed' && !f.isPrinted) return false
       if (customerFilter !== 'all' && f.customerId !== customerFilter) return false
       if (search) {
         const customer = getCustomer(f.customerId)
@@ -271,7 +328,7 @@ export default function LinenFormsPage() {
     })
     // getPiecesForStatus เป็น pure ต่อ argument (อ่านแค่ f.rows/f.status ไม่มี external state) / linenCatalog เพิ่มเป็น store value
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linenForms, statusFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, alertFilter, linkedLFMap, focusMode, focusIds, linenCatalog])
+  }, [linenForms, statusFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, alertFilter, printFilter, linkedLFMap, focusMode, focusIds, linenCatalog])
 
   const statuses: (LinenFormStatus | 'all')[] = ['all', ...ALL_LINEN_STATUSES]
 
@@ -541,6 +598,12 @@ export default function LinenFormsPage() {
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium">
             <Printer className="w-4 h-4" />พิมพ์/ส่งออกเอกสารรายการ
           </button>
+          {/* 384.1 — Quick Print LF (multi-customer) */}
+          <button onClick={() => setShowQuickPrintLf(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-100 text-violet-700 rounded-lg hover:bg-violet-200 transition-colors text-sm font-medium"
+            title="เห็นลูกค้าทุกรายที่มี LF รอพิมพ์ → เลือกหลายราย → พิมพ์ทีเดียว แยกตามลูกค้า (แบบเดียวกับพิมพ์ SD เร่งด่วน)">
+            <Sparkles className="w-4 h-4" />พิมพ์ LF เร่งด่วน
+          </button>
           <button onClick={handleCreateOpen}
             className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />สร้างใบส่งรับผ้าใหม่
@@ -624,6 +687,28 @@ export default function LinenFormsPage() {
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             )}>
             {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 384 — Print status filter */}
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {([
+          { key: 'all' as const, label: 'ทั้งหมด' },
+          { key: 'unprinted' as const, label: '🖨 ยังไม่พิมพ์' },
+          { key: 'printed' as const, label: '✓ พิมพ์แล้ว' },
+        ]).map(f => (
+          <button key={f.key} onClick={() => setPrintFilter(f.key)}
+            className={cn(
+              'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+              printFilter === f.key
+                ? f.key === 'unprinted' ? 'bg-blue-500 text-white' : f.key === 'printed' ? 'bg-emerald-500 text-white' : 'bg-[#3DD8D8] text-[#1B3A5C]'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            )}>
+            {f.label}
+            <span className="ml-1 opacity-70">
+              ({f.key === 'all' ? linenForms.length : f.key === 'unprinted' ? linenForms.filter(x => !x.isPrinted).length : linenForms.filter(x => x.isPrinted).length})
+            </span>
           </button>
         ))}
       </div>
@@ -1748,6 +1833,198 @@ export default function LinenFormsPage() {
             onExportFile={() => { for (const lfId of selectedLfIds) updateLinenForm(lfId, { isExported: true }) }}
           />
         </div>
+      </Modal>
+
+      {/* 384.1 — Quick Print LF Modal — multi-customer selector (mirror Quick Print SD 303) */}
+      <Modal open={showQuickPrintLf} onClose={() => setShowQuickPrintLf(false)} title="พิมพ์ LF เร่งด่วน (Multi-customer)" size="lg" closeLabel="cancel">
+        {(() => {
+          const entries = Array.from(printableLfByCustomer.entries())
+            .map(([custId, bucket]) => {
+              const c = getCustomer(custId)
+              if (!c) return null
+              return { custId, customer: c, all: bucket.all, unprinted: bucket.unprinted }
+            })
+            .filter((e): e is NonNullable<typeof e> => e !== null && e.all.length > 0)
+            .sort((a, b) => (a.customer.shortName || a.customer.name).localeCompare(b.customer.shortName || b.customer.name))
+
+          const allSelected = entries.length > 0 && entries.every(e => qpLfSelectedCusts.has(e.custId))
+          const toggleOne = (custId: string) => {
+            setQpLfSelectedCusts(prev => { const next = new Set(prev); if (next.has(custId)) next.delete(custId); else next.add(custId); return next })
+          }
+          const toggleAll = () => { if (allSelected) setQpLfSelectedCusts(new Set()); else setQpLfSelectedCusts(new Set(entries.map(e => e.custId))) }
+          const totalSelected = Array.from(qpLfSelectedCusts).reduce((s, cid) => { const b = printableLfByCustomer.get(cid); return s + (b ? b.all.length : 0) }, 0)
+
+          const openPrintFor = (customerIds: string[], mode: 'single' | 'multi') => {
+            const snapshotGroups = customerIds.map(cid => {
+              const bucket = printableLfByCustomer.get(cid)
+              return { customerId: cid, lfIds: bucket ? bucket.all.map(f => f.id) : [] }
+            }).filter(g => g.lfIds.length > 0)
+            if (snapshotGroups.length === 0) return
+            setQpLfTarget({ snapshotGroups, mode })
+            setShowQuickPrintLf(false)
+          }
+
+          const dateChips: Array<{ key: typeof qpLfDateMode; label: string }> = [
+            { key: 'this_month', label: 'เดือนนี้' },
+            { key: 'last_30d', label: '30 วันล่าสุด' },
+            { key: 'all', label: 'ทั้งหมด' },
+          ]
+
+          return (
+            <div className="space-y-4 text-sm">
+              <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 text-xs text-violet-800">
+                <p className="font-medium mb-1">🖨️ พิมพ์ใบส่งรับผ้าแยกตามลูกค้า — ทีเดียวจบ</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>คลิก <strong>&quot;พิมพ์&quot;</strong> ที่แถวลูกค้า → พิมพ์เฉพาะรายนั้น</li>
+                  <li>หรือ ☑ เลือกหลายลูกค้า → <strong>&quot;พิมพ์รวมทั้งหมด&quot;</strong> → ขึ้นหน้าใหม่ระหว่างลูกค้า</li>
+                  <li>LF ที่พิมพ์แล้วถูก mark <code>isPrinted=true</code> + หายจาก list ครั้งต่อไป</li>
+                </ul>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+                <div className="flex items-center gap-1">
+                  {dateChips.map(chip => (
+                    <button key={chip.key} type="button" onClick={() => setQpLfDateMode(chip.key)}
+                      className={cn('px-2.5 py-1 rounded text-xs font-medium transition-colors',
+                        qpLfDateMode === chip.key ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100')}>
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+                <label className="flex items-center gap-1.5 text-xs cursor-pointer ml-auto">
+                  <input type="checkbox" checked={qpLfShowPrinted} onChange={e => setQpLfShowPrinted(e.target.checked)}
+                    className="rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                  <span className="text-slate-600">แสดงที่พิมพ์แล้วด้วย</span>
+                </label>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-medium text-slate-700">ลูกค้าที่มี LF รอพิมพ์ ({entries.length} ราย)</p>
+                  <button onClick={toggleAll} className="text-xs px-2 py-1 border border-slate-200 rounded hover:bg-slate-50">
+                    {allSelected ? 'ยกเลิกเลือกทั้งหมด' : 'เลือกทั้งหมด'}
+                  </button>
+                </div>
+                <div className="border border-slate-200 rounded-lg max-h-[45vh] overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 sticky top-0 border-b border-slate-200">
+                      <tr>
+                        <th className="px-3 py-2 w-10"></th>
+                        <th className="text-left px-3 py-2 font-medium text-slate-600">ลูกค้า</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">LF รอ</th>
+                        <th className="text-right px-3 py-2 font-medium text-slate-600">ทั้งหมด</th>
+                        <th className="text-center px-2 py-2 font-medium text-slate-600 w-20"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.map(({ custId, customer, all, unprinted }) => {
+                        const checked = qpLfSelectedCusts.has(custId)
+                        return (
+                          <tr key={custId} className={cn('border-t border-slate-100 cursor-pointer hover:bg-slate-50', checked && 'bg-[#3DD8D8]/10')}
+                            onClick={() => toggleOne(custId)}>
+                            <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
+                              <input type="checkbox" checked={checked} onChange={() => toggleOne(custId)}
+                                className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className="font-bold text-[#1B3A5C] tracking-wide">{customer.shortName || '-'}</span>
+                              <span className="text-slate-500 text-xs ml-2">{customer.name}</span>
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <span className="font-mono font-semibold text-slate-700">{unprinted.length}</span>
+                              {unprinted.length > 0 && <span className="text-[10px] text-amber-600 ml-1">รอพิมพ์</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-500 text-xs">{all.length}</td>
+                            <td className="px-2 py-2 text-center" onClick={e => e.stopPropagation()}>
+                              <button onClick={() => openPrintFor([custId], 'single')}
+                                className="px-2.5 py-1 text-[11px] bg-violet-100 text-violet-700 rounded hover:bg-violet-200 font-medium inline-flex items-center gap-1">
+                                <Printer className="w-3 h-3" />พิมพ์
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {entries.length === 0 && (<tr><td colSpan={5} className="text-center py-12 text-slate-400">ไม่มี LF รอพิมพ์ในช่วงนี้</td></tr>)}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200">
+                <div className="text-xs text-slate-500">
+                  {qpLfSelectedCusts.size > 0 && (<>เลือก <strong className="text-[#1B3A5C]">{qpLfSelectedCusts.size}</strong> ลูกค้า · รวม <strong className="text-[#1B3A5C]">{totalSelected}</strong> ใบ</>)}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowQuickPrintLf(false)} className="px-3 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium">ยกเลิก</button>
+                  <button onClick={() => openPrintFor(Array.from(qpLfSelectedCusts), 'multi')} disabled={qpLfSelectedCusts.size === 0}
+                    className={cn('px-4 py-2 text-sm rounded-lg font-medium transition-colors flex items-center gap-1.5',
+                      qpLfSelectedCusts.size === 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8]')}>
+                    <Sparkles className="w-4 h-4" />พิมพ์รวมทั้งหมด ({totalSelected} ใบ)
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* 384.1 — Quick Print LF View — render LF grouped by customer + pageBreak + auto-mark isPrinted */}
+      <Modal open={!!qpLfTarget} onClose={() => setQpLfTarget(null)} title={
+        qpLfTarget?.mode === 'multi' ? `พิมพ์ LF รวม ${qpLfTarget.snapshotGroups.length} ลูกค้า` : 'พิมพ์ใบส่งรับผ้า'
+      } size="xl" className="print-target">
+        {(() => {
+          if (!qpLfTarget) return null
+          const groups = quickPrintLfGroups
+          const allLfIds = groups.flatMap(g => g.forms.map(f => f.id))
+          const allPrinted = allLfIds.length > 0 && allLfIds.every(id => linenForms.find(f => f.id === id)?.isPrinted)
+          const totalCount = allLfIds.length
+          const markAll = (printed: boolean) => { for (const id of allLfIds) updateLinenForm(id, { isPrinted: printed }) }
+
+          return (
+            <div className="space-y-4 relative">
+              {!qpLfReady && (
+                <div className="absolute inset-0 z-10 bg-white/85 flex items-center justify-center no-print">
+                  <div className="text-center">
+                    <Loader2 className="w-10 h-10 text-[#3DD8D8] animate-spin mx-auto mb-3" />
+                    <div className="text-sm font-medium text-slate-700">กำลังเตรียมเอกสาร...</div>
+                    <div className="text-xs text-slate-400 mt-1">รอสักครู่ก่อนกดพิมพ์ — {totalCount} ใบ</div>
+                  </div>
+                </div>
+              )}
+              <div id="print-quick-lf">
+                {groups.map((g, gIdx) => (
+                  <div key={g.customer.id}>
+                    {g.forms.map((form, fIdx) => {
+                      const carryOver = getCarryOver(form.customerId, form.date)
+                      return (
+                        <div key={form.id}>
+                          {(fIdx > 0 || gIdx > 0) && <div style={{ pageBreakBefore: 'always', breakBefore: 'page' }} />}
+                          <LinenFormPrint form={form} customer={g.customer} company={companyInfo} catalog={linenCatalog} carryOver={carryOver} qtItems={getLinkedQT(g.customer.name, form.customerId)?.items} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between items-center mt-4 no-print">
+                <div className="flex flex-col gap-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={allPrinted} onChange={e => markAll(e.target.checked)}
+                      className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500" />
+                    <span className="text-sm font-medium text-blue-700">พิมพ์แล้ว (ทุกรายการ {totalCount} ใบ)</span>
+                  </label>
+                  <p className="text-xs text-slate-400">พิมพ์ → mark <code>isPrinted=true</code> อัตโนมัติ · จาก list ครั้งต่อไปหาย</p>
+                </div>
+                <ExportButtons
+                  targetId="print-quick-lf"
+                  filename={`LF-quickprint-${groups.length}cust-${totalCount}lf`}
+                  onPrint={() => markAll(true)}
+                  onExportFile={() => { for (const id of allLfIds) updateLinenForm(id, { isExported: true }) }}
+                />
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
 
       {/* 207+209: Universal Add-Item Wizard — push row เข้า LF ปัจจุบัน */}
