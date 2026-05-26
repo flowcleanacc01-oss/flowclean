@@ -60,6 +60,8 @@ export interface LinenItemDef {
   code: string
   name: string
   nameEn: string
+  /** 376 — Burmese name (optional) สำหรับฟอร์ม 3 ภาษา · fallback = name+nameEn */
+  nameMy?: string
   category: LinenCategory
   unit: string
   defaultPrice: number

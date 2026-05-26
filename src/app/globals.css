@@ -41,6 +41,12 @@ input[type="number"] {
   -moz-appearance: textfield; /* Firefox */
 }
 
+/* 376 — Burmese (Myanmar) text: ใช้ Noto Sans Myanmar (Sarabun ไม่มี glyph อักษรพม่า)
+ * scoped เฉพาะ .font-my → ไม่กระทบ typography ส่วนอื่นของแอป */
+.font-my {
+  font-family: 'Noto Sans Myanmar', 'Sarabun', sans-serif;
+}
+
 /* Print styles — proper A4 output for mobile and desktop */
 /*
  * Note: @page rule is INJECTED dynamically by lib/print-utils.ts (applyPrintSettings)
@@ -129,7 +135,6 @@ input[type="number"] {
     box-shadow: none !important;
     margin: 0 !important;
     width: 100% !important;            /* เต็มพื้นที่พิมพ์ (A4 landscape หรือ A5) */
-    break-inside: avoid; page-break-inside: avoid;   /* 376: เก็บแต่ละหน้าให้อยู่แผ่นเดียว */
   }
   /* 376 — break BEFORE หน้าถัดๆ ไป (ไม่ใช่ after หน้าสุดท้าย) → กันหน้าเปล่าท้ายสุด
    * page-break-after:always + :last-child:auto เดิม เปราะ (พลาด = หน้าเปล่า)
@@ -137,6 +142,9 @@ input[type="number"] {
   .blank-a4-2up-page:not(:first-child), .blank-a5-page:not(:first-child) {
     page-break-before: always; break-before: page;
   }
+  /* 376.1 — ตารางฟอร์มยาวเกิน 1 หน้า (A5 เดี่ยว): thead ซ้ำทุกหน้า + แถว/กลุ่มไม่ฉีกกลาง */
+  .blank-form-table thead { display: table-header-group; }
+  .blank-form-table tr, .blank-form-group { break-inside: avoid; page-break-inside: avoid; }
   .blank-a4-2up-page { display: flex !important; }
   .blank-a4-2up-page > div, .blank-a5-half {
     break-inside: avoid; page-break-inside: avoid;

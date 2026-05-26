@@ -1,71 +1,109 @@
 'use client'
 
-// 374 — ใบเช็คผ้าเปล่า v2: toggle ชื่อ/วันที่ (374.1/2) · sheetTitle แผนก (374.4) · compact สำหรับ A5 2-up (374.3)
-// scan-friendly: ชื่อ+วันที่ printed เด่น (provenance แม่น) · รหัสกำกับทุกแถว · บอกพนักงานเขียนตามสี
+// 376 — ใบเช็คผ้าเปล่า v3 (Form Designer v3)
+//  · คอลัมน์: # / รายการ(+code) / นับส่ง(แดง) / ต่อถุง-แพคส่ง(น้ำเงิน) / รวม
+//  · 376.4 3 ภาษา (ไทย/อังกฤษ/พม่า) · 376.5 จัดกลุ่ม+เส้นหนา · 376.1 density · 376.3 แถวว่าง
+//  · scan-friendly: code เด่นทุกแถว + สีปากกา (แดง/น้ำเงิน) ช่วย AI สแกนแม่น
 
-import { formatDate } from '@/lib/utils'
-import type { Customer, CompanyInfo, LinenItemDef } from '@/types'
+import { Fragment } from 'react'
+import { formatDate, cn } from '@/lib/utils'
+import { FL, DENSITY, BURMESE_ITEM, type FormLang, type FormDensity, type TriLabel } from '@/lib/form-i18n'
+import type { Customer, CompanyInfo, LinenItemDef, LinenCategoryDef } from '@/types'
 
 interface BlankChecklistPrintProps {
-  customer: Customer | null            // null = ฟอร์มกลาง (ไม่ระบุลูกค้า)
+  customer: Customer | null
   company: CompanyInfo
   items: LinenItemDef[]
   date: string
-  showCustomer?: boolean               // 374.1 — false = เว้นช่องเขียนมือ
-  showDate?: boolean                   // 374.2 — false = เว้นช่องเขียนมือ
-  sheetTitle?: string                  // 374.4 — ชื่อใบ/แผนก เช่น "ผ้าเรียบ"
-  compact?: boolean                    // 374.3 — A5 mode (font/ระยะเล็กลง fit A5)
-  id?: string                          // print target id (unique เมื่อ render หลายใบ)
+  showCustomer?: boolean
+  showDate?: boolean
+  sheetTitle?: string
+  compact?: boolean
+  id?: string
+  langs?: FormLang[]
+  density?: FormDensity
+  extraRows?: number
+  grouped?: boolean
+  categories?: LinenCategoryDef[]
+}
+
+const COL_W = { no: '5%', item: '40%', send: '18%', pack: '25%', total: '12%' }
+
+function Tri({ label, langs, center }: { label: TriLabel; langs: FormLang[]; center?: boolean }) {
+  return (
+    <span className={cn('block leading-tight', center && 'text-center')}>
+      {langs.map((l, i) => {
+        const txt = label[l]
+        if (!txt) return null
+        return (
+          <span key={l} className={cn('block leading-tight', i === 0 ? 'font-semibold' : 'opacity-70', l === 'my' && 'font-my')}
+            style={i > 0 ? { fontSize: '0.82em' } : undefined}>{txt}</span>
+        )
+      })}
+    </span>
+  )
+}
+
+function myItemName(item: LinenItemDef): string {
+  return item.nameMy || BURMESE_ITEM[item.code] || ''
 }
 
 export default function BlankChecklistPrint({
   customer, company, items, date,
   showCustomer = true, showDate = true, sheetTitle, compact = false, id = 'print-blank-checklist',
+  langs = ['th', 'en', 'my'], density = 'normal', extraRows = 0, grouped = false, categories = [],
 }: BlankChecklistPrintProps) {
-  // ระยะ/ขนาดตาม compact (A5) vs ปกติ (A4)
   const pad = compact ? 'p-3' : 'p-8'
   const coTitle = compact ? 'text-sm' : 'text-xl'
-  const docTitle = compact ? 'text-sm' : 'text-lg'
   const provVal = compact ? 'text-base' : 'text-2xl'
-  const provLabel = compact ? 'text-[9px]' : 'text-[11px]'
-  const cellPy = compact ? 'py-1.5' : 'py-3'
-  const fontSz = compact ? 'text-[11px]' : 'text-sm'
+  const d = DENSITY[density]
 
-  // 376: print:px-2 print:py-0 — คืน padding ที่ซ้ำกับ @page margin (กันล้นหน้า 2)
+  const sortedCats = [...categories].sort((a, b) => a.sortOrder - b.sortOrder)
+  const groups: { label: string; items: LinenItemDef[] }[] = []
+  if (grouped && sortedCats.length) {
+    for (const c of sortedCats) {
+      const gItems = items.filter(i => i.category === c.key)
+      if (gItems.length) groups.push({ label: c.label, items: gItems })
+    }
+    const known = new Set(sortedCats.map(c => c.key))
+    const orphans = items.filter(i => !known.has(i.category))
+    if (orphans.length) groups.push({ label: 'อื่นๆ', items: orphans })
+  } else {
+    groups.push({ label: '', items })
+  }
+
+  let rowNo = 0
+  const colCount = 5
+
   return (
-    <div className={`bg-white ${pad} mx-auto ${fontSz} print:shadow-none print:px-2 print:py-0 w-full`} id={id}>
+    // 376: print:px-2 print:py-0 — คืน padding ที่ซ้ำกับ @page margin (กันล้นหน้า 2)
+    <div className={`bg-white ${pad} mx-auto print:shadow-none print:px-2 print:py-0 w-full`} id={id} style={{ fontSize: `${d.fontPx}px` }}>
       {/* Header */}
-      <div className={`flex justify-between items-start border-b-2 border-[#1B3A5C] ${compact ? 'mb-2 pb-2' : 'mb-4 pb-3'}`}>
+      <div className={`flex justify-between items-start border-b-2 border-[#1B3A5C] ${compact ? 'mb-2 pb-1' : 'mb-4 pb-3'}`}>
         <div>
           <h1 className={`${coTitle} font-bold text-[#1B3A5C]`}>{company.name}</h1>
           {!compact && <p className="text-xs text-slate-500">{company.nameEn}</p>}
-          {!compact && <p className="text-xs text-slate-500 mt-1">{company.address}</p>}
           <p className={compact ? 'text-[9px] text-slate-500' : 'text-xs text-slate-500'}>โทร: {company.phone}</p>
         </div>
         <div className="text-right">
-          <h2 className={`${docTitle} font-bold text-[#1B3A5C]`}>ใบเช็คผ้า</h2>
+          <Tri label={FL.docTitleCk} langs={langs} />
           {sheetTitle && <p className={`${compact ? 'text-[11px]' : 'text-sm'} font-semibold text-slate-600`}>📋 {sheetTitle}</p>}
         </div>
       </div>
 
-      {/* Provenance: ชื่อลูกค้า + วันที่ (toggle) → printed เด่น หรือ เว้นช่องเขียนมือ */}
+      {/* Provenance: ชื่อลูกค้า + วันที่ + จำนวนถุง */}
       <div className={`flex justify-between items-stretch gap-2 ${compact ? 'mb-2' : 'mb-4'}`}>
         <div className="flex gap-2 flex-1">
           <div className={`border-2 border-[#1B3A5C] rounded-lg ${compact ? 'px-2 py-1' : 'px-4 py-2'} flex-1`}>
-            <p className={`${provLabel} text-slate-500`}>ชื่อลูกค้า</p>
+            <Tri label={FL.customer} langs={langs} />
             {showCustomer && customer ? (
-              <>
-                <p className={`font-bold text-slate-900 ${provVal} leading-tight`}>{customer.shortName || customer.name}</p>
-                {!compact && customer.shortName && customer.name && customer.name !== customer.shortName && (
-                  <p className="text-[10px] text-slate-400">{customer.name}</p>
-                )}
-              </>
+              <p className={`font-bold text-slate-900 ${provVal} leading-tight`}>{customer.shortName || customer.name}</p>
             ) : (
               <div className={`${compact ? 'h-6' : 'h-9'} border-b-2 border-dotted border-slate-400`}></div>
             )}
           </div>
           <div className={`border-2 border-[#1B3A5C] rounded-lg ${compact ? 'px-2 py-1' : 'px-4 py-2'}`}>
-            <p className={`${provLabel} text-slate-500`}>วันที่</p>
+            <Tri label={FL.date} langs={langs} />
             {showDate ? (
               <p className={`font-bold text-slate-900 ${provVal} leading-tight`}>{formatDate(date)}</p>
             ) : (
@@ -74,47 +112,96 @@ export default function BlankChecklistPrint({
           </div>
         </div>
         <div className={`border-2 border-[#1B3A5C] rounded-lg ${compact ? 'px-2 py-1' : 'px-5 py-2'} text-center`}>
-          <p className={`${provLabel} font-medium text-[#1B3A5C] mb-1`}>จำนวนถุง</p>
+          <Tri label={FL.bagCount} langs={langs} center />
           <div className={`${compact ? 'w-12 h-5' : 'w-20 h-9'} border-b-2 border-dotted border-slate-400 mx-auto`}></div>
         </div>
       </div>
 
-      {/* Items Table — รหัสเด่น + ระบุสีที่ให้พนักงานเขียน */}
-      <table className={`w-full ${fontSz} border-2 border-slate-600 mb-1`}>
+      {/* Items Table */}
+      <table className="blank-form-table w-full border-2 border-slate-600 mb-1" style={{ tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: COL_W.no }} />
+          <col style={{ width: COL_W.item }} />
+          <col style={{ width: COL_W.send }} />
+          <col style={{ width: COL_W.pack }} />
+          <col style={{ width: COL_W.total }} />
+        </colgroup>
         <thead>
-          <tr className="bg-[#e8eef5]">
-            <th className={`text-center px-1 ${compact ? 'py-1' : 'py-2'} border border-slate-500 w-6`}>#</th>
-            <th className={`text-center px-1 ${compact ? 'py-1' : 'py-2'} border border-slate-500 ${compact ? 'w-10' : 'w-14'}`}>รหัส</th>
-            <th className={`text-left px-1 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}>รายการ</th>
-            <th className={`text-center px-1 ${compact ? 'py-1' : 'py-2'} border border-slate-500 ${compact ? 'w-14' : 'w-24'}`}>นับส่ง <span className="text-red-600">{compact ? '(แดง)' : '(สีแดง)'}</span></th>
-            <th className={`text-center px-1 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}>ต่อถุง — แพคส่ง <span className="text-blue-600">{compact ? '(น้ำเงิน)' : '(สีน้ำเงิน)'}</span>{!compact && <><br /><span className="text-[9px] font-normal text-slate-500">หลายถุงคั่นด้วย + เช่น 43+36</span></>}</th>
-            <th className={`text-center px-1 ${compact ? 'py-1' : 'py-2'} border border-slate-500 ${compact ? 'w-10' : 'w-16'}`}>รวม</th>
+          <tr className="bg-[#e8eef5] align-bottom">
+            <th className={`text-center px-0.5 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}><Tri label={FL.no} langs={langs} center /></th>
+            <th className={`text-left px-1 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}><Tri label={FL.item} langs={langs} /></th>
+            <th className={`text-center px-0.5 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}>
+              <Tri label={FL.ckCountSend} langs={langs} center />
+              <span className="block text-red-600 text-[0.8em]">{compact ? '(แดง)' : '(สีแดง)'}</span>
+            </th>
+            <th className={`text-center px-0.5 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}>
+              <Tri label={FL.ckPerBagPack} langs={langs} center />
+              <span className="block text-blue-600 text-[0.8em]">{compact ? '(น้ำเงิน · คั่น +)' : '(สีน้ำเงิน · หลายถุงคั่น + เช่น 43+36)'}</span>
+            </th>
+            <th className={`text-center px-0.5 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}><Tri label={FL.total} langs={langs} center /></th>
           </tr>
         </thead>
         <tbody>
-          {items.map((item, idx) => (
-            <tr key={item.code}>
-              <td className={`text-center px-1 ${cellPy} border border-slate-500 text-slate-400`}>{idx + 1}</td>
-              <td className={`text-center px-1 ${cellPy} border border-slate-500 font-mono font-bold bg-slate-50`}>{item.code}</td>
-              <td className={`px-1 ${cellPy} border border-slate-500`}>{item.name}</td>
-              <td className={`px-1 ${cellPy} border border-slate-500`}></td>
-              <td className={`px-1 ${cellPy} border border-slate-500`}><div className={compact ? 'min-h-[18px]' : 'min-h-[30px]'}></div></td>
-              <td className={`px-1 ${cellPy} border border-slate-500`}></td>
-            </tr>
+          {groups.map((g, gi) => (
+            <Fragment key={gi}>
+              {g.label && (
+                <tr className="blank-form-group">
+                  <td colSpan={colCount} className={`border-x border-slate-500 border-t-2 border-t-slate-700 bg-slate-100 font-semibold text-slate-700 px-1.5 ${compact ? 'py-0.5' : 'py-1'}`}>
+                    ▸ {g.label}
+                  </td>
+                </tr>
+              )}
+              {g.items.map(item => {
+                rowNo++
+                const my = myItemName(item)
+                return (
+                  <tr key={item.code}>
+                    <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-400`}>{rowNo}</td>
+                    <td className={`px-1 ${d.cellPy} border border-slate-500`}>
+                      <div className="flex items-start justify-between gap-1">
+                        <span className="min-w-0 leading-tight">
+                          {langs.includes('th') && <span className="block font-medium leading-tight">{item.name}</span>}
+                          {langs.includes('en') && item.nameEn && <span className="block opacity-60 leading-tight" style={{ fontSize: '0.82em' }}>{item.nameEn}</span>}
+                          {langs.includes('my') && my && <span className="block font-my opacity-60 leading-tight" style={{ fontSize: '0.82em' }}>{my}</span>}
+                        </span>
+                        <span className="flex-shrink-0 font-mono font-bold bg-slate-100 border border-slate-300 rounded px-1 leading-tight">{item.code}</span>
+                      </div>
+                    </td>
+                    <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>
+                    <td className={`px-1 ${d.cellPy} border border-slate-500`}><div className={compact ? 'min-h-[16px]' : 'min-h-[30px]'}></div></td>
+                    <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>
+                  </tr>
+                )
+              })}
+            </Fragment>
           ))}
+          {Array.from({ length: Math.max(0, extraRows) }).map((_, i) => {
+            rowNo++
+            return (
+              <tr key={`blank-${i}`}>
+                <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-300`}>{rowNo}</td>
+                <td className={`border border-slate-500 ${d.cellPy}`}></td>
+                <td className={`border border-slate-500 ${d.cellPy}`}></td>
+                <td className={`border border-slate-500 ${d.cellPy}`}></td>
+                <td className={`border border-slate-500 ${d.cellPy}`}></td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
-      <p className={`${compact ? 'text-[8px]' : 'text-[10px]'} text-slate-400 ${compact ? 'mb-2' : 'mb-4'}`}>💡 <span className="text-red-600 font-medium">นับส่ง=ปากกาแดง</span> · <span className="text-blue-600 font-medium">ต่อถุง=ปากกาน้ำเงิน</span> — ช่วยให้สแกนแม่นขึ้น</p>
+      <p className={`${compact ? 'text-[8px]' : 'text-[10px]'} text-slate-400 ${compact ? 'mb-2' : 'mb-4'}`}>
+        💡 <span className="text-red-600 font-medium">นับส่ง = ปากกาแดง</span> · <span className="text-blue-600 font-medium">ต่อถุง = ปากกาน้ำเงิน</span> — ช่วยให้สแกนแม่นขึ้น
+      </p>
 
       {/* Signatures */}
       <div className={`grid grid-cols-2 ${compact ? 'gap-6 mt-3' : 'gap-16 mt-8'} ${compact ? 'text-[9px]' : 'text-xs'} text-center`}>
         <div>
           <div className={`border-b border-slate-400 ${compact ? 'pb-4' : 'pb-8'} mb-1`}></div>
-          <p className="text-slate-500">ผู้ส่ง (Sender)</p>
+          <Tri label={FL.senderWash} langs={langs} center />
         </div>
         <div>
           <div className={`border-b border-slate-400 ${compact ? 'pb-4' : 'pb-8'} mb-1`}></div>
-          <p className="text-slate-500">ผู้รับ (Receiver)</p>
+          <Tri label={FL.receiverWash} langs={langs} center />
         </div>
       </div>
 

@@ -15,6 +15,7 @@ import BlankChecklistPrint from '@/components/BlankChecklistPrint'
 import ExportButtons from '@/components/ExportButtons'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { loadFormTemplates, saveFormTemplates, type FormTemplate } from '@/lib/form-template-service'
+import { DENSITY, type FormLang, type FormDensity } from '@/lib/form-i18n'
 import { Plus, X, FileText, Users, Check, Search, ArrowUpDown, ChevronUp, ChevronDown, Save, Trash2, BookMarked } from 'lucide-react'
 import type { LinenItemDef } from '@/types'
 
@@ -45,11 +46,17 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   const [itemSearch, setItemSearch] = useState('')
   const [itemCat, setItemCat] = useState('all')
   const [reorderMode, setReorderMode] = useState(false)
+  // 376 — Form Designer v3 controls
+  const [density, setDensity] = useState<FormDensity>('normal')   // 376.1 ความหนาแน่นแถว
+  const [extraRows, setExtraRows] = useState(0)                   // 376.3 แถวว่าง ad-hoc
+  const [showMy, setShowMy] = useState(true)                      // 376.4 ภาษาพม่า
+  const [grouped, setGrouped] = useState(true)                    // 376.5 จัดกลุ่มตามหมวด
+  const langs: FormLang[] = showMy ? ['th', 'en', 'my'] : ['th', 'en']
   // 375.1 — form templates (บันทึกฟอร์มกลาง → reuse)
   const [templates, setTemplates] = useState<FormTemplate[]>([])
   useEffect(() => { if (open) loadFormTemplates().then(setTemplates).catch(() => {}) }, [open])
 
-  const reset = () => { setCustomerId(''); setSheets([]); setActiveSheet(0); setShowCustomer(true); setShowDate(true); setPrintMode('a4-2up'); setItemSearch(''); setItemCat('all'); setReorderMode(false) }
+  const reset = () => { setCustomerId(''); setSheets([]); setActiveSheet(0); setShowCustomer(true); setShowDate(true); setPrintMode('a4-2up'); setItemSearch(''); setItemCat('all'); setReorderMode(false); setDensity('normal'); setExtraRows(0); setShowMy(true); setGrouped(true) }
   const handleClose = () => { reset(); onClose() }
 
   // items ที่เลือกได้ (จาก QT ลูกค้า หรือ catalog ทั้งหมดถ้าฟอร์มกลาง)
@@ -179,6 +186,35 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
             </div>
           </div>
 
+          {/* 376 v3 controls: density (376.1) + จัดกลุ่ม (376.5) + ภาษาพม่า (376.4) + แถวว่าง (376.3) */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs no-print bg-slate-50 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500">ความหนาแน่น:</span>
+              <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                {(['normal', 'compact', 'ultra'] as FormDensity[]).map(dk => (
+                  <button key={dk} onClick={() => setDensity(dk)}
+                    className={density === dk ? 'px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'px-2 py-1 text-slate-600 hover:bg-slate-50'}>
+                    {DENSITY[dk].label} <span className="text-[10px] opacity-60">≤{DENSITY[dk].rowsPerPage}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" checked={grouped} onChange={e => setGrouped(e.target.checked)} />
+              จัดกลุ่มตามหมวด
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" checked={showMy} onChange={e => setShowMy(e.target.checked)} />
+              ภาษาพม่า <span className="text-[10px] text-amber-600">(draft — verify)</span>
+            </label>
+            <div className="flex items-center gap-1 ml-auto">
+              <span className="text-slate-500">เพิ่มแถวว่าง:</span>
+              <button onClick={() => setExtraRows(n => Math.max(0, n - 1))} className="w-6 h-6 rounded border border-slate-200 hover:bg-slate-100 text-slate-600">−</button>
+              <span className="w-6 text-center font-medium">{extraRows}</span>
+              <button onClick={() => setExtraRows(n => Math.min(20, n + 1))} className="w-6 h-6 rounded border border-slate-200 hover:bg-slate-100 text-slate-600">+</button>
+            </div>
+          </div>
+
           {/* 375.1 — template bar (บันทึก/โหลดฟอร์มกลาง) */}
           <div className="flex flex-wrap items-center gap-1.5 text-xs no-print bg-[#1B3A5C]/5 rounded-lg px-3 py-2">
             <BookMarked className="w-3.5 h-3.5 text-[#1B3A5C] flex-shrink-0" />
@@ -274,7 +310,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
                 {printMode === 'a5' ? (
                   usableSheets.map(s => (
                     <div key={s.id} className="blank-a5-page bg-white mx-auto mb-3 shadow-sm print:shadow-none print:mb-0" style={{ width: '148mm' }}>
-                      <FormComp customer={cust} company={companyInfo} items={sheetItems(s)} date={todayISO()} showCustomer={showCustomer} showDate={showDate} sheetTitle={s.title} compact id={`bf-${s.id}`} />
+                      <FormComp customer={cust} company={companyInfo} items={sheetItems(s)} date={todayISO()} showCustomer={showCustomer} showDate={showDate} sheetTitle={s.title} compact id={`bf-${s.id}`} langs={langs} density={density} extraRows={extraRows} grouped={grouped} categories={linenCategories} />
                     </div>
                   ))
                 ) : (
@@ -282,7 +318,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
                     <div key={pi} className="blank-a4-2up-page flex bg-white mx-auto mb-3 shadow-sm print:shadow-none print:mb-0" style={{ width: '297mm' }}>
                       {pair.map(s => (
                         <div key={s.id} className="blank-a5-half" style={{ width: '148.5mm', borderRight: '1px dashed #94a3b8' }}>
-                          <FormComp customer={cust} company={companyInfo} items={sheetItems(s)} date={todayISO()} showCustomer={showCustomer} showDate={showDate} sheetTitle={s.title} compact id={`bf-${s.id}`} />
+                          <FormComp customer={cust} company={companyInfo} items={sheetItems(s)} date={todayISO()} showCustomer={showCustomer} showDate={showDate} sheetTitle={s.title} compact id={`bf-${s.id}`} langs={langs} density={density} extraRows={extraRows} grouped={grouped} categories={linenCategories} />
                         </div>
                       ))}
                       {pair.length === 1 && <div style={{ width: '148.5mm' }} className="flex items-center justify-center text-slate-300 text-xs">(ฉีกครึ่ง — ครึ่งนี้ว่าง)</div>}
