@@ -127,7 +127,7 @@ export default function BlankChecklistPrint({
           <col style={{ width: COL_W.total }} />
         </colgroup>
         <thead>
-          <tr className="bg-[#e8eef5] align-bottom">
+          <tr className="align-bottom">
             <th className={`text-center px-0.5 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}><Tri label={FL.no} langs={langs} center /></th>
             <th className={`text-left px-1 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}><Tri label={FL.item} langs={langs} /></th>
             <th className={`text-center px-0.5 ${compact ? 'py-1' : 'py-2'} border border-slate-500`}>
@@ -146,7 +146,7 @@ export default function BlankChecklistPrint({
             <Fragment key={gi}>
               {g.label && (
                 <tr className="blank-form-group">
-                  <td colSpan={colCount} className={`border-x border-slate-500 border-t-2 border-t-slate-700 bg-slate-100 font-semibold text-slate-700 px-1.5 ${compact ? 'py-0.5' : 'py-1'}`}>
+                  <td colSpan={colCount} className={`border-x border-slate-500 border-t-2 border-t-slate-700 font-semibold text-slate-700 px-1.5 ${compact ? 'py-0.5' : 'py-1'}`}>
                     ▸ {g.label}
                   </td>
                 </tr>
@@ -164,7 +164,7 @@ export default function BlankChecklistPrint({
                           {langs.includes('en') && item.nameEn && <span className="block opacity-60 leading-tight" style={{ fontSize: '0.82em' }}>{item.nameEn}</span>}
                           {langs.includes('my') && my && <span className="block font-my opacity-60 leading-tight" style={{ fontSize: '0.82em' }}>{my}</span>}
                         </span>
-                        <span className="flex-shrink-0 font-mono font-bold bg-slate-100 border border-slate-300 rounded px-1 leading-tight">{item.code}</span>
+                        <span className="flex-shrink-0 font-mono font-bold border border-slate-400 rounded px-1 leading-tight">{item.code}</span>
                       </div>
                     </td>
                     <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>

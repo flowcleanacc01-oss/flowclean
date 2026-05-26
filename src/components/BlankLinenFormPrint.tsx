@@ -33,13 +33,14 @@ interface Props {
 // 379/380.4 — column widths (รวม 100%) · ลูกค้านับส่ง กว้างสุด, แพคส่ง รอง · รายการ แคบลง (28→23)
 // 379 — เรียงตาม flow ในโปรแกรม: ลูกค้านับผ้ากลับ (Washed return) ย้ายไปขวาสุด
 const COL_W = { no: '4%', item: '23%' }
-const DATA_COLS: { num: number; label: TriLabel; w: string; emphasize?: boolean }[] = [
-  { num: 1, label: FL.sendNormal,       w: '21%', emphasize: true },  // ลูกค้านับส่ง (breakdown — กว้างสุด)
+// 382 — เน้นคอลัมน์สำคัญด้วย "ความกว้าง" ไม่ใช่สีพื้น (ถ่ายเอกสารต่อกันแล้วสีไม่เข้มกลบตัวเลข)
+const DATA_COLS: { num: number; label: TriLabel; w: string }[] = [
+  { num: 1, label: FL.sendNormal,       w: '21%' },  // ลูกค้านับส่ง (breakdown — กว้างสุด)
   { num: 2, label: FL.sendClaim,        w: '8%' },
   { num: 3, label: FL.countedIn,        w: '8%' },
-  { num: 4, label: FL.packDeliver,      w: '16%', emphasize: true },  // โรงซักแพคส่ง (รอง)
+  { num: 4, label: FL.packDeliver,      w: '16%' },  // โรงซักแพคส่ง (รอง)
   { num: 5, label: FL.noteRemainReturn, w: '12%' },
-  { num: 6, label: FL.washedReturn,     w: '8%' },                    // 379 — ลูกค้านับผ้ากลับ ขวาสุด
+  { num: 6, label: FL.washedReturn,     w: '8%' },   // 379 — ลูกค้านับผ้ากลับ ขวาสุด
 ]
 
 // trilingual stack: ไทย (เด่น) / อังกฤษ (รอง) / พม่า (.font-my ถ้ามี)
@@ -144,11 +145,11 @@ export default function BlankLinenFormPrint({
         </colgroup>
         <thead>
           {/* 380.3 เอาแถว (ลูกค้ากรอก) ออก · 380.5 header row เตี้ยลง (py-0.5 + leading-none) */}
-          <tr className="bg-[#e8eef5] text-[#1B3A5C] align-bottom leading-none">
+          <tr className="text-[#1B3A5C] align-bottom leading-none">
             <th className={`text-center px-0.5 ${compact ? 'py-0.5' : 'py-1.5'} border border-slate-500`}><Tri label={FL.no} langs={langs} center /></th>
             <th className={`text-left px-1 ${compact ? 'py-0.5' : 'py-1.5'} border border-slate-500`}><Tri label={FL.item} langs={langs} /></th>
             {DATA_COLS.map(c => (
-              <th key={c.num} className={cn('text-center px-0.5 border border-slate-500', compact ? 'py-0.5' : 'py-1.5', c.emphasize && 'bg-[#d9e4f0]')}>
+              <th key={c.num} className={cn('text-center px-0.5 border border-slate-500', compact ? 'py-0.5' : 'py-1.5')}>
                 <span className="block text-[0.8em] opacity-60">{c.num}</span>
                 <Tri label={c.label} langs={langs} center />
               </th>
@@ -161,7 +162,7 @@ export default function BlankLinenFormPrint({
               {/* 376.5 — หัวกลุ่ม + เส้นหนาคั่น */}
               {g.label && (
                 <tr className="blank-form-group">
-                  <td colSpan={colCount} className={`border-x border-slate-500 border-t-2 border-t-slate-700 bg-slate-100 font-semibold text-slate-700 px-1.5 ${compact ? 'py-0.5' : 'py-1'}`}>
+                  <td colSpan={colCount} className={`border-x border-slate-500 border-t-2 border-t-slate-700 font-semibold text-slate-700 px-1.5 ${compact ? 'py-0.5' : 'py-1'}`}>
                     ▸ {g.label}
                   </td>
                 </tr>
@@ -179,10 +180,10 @@ export default function BlankLinenFormPrint({
                           {langs.includes('en') && item.nameEn && <span className="block opacity-60 leading-tight" style={{ fontSize: '0.82em' }}>{item.nameEn}</span>}
                           {langs.includes('my') && my && <span className="block font-my opacity-60 leading-tight" style={{ fontSize: '0.82em' }}>{my}</span>}
                         </span>
-                        <span className="flex-shrink-0 font-mono font-bold bg-slate-100 border border-slate-300 rounded px-1 leading-tight">{item.code}</span>
+                        <span className="flex-shrink-0 font-mono font-bold border border-slate-400 rounded px-1 leading-tight">{item.code}</span>
                       </div>
                     </td>
-                    {DATA_COLS.map(c => <td key={c.num} className={cn('border border-slate-500', c.emphasize && 'bg-slate-50/60')}></td>)}
+                    {DATA_COLS.map(c => <td key={c.num} className="border border-slate-500"></td>)}
                   </tr>
                 )
               })}
@@ -195,7 +196,7 @@ export default function BlankLinenFormPrint({
               <tr key={`blank-${i}`}>
                 <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-300`}>{rowNo}</td>
                 <td className={`border border-slate-500 ${d.cellPy}`}></td>
-                {DATA_COLS.map(c => <td key={c.num} className={cn('border border-slate-500', c.emphasize && 'bg-slate-50/60')}></td>)}
+                {DATA_COLS.map(c => <td key={c.num} className="border border-slate-500"></td>)}
               </tr>
             )
           })}
