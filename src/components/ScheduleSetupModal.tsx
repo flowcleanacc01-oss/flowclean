@@ -10,6 +10,7 @@ import {
   type Customer, type ScheduleType,
 } from '@/types'
 import { detectSchedulePattern } from '@/lib/schedule-pattern'
+import { nthOccurrenceDate } from '@/lib/schedule-audit'
 
 interface Props {
   open: boolean
@@ -29,6 +30,12 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
   // P2.4 — additional fields for new schedule types
   const [scheduleEveryNDays, setScheduleEveryNDays] = useState<number>(customer.scheduleEveryNDays || 2)
   const [scheduleBiweeklyAnchorWeek, setScheduleBiweeklyAnchorWeek] = useState<0 | 1>(customer.scheduleBiweeklyAnchorWeek ?? 0)
+  // 377 — เงื่อนไขสิ้นสุด (never / on_date / after_count)
+  const [endMode, setEndMode] = useState<'never' | 'on_date' | 'after_count'>(
+    customer.scheduleEndCount ? 'after_count' : customer.scheduleEndDate ? 'on_date' : 'never',
+  )
+  const [scheduleEndDate, setScheduleEndDate] = useState<string>(customer.scheduleEndDate || '')
+  const [scheduleEndCount, setScheduleEndCount] = useState<number>(customer.scheduleEndCount || 10)
   const [aiSuggestion, setAiSuggestion] = useState<ReturnType<typeof detectSchedulePattern> | null>(null)
 
   const customerDNs = useMemo(
@@ -62,15 +69,32 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
     (scheduleType === 'every_n_days' && scheduleEveryNDays >= 1 && !!scheduleStartDate) ||
     (scheduleType === 'biweekly' && scheduleDays.length > 0 && !!scheduleStartDate)
 
+  // 377 — preview วันสิ้นสุดเมื่อเลือก "หลัง N ครั้ง"
+  const computedEndFromCount = useMemo(
+    () => endMode === 'after_count'
+      ? nthOccurrenceDate({ scheduleType, scheduleDays, scheduleStartDate, scheduleEveryNDays, scheduleBiweeklyAnchorWeek }, scheduleEndCount)
+      : null,
+    [endMode, scheduleType, scheduleDays, scheduleStartDate, scheduleEveryNDays, scheduleBiweeklyAnchorWeek, scheduleEndCount],
+  )
+
   const handleSave = () => {
     if (!canSave) return
     const needsWeekdays = scheduleType === 'weekly' || scheduleType === 'biweekly'
+    // 377 — resolve end condition → เก็บ scheduleEndDate (authoritative) + scheduleEndCount (display hint)
+    let endDate: string | undefined
+    let endCount: number | undefined
+    if (scheduleType !== 'none') {
+      if (endMode === 'on_date' && scheduleEndDate) endDate = scheduleEndDate
+      else if (endMode === 'after_count') { endCount = scheduleEndCount; endDate = computedEndFromCount ?? undefined }
+    }
     updateCustomer(customer.id, {
       scheduleType,
       scheduleDays: needsWeekdays ? scheduleDays : [],
       scheduleStartDate: scheduleType === 'none' ? undefined : scheduleStartDate,
       scheduleEveryNDays: scheduleType === 'every_n_days' ? scheduleEveryNDays : undefined,
       scheduleBiweeklyAnchorWeek: scheduleType === 'biweekly' ? scheduleBiweeklyAnchorWeek : undefined,
+      scheduleEndDate: endDate,
+      scheduleEndCount: endCount,
       scheduleNote,
     })
     onClose()
@@ -290,6 +314,54 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
             <p className="text-xs text-slate-500 mt-1">
               ไม่จำเป็นต้องเป็นวันแรกจริง — เช่นเดือนที่กำลัง key ข้อมูลก็ได้ Audit จะเริ่มเช็คจากวันนี้เป็นต้นไป
             </p>
+          </div>
+        )}
+
+        {/* 377 — เงื่อนไขสิ้นสุด (เหมือน Google Calendar recurrence end) */}
+        {scheduleType !== 'none' && (
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">สิ้นสุด</label>
+            <div className="space-y-2.5">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="endmode" checked={endMode === 'never'} onChange={() => setEndMode('never')} className="accent-[#3DD8D8]" />
+                <span className="text-sm text-slate-700">ไม่หยุด</span>
+                <span className="text-xs text-slate-400">(วิ่งต่อเนื่อง — default)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer flex-wrap">
+                <input type="radio" name="endmode" checked={endMode === 'on_date'} onChange={() => setEndMode('on_date')} className="accent-[#3DD8D8]" />
+                <span className="text-sm text-slate-700">ในวันที่</span>
+                <input
+                  type="date"
+                  value={scheduleEndDate}
+                  min={scheduleStartDate}
+                  onChange={e => { setScheduleEndDate(e.target.value); setEndMode('on_date') }}
+                  className="rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:border-[#3DD8D8] focus:ring-2 focus:ring-[#3DD8D8]/30"
+                />
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="endmode" checked={endMode === 'after_count'} onChange={() => setEndMode('after_count')} className="accent-[#3DD8D8]" />
+                <span className="text-sm text-slate-700">หลังจากเกิด</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={999}
+                  value={scheduleEndCount}
+                  onChange={e => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v >= 1) { setScheduleEndCount(v); setEndMode('after_count') } }}
+                  className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm text-center font-mono focus:outline-none focus:border-[#3DD8D8] focus:ring-2 focus:ring-[#3DD8D8]/30"
+                />
+                <span className="text-sm text-slate-700">ครั้ง</span>
+              </label>
+            </div>
+            {endMode === 'after_count' && (
+              <p className="text-xs text-slate-500 mt-1.5">
+                {computedEndFromCount
+                  ? <>ครั้งสุดท้าย ≈ <span className="font-medium text-slate-600">{computedEndFromCount}</span> (ระบบแปลงเป็นวันสิ้นสุดให้อัตโนมัติ)</>
+                  : 'คำนวณวันสิ้นสุดไม่ได้ — ตรวจวันเริ่ม/ประเภทคิว'}
+              </p>
+            )}
+            {endMode === 'on_date' && !scheduleEndDate && (
+              <p className="text-xs text-amber-600 mt-1.5">เลือกวันสิ้นสุด (ไม่งั้นจะถือว่า "ไม่หยุด")</p>
+            )}
           </div>
         )}
 

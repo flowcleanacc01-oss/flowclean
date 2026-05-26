@@ -13,7 +13,7 @@ import {
   type LogisticsCell, type LogisticsRow,
 } from '@/lib/logistics-week'
 import { todayISO, genId, cn, formatExportFilename } from '@/lib/utils'
-import { WEEKDAY_SHORT, SCHEDULE_TYPE_CONFIG, type DeliveryNote, type ScheduleOverride } from '@/types'
+import { WEEKDAY_SHORT, SCHEDULE_TYPE_CONFIG, type DeliveryNote, type ScheduleOverride, type Customer } from '@/types'
 import { canViewSD } from '@/lib/permissions'
 import Modal from '@/components/Modal'
 import RouteSheetPrint, { type RouteStop } from '@/components/RouteSheetPrint'
@@ -21,7 +21,7 @@ import ExportButtons from '@/components/ExportButtons'
 import {
   ChevronLeft, ChevronRight, CalendarDays, Truck, Plus, AlertOctagon,
   AlertTriangle, CheckCircle2, ArrowRight, Ban, Info, ClipboardCheck, CornerUpRight, CornerDownRight,
-  ChevronUp, ChevronDown, GripVertical, ListOrdered,
+  ChevronUp, ChevronDown, GripVertical, ListOrdered, X, CalendarX, Trash2,
 } from 'lucide-react'
 
 const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
@@ -59,10 +59,19 @@ interface ReschedAction {
   addedOverrideIds: string[]                                     // ที่เพิ่ง add → undo: delete
   deletedOverrides: ScheduleOverride[]                           // ที่เพิ่ง delete → undo: re-add
   movedSDs: { id: string; noteNumber: string; fromDate: string }[] // SD ที่ย้าย → undo: ย้ายกลับ
+  customerRestore?: { id: string; prev: Partial<Customer> }      // 378 — undo: คืนค่า schedule fields
+}
+
+// 378 — ลบ chip → เลือก scope (เหมือน Google Calendar)
+interface PendingDelete {
+  customerId: string
+  customerName: string
+  date: string
+  hasSD: boolean
 }
 
 export default function LogisticsPage() {
-  const { currentUser, customers, deliveryNotes, scheduleOverrides, updateDeliveryNote, addScheduleOverride, deleteScheduleOverride, routePlans, setRouteOrder, companyInfo } = useStore()
+  const { currentUser, customers, deliveryNotes, scheduleOverrides, updateDeliveryNote, addScheduleOverride, deleteScheduleOverride, updateCustomer, routePlans, setRouteOrder, companyInfo } = useStore()
   const router = useRouter()
 
   const today = todayISO()
@@ -77,6 +86,7 @@ export default function LogisticsPage() {
   const [pending, setPending] = useState<PendingReschedule | null>(null)
   const [reason, setReason] = useState('')
   const [lastAction, setLastAction] = useState<ReschedAction | null>(null)  // 371 — undo
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)  // 378
 
   const week = useMemo(
     () => buildLogisticsWeek(customers, deliveryNotes, scheduleOverrides, anchor, today),
@@ -188,13 +198,66 @@ export default function LogisticsPage() {
     setPending(null)
   }
 
-  // 371 — เลิกทำ reschedule ล่าสุด (reverse ทุก operation)
+  // 371 — เลิกทำ action ล่าสุด (reverse ทุก operation)
   const undoReschedule = () => {
     if (!lastAction) return
     lastAction.addedOverrideIds.forEach(id => deleteScheduleOverride(id))
     lastAction.deletedOverrides.forEach(o => addScheduleOverride({ customerId: o.customerId, date: o.date, type: o.type, reason: o.reason, rescheduledLinkId: o.rescheduledLinkId }))
     lastAction.movedSDs.forEach(m => updateDeliveryNote(m.id, { date: m.fromDate }))
+    if (lastAction.customerRestore) updateCustomer(lastAction.customerRestore.id, lastAction.customerRestore.prev)  // 378
     setLastAction(null)
+  }
+
+  // ── 378 — ลบ chip (เลือก scope เหมือน Google Calendar) ──
+  const askDelete = (row: LogisticsRow, cell: LogisticsCell) => {
+    setPendingDelete({
+      customerId: row.customer.id,
+      customerName: row.customer.shortName || row.customer.name,
+      date: cell.date,
+      hasSD: cell.regularSDs.length > 0,
+    })
+  }
+
+  // เฉพาะกิจกรรมนี้ = skip override วันนั้น (371 cancel-opposite: ลบ add/extra ที่ค้างก่อน)
+  const deleteThisOnly = () => {
+    if (!pendingDelete) return
+    const { customerId, date, customerName } = pendingDelete
+    const oppOv = scheduleOverrides.find(o => o.customerId === customerId && o.date === date && (o.type === 'reschedule_add' || o.type === 'extra'))
+    const deletedOverrides: ScheduleOverride[] = []
+    if (oppOv) { deleteScheduleOverride(oppOv.id); deletedOverrides.push(oppOv) }
+    const o = addScheduleOverride({ customerId, date, type: 'skip', reason: 'ลูกค้ายกเลิก/ข้ามคิววันนี้' })
+    setLastAction({ label: `${customerName}: ข้ามคิว ${fmtShort(date)}`, addedOverrideIds: [o.id], deletedOverrides, movedSDs: [] })
+    setPendingDelete(null)
+  }
+
+  // กิจกรรมนี้และที่ตามมาทั้งหมด = ตั้ง scheduleEndDate = วันก่อนหน้า chip นี้
+  const deleteThisAndFollowing = () => {
+    if (!pendingDelete) return
+    const { customerId, date, customerName } = pendingDelete
+    const cust = customers.find(c => c.id === customerId)
+    const prev: Partial<Customer> = { scheduleEndDate: cust?.scheduleEndDate, scheduleEndCount: cust?.scheduleEndCount }
+    const newEnd = addDays(date, -1)
+    updateCustomer(customerId, { scheduleEndDate: newEnd, scheduleEndCount: undefined })
+    setLastAction({ label: `${customerName}: สิ้นสุดคิวที่ ${fmtShort(newEnd)}`, addedOverrideIds: [], deletedOverrides: [], movedSDs: [], customerRestore: { id: customerId, prev } })
+    setPendingDelete(null)
+  }
+
+  // ทั้งหมด = เปลี่ยนเป็น "ไม่ตั้งคิว" (เก็บ prev ไว้ undo)
+  const deleteAllSchedule = () => {
+    if (!pendingDelete) return
+    const { customerId, customerName } = pendingDelete
+    const cust = customers.find(c => c.id === customerId)
+    const prev: Partial<Customer> = {
+      scheduleType: cust?.scheduleType, scheduleDays: cust?.scheduleDays, scheduleStartDate: cust?.scheduleStartDate,
+      scheduleEveryNDays: cust?.scheduleEveryNDays, scheduleBiweeklyAnchorWeek: cust?.scheduleBiweeklyAnchorWeek,
+      scheduleEndDate: cust?.scheduleEndDate, scheduleEndCount: cust?.scheduleEndCount,
+    }
+    updateCustomer(customerId, {
+      scheduleType: 'none', scheduleDays: [], scheduleStartDate: undefined,
+      scheduleEveryNDays: undefined, scheduleBiweeklyAnchorWeek: undefined, scheduleEndDate: undefined, scheduleEndCount: undefined,
+    })
+    setLastAction({ label: `${customerName}: ลบตารางคิวทั้งหมด`, addedOverrideIds: [], deletedOverrides: [], movedSDs: [], customerRestore: { id: customerId, prev } })
+    setPendingDelete(null)
   }
 
   // ── route reorder (day-detail) ──
@@ -377,6 +440,7 @@ export default function LogisticsPage() {
                           onDragEnd={onDragEnd}
                           onCreate={() => goCreate(row.customer.id, cell.date)}
                           onView={goDetail}
+                          onDelete={cell.baseScheduled && cell.status !== 'skipped' ? () => askDelete(row, cell) : undefined}
                         />
                       </td>
                     )
@@ -408,6 +472,41 @@ export default function LogisticsPage() {
           <button type="button" onClick={() => setLastAction(null)} className="text-white/50 hover:text-white flex-shrink-0" aria-label="ปิด">✕</button>
         </div>
       )}
+
+      {/* 378 — ลบ/ยกเลิกคิว (เลือก scope เหมือน Google Calendar) */}
+      <Modal open={!!pendingDelete} onClose={() => setPendingDelete(null)} title="ยกเลิก / ลบคิว" size="md" closeLabel="cancel">
+        {pendingDelete && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              <span className="font-semibold text-[#1B3A5C]">{pendingDelete.customerName}</span>
+              {' · คิววันที่ '}
+              <span className="font-semibold text-[#1B3A5C]">{fmtFull(pendingDelete.date)}</span>
+            </p>
+            {pendingDelete.hasSD && (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                ⚠ วันนี้มีใบส่งของ (SD) อยู่แล้ว — &quot;ข้ามคิว&quot; เป็นการบันทึกเชิงข้อมูล ไม่ได้ลบ SD (ลบ SD ทำที่หน้าใบส่งของ)
+              </div>
+            )}
+            <div className="space-y-2">
+              <button type="button" onClick={deleteThisOnly}
+                className="w-full text-left rounded-lg border border-slate-200 px-4 py-3 hover:border-[#3DD8D8] hover:bg-[#3DD8D8]/5 transition-colors">
+                <div className="font-semibold text-sm text-[#1B3A5C] flex items-center gap-2"><Ban className="w-4 h-4 text-amber-500" />เฉพาะกิจกรรมนี้</div>
+                <div className="text-xs text-slate-500 mt-0.5">ลูกค้ายกเลิก/ข้ามเฉพาะวันนี้ — คิววันอื่นเหมือนเดิม</div>
+              </button>
+              <button type="button" onClick={deleteThisAndFollowing}
+                className="w-full text-left rounded-lg border border-slate-200 px-4 py-3 hover:border-[#3DD8D8] hover:bg-[#3DD8D8]/5 transition-colors">
+                <div className="font-semibold text-sm text-[#1B3A5C] flex items-center gap-2"><CalendarX className="w-4 h-4 text-purple-500" />กิจกรรมนี้และที่ตามมาทั้งหมด</div>
+                <div className="text-xs text-slate-500 mt-0.5">สิ้นสุดคิวตั้งแต่วันนี้เป็นต้นไป (= ตั้งวันสิ้นสุด {fmtShort(addDays(pendingDelete.date, -1))})</div>
+              </button>
+              <button type="button" onClick={() => { if (window.confirm('ลบตารางคิวทั้งหมดของลูกค้านี้? (เปลี่ยนเป็น "ไม่ตั้งคิว")')) deleteAllSchedule() }}
+                className="w-full text-left rounded-lg border border-red-200 px-4 py-3 hover:border-red-400 hover:bg-red-50 transition-colors">
+                <div className="font-semibold text-sm text-red-700 flex items-center gap-2"><Trash2 className="w-4 h-4" />กิจกรรมทั้งหมด</div>
+                <div className="text-xs text-slate-500 mt-0.5">ลบตารางคิวทั้งหมดของลูกค้านี้ (เปลี่ยนเป็น &quot;ไม่ตั้งคิว&quot;)</div>
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Reschedule confirm modal */}
       <Modal open={!!pending} onClose={() => setPending(null)} title="ยืนยันการเลื่อนคิว" size="md" closeLabel="cancel">
@@ -557,7 +656,7 @@ export default function LogisticsPage() {
 
 // ── Cell chip ──
 function CellChip({
-  cell, today, draggable, onDragStart, onDragEnd, onCreate, onView,
+  cell, today, draggable, onDragStart, onDragEnd, onCreate, onView, onDelete,
 }: {
   cell: LogisticsCell
   today: string
@@ -566,6 +665,7 @@ function CellChip({
   onDragEnd: () => void
   onCreate: () => void
   onView: (id: string) => void
+  onDelete?: () => void          // 378 — ลบ/ยกเลิกคิว (เฉพาะวันคิวจริง)
 }) {
   const hasRescheduleSkip = cell.overrides.some(o => o.type === 'reschedule_skip')
   const hasRescheduleAdd = cell.overrides.some(o => o.type === 'reschedule_add')
@@ -635,27 +735,41 @@ function CellChip({
   }
 
   return (
-    <button
-      type="button"
-      draggable={draggable}
-      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', cell.date); onDragStart() }}
-      onDragEnd={onDragEnd}
-      onClick={onClick}
-      disabled={!onClick && !draggable}
-      title={title}
-      className={cn(
-        'relative w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border text-[12px] font-medium transition-colors',
-        cls,
-        draggable && 'cursor-grab active:cursor-grabbing',
-        !onClick && !draggable && 'cursor-default',
+    <span className="relative block w-full group/chip">
+      <button
+        type="button"
+        draggable={draggable}
+        onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', cell.date); onDragStart() }}
+        onDragEnd={onDragEnd}
+        onClick={onClick}
+        disabled={!onClick && !draggable}
+        title={title}
+        className={cn(
+          'relative w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border text-[12px] font-medium transition-colors',
+          cls,
+          draggable && 'cursor-grab active:cursor-grabbing',
+          !onClick && !draggable && 'cursor-default',
+        )}
+      >
+        {Icon && <Icon className="w-3.5 h-3.5 flex-shrink-0" />}
+        <span className="truncate">{label}</span>
+        {hasRescheduleAdd && cell.status !== 'skipped' && (
+          <CornerDownRight className="w-3 h-3 text-indigo-500 absolute -top-1 -right-1" aria-label="เลื่อนเข้า" />
+        )}
+      </button>
+      {/* 378 — ปุ่มลบ/ยกเลิกคิว (มุมซ้ายบน · subtle, เด่นตอน hover · แตะได้บน tablet) */}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onDelete() }}
+          title="ยกเลิก / ลบคิว"
+          aria-label="ยกเลิก / ลบคิว"
+          className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-white border border-slate-300 text-slate-400 shadow-sm flex items-center justify-center opacity-50 hover:opacity-100 hover:bg-red-50 hover:text-red-600 hover:border-red-300 group-hover/chip:opacity-100 transition-opacity z-10"
+        >
+          <X className="w-3 h-3" />
+        </button>
       )}
-    >
-      {Icon && <Icon className="w-3.5 h-3.5 flex-shrink-0" />}
-      <span className="truncate">{label}</span>
-      {hasRescheduleAdd && cell.status !== 'skipped' && (
-        <CornerDownRight className="w-3 h-3 text-indigo-500 absolute -top-1 -right-1" aria-label="เลื่อนเข้า" />
-      )}
-    </button>
+    </span>
   )
 }
 

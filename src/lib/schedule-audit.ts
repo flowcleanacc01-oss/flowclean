@@ -75,13 +75,16 @@ function daysBetween(fromIso: string, toIso: string): number {
   return Math.round(diffMs / (1000 * 60 * 60 * 24))
 }
 
+type ScheduleShape = Pick<Customer, 'scheduleType' | 'scheduleDays' | 'scheduleStartDate' | 'scheduleEveryNDays' | 'scheduleBiweeklyAnchorWeek' | 'scheduleEndDate'>
+
 export function isScheduledDay(
   date: string,
-  customer: Pick<Customer, 'scheduleType' | 'scheduleDays' | 'scheduleStartDate' | 'scheduleEveryNDays' | 'scheduleBiweeklyAnchorWeek'>,
+  customer: ScheduleShape,
 ): boolean {
-  const { scheduleType, scheduleDays, scheduleStartDate, scheduleEveryNDays, scheduleBiweeklyAnchorWeek } = customer
+  const { scheduleType, scheduleDays, scheduleStartDate, scheduleEveryNDays, scheduleBiweeklyAnchorWeek, scheduleEndDate } = customer
   if (scheduleType === 'none' || !scheduleType) return false
   if (scheduleStartDate && date < scheduleStartDate) return false
+  if (scheduleEndDate && date > scheduleEndDate) return false  // 377 — เลยวันสิ้นสุด → หยุด
 
   if (scheduleType === 'daily') return true
 
@@ -112,6 +115,28 @@ export function isScheduledDay(
   }
 
   return false
+}
+
+/**
+ * 377 — หา ISO date ของ occurrence ครั้งที่ n (1-based) นับจาก scheduleStartDate
+ * ใช้แปลง "สิ้นสุดหลัง N ครั้ง" → scheduleEndDate ตอนเซฟ
+ * ⚠️ ละเว้น scheduleEndDate ใน customer (ป้องกัน self-limit ตอนคำนวณ)
+ * คืน null ถ้าไม่มี start / type none / n<1 / หาไม่เจอภายใน ~10 ปี (guard)
+ */
+export function nthOccurrenceDate(customer: ScheduleShape, n: number): string | null {
+  if (n < 1 || !customer.scheduleType || customer.scheduleType === 'none' || !customer.scheduleStartDate) return null
+  const probe: ScheduleShape = { ...customer, scheduleEndDate: undefined } // ไม่ให้ end จำกัดการนับ
+  const cur = parseLocalDate(customer.scheduleStartDate)
+  let count = 0
+  for (let i = 0; i < 3660; i++) {            // guard ~10 ปี กันลูปไม่จบ
+    const iso = toLocalISO(cur)
+    if (isScheduledDay(iso, probe)) {
+      count++
+      if (count === n) return iso
+    }
+    cur.setDate(cur.getDate() + 1)
+  }
+  return null
 }
 
 export function runScheduleAudit(

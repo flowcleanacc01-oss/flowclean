@@ -26,11 +26,10 @@ export function addDays(iso: string, n: number): string {
   return toLocalISO(d)
 }
 
-/** Monday-based week start สำหรับวันที่ใดๆ ในสัปดาห์ */
+/** Sunday-based week start (378.1 — ให้ตรงหน้าตั้งค่าตารางคิวที่แสดงอาทิตย์เป็นคอลัมน์แรก) */
 export function getWeekStart(iso: string): string {
   const d = parseLocalDate(iso)
-  const back = (d.getDay() + 6) % 7 // Sun(0)→6, Mon(1)→0, Tue(2)→1 ...
-  d.setDate(d.getDate() - back)
+  d.setDate(d.getDate() - d.getDay()) // Sun(0)→0, Mon(1)→1 ... Sat(6)→6 — ถอยถึงอาทิตย์
   return toLocalISO(d)
 }
 
@@ -52,7 +51,7 @@ export interface LogisticsCell {
 
 export interface LogisticsRow {
   customer: Customer
-  cells: LogisticsCell[]          // length 7 (Mon..Sun)
+  cells: LogisticsCell[]          // length 7 (Sun..Sat) — 378.1
   weekMissing: number             // missing บนวันที่ <= วันนี้ (ของจริงที่ขาด)
   weekSDs: number                 // จำนวน regular SD ทั้งสัปดาห์
 }
@@ -118,7 +117,8 @@ export function buildLogisticsWeek(
     overridesByCustomer.get(o.customerId)!.push(o)
   }
 
-  const scheduledCustomers = customers.filter(c => c.scheduleType && c.scheduleType !== 'none')
+  // 377 — filter isActive (ให้ตรงกับ Schedule Audit · ปิดลูกค้า = หายจากปฏิทินด้วย)
+  const scheduledCustomers = customers.filter(c => c.scheduleType && c.scheduleType !== 'none' && c.isActive)
 
   const rows: LogisticsRow[] = []
   let totScheduled = 0, totSDs = 0, totExtra = 0, totMissing = 0, totUpcoming = 0

@@ -218,6 +218,11 @@ export interface Customer {
   scheduleStartDate?: string // ISO date
   scheduleEveryNDays?: number
   scheduleBiweeklyAnchorWeek?: 0 | 1
+  // 377 — เงื่อนไขสิ้นสุด (เหมือน Google Calendar recurrence end)
+  // scheduleEndDate: schedule วิ่งถึงวันนี้ (inclusive) แล้วหยุด · undefined = ไม่หยุด (default)
+  // scheduleEndCount: display hint "สิ้นสุดหลัง N ครั้ง" — แปลงเป็น scheduleEndDate ตอนเซฟ
+  scheduleEndDate?: string
+  scheduleEndCount?: number
   scheduleNote?: string
   // 317 Phase 1 — Aggregate Size Groups (per-customer opt-in)
   // ลูกค้า opt-in รายตัวว่า size group ไหน "นับรวมไซส์" บ้าง

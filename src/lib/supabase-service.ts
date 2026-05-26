@@ -69,6 +69,8 @@ const FIELD_MAP: Record<string, string> = {
   scheduleNote: 'schedule_note',                  // 311
   scheduleEveryNDays: 'schedule_every_n_days',    // 311 P2.1
   scheduleBiweeklyAnchorWeek: 'schedule_biweekly_anchor_week', // 311 P2.1
+  scheduleEndDate: 'schedule_end_date',           // 377
+  scheduleEndCount: 'schedule_end_count',         // 377
   rescheduledLinkId: 'rescheduled_link_id',       // 311 P2.1 (ScheduleOverride)
   isExtraRound: 'is_extra_round',                 // 311
   orderedCustomerIds: 'ordered_customer_ids',     // P5.2 (RoutePlan)
