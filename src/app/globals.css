@@ -126,14 +126,16 @@ input[type="number"] {
   /* 374 — Form Generator: page breaks สำหรับ A4 2-up / A5 เดี่ยว
    * @page size (A4 landscape / A5 portrait) ถูก inject โดย print-utils ตาม printMode */
   .blank-a4-2up-page, .blank-a5-page {
-    page-break-after: always;
-    break-after: page;
     box-shadow: none !important;
     margin: 0 !important;
     width: 100% !important;            /* เต็มพื้นที่พิมพ์ (A4 landscape หรือ A5) */
+    break-inside: avoid; page-break-inside: avoid;   /* 376: เก็บแต่ละหน้าให้อยู่แผ่นเดียว */
   }
-  .blank-a4-2up-page:last-child, .blank-a5-page:last-child {
-    page-break-after: auto; break-after: auto;
+  /* 376 — break BEFORE หน้าถัดๆ ไป (ไม่ใช่ after หน้าสุดท้าย) → กันหน้าเปล่าท้ายสุด
+   * page-break-after:always + :last-child:auto เดิม เปราะ (พลาด = หน้าเปล่า)
+   * pattern นี้ไม่มี break-after เลย → เป็นไปไม่ได้ที่จะมีหน้าเปล่าต่อท้าย */
+  .blank-a4-2up-page:not(:first-child), .blank-a5-page:not(:first-child) {
+    page-break-before: always; break-before: page;
   }
   .blank-a4-2up-page { display: flex !important; }
   .blank-a4-2up-page > div, .blank-a5-half {

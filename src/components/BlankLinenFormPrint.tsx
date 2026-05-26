@@ -30,8 +30,9 @@ export default function BlankLinenFormPrint({
   const cellPy = compact ? 'py-1' : 'py-2'
   const tableFont = compact ? '9px' : '11px'
 
+  // 376: print:px-2 print:py-0 — คืน padding ที่ซ้ำกับ @page margin (กันล้นหน้า 2)
   return (
-    <div className={`bg-white ${pad} mx-auto print:shadow-none w-full`} id={id}>
+    <div className={`bg-white ${pad} mx-auto print:shadow-none print:px-2 print:py-0 w-full`} id={id}>
       {/* Header */}
       <div className={`flex justify-between items-start border-b-2 border-[#1B3A5C] ${compact ? 'mb-2 pb-2' : 'mb-4 pb-3'}`}>
         <div>
