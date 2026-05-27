@@ -46,6 +46,7 @@ export const FL = {
   receiverWash: { th: 'ผู้รับผ้าซัก', en: 'Receiver', my: 'လက်ခံသူ' },
   receiverWashed: { th: 'ผู้รับผ้าซักรีดแล้ว', en: 'Receiver (washed)', my: 'လျှော်ပြီး လက်ခံသူ' },
   senderWashed: { th: 'ผู้ส่งผ้าซักรีดแล้ว', en: 'Sender (washed)', my: 'လျှော်ပြီး ပို့သူ' },
+  signCustomer: { th: 'ลูกค้า', en: 'Customer', my: 'ဖောက်သည်' },  // 385.1 ลายเซ็นฝั่งลูกค้า (สั้นกว่า customer ที่เป็น "ชื่อลูกค้า")
   // Misc
   penRed: { th: 'นับส่ง = ปากกาแดง', en: 'Count sent = red pen', my: 'ပို့ရေတွက် = အနီ' },
   penBlue: { th: 'ต่อถุง = ปากกาน้ำเงิน', en: 'Per bag = blue pen', my: 'အိတ်အလိုက် = အပြာ' },

@@ -6,7 +6,7 @@
 //  · 376.4 3 ภาษา (ไทย/อังกฤษ/พม่า) หัวตาราง+ป้าย · item = ไทย+อังกฤษ(+พม่าถ้ามี) · code badge
 //  · 376.5 จัดกลุ่มตามหมวด + เส้นหนาคั่น + หัวกลุ่ม
 //  · 376.1 density (ปกติ/แน่น/แน่นมาก) + paginate (thead ซ้ำ) · 376.3 เพิ่มแถวว่าง
-//  · 2 กล่องนับถุง (ส่งซัก/แพคส่ง) + 4 ลายเซ็น bidirectional
+//  · 2 กล่องนับถุง (ส่งซัก/แพคส่ง) + 385.1 ลายเซ็นแถวเดียว 2 จุด (ลูกค้า | FlowClean) "_ / _" เซ็น 1-2 ครั้งก็ได้
 
 import { Fragment } from 'react'
 import { formatDate, cn } from '@/lib/utils'
@@ -30,16 +30,17 @@ interface Props {
   categories?: LinenCategoryDef[]
 }
 
-// 379/380.4 — column widths (รวม 100%) · ลูกค้านับส่ง กว้างสุด, แพคส่ง รอง · รายการ แคบลง (28→23)
+// 385 — column widths (รวม 100%) · รายการ กว้างขึ้น 23→26 (กันตัวหนังสือ wrap หลายบรรทัด)
+//   reclaim +3% จากที่ 380 เคยแจกตอน item หด 28→23: packDeliver คืน 2 (16→14), note คืน 1 (12→11)
 // 379 — เรียงตาม flow ในโปรแกรม: ลูกค้านับผ้ากลับ (Washed return) ย้ายไปขวาสุด
-const COL_W = { no: '4%', item: '23%' }
+const COL_W = { no: '4%', item: '26%' }
 // 382 — เน้นคอลัมน์สำคัญด้วย "ความกว้าง" ไม่ใช่สีพื้น (ถ่ายเอกสารต่อกันแล้วสีไม่เข้มกลบตัวเลข)
 const DATA_COLS: { num: number; label: TriLabel; w: string }[] = [
   { num: 1, label: FL.sendNormal,       w: '21%' },  // ลูกค้านับส่ง (breakdown — กว้างสุด)
   { num: 2, label: FL.sendClaim,        w: '8%' },
   { num: 3, label: FL.countedIn,        w: '8%' },
-  { num: 4, label: FL.packDeliver,      w: '16%' },  // โรงซักแพคส่ง (รอง)
-  { num: 5, label: FL.noteRemainReturn, w: '12%' },
+  { num: 4, label: FL.packDeliver,      w: '14%' },  // โรงซักแพคส่ง (รอง — 385 คืน 2%)
+  { num: 5, label: FL.noteRemainReturn, w: '11%' },  // 385 คืน 1%
   { num: 6, label: FL.washedReturn,     w: '8%' },   // 379 — ลูกค้านับผ้ากลับ ขวาสุด
 ]
 
@@ -203,15 +204,21 @@ export default function BlankLinenFormPrint({
         </tbody>
       </table>
 
-      {/* 4 ลายเซ็น — bidirectional (ส่ง-รับ 2 ฝั่ง) */}
-      <div className={`grid grid-cols-2 ${compact ? 'gap-x-8 gap-y-3 mt-3' : 'gap-x-16 gap-y-5 mt-6'} ${compact ? 'text-[9px]' : 'text-xs'} text-center`}>
-        {[FL.senderWash, FL.receiverWashed, FL.receiverWash, FL.senderWashed].map((sig, i) => (
-          <div key={i}>
-            <div className={`border-b border-slate-400 ${compact ? 'pb-3' : 'pb-6'} mb-1`}></div>
-            <Tri label={sig} langs={langs} center />
-            {(i === 1 || i === 3) && <span className="text-slate-400">(FlowClean)</span>}
-          </div>
-        ))}
+      {/* 385.1 — ลายเซ็นแถวเดียว 2 จุด (ลูกค้า | FlowClean) · "_ / _" = เซ็น 1 หรือ 2 ครั้งก็ได้
+          ไม่ระบุ ส่งซัก/รับกลับ — บางลูกค้าเซ็นครั้งเดียว, กัน audit ไม่ผ่านเพราะลายเซ็นไม่ครบ 4 จุด */}
+      <div className={`grid grid-cols-2 ${compact ? 'gap-x-8 mt-4 text-[9px]' : 'gap-x-16 mt-8 text-xs'}`}>
+        <div className="flex items-end gap-2 min-w-0">
+          <span className="flex-shrink-0"><Tri label={FL.signCustomer} langs={langs} /></span>
+          <span className={`flex-1 border-b border-slate-400 ${compact ? 'pb-3' : 'pb-6'}`}></span>
+          <span className="flex-shrink-0 text-slate-400">/</span>
+          <span className={`flex-1 border-b border-slate-400 ${compact ? 'pb-3' : 'pb-6'}`}></span>
+        </div>
+        <div className="flex items-end gap-2 min-w-0">
+          <span className="flex-shrink-0 font-semibold">FlowClean</span>
+          <span className={`flex-1 border-b border-slate-400 ${compact ? 'pb-3' : 'pb-6'}`}></span>
+          <span className="flex-shrink-0 text-slate-400">/</span>
+          <span className={`flex-1 border-b border-slate-400 ${compact ? 'pb-3' : 'pb-6'}`}></span>
+        </div>
       </div>
 
       {!compact && (
