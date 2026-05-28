@@ -36,12 +36,12 @@ function suggestSheets(items: LinenItemDef[]): FormSheet[] {
 export default function BlankFormModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { customers, quotations, linenCatalog, linenCategories, companyInfo, getCustomer } = useStore()
   const [customerId, setCustomerId] = useState('')   // '' = ยังไม่เลือก
-  const [showCustomer, setShowCustomer] = useState(true)
-  const [showDate, setShowDate] = useState(true)
-  const [formType, setFormType] = useState<'checklist' | 'lf'>('checklist')
+  const [showCustomer, setShowCustomer] = useState(false)  // 387.2/.4 — pickCustomer set ตาม chip
+  const [showDate, setShowDate] = useState(false)          // 387.2/.4 default ไม่ติ๊ก
+  const [formType, setFormType] = useState<'lf' | 'checklist'>('lf')      // 387.3/.4 LF เป็น default (ปุ่มแรก ซ้าย)
   const [sheets, setSheets] = useState<FormSheet[]>([])
   const [activeSheet, setActiveSheet] = useState(0)
-  const [printMode, setPrintMode] = useState<'a4-2up' | 'a4'>('a4-2up')  // 381: a5 เดี่ยว → a4 เดี่ยว
+  const [printMode, setPrintMode] = useState<'a4-2up' | 'a4'>('a4')        // 387.3/.4 LF default = A4 เดี่ยว (orientation auto = portrait)
   // 375 — item picker enhance (mirror QT picker)
   const [itemSearch, setItemSearch] = useState('')
   const [itemCat, setItemCat] = useState('all')
@@ -49,14 +49,14 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   // 376 — Form Designer v3 controls
   const [density, setDensity] = useState<FormDensity>('normal')   // 376.1 ความหนาแน่นแถว
   const [extraRows, setExtraRows] = useState(0)                   // 376.3 แถวว่าง ad-hoc
-  const [showMy, setShowMy] = useState(true)                      // 376.4 ภาษาพม่า
-  const [grouped, setGrouped] = useState(true)                    // 376.5 จัดกลุ่มตามหมวด
+  const [showMy, setShowMy] = useState(false)                     // 387.2/.4 default ไม่ติ๊กพม่า
+  const [grouped, setGrouped] = useState(false)                   // 387.2/.4 default ไม่จัดกลุ่ม
   const langs: FormLang[] = showMy ? ['th', 'en', 'my'] : ['th', 'en']
   // 375.1 — form templates (บันทึกฟอร์มกลาง → reuse)
   const [templates, setTemplates] = useState<FormTemplate[]>([])
   useEffect(() => { if (open) loadFormTemplates().then(setTemplates).catch(() => {}) }, [open])
 
-  const reset = () => { setCustomerId(''); setSheets([]); setActiveSheet(0); setShowCustomer(true); setShowDate(true); setPrintMode('a4-2up'); setItemSearch(''); setItemCat('all'); setReorderMode(false); setDensity('normal'); setExtraRows(0); setShowMy(true); setGrouped(true) }
+  const reset = () => { setCustomerId(''); setSheets([]); setActiveSheet(0); setShowCustomer(false); setShowDate(false); setFormType('lf'); setPrintMode('a4'); setItemSearch(''); setItemCat('all'); setReorderMode(false); setDensity('normal'); setExtraRows(0); setShowMy(false); setGrouped(false) }  // 387 defaults: LF + A4 เดี่ยว + ไม่ติ๊ก toggles
   const handleClose = () => { reset(); onClose() }
 
   // items ที่เลือกได้ (จาก QT ลูกค้า หรือ catalog ทั้งหมดถ้าฟอร์มกลาง)
@@ -69,7 +69,21 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
     setCustomerId(id)
     setSheets(suggestSheets(items))
     setActiveSheet(0)
-    if (id === NONE) setShowCustomer(false)   // ฟอร์มกลาง → ปิดชื่อ default (เขียนมือ)
+    // 387.2/.4 — รีเซ็ต defaults ตาม chip
+    setShowCustomer(id !== NONE)   // ลูกค้า=✓ (สอดคล้อง action) · ฟอร์มกลาง=✗
+    setShowDate(false)             // 3 toggles ทั้งคู่ chip = ไม่ติ๊ก
+    setGrouped(false)
+    setShowMy(false)
+    setFormType('lf')              // 387.3/.4 default formType = LF เสมอ (ปุ่มซ้าย)
+    setPrintMode('a4')             // 387.3/.4 default printMode = A4 เดี่ยว (orientation auto = portrait via key={printMode})
+  }
+
+  // 387 — สลับ formType + auto set printMode · idempotent: กดปุ่มเดิม = no-op กัน wipe ค่าที่ user/template เซตไว้
+  //   LF → A4 เดี่ยว portrait | CK → A4→2×A5 landscape (orientation มาจาก ExportButtons key={printMode})
+  const switchFormType = (next: 'lf' | 'checklist') => {
+    if (next === formType) return
+    setFormType(next)
+    setPrintMode(next === 'lf' ? 'a4' : 'a4-2up')
   }
 
   // sheet ops
@@ -124,7 +138,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   for (let i = 0; i < usableSheets.length; i += 2) pairs.push(usableSheets.slice(i, i + 2))
 
   return (
-    <Modal open={open} onClose={handleClose} title="พิมพ์ฟอร์มเปล่า (ใบเช็คผ้า / ใบส่งรับผ้า)" size="xl" className="print-target">
+    <Modal open={open} onClose={handleClose} title="พิมพ์ฟอร์มเปล่า ใบส่งรับผ้า (LF) / ใบเช็คผ้า (CK)" size="xl" className="print-target">
       {!customerId ? (
         <div className="space-y-4">
           <label className="block text-sm font-medium text-slate-600">เลือกลูกค้า (ฟอร์มจะล้อรายการตาม QT) หรือทำฟอร์มกลางไว้เขียนมือ</label>
@@ -155,10 +169,12 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
             <button onClick={reset} className="text-sm text-slate-500 hover:text-slate-700">← เลือกใหม่</button>
             <div className="flex items-center gap-1.5">
               <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
-                <button onClick={() => setFormType('checklist')} className={formType === 'checklist' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>ใบเช็คผ้า</button>
-                <button onClick={() => setFormType('lf')} className={formType === 'lf' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>ใบส่งรับผ้า</button>
+                {/* 387.1 — สลับลำดับ LF ↔ CK (LF ซ้าย/แรก = default) + เติม (LF)/(CK) ตามคำขอ */}
+                <button onClick={() => switchFormType('lf')} className={formType === 'lf' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>ใบส่งรับผ้า (LF)</button>
+                <button onClick={() => switchFormType('checklist')} className={formType === 'checklist' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>ใบเช็คผ้า (CK)</button>
               </div>
               <ExportButtons
+                key={printMode}  /* 387 — remount เมื่อ printMode toggle → ExportButtons re-init defaultSettings (orientation/margin sync) · เดิม useState lazy init = stale orientation */
                 targetId="print-blank-area"
                 filename={`blank-${formType}`}
                 defaultSettings={printMode === 'a4-2up' ? { paperSize: 'A4', orientation: 'landscape', margin: 'narrow' } : { paperSize: 'A4', orientation: 'portrait', margin: 'narrow' }}
