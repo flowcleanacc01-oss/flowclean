@@ -588,6 +588,12 @@ export default function LinenFormsPage() {
               <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสารที่เลือก ({selectedLfIds.length})
             </button>
           )}
+          {/* 388 — พิมพ์ฟอร์มเปล่า ย้ายมาซ้ายสุด (ก่อน Discrepancy) — flow เริ่มจาก "พิมพ์ฟอร์มเปล่า → เขียนมือ → scan กลับ" */}
+          <button onClick={() => setShowBlankForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
+            title="พิมพ์ฟอร์มเปล่า (ใบเช็คผ้า/ใบส่งรับผ้า) รายการล้อ QT ลูกค้า — ให้พนักงานกรอก แล้ว scan กลับ ลดภาระ AI + audit ตรง">
+            <FileDown className="w-4 h-4" />พิมพ์ฟอร์มเปล่า
+          </button>
           {/* 297.1: Discrepancy helper — ย้ายมาจาก dashboard */}
           <button onClick={() => setHelperOpen(true)}
             title="ใช้เมื่อลูกค้าแจ้งว่านับผ้ากลับไม่ตรง — sync col6 ↔ col4 + recalc fees อัตโนมัติ"
@@ -604,19 +610,15 @@ export default function LinenFormsPage() {
             title="เห็นลูกค้าทุกรายที่มี LF รอพิมพ์ → เลือกหลายราย → พิมพ์ทีเดียว แยกตามลูกค้า (แบบเดียวกับพิมพ์ SD เร่งด่วน)">
             <Sparkles className="w-4 h-4" />พิมพ์ LF เร่งด่วน
           </button>
-          <button onClick={handleCreateOpen}
-            className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
-            <Plus className="w-4 h-4" />สร้างใบส่งรับผ้าใหม่
-          </button>
-          <button onClick={() => setShowBlankForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
-            title="พิมพ์ฟอร์มเปล่า (ใบเช็คผ้า/ใบส่งรับผ้า) รายการล้อ QT ลูกค้า — ให้พนักงานกรอก แล้ว scan กลับ ลดภาระ AI + audit ตรง">
-            <FileDown className="w-4 h-4" />พิมพ์ฟอร์มเปล่า
-          </button>
           <button onClick={() => setShowBatch(true)}
             className="flex items-center gap-2 px-4 py-2 bg-[#1B3A5C] text-white rounded-lg hover:bg-[#122740] transition-colors text-sm font-medium"
             title="อัปโหลดใบส่งรับผ้าหลายใบ → AI อ่านลูกค้า/วันที่/ยอด → สร้าง LF ที่ 4/7 รวดเดียว">
             📷 นำเข้าหลายใบ (AI)
+          </button>
+          {/* 388.1 — สร้างใบส่งรับผ้าใหม่ ย้ายมาขวาสุด (หลัง 📷 นำเข้าหลายใบ) — primary action ของหน้านี้ */}
+          <button onClick={handleCreateOpen}
+            className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+            <Plus className="w-4 h-4" />สร้างใบส่งรับผ้าใหม่
           </button>
         </div>
       </div>

@@ -1294,7 +1294,19 @@ export default function DeliveryPage() {
             <Printer className="w-4 h-4" />
             พิมพ์/ส่งออกเอกสารรายการ
           </button>
-          {/* 283: Quick Batch — เห็นลูกค้าทุกรายที่มี LF ค้าง → multi-select → 1-click create */}
+          {/* 303: Quick Print — เห็นลูกค้าทุกรายที่มี SD รอพิมพ์ → multi-select → 1-click print · 388.2 ย้ายมาก่อนสร้าง SD เร่งด่วน */}
+          <button onClick={() => {
+            setQpSelectedCusts(new Set())
+            setQpDateMode('this_month')
+            setQpShowPrinted(false)
+            setShowQuickPrint(true)
+          }}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-50 text-violet-700 border border-violet-200 rounded-lg hover:bg-violet-100 transition-colors text-sm font-medium"
+            title="พิมพ์ SD แยกลูกค้า — เลือกราย/หลายลูกค้า แล้วพิมพ์ทีเดียว">
+            <Sparkles className="w-4 h-4" />
+            พิมพ์ SD เร่งด่วน
+          </button>
+          {/* 283: Quick Batch — เห็นลูกค้าทุกรายที่มี LF ค้าง → multi-select → 1-click create · 388.2 ย้ายมาขวาของพิมพ์ SD เร่งด่วน */}
           {pendingByCustomer.size > 0 && (
             <button onClick={() => {
               setQbSelectedCusts(new Set())
@@ -1307,18 +1319,6 @@ export default function DeliveryPage() {
               สร้าง SD เร่งด่วน ({pendingByCustomer.size} ลูกค้ารอ)
             </button>
           )}
-          {/* 303: Quick Print — เห็นลูกค้าทุกรายที่มี SD รอพิมพ์ → multi-select → 1-click print */}
-          <button onClick={() => {
-            setQpSelectedCusts(new Set())
-            setQpDateMode('this_month')
-            setQpShowPrinted(false)
-            setShowQuickPrint(true)
-          }}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-50 text-violet-700 border border-violet-200 rounded-lg hover:bg-violet-100 transition-colors text-sm font-medium"
-            title="พิมพ์ SD แยกลูกค้า — เลือกราย/หลายลูกค้า แล้วพิมพ์ทีเดียว">
-            <Sparkles className="w-4 h-4" />
-            พิมพ์ SD เร่งด่วน
-          </button>
           <button onClick={() => { setShowCreate(true); setBatchMode(false); setSelCustomerId(''); setSelFormIds([]); setDeliveryItems([]); setDriverName(''); setVehiclePlate(''); setReceiverName(''); setDnNotes(''); setDnDate(todayISO()); setDnDiscount(0); setDnDiscountNote(''); setDnExtraCharge(0); setDnExtraChargeNote(''); setDnIsExtraRound(false) }}
             className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
             <Plus className="w-4 h-4" />
