@@ -1,7 +1,8 @@
 'use client'
 
 // 376 — ใบเช็คผ้าเปล่า v3 (Form Designer v3)
-//  · คอลัมน์: # / รายการ(+code) / นับส่ง(แดง) / ต่อถุง-แพคส่ง(น้ำเงิน) / รวม
+//  · 389.5 คอลัมน์ใหม่: # / รายการ(+code) / นับส่ง(แดง) / เคลม(แดง) / ต่อถุง-แพคส่ง(น้ำเงิน)
+//    (ลบ "รวม" ออก · เพิ่ม "เคลม" คั่นระหว่าง send กับ pack)
 //  · 376.4 3 ภาษา (ไทย/อังกฤษ/พม่า) · 376.5 จัดกลุ่ม+เส้นหนา · 376.1 density · 376.3 แถวว่าง
 //  · scan-friendly: code เด่นทุกแถว + สีปากกา (แดง/น้ำเงิน) ช่วย AI สแกนแม่น
 
@@ -27,7 +28,9 @@ interface BlankChecklistPrintProps {
   categories?: LinenCategoryDef[]
 }
 
-const COL_W = { no: '5%', item: '40%', send: '18%', pack: '25%', total: '12%' }
+// 389 — column widths (รวม 100%) · "ต่อถุง-แพคส่ง" กว้างขึ้น (พอเขียน 43+36+... แบบหลายถุง)
+//   389.1 send 18→12 (เท่ากับ "รวม" เดิม) · 389.2 item 40→36 (-4 "นิดนึง") · 389.5 ลบ total +เพิ่ม claim (สมมาตร red pair)
+const COL_W = { no: '5%', item: '36%', send: '12%', claim: '12%', pack: '35%' }
 
 function Tri({ label, langs, center }: { label: TriLabel; langs: FormLang[]; center?: boolean }) {
   return (
@@ -123,8 +126,8 @@ export default function BlankChecklistPrint({
           <col style={{ width: COL_W.no }} />
           <col style={{ width: COL_W.item }} />
           <col style={{ width: COL_W.send }} />
+          <col style={{ width: COL_W.claim }} />
           <col style={{ width: COL_W.pack }} />
-          <col style={{ width: COL_W.total }} />
         </colgroup>
         <thead>
           <tr className="align-bottom leading-none">
@@ -135,10 +138,13 @@ export default function BlankChecklistPrint({
               <span className="block text-red-600 text-[0.8em]">{compact ? '(แดง)' : '(สีแดง)'}</span>
             </th>
             <th className={`text-center px-0.5 ${compact ? 'py-0.5' : 'py-2'} border border-slate-500`}>
+              <Tri label={FL.ckClaim} langs={langs} center />
+              <span className="block text-red-600 text-[0.8em]">{compact ? '(แดง)' : '(สีแดง)'}</span>
+            </th>
+            <th className={`text-center px-0.5 ${compact ? 'py-0.5' : 'py-2'} border border-slate-500`}>
               <Tri label={FL.ckPerBagPack} langs={langs} center />
               <span className="block text-blue-600 text-[0.8em]">{compact ? '(น้ำเงิน · คั่น +)' : '(สีน้ำเงิน · หลายถุงคั่น + เช่น 43+36)'}</span>
             </th>
-            <th className={`text-center px-0.5 ${compact ? 'py-0.5' : 'py-2'} border border-slate-500`}><Tri label={FL.total} langs={langs} center /></th>
           </tr>
         </thead>
         <tbody>
@@ -167,9 +173,9 @@ export default function BlankChecklistPrint({
                         <span className="flex-shrink-0 font-mono font-bold border border-slate-400 rounded px-1 leading-tight">{item.code}</span>
                       </div>
                     </td>
-                    <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>
-                    <td className={`px-1 ${d.cellPy} border border-slate-500`}><div className={compact ? 'min-h-[16px]' : 'min-h-[30px]'}></div></td>
-                    <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>
+                    <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>{/* send (แดง) */}
+                    <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>{/* 389.5 claim (แดง) */}
+                    <td className={`px-1 ${d.cellPy} border border-slate-500`}><div className={compact ? 'min-h-[16px]' : 'min-h-[30px]'}></div></td>{/* pack (น้ำเงิน) — min-h เผื่อ "43+36+..." */}
                   </tr>
                 )
               })}

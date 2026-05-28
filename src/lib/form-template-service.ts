@@ -17,7 +17,7 @@ export interface FormTemplate {
   showCustomer: boolean
   showDate: boolean
   printMode: 'a4-2up' | 'a4'   // 381: a5 → a4 (template เก่าที่เป็น 'a5' ถูก migrate ตอนโหลด)
-  sheets: { title: string; codes: string[] }[]
+  sheets: { title: string; codes: string[]; extraRows?: number }[]   // 389.4 extraRows per-sheet (optional, default 0 สำหรับ template เก่า)
   updatedAt: string
 }
 

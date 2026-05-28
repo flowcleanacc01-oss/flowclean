@@ -36,6 +36,7 @@ export const FL = {
   noteRemainReturn: { th: 'หมายเหตุ · ค้าง(-)/คืน(+)', en: 'Note · remain(-)/return(+)', my: 'မှတ်ချက် · ကျန်(-)/ပြန်(+)' },
   // CK data columns
   ckCountSend: { th: 'นับส่ง', en: 'Count sent', my: 'ပို့ရေတွက်' },
+  ckClaim: { th: 'เคลม', en: 'Claim', my: 'တောင်းဆို' },             // 389.5 เคลม (แดง) คั่นระหว่าง นับส่ง กับ ต่อถุง-แพคส่ง
   ckPerBagPack: { th: 'ต่อถุง — แพคส่ง', en: 'Per bag — packed', my: 'အိတ်အလိုက် — ထုပ်ပိုး' },
   // Header count boxes
   sacksForWashing: { th: 'จำนวนถุงกระสอบ ผ้าส่งซัก', en: 'Sacks for washing', my: 'လျှော်ရန် အိတ်အရေအတွက်' },
@@ -62,13 +63,14 @@ export const BURMESE_ITEM: Record<string, string> = {
   // ตัวอย่าง draft (ลบ/แก้ได้): 'B/F': 'မျက်နှာသုတ်ပဝါ',
 }
 
-/** 376.1 — Row density presets (จำนวนแถวที่ fit ต่อหน้าโดยประมาณ) */
-export type FormDensity = 'normal' | 'compact' | 'ultra'
+/** 376.1 — Row density presets (จำนวนแถวที่ fit ต่อหน้าโดยประมาณ) · 389.3 เพิ่ม 'sparse' (≤10 แถว เผื่อ free text) */
+export type FormDensity = 'sparse' | 'normal' | 'compact' | 'ultra'
 
 export const DENSITY: Record<FormDensity, { label: string; rowsPerPage: number; cellPy: string; fontPx: number }> = {
-  normal: { label: 'ปกติ', rowsPerPage: 22, cellPy: 'py-1.5', fontPx: 11 },
+  sparse:  { label: 'น้อย', rowsPerPage: 10, cellPy: 'py-3', fontPx: 13 },     // 389.3 แถวสูง เผื่อพนักงานเขียน free text
+  normal:  { label: 'ปกติ', rowsPerPage: 22, cellPy: 'py-1.5', fontPx: 11 },
   compact: { label: 'แน่น', rowsPerPage: 30, cellPy: 'py-1', fontPx: 10 },
-  ultra: { label: 'แน่นมาก', rowsPerPage: 40, cellPy: 'py-0.5', fontPx: 9 },
+  ultra:   { label: 'แน่นมาก', rowsPerPage: 40, cellPy: 'py-0.5', fontPx: 9 },
 }
 
 /**
