@@ -309,9 +309,10 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
               <div id="print-blank-area">
                 {printMode === 'a4' ? (
                   usableSheets.map(s => (
-                    /* 381: A4 เดี่ยว (portrait 210mm) · .blank-a5-page = generic single-sheet class (print width:100% → ตาม @page A4) */
+                    /* 381: A4 เดี่ยว (portrait 210mm) · .blank-a5-page = generic single-sheet class (print width:100% → ตาม @page A4)
+                       386: ไม่ส่ง compact → FormComp ใช้ full size (text-xl title + nameEn + กล่อง text-2xl + thead py-1.5 + signature mt-8/pb-6 + footer) — A4 เต็มแผ่น อ่าน/เขียนสบาย */
                     <div key={s.id} className="blank-a5-page bg-white mx-auto mb-3 shadow-sm print:shadow-none print:mb-0" style={{ width: '210mm' }}>
-                      <FormComp customer={cust} company={companyInfo} items={sheetItems(s)} date={todayISO()} showCustomer={showCustomer} showDate={showDate} sheetTitle={s.title} compact id={`bf-${s.id}`} langs={langs} density={density} extraRows={extraRows} grouped={grouped} categories={linenCategories} />
+                      <FormComp customer={cust} company={companyInfo} items={sheetItems(s)} date={todayISO()} showCustomer={showCustomer} showDate={showDate} sheetTitle={s.title} id={`bf-${s.id}`} langs={langs} density={density} extraRows={extraRows} grouped={grouped} categories={linenCategories} />
                     </div>
                   ))
                 ) : (
