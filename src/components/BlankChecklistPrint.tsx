@@ -114,9 +114,10 @@ export default function BlankChecklistPrint({
             )}
           </div>
         </div>
-        <div className={`border-2 border-[#1B3A5C] rounded-lg text-center ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-5 py-2'}`}>
-          <Tri label={FL.bagCount} langs={langs} center />
-          <div className={`${compact ? 'w-12 h-4' : 'w-20 h-9'} border-b-2 border-dotted border-slate-400 mx-auto`}></div>
+        {/* 392.1 — จัดข้อความชิดซ้าย เหมือนกล่องวันที่ (เอา text-center / center / mx-auto ออก) */}
+        <div className={`border-2 border-[#1B3A5C] rounded-lg ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-5 py-2'}`}>
+          <Tri label={FL.bagCount} langs={langs} />
+          <div className={`${compact ? 'w-12 h-4' : 'w-20 h-9'} border-b-2 border-dotted border-slate-400`}></div>
         </div>
       </div>
 
@@ -199,23 +200,8 @@ export default function BlankChecklistPrint({
         💡 <span className="text-red-600 font-medium">นับส่ง = ปากกาแดง</span> · <span className="text-blue-600 font-medium">ต่อถุง = ปากกาน้ำเงิน</span> — ช่วยให้สแกนแม่นขึ้น
       </p>
 
-      {/* Signatures (383 — เตี้ยลง: gap/mt/ช่องเซ็นแคบลง ให้ฟิต 2-up) */}
-      <div className={`grid grid-cols-2 ${compact ? 'gap-4 mt-2' : 'gap-16 mt-8'} ${compact ? 'text-[9px]' : 'text-xs'} text-center`}>
-        <div>
-          <div className={`border-b border-slate-400 ${compact ? 'pb-2.5' : 'pb-8'} mb-1`}></div>
-          <Tri label={FL.senderWash} langs={langs} center />
-        </div>
-        <div>
-          <div className={`border-b border-slate-400 ${compact ? 'pb-2.5' : 'pb-8'} mb-1`}></div>
-          <Tri label={FL.receiverWash} langs={langs} center />
-        </div>
-      </div>
-
-      {!compact && (
-        <div className="mt-6 pt-3 border-t border-slate-200 text-center text-[10px] text-slate-400">
-          <p>เอกสารนี้ออกโดยระบบ FlowClean — {company.name}</p>
-        </div>
-      )}
+      {/* 392 — เอา pattern ลายเซ็น (ผู้ส่ง/ผู้รับ) ออก ตามที่ติ๊ดขอ
+          391 — เอา footer "เอกสารนี้ออกโดยระบบ FlowClean" + เส้นคั่นออกด้วย (ให้เหมือนฟอร์ม LF) */}
     </div>
   )
 }

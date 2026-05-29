@@ -39,8 +39,8 @@ export const FL = {
   ckClaim: { th: 'เคลม', en: 'Claim', my: 'တောင်းဆို' },             // 389.5 เคลม (แดง) คั่นระหว่าง นับส่ง กับ ต่อถุง-แพคส่ง
   ckPerBagPack: { th: 'ต่อถุง — แพคส่ง', en: 'Per bag — packed', my: 'အိတ်အလိုက် — ထုပ်ပိုး' },
   // Header count boxes
-  sacksForWashing: { th: 'จำนวนถุงกระสอบ ผ้าส่งซัก', en: 'Sacks for washing', my: 'လျှော်ရန် အိတ်အရေအတွက်' },
-  packBagsDelivery: { th: 'จำนวนผ้าซักแล้ว แพคถุงจัดส่ง', en: 'Pack bags delivery', my: 'ထုပ်ပိုးပို့ အိတ်အရေအတွက်' },
+  sacksForWashing: { th: 'จำนวนถุงกระสอบส่งซัก', en: 'Sacks for washing', my: 'လျှော်ရန် အိတ်အရေအတွက်' },  // 393 ติ๊ด rename
+  packBagsDelivery: { th: 'จำนวนถุงโรงซักแพคส่ง', en: 'Pack bags delivery', my: 'ထုပ်ပိုးပို့ အိတ်အရေအတွက်' },  // 393 ติ๊ด rename
   bagCount: { th: 'จำนวนถุง', en: 'Bags', my: 'အိတ်အရေအတွက်' },
   // Signatures (bidirectional)
   senderWash: { th: 'ผู้ส่งผ้าซัก', en: 'Sender', my: 'ပို့သူ' },

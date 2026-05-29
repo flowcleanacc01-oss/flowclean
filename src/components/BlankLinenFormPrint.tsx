@@ -108,26 +108,27 @@ export default function BlankLinenFormPrint({
         </div>
       </div>
 
-      {/* Provenance + กล่องนับถุง — แถวเดียว (380.1 ชื่อแคบ/เตี้ย · วันที่กว้างขึ้น · 380.2 ย้ายกล่องนับถุงมารวม) */}
+      {/* Provenance + กล่องนับถุง — แถวเดียว (380.1 ชื่อแคบ/เตี้ย · วันที่กว้างขึ้น · 380.2 ย้ายกล่องนับถุงมารวม)
+          393.1 — กล่องหัว 4 ใบ กลับไปขนาดเดิม (เตี้ย+ฟอนต์เล็ก) แม้โหมด A4 เดี่ยว: ติ๊ดเห็นว่าความสูงเดิมพอแล้ว ไม่ต้องสูง text-2xl/h-9 */}
       <div className={`flex items-stretch gap-1.5 ${compact ? 'mb-2' : 'mb-3'}`}>
-        <div className={cn('border-2 border-[#1B3A5C] rounded-lg w-[32%]', compact ? 'px-2 py-0.5 text-[10px]' : 'px-4 py-2')}>
+        <div className="border-2 border-[#1B3A5C] rounded-lg w-[32%] px-2 py-0.5 text-[10px]">
           <Tri label={FL.customer} langs={langs} />
           {showCustomer && customer ? (
-            <p className={cn('font-bold text-slate-900 leading-tight truncate', compact ? 'text-sm' : 'text-2xl')}>{customer.shortName || customer.name}</p>
+            <p className="font-bold text-slate-900 leading-tight truncate text-sm">{customer.shortName || customer.name}</p>
           ) : (
-            <div className={cn('border-b-2 border-dotted border-slate-400', compact ? 'h-4' : 'h-9')}></div>
+            <div className="border-b-2 border-dotted border-slate-400 h-4"></div>
           )}
         </div>
-        <div className={cn('border-2 border-[#1B3A5C] rounded-lg w-[22%]', compact ? 'px-2 py-0.5 text-[10px]' : 'px-4 py-2')}>
+        <div className="border-2 border-[#1B3A5C] rounded-lg w-[22%] px-2 py-0.5 text-[10px]">
           <Tri label={FL.date} langs={langs} />
           {showDate ? (
-            <p className={cn('font-bold text-slate-900 leading-tight', compact ? 'text-sm' : 'text-2xl')}>{formatDate(date)}</p>
+            <p className="font-bold text-slate-900 leading-tight text-sm">{formatDate(date)}</p>
           ) : (
-            <div className={cn('border-b-2 border-dotted border-slate-400', compact ? 'h-4' : 'h-9')}></div>
+            <div className="border-b-2 border-dotted border-slate-400 h-4"></div>
           )}
         </div>
         {[FL.sacksForWashing, FL.packBagsDelivery].map((box, i) => (
-          <div key={i} className={cn('border border-slate-500 rounded flex-1 flex flex-col justify-center leading-none', compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-1 text-[10px]')}>
+          <div key={i} className={cn('border border-slate-500 rounded flex-1 flex flex-col justify-center leading-none', compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[10px]')}>
             <Tri label={box} langs={langs} />
             <div className="flex items-center gap-1 mt-0.5">
               <span className="font-bold">=</span>
@@ -221,11 +222,7 @@ export default function BlankLinenFormPrint({
         </div>
       </div>
 
-      {!compact && (
-        <div className="mt-6 pt-3 border-t border-slate-200 text-center text-[10px] text-slate-400">
-          <p>เอกสารนี้ออกโดยระบบ FlowClean — {company.name}</p>
-        </div>
-      )}
+      {/* 391 — เอา footer "เอกสารนี้ออกโดยระบบ FlowClean" + เส้นคั่นออก (ติ๊ดขอ ฟอร์มสะอาดขึ้น) */}
     </div>
   )
 }
