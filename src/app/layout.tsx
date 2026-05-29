@@ -4,9 +4,7 @@ import '@fontsource/sarabun/400.css'
 import '@fontsource/sarabun/500.css'
 import '@fontsource/sarabun/600.css'
 import '@fontsource/sarabun/700.css'
-// 376 — Burmese (Myanmar) font สำหรับฟอร์ม 3 ภาษา (scoped ผ่าน .font-my)
-import '@fontsource/noto-sans-myanmar/400.css'
-import '@fontsource/noto-sans-myanmar/600.css'
+// 394.1 — เอา Burmese (Noto Sans Myanmar) font ออก: ฟอร์มเปล่าเลิกใช้ภาษาพม่า (ติ๊ดใช้ Chrome translate แทน)
 import './globals.css'
 import { StoreProvider } from '@/lib/store'
 import { ToastProvider } from '@/components/Toast'

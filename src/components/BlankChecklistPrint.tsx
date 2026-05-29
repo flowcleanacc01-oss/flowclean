@@ -6,10 +6,9 @@
 //  · 376.4 3 ภาษา (ไทย/อังกฤษ/พม่า) · 376.5 จัดกลุ่ม+เส้นหนา · 376.1 density · 376.3 แถวว่าง
 //  · scan-friendly: code เด่นทุกแถว + สีปากกา (แดง/น้ำเงิน) ช่วย AI สแกนแม่น
 
-import { Fragment } from 'react'
 import { formatDate, cn } from '@/lib/utils'
-import { FL, DENSITY, BURMESE_ITEM, type FormLang, type FormDensity, type TriLabel } from '@/lib/form-i18n'
-import type { Customer, CompanyInfo, LinenItemDef, LinenCategoryDef } from '@/types'
+import { FL, DENSITY, type FormLang, type FormDensity, type TriLabel } from '@/lib/form-i18n'
+import type { Customer, CompanyInfo, LinenItemDef } from '@/types'
 
 interface BlankChecklistPrintProps {
   customer: Customer | null
@@ -24,8 +23,6 @@ interface BlankChecklistPrintProps {
   langs?: FormLang[]
   density?: FormDensity
   extraRows?: number
-  grouped?: boolean
-  categories?: LinenCategoryDef[]
 }
 
 // 389 — column widths (รวม 100%) · "ต่อถุง-แพคส่ง" กว้างขึ้น (พอเขียน 43+36+... แบบหลายถุง)
@@ -39,7 +36,7 @@ function Tri({ label, langs, center }: { label: TriLabel; langs: FormLang[]; cen
         const txt = label[l]
         if (!txt) return null
         return (
-          <span key={l} className={cn('block leading-tight', i === 0 ? 'font-semibold' : 'opacity-70', l === 'my' && 'font-my')}
+          <span key={l} className={cn('block leading-tight', i === 0 ? 'font-semibold' : 'opacity-70')}
             style={i > 0 ? { fontSize: '0.82em' } : undefined}>{txt}</span>
         )
       })}
@@ -47,36 +44,18 @@ function Tri({ label, langs, center }: { label: TriLabel; langs: FormLang[]; cen
   )
 }
 
-function myItemName(item: LinenItemDef): string {
-  return item.nameMy || BURMESE_ITEM[item.code] || ''
-}
-
 export default function BlankChecklistPrint({
   customer, company, items, date,
   showCustomer = true, showDate = true, sheetTitle, compact = false, id = 'print-blank-checklist',
-  langs = ['th', 'en', 'my'], density = 'normal', extraRows = 0, grouped = false, categories = [],
+  langs = ['th', 'en'], density = 'normal', extraRows = 0,
 }: BlankChecklistPrintProps) {
   const pad = compact ? 'p-3' : 'p-8'
   const coTitle = compact ? 'text-sm' : 'text-xl'
   const provVal = compact ? 'text-sm' : 'text-2xl'   // 383 — เตี้ยลงให้ฟิต 2-up
   const d = DENSITY[density]
 
-  const sortedCats = [...categories].sort((a, b) => a.sortOrder - b.sortOrder)
-  const groups: { label: string; items: LinenItemDef[] }[] = []
-  if (grouped && sortedCats.length) {
-    for (const c of sortedCats) {
-      const gItems = items.filter(i => i.category === c.key)
-      if (gItems.length) groups.push({ label: c.label, items: gItems })
-    }
-    const known = new Set(sortedCats.map(c => c.key))
-    const orphans = items.filter(i => !known.has(i.category))
-    if (orphans.length) groups.push({ label: 'อื่นๆ', items: orphans })
-  } else {
-    groups.push({ label: '', items })
-  }
-
+  // 394.2 — เอา "จัดกลุ่มตามหมวด" ออก → render รายการเรียงเดียว
   let rowNo = 0
-  const colCount = 5
 
   return (
     // 376: print:px-2 print:py-0 — คืน padding ที่ซ้ำกับ @page margin (กันล้นหน้า 2)
@@ -149,39 +128,26 @@ export default function BlankChecklistPrint({
           </tr>
         </thead>
         <tbody>
-          {groups.map((g, gi) => (
-            <Fragment key={gi}>
-              {g.label && (
-                <tr className="blank-form-group">
-                  <td colSpan={colCount} className={`border-x border-slate-500 border-t-2 border-t-slate-700 font-semibold text-slate-700 px-1.5 ${compact ? 'py-0.5' : 'py-1'}`}>
-                    ▸ {g.label}
-                  </td>
-                </tr>
-              )}
-              {g.items.map(item => {
-                rowNo++
-                const my = myItemName(item)
-                return (
-                  <tr key={item.code}>
-                    <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-400`}>{rowNo}</td>
-                    <td className={`px-1 ${d.cellPy} border border-slate-500`}>
-                      <div className="flex items-start justify-between gap-1">
-                        <span className="min-w-0 leading-none">
-                          {langs.includes('th') && <span className="block font-medium leading-none">{item.name}</span>}
-                          {langs.includes('en') && item.nameEn && <span className="block opacity-60 leading-none" style={{ fontSize: '0.82em' }}>{item.nameEn}</span>}
-                          {langs.includes('my') && my && <span className="block font-my opacity-60 leading-none" style={{ fontSize: '0.82em' }}>{my}</span>}
-                        </span>
-                        <span className="flex-shrink-0 font-mono font-bold border border-slate-400 rounded px-1 leading-tight">{item.code}</span>
-                      </div>
-                    </td>
-                    <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>{/* send (แดง) */}
-                    <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>{/* 389.5 claim (แดง) */}
-                    <td className={`px-1 ${d.cellPy} border border-slate-500`}><div className={compact ? 'min-h-[16px]' : 'min-h-[30px]'}></div></td>{/* pack (น้ำเงิน) — min-h เผื่อ "43+36+..." */}
-                  </tr>
-                )
-              })}
-            </Fragment>
-          ))}
+          {items.map(item => {
+            rowNo++
+            return (
+              <tr key={item.code}>
+                <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-400`}>{rowNo}</td>
+                <td className={`px-1 ${d.cellPy} border border-slate-500`}>
+                  <div className="flex items-start justify-between gap-1">
+                    <span className="min-w-0 leading-none">
+                      {langs.includes('th') && <span className="block font-medium leading-none">{item.name}</span>}
+                      {langs.includes('en') && item.nameEn && <span className="block opacity-60 leading-none" style={{ fontSize: '0.82em' }}>{item.nameEn}</span>}
+                    </span>
+                    <span className="flex-shrink-0 font-mono font-bold border border-slate-400 rounded px-1 leading-tight">{item.code}</span>
+                  </div>
+                </td>
+                <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>{/* send (แดง) */}
+                <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>{/* 389.5 claim (แดง) */}
+                <td className={`px-1 ${d.cellPy} border border-slate-500`}><div className={compact ? 'min-h-[16px]' : 'min-h-[30px]'}></div></td>{/* pack (น้ำเงิน) — min-h เผื่อ "43+36+..." */}
+              </tr>
+            )
+          })}
           {Array.from({ length: Math.max(0, extraRows) }).map((_, i) => {
             rowNo++
             return (

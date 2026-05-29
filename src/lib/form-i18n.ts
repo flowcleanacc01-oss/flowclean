@@ -63,10 +63,11 @@ export const BURMESE_ITEM: Record<string, string> = {
   // ตัวอย่าง draft (ลบ/แก้ได้): 'B/F': 'မျက်နှာသုတ်ပဝါ',
 }
 
-/** 376.1 — Row density presets (จำนวนแถวที่ fit ต่อหน้าโดยประมาณ) · 389.3 เพิ่ม 'sparse' (≤10 แถว เผื่อ free text) */
-export type FormDensity = 'sparse' | 'normal' | 'compact' | 'ultra'
+/** 376.1 — Row density presets (จำนวนแถวที่ fit ต่อหน้าโดยประมาณ) · 389.3 'sparse' (≤10) · 394 'xsparse' (น้อยมาก, สูงสุด) */
+export type FormDensity = 'xsparse' | 'sparse' | 'normal' | 'compact' | 'ultra'
 
 export const DENSITY: Record<FormDensity, { label: string; rowsPerPage: number; cellPy: string; fontPx: number }> = {
+  xsparse: { label: 'น้อยมาก', rowsPerPage: 6, cellPy: 'py-5', fontPx: 15 },   // 394 แถวสูงสุด — ลูกค้ารายการน้อย/เขียน free text เยอะ
   sparse:  { label: 'น้อย', rowsPerPage: 10, cellPy: 'py-3', fontPx: 13 },     // 389.3 แถวสูง เผื่อพนักงานเขียน free text
   normal:  { label: 'ปกติ', rowsPerPage: 22, cellPy: 'py-1.5', fontPx: 11 },
   compact: { label: 'แน่น', rowsPerPage: 30, cellPy: 'py-1', fontPx: 10 },

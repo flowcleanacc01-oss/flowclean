@@ -8,10 +8,9 @@
 //  · 376.1 density (ปกติ/แน่น/แน่นมาก) + paginate (thead ซ้ำ) · 376.3 เพิ่มแถวว่าง
 //  · 2 กล่องนับถุง (ส่งซัก/แพคส่ง) + 385.1 ลายเซ็นแถวเดียว 2 จุด (ลูกค้า | FlowClean) "_ / _" เซ็น 1-2 ครั้งก็ได้
 
-import { Fragment } from 'react'
 import { formatDate, cn } from '@/lib/utils'
-import { FL, DENSITY, BURMESE_ITEM, type FormLang, type FormDensity, type TriLabel } from '@/lib/form-i18n'
-import type { Customer, CompanyInfo, LinenItemDef, LinenCategoryDef } from '@/types'
+import { FL, DENSITY, type FormLang, type FormDensity, type TriLabel } from '@/lib/form-i18n'
+import type { Customer, CompanyInfo, LinenItemDef } from '@/types'
 
 interface Props {
   customer: Customer | null
@@ -23,11 +22,9 @@ interface Props {
   sheetTitle?: string
   compact?: boolean
   id?: string
-  langs?: FormLang[]                 // 376.4 ภาษาที่แสดง (default ทั้ง 3)
+  langs?: FormLang[]                 // 376.4 ภาษาที่แสดง · 394.1 ถอดพม่า (เหลือ th/en)
   density?: FormDensity              // 376.1 ความหนาแน่นแถว
   extraRows?: number                 // 376.3 แถวว่างต่อท้าย (ad-hoc)
-  grouped?: boolean                  // 376.5 จัดกลุ่มตามหมวด
-  categories?: LinenCategoryDef[]
 }
 
 // 385 — column widths (รวม 100%) · รายการ กว้างขึ้น 23→26 (กันตัวหนังสือ wrap หลายบรรทัด)
@@ -44,7 +41,7 @@ const DATA_COLS: { num: number; label: TriLabel; w: string }[] = [
   { num: 6, label: FL.washedReturn,     w: '8%' },   // 379 — ลูกค้านับผ้ากลับ ขวาสุด
 ]
 
-// trilingual stack: ไทย (เด่น) / อังกฤษ (รอง) / พม่า (.font-my ถ้ามี)
+// bilingual stack: ไทย (เด่น) / อังกฤษ (รอง) — 394.1 ถอดพม่าออก
 function Tri({ label, langs, center }: { label: TriLabel; langs: FormLang[]; center?: boolean }) {
   return (
     <span className={cn('block leading-tight', center && 'text-center')}>
@@ -52,7 +49,7 @@ function Tri({ label, langs, center }: { label: TriLabel; langs: FormLang[]; cen
         const txt = label[l]
         if (!txt) return null
         return (
-          <span key={l} className={cn('block leading-tight', i === 0 ? 'font-semibold' : 'opacity-70', l === 'my' && 'font-my')}
+          <span key={l} className={cn('block leading-tight', i === 0 ? 'font-semibold' : 'opacity-70')}
             style={i > 0 ? { fontSize: '0.82em' } : undefined}>{txt}</span>
         )
       })}
@@ -60,37 +57,17 @@ function Tri({ label, langs, center }: { label: TriLabel; langs: FormLang[]; cen
   )
 }
 
-function myItemName(item: LinenItemDef): string {
-  return item.nameMy || BURMESE_ITEM[item.code] || ''
-}
-
 export default function BlankLinenFormPrint({
   customer, company, items, date,
   showCustomer = true, showDate = true, sheetTitle, compact = false, id = 'print-blank-lf',
-  langs = ['th', 'en', 'my'], density = 'normal', extraRows = 0, grouped = false, categories = [],
+  langs = ['th', 'en'], density = 'normal', extraRows = 0,
 }: Props) {
   const pad = compact ? 'p-3' : 'p-8'
   const coTitle = compact ? 'text-sm' : 'text-xl'
   const d = DENSITY[density]
 
-  // 376.5 — จัดกลุ่มตามหมวด (เรียงตาม category sortOrder) หรือลำดับเดิม
-  const sortedCats = [...categories].sort((a, b) => a.sortOrder - b.sortOrder)
-  const groups: { label: string; items: LinenItemDef[] }[] = []
-  if (grouped && sortedCats.length) {
-    for (const c of sortedCats) {
-      const gItems = items.filter(i => i.category === c.key)
-      if (gItems.length) groups.push({ label: c.label, items: gItems })
-    }
-    const known = new Set(sortedCats.map(c => c.key))
-    const orphans = items.filter(i => !known.has(i.category))
-    if (orphans.length) groups.push({ label: 'อื่นๆ', items: orphans })
-  } else {
-    groups.push({ label: '', items })
-  }
-
-  // running row number ข้ามกลุ่ม
+  // 394.2 — เอา "จัดกลุ่มตามหมวด" ออก (ติ๊ดวาดปีกกาครอบ aggregate เองมากกว่า) → render รายการเรียงเดียว
   let rowNo = 0
-  const colCount = 2 + DATA_COLS.length  // no + item + 6 = 8
 
   return (
     // 376: print:px-2 print:py-0 — คืน padding ที่ซ้ำกับ @page margin (กันล้นหน้า 2)
@@ -159,38 +136,24 @@ export default function BlankLinenFormPrint({
           </tr>
         </thead>
         <tbody>
-          {groups.map((g, gi) => (
-            <Fragment key={gi}>
-              {/* 376.5 — หัวกลุ่ม + เส้นหนาคั่น */}
-              {g.label && (
-                <tr className="blank-form-group">
-                  <td colSpan={colCount} className={`border-x border-slate-500 border-t-2 border-t-slate-700 font-semibold text-slate-700 px-1.5 ${compact ? 'py-0.5' : 'py-1'}`}>
-                    ▸ {g.label}
-                  </td>
-                </tr>
-              )}
-              {g.items.map(item => {
-                rowNo++
-                const my = myItemName(item)
-                return (
-                  <tr key={item.code}>
-                    <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-400`}>{rowNo}</td>
-                    <td className={`px-1 ${d.cellPy} border border-slate-500`}>
-                      <div className="flex items-start justify-between gap-1">
-                        <span className="min-w-0 leading-tight">
-                          {langs.includes('th') && <span className="block font-medium leading-tight">{item.name}</span>}
-                          {langs.includes('en') && item.nameEn && <span className="block opacity-60 leading-tight" style={{ fontSize: '0.82em' }}>{item.nameEn}</span>}
-                          {langs.includes('my') && my && <span className="block font-my opacity-60 leading-tight" style={{ fontSize: '0.82em' }}>{my}</span>}
-                        </span>
-                        <span className="flex-shrink-0 font-mono font-bold border border-slate-400 rounded px-1 leading-tight">{item.code}</span>
-                      </div>
-                    </td>
-                    {DATA_COLS.map(c => <td key={c.num} className="border border-slate-500"></td>)}
-                  </tr>
-                )
-              })}
-            </Fragment>
-          ))}
+          {items.map(item => {
+            rowNo++
+            return (
+              <tr key={item.code}>
+                <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-400`}>{rowNo}</td>
+                <td className={`px-1 ${d.cellPy} border border-slate-500`}>
+                  <div className="flex items-start justify-between gap-1">
+                    <span className="min-w-0 leading-tight">
+                      {langs.includes('th') && <span className="block font-medium leading-tight">{item.name}</span>}
+                      {langs.includes('en') && item.nameEn && <span className="block opacity-60 leading-tight" style={{ fontSize: '0.82em' }}>{item.nameEn}</span>}
+                    </span>
+                    <span className="flex-shrink-0 font-mono font-bold border border-slate-400 rounded px-1 leading-tight">{item.code}</span>
+                  </div>
+                </td>
+                {DATA_COLS.map(c => <td key={c.num} className="border border-slate-500"></td>)}
+              </tr>
+            )
+          })}
           {/* 376.3 — แถวว่าง ad-hoc */}
           {Array.from({ length: Math.max(0, extraRows) }).map((_, i) => {
             rowNo++
