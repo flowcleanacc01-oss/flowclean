@@ -5,7 +5,7 @@
 //  374.3 พิมพ์ A4→2×A5 (แนวนอน ฉีกกลาง) หรือ A5 เดี่ยว
 //  374.4 แยกใบ/แผนก (เดาให้ตามหมวด + ปรับได้เต็มที่) → items ต่อใบน้อย fit A5
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Modal from '@/components/Modal'
 import { useStore } from '@/lib/store'
 import { getCustomerEnabledCodes } from '@/lib/customer-pricing'
@@ -13,6 +13,7 @@ import { todayISO, genId, cn } from '@/lib/utils'
 import BlankLinenFormPrint from '@/components/BlankLinenFormPrint'
 import BlankChecklistPrint from '@/components/BlankChecklistPrint'
 import ExportButtons from '@/components/ExportButtons'
+import SortableHeader from '@/components/SortableHeader'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { loadFormTemplates, saveFormTemplates, type FormTemplate } from '@/lib/form-template-service'
 import { DENSITY, type FormLang, type FormDensity } from '@/lib/form-i18n'
@@ -55,7 +56,12 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   const [templates, setTemplates] = useState<FormTemplate[]>([])
   useEffect(() => { if (open) loadFormTemplates().then(setTemplates).catch(() => {}) }, [open])
 
-  const reset = () => { setCustomerId(''); setSheets([]); setActiveSheet(0); setShowCustomer(false); setShowDate(false); setFormType('lf'); setPrintMode('a4'); setItemSearch(''); setItemCat('all'); setReorderMode(false); setDensity('normal') }  // 387 defaults · 389.4 extraRows reset auto ผ่าน setSheets([]) · 394.1/.2 ถอด showMy/grouped
+  // 395 — หน้าแรก (เลือกลูกค้า) theme หน้าลูกค้า: search (กรอง + Enter จั๊มเข้าหน้า 2) + ตาราง sort
+  const [custSearch, setCustSearch] = useState('')
+  const [custSortKey, setCustSortKey] = useState<'shortName' | 'count'>('shortName')
+  const [custSortDir, setCustSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const reset = () => { setCustomerId(''); setSheets([]); setActiveSheet(0); setShowCustomer(false); setShowDate(false); setFormType('lf'); setPrintMode('a4'); setItemSearch(''); setItemCat('all'); setReorderMode(false); setDensity('normal'); setCustSearch(''); setCustSortKey('shortName'); setCustSortDir('asc') }  // 387 defaults · 389.4 extraRows reset auto ผ่าน setSheets([]) · 394.1/.2 ถอด showMy/grouped · 395 reset picker
   const handleClose = () => { reset(); onClose() }
 
   // items ที่เลือกได้ (จาก QT ลูกค้า หรือ catalog ทั้งหมดถ้าฟอร์มกลาง)
@@ -73,6 +79,33 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
     setShowDate(false)             // 394.1/.2 ถอด showMy/grouped แล้ว
     setFormType('lf')              // 387.3/.4 default formType = LF เสมอ (ปุ่มซ้าย)
     setPrintMode('a4')             // 387.3/.4 default printMode = A4 เดี่ยว (orientation auto = portrait via key={printMode})
+  }
+
+  // 395 — customer rows + จำนวนรายการ (compute count ครั้งเดียว) → filter (Thai search) → sort
+  const customerRowsBase = useMemo(
+    () => customers.filter(c => c.isActive).map(c => ({ c, count: getCustomerEnabledCodes(c.id, quotations).length })),
+    [customers, quotations],
+  )
+  const customerRows = useMemo(() => {
+    const q = custSearch.trim()
+    const list = q
+      ? customerRowsBase.filter(r => matchesThaiQueryAnyField([r.c.shortName ?? '', r.c.name, r.c.nameEn ?? '', r.c.customerCode ?? ''], q))
+      : customerRowsBase
+    return [...list].sort((a, b) => {
+      const cmp = custSortKey === 'shortName'
+        ? (a.c.shortName || a.c.name).localeCompare(b.c.shortName || b.c.name, 'th')
+        : a.count - b.count
+      return custSortDir === 'asc' ? cmp : -cmp
+    })
+  }, [customerRowsBase, custSearch, custSortKey, custSortDir])
+  const handleCustSort = (key: string) => {
+    if (custSortKey === key) setCustSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setCustSortKey(key as 'shortName' | 'count'); setCustSortDir('asc') }
+  }
+  // Enter ในช่องค้นหา → จั๊มเข้าหน้า 2 ด้วยลูกค้าตัวแรกที่เลือกได้ (มี QT)
+  const jumpFirstCustomer = () => {
+    const first = customerRows.find(r => r.count > 0)
+    if (first) pickCustomer(first.c.id)
   }
 
   // 387 — สลับ formType + auto set printMode · idempotent: กดปุ่มเดิม = no-op กัน wipe ค่าที่ user/template เซตไว้
@@ -152,18 +185,57 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
             <span className="font-medium text-[#1B3A5C]">ฟอร์มกลาง (ไม่ระบุลูกค้า)</span>
             <span className="text-xs text-slate-500">— เว้นช่องชื่อ/วันที่ให้เขียนมือ ใช้ได้ทุกเจ้า · รายการทั้งหมด {linenCatalog.length}</span>
           </button>
-          <div className="grid gap-2">
-            {customers.filter(c => c.isActive).map(c => {
-              const codes = getCustomerEnabledCodes(c.id, quotations)
-              return (
-                <button key={c.id} onClick={() => pickCustomer(c.id)} disabled={codes.length === 0}
-                  className="text-left px-4 py-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50">
-                  <span className="font-medium text-slate-800">{c.shortName || c.name}</span>
-                  <span className="text-xs text-slate-500 ml-2">({codes.length} รายการ)</span>
-                  {codes.length === 0 && <span className="text-xs text-amber-600 ml-2">⚠ ยังไม่มี QT</span>}
-                </button>
-              )
-            })}
+          {/* 395 — search: กรองตาราง + กด Enter จั๊มเข้าหน้า 2 (ลูกค้าตัวแรกที่มี QT) · theme หน้าลูกค้า */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3DD8D8]" />
+            <input
+              value={custSearch}
+              onChange={e => setCustSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); jumpFirstCustomer() } }}
+              placeholder="ค้นหาลูกค้า — พิมพ์ชื่อย่อ/ชื่อ/รหัส แล้วกด Enter เข้าเลย"
+              className="w-full pl-10 pr-4 py-2 border-2 border-[#3DD8D8] rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
+            />
+          </div>
+
+          {/* 395 — ตาราง sort (ชื่อย่อ / ชื่อบริษัท / จำนวนรายการ) — คลิกแถวเพื่อเข้าหน้า 2 */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="max-h-[44vh] overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <SortableHeader label="ชื่อย่อลูกค้า" sortKey="shortName" currentSortKey={custSortKey} currentSortDir={custSortDir} onSort={handleCustSort} className="text-left" />
+                    <th className="px-4 py-3 font-medium text-slate-600 text-left">ชื่อบริษัท</th>
+                    <SortableHeader label="จำนวนรายการ" sortKey="count" currentSortKey={custSortKey} currentSortDir={custSortDir} onSort={handleCustSort} className="text-right" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {customerRows.length === 0 ? (
+                    <tr><td colSpan={3} className="text-center py-10 text-slate-400 text-sm">ไม่พบลูกค้า</td></tr>
+                  ) : customerRows.map(({ c, count }) => {
+                    const noQT = count === 0
+                    return (
+                      <tr key={c.id}
+                        onClick={() => { if (!noQT) pickCustomer(c.id) }}
+                        className={cn('border-b border-slate-100 last:border-0',
+                          noQT ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-[#3DD8D8]/10')}>
+                        <td className="px-4 py-2.5">
+                          <span className="font-bold text-[#1B3A5C] tracking-wide">{c.shortName || c.name}</span>
+                          {noQT && <span className="ml-2 text-[10px] text-amber-600 font-medium">⚠ ยังไม่มี QT</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-700">
+                          <span>{c.name}</span>
+                          {c.nameEn && <span className="block text-[10px] text-slate-400">{c.nameEn}</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                          <span className={cn('font-semibold', noQT ? 'text-slate-400' : 'text-[#1B3A5C]')}>{count}</span>
+                          <span className="text-xs text-slate-400 ml-1">รายการ</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : (
