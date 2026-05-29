@@ -18,9 +18,11 @@
 import { useMemo, useState } from 'react'
 import { Package, Info } from 'lucide-react'
 import Modal from './Modal'
+import AggregateImpactModal from './AggregateImpactModal'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { getGroupAnchorCode } from '@/lib/aggregate-groups'
+import { diffConfigs } from '@/lib/aggregate-audit'
 import type { Customer, AggregateSizeGroupConfig, LinenItemDef } from '@/types'
 
 interface Props {
@@ -35,6 +37,9 @@ export default function AggregateGroupsModal({ open, onClose, customer }: Props)
   const [configs, setConfigs] = useState<AggregateSizeGroupConfig[]>(
     customer.aggregateSizeGroups ?? [],
   )
+
+  // 390 — หลัง save ถ้า config เปลี่ยนจริง → เด้ง Impact Modal (เก็บ prev/next ไว้ส่งให้ diff + นับ LF กระทบ)
+  const [impact, setImpact] = useState<{ prev: AggregateSizeGroupConfig[]; next: AggregateSizeGroupConfig[] } | null>(null)
 
   // หา size groups ทั้งหมดใน catalog (unique, sorted) + รวบรวม items ในแต่ละ group
   const groupsInCatalog = useMemo(() => {
@@ -89,13 +94,27 @@ export default function AggregateGroupsModal({ open, onClose, customer }: Props)
   }
 
   const handleSave = () => {
-    updateCustomer(customer.id, { aggregateSizeGroups: configs })
+    const prevConfigs = customer.aggregateSizeGroups ?? []   // capture ก่อน update
+    const nextConfigs = configs
+    updateCustomer(customer.id, { aggregateSizeGroups: nextConfigs })
+    // 390 — config เปลี่ยนจริง → เด้ง impact modal · ไม่เปลี่ยน → ปิดเงียบเหมือนเดิม
+    if (diffConfigs(prevConfigs, nextConfigs).hasChanges) {
+      setImpact({ prev: prevConfigs, next: nextConfigs })
+    } else {
+      onClose()
+    }
+  }
+
+  // 390 — ปิด impact modal = จบ flow → ปิด groups modal ด้วย
+  const handleImpactClose = () => {
+    setImpact(null)
     onClose()
   }
 
   return (
+    <>
     <Modal
-      open={open}
+      open={open && !impact}
       onClose={onClose}
       title={`การนับรวมไซส์ — ${customer.shortName || customer.name}`}
       size="lg"
@@ -307,5 +326,17 @@ export default function AggregateGroupsModal({ open, onClose, customer }: Props)
         </div>
       </div>
     </Modal>
+
+    {/* 390 — Impact modal เด้งเมื่อ config เปลี่ยน (ปิดแล้วปิด groups modal ด้วย) */}
+    {impact && (
+      <AggregateImpactModal
+        open={!!impact}
+        onClose={handleImpactClose}
+        customer={customer}
+        prevConfigs={impact.prev}
+        nextConfigs={impact.next}
+      />
+    )}
+    </>
   )
 }

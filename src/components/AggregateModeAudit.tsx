@@ -15,11 +15,13 @@
  *   - missing_groups: customer มี group ใหม่ที่ snapshot ไม่ครอบ
  */
 import { useState, useMemo, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { exportCSV } from '@/lib/export'
 import { formatDate, cn, startOfMonthISO, endOfMonthISO, formatExportFilename } from '@/lib/utils'
 import { buildAggregateSnapshot, type AggregateSnapshot } from '@/lib/carry-over-logic'
+// 390 — reason logic ย้ายไป lib/aggregate-audit (reuse กับ AggregateImpactModal)
+import { compareSnapshots, stringifySnap, REASON_CONFIG, type AggReason, type AggSeverity as Severity } from '@/lib/aggregate-audit'
 import DateFilter from '@/components/DateFilter'
 import CustomerPicker from '@/components/CustomerPicker'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
@@ -28,14 +30,6 @@ import {
   Search, AlertTriangle, AlertOctagon, CheckCircle2, FileSpreadsheet,
   Package, Eye, ExternalLink, RefreshCw,
 } from 'lucide-react'
-
-type AggReason =
-  | 'snapshot_missing'    // LF ไม่มี snapshot — fallback ใช้ customer ปัจจุบัน
-  | 'snapshot_mismatch'   // snapshot ≠ customer ปัจจุบัน (mode ของ group เปลี่ยน)
-  | 'extra_groups'        // snapshot มี group ที่ customer ลบแล้ว
-  | 'missing_groups'      // customer เพิ่ม group ใหม่หลังจาก LF สร้าง
-
-type Severity = 'critical' | 'high' | 'warning' | 'info'
 
 interface PendingFix {
   sourceType: 'lf' | 'adj'
@@ -47,90 +41,23 @@ interface PendingFix {
   reason: AggReason
 }
 
-const REASON_CONFIG: Record<AggReason, { label: string; color: string; icon: string }> = {
-  snapshot_missing:  { label: 'ไม่มี snapshot',          color: 'amber',  icon: '❓' },
-  snapshot_mismatch: { label: 'snapshot ≠ ปัจจุบัน',     color: 'orange', icon: '🔀' },
-  extra_groups:      { label: 'มี group ที่ลบแล้ว',      color: 'orange', icon: '➖' },
-  missing_groups:    { label: 'ขาด group ใหม่',          color: 'amber',  icon: '➕' },
-}
-
 type SortCol = 'severity' | 'date' | 'lfNumber' | 'customer'
 type SortDir = 'asc' | 'desc'
 
-/** Stringify config ให้เปรียบเทียบได้ + แสดงผล */
-function stringifySnap(snap: AggregateSnapshot | undefined): string {
-  if (!snap) return '(none)'
-  const keys = Object.keys(snap).sort()
-  if (keys.length === 0) return '(empty)'
-  return keys.map(k => `${k}:c2=${snap[k].col2Mode[0]}/c5=${snap[k].col5Mode[0]}`).join(', ')
-}
-
-/** เปรียบเทียบ snapshot 2 ตัว — ถ้าเหมือนกัน return null, ต่าง return reason */
-function compareSnapshots(
-  lfSnap: AggregateSnapshot | undefined,
-  curSnap: AggregateSnapshot | undefined,
-): { reason: AggReason | null; severity: Severity; detail: string } {
-  // ทั้งคู่ไม่มี → ไม่มี aggregate config → OK
-  if (!lfSnap && !curSnap) {
-    return { reason: null, severity: 'info', detail: 'ไม่ใช้ aggregate' }
-  }
-  // LF ไม่มี + customer มี → fallback active
-  if (!lfSnap && curSnap) {
-    return {
-      reason: 'snapshot_missing',
-      severity: 'warning',
-      detail: 'LF ไม่มี snapshot (เก่าก่อน 330) — calc carry-over ใช้ customer ปัจจุบัน',
-    }
-  }
-  // LF มี + customer ไม่มี → LF ติด config เก่า, customer ลบ groups ไปแล้ว
-  if (lfSnap && !curSnap) {
-    return {
-      reason: 'extra_groups',
-      severity: 'high',
-      detail: `LF snapshot มี ${Object.keys(lfSnap).length} group แต่ customer ไม่มี aggregate config แล้ว`,
-    }
-  }
-  // ทั้งคู่มี → เปรียบเทียบเนื้อหา
-  if (lfSnap && curSnap) {
-    const lfKeys = Object.keys(lfSnap)
-    const curKeys = Object.keys(curSnap)
-    const extra = lfKeys.filter(k => !curKeys.includes(k))
-    const missing = curKeys.filter(k => !lfKeys.includes(k))
-    const common = lfKeys.filter(k => curKeys.includes(k))
-    const modeChanged = common.filter(
-      k => lfSnap[k].col2Mode !== curSnap[k].col2Mode || lfSnap[k].col5Mode !== curSnap[k].col5Mode,
-    )
-    if (extra.length === 0 && missing.length === 0 && modeChanged.length === 0) {
-      return { reason: null, severity: 'info', detail: 'ตรงปัจจุบัน' }
-    }
-    const parts: string[] = []
-    if (modeChanged.length > 0) parts.push(`mode เปลี่ยน: ${modeChanged.join(', ')}`)
-    if (extra.length > 0) parts.push(`group ที่ลบ: ${extra.join(', ')}`)
-    if (missing.length > 0) parts.push(`group ใหม่: ${missing.join(', ')}`)
-    let reason: AggReason = 'snapshot_mismatch'
-    let sev: Severity = 'high'
-    if (modeChanged.length === 0 && extra.length === 0 && missing.length > 0) {
-      reason = 'missing_groups'
-      sev = 'warning'
-    } else if (modeChanged.length === 0 && missing.length === 0 && extra.length > 0) {
-      reason = 'extra_groups'
-      sev = 'high'
-    }
-    return { reason, severity: sev, detail: parts.join(' · ') }
-  }
-  return { reason: null, severity: 'info', detail: '' }
-}
-
 export default function AggregateModeAudit() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   // B1: include carryOverAdjustments scan
   const { linenForms, customers, updateLinenForm, carryOverAdjustments, updateCarryOverAdjustment } = useStore()
   const [pendingFix, setPendingFix] = useState<PendingFix | null>(null)
 
+  // 390 — deep-link จาก Impact Modal: ?customerId=xxx → pre-filter ลูกค้านี้ + เปิดช่วงวันกว้าง (เห็น LF เก่าครบ)
+  //   lazy init = อ่านครั้งเดียวตอน mount (component นี้ mount ใหม่เมื่อ nav มาจากหน้า customer → ค่าถูกเสมอ)
+  const deepLinkCustomer = searchParams.get('customerId')
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')
-  const [dateFrom, setDateFrom] = useState<string>(() => startOfMonthISO())
-  const [dateTo, setDateTo] = useState<string>(() => endOfMonthISO())
-  const [customerId, setCustomerId] = useState<string>('all')
+  const [dateFrom, setDateFrom] = useState<string>(() => deepLinkCustomer ? '' : startOfMonthISO())
+  const [dateTo, setDateTo] = useState<string>(() => deepLinkCustomer ? '' : endOfMonthISO())
+  const [customerId, setCustomerId] = useState<string>(() => deepLinkCustomer || 'all')
   const [severity, setSeverity] = useState<'all' | Severity>('all')
   const [reason, setReason] = useState<'all' | AggReason>('all')
   const [showOk, setShowOk] = useState(false)
