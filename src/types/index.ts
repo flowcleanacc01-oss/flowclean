@@ -632,6 +632,9 @@ export interface Quotation {
   minPerTripThreshold?: number
   enableMinPerMonth?: boolean
   monthlyFlatRate?: number
+  // 397 — ไฟล์สแกนใบตอบรับที่ลูกค้าเซ็น (เก็บใน Supabase Storage · DB เก็บแค่ path)
+  acceptedScanPath?: string
+  acceptedScanUploadedAt?: string
 }
 
 // ============================================================

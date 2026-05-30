@@ -246,6 +246,7 @@ export default function CustomerDetailPage() {
           <Link href={`/dashboard/billing?tab=quotation&openqt=${linkedQT.id}&qtcustomer=${id}`}
             className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
             <Link2 className="w-3 h-3" />{linkedQT.quotationNumber}
+            {linkedQT.acceptedScanPath && <span title="มีเอกสารตอบรับแนบ (ลายเซ็นลูกค้า)">📎</span>}
           </Link>
         ) : (
           <Link href={`/dashboard/billing?tab=quotation&newqt=${id}&qtcustomer=${id}`}

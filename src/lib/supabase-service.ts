@@ -38,6 +38,9 @@ async function dbWrite(params: {
 
 // Map of camelCase TS field names → snake_case DB column names
 const FIELD_MAP: Record<string, string> = {
+  // 397 — QT accepted-scan (path ไฟล์ลายเซ็นตอบรับ)
+  acceptedScanPath: 'accepted_scan_path',
+  acceptedScanUploadedAt: 'accepted_scan_uploaded_at',
   shortName: 'short_name',
   nameEn: 'name_en',
   customerCode: 'customer_code',

@@ -27,6 +27,7 @@ import SortableHeader from '@/components/SortableHeader'
 import BillingPrint from '@/components/BillingPrint'
 import TaxInvoicePrint from '@/components/TaxInvoicePrint'
 import QuotationPrint from '@/components/QuotationPrint'
+import QtScanAttachment from '@/components/QtScanAttachment'
 import CustomerPicker from '@/components/CustomerPicker'
 import { useScrollToMark } from '@/lib/use-scroll-to-mark'
 import { useTabUrlSync } from '@/lib/use-tab-url-sync'
@@ -1833,7 +1834,7 @@ export default function BillingPage() {
                       {/* 135.4 + 147.2: highlight Q */}
                       <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(q.date)}</td>
                       <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customerName'))}>{highlightText(getCustomer(q.customerId)?.shortName || q.customerName, highlightQ)}</td>
-                      <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('quotationNumber'))}>{highlightText(q.quotationNumber, highlightQ)}</td>
+                      <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('quotationNumber'))}>{highlightText(q.quotationNumber, highlightQ)}{q.acceptedScanPath && <span title="มีเอกสารตอบรับแนบ (ลายเซ็นลูกค้า)" className="ml-1">📎</span>}</td>
                       <td className={cn("px-4 py-3 text-center text-slate-500", sortedBg('items'))}>{q.items.length}</td>
                       <td className={cn("px-4 py-3 text-slate-500 text-sm max-w-[160px] truncate", sortedBg('notes'))}>{q.notes || '-'}</td>
                       <td className={cn("px-4 py-3 text-center", sortedBg('status'))}>
@@ -3378,6 +3379,9 @@ export default function BillingPage() {
                 <strong>หมายเหตุ:</strong> ราคาใหม่จะมีผลเฉพาะ SD ที่สร้างหลังกดตกลงเท่านั้น — SD/WB/IV ที่ออกไปแล้วจะใช้ราคาเดิม (ล็อคไว้ตอนสร้าง)
               </div>
             )}
+
+            {/* 397 — เอกสารตอบรับ (ลายเซ็นลูกค้า) แนบ/ดู/ลบ */}
+            <QtScanAttachment quotation={detailQuotation} />
 
             <div className="flex justify-between pt-2">
               <div className="flex gap-2 items-center flex-wrap">
