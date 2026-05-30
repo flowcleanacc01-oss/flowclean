@@ -6,6 +6,7 @@
  * Mount: tab ใหม่ในเมนูรายงาน (/dashboard/reports?tab=priceaudit)
  */
 import { useState, useMemo, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import FloatingTotalBar from '@/components/FloatingTotalBar'
 import {
   usePriceAudit,
@@ -20,7 +21,7 @@ import DateFilter from '@/components/DateFilter'
 import CustomerPicker from '@/components/CustomerPicker'
 import {
   Search, AlertTriangle, AlertOctagon, CheckCircle2, FileSpreadsheet,
-  ShieldAlert, Eye, EyeOff, ChevronDown, ChevronUp, ArrowUpDown, Info,
+  ShieldAlert, Eye, EyeOff, ChevronDown, ChevronUp, ArrowUpDown, Info, ExternalLink,
 } from 'lucide-react'
 import HoverPopover from '@/components/HoverPopover'
 
@@ -32,6 +33,7 @@ const SEVERITY_RANK: Record<PriceAuditSeverity, number> = {
 }
 
 export default function PriceAudit() {
+  const router = useRouter()
   // Date filter — default = current month (per ติ๊ด: monitor by date range)
   const [dateFilterMode, setDateFilterMode] = useState<'single' | 'range'>('range')
   const [dateFrom, setDateFrom] = useState<string>(() => startOfMonthISO())
@@ -348,7 +350,14 @@ export default function PriceAudit() {
                 <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-3 py-2"><SeverityBadge sev={r.severity} isBilled={r.isBilled} /></td>
                   <td className="px-3 py-2 text-slate-600 text-xs">{formatDate(r.dnDate)}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-700">{r.dnNumber}</td>
+                  <td className="px-3 py-2">
+                    {/* 401 — DN# = link เปิดใบส่งของ (SD) ที่หน้า delivery */}
+                    <button onClick={() => router.push(`/dashboard/delivery?detail=${r.dnId}`)}
+                      title="เปิดใบส่งของ (SD)"
+                      className="font-mono text-xs font-semibold text-[#1B3A5C] hover:underline inline-flex items-center gap-1">
+                      {r.dnNumber}<ExternalLink className="w-3 h-3" />
+                    </button>
+                  </td>
                   <td className="px-3 py-2">
                     <div className="font-medium text-slate-700">{r.customerShortName}</div>
                     <div className="text-xs text-slate-400">{r.qtNumber || <em className="text-red-500">— ไม่มี QT —</em>}</div>

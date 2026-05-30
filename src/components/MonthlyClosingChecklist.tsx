@@ -7,7 +7,8 @@
  */
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
-import { cn, todayISO, formatCurrency } from '@/lib/utils'
+import { cn, todayISO, formatCurrency, formatDate } from '@/lib/utils'
+import { CARRY_OVER_REASON_CONFIG } from '@/types'
 import { useRouter } from 'next/navigation'
 import {
   ClipboardCheck, CheckCircle2, AlertTriangle, FileText, Truck,
@@ -16,15 +17,20 @@ import {
 
 export default function MonthlyClosingChecklist() {
   const router = useRouter()
-  const { linenForms, deliveryNotes, billingStatements, taxInvoices, carryOverAdjustments } = useStore()
+  const { linenForms, deliveryNotes, billingStatements, taxInvoices, carryOverAdjustments, customers } = useStore()
 
   const [month, setMonth] = useState<string>(() => todayISO().slice(0, 7))
+
+  const custNameById = useMemo(
+    () => new Map(customers.map(c => [c.id, c.shortName || c.name])),
+    [customers],
+  )
 
   const data = useMemo(() => {
     const monthStart = `${month}-01`
     const [yr, mo] = month.split('-').map(Number)
-    const nextMonth = new Date(yr, mo, 1)
-    const nextMonthISO = nextMonth.toISOString().slice(0, 10)
+    // 400 — string math (timezone-safe): new Date(yr,mo,1).toISOString() เลื่อน -1 วันใน TZ+7 → ตัด LF/SD/adj วันสุดท้ายของเดือนทิ้ง
+    const nextMonthISO = mo === 12 ? `${yr + 1}-01-01` : `${yr}-${String(mo + 1).padStart(2, '0')}-01`
 
     // LF section
     const lfsInMonth = linenForms.filter(f => f.date >= monthStart && f.date < nextMonthISO)
@@ -209,22 +215,38 @@ export default function MonthlyClosingChecklist() {
         </Section>
       </div>
 
-      {/* Adjustments — informational */}
-      {data.adjCount > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <span className="font-semibold text-slate-700">รายการปรับยอดผ้าค้างในเดือนนี้</span>
-            </div>
-            <div className="text-xs text-slate-500">
-              {data.adjCount} รายการ — ตรวจสอบให้แน่ใจว่าทุกรายการมีหลักฐานยืนยัน
-            </div>
+      {/* Adjustments — informational · 400: list รายการจริง + กดเปิดเอกสาร (deep-link เปิด modal ที่ tab ผ้าค้าง) */}
+      {data.adjsInMonth.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span className="font-semibold text-slate-700">รายการปรับยอดผ้าค้างในเดือนนี้</span>
+            <span className="text-xs text-slate-400">({data.adjsInMonth.length} รายการ — กดเพื่อเปิดดู)</span>
           </div>
-          <button onClick={() => router.push('/dashboard/reports?tab=carryover')}
-            className="text-xs text-[#1B3A5C] hover:underline inline-flex items-center gap-1">
-            ไปดู <ExternalLink className="w-3 h-3" />
-          </button>
+          <div className="divide-y divide-slate-100">
+            {data.adjsInMonth.map(a => {
+              const reasonCfg = CARRY_OVER_REASON_CONFIG[a.reasonCategory]
+              return (
+                <button key={a.id}
+                  onClick={() => router.push(`/dashboard/reports?tab=carryover&openAdj=${a.id}`)}
+                  className="w-full flex items-center justify-between gap-2 py-1.5 px-1 -mx-1 rounded text-left hover:bg-slate-50 transition-colors">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono text-xs text-slate-500 flex-shrink-0">{formatDate(a.date)}</span>
+                    <span className={cn('inline-block px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0',
+                      a.type === 'reset' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700')}>
+                      {a.type === 'reset' ? 'Reset' : 'Adjust'}
+                    </span>
+                    <span className="text-xs font-medium text-slate-700 truncate">{custNameById.get(a.customerId) || a.customerId}</span>
+                    <span className="text-[11px] text-slate-400 truncate hidden sm:inline">
+                      {a.items.length} รายการ · {reasonCfg ? `${reasonCfg.icon} ${reasonCfg.label}` : a.reasonCategory}
+                    </span>
+                  </span>
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                </button>
+              )
+            })}
+          </div>
+          <div className="text-xs text-slate-400 mt-2">ตรวจสอบให้แน่ใจว่าทุกรายการมีหลักฐานยืนยัน</div>
         </div>
       )}
 

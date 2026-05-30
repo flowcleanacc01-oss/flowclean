@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatCurrency, formatNumber, cn, buildPriceMapFromQT, formatDate, todayISO, startOfMonthISO, endOfMonthISO } from '@/lib/utils'
 import { FileDown, ExternalLink, Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react'
@@ -62,6 +63,27 @@ export default function ReportsPage() {
   const [coAdjustModalOpen, setCoAdjustModalOpen] = useState(false)
   const [coEditingAdjustment, setCoEditingAdjustment] = useState<CarryOverAdjustment | undefined>(undefined)
   const [showCarryOverPrint, setShowCarryOverPrint] = useState(false)
+
+  // 400 — deep-link จาก Closing checklist: ?openAdj=<id> → เลือกลูกค้า+เดือน + เปิด modal เอกสารปรับยอด
+  //   strip param หลังเปิด → re-click ตัวเดิมได้อีก + refresh ไม่ re-open (ref กัน loop ระหว่าง replace)
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const deepLinkAdjRef = useRef<string | null>(null)
+  useEffect(() => {
+    const adjId = searchParams.get('openAdj')
+    if (!adjId) { deepLinkAdjRef.current = null; return }
+    if (deepLinkAdjRef.current === adjId) return
+    const adj = carryOverAdjustments.find(a => a.id === adjId && !a.isDeleted)
+    if (!adj) return
+    deepLinkAdjRef.current = adjId
+    setSelCustomerId(adj.customerId)
+    setSelMonth(adj.date.slice(0, 7))
+    setCoEditingAdjustment(adj)
+    setCoAdjustModalOpen(true)
+    const sp = new URLSearchParams(Array.from(searchParams.entries()))
+    sp.delete('openAdj')
+    router.replace(`/dashboard/reports?${sp.toString()}`, { scroll: false })
+  }, [searchParams, carryOverAdjustments, router])
 
   // 210.1: เมื่อเปลี่ยนเดือนด้านบน (selMonth) บน carryover tab → sync ช่องวันที่ด้านล่าง
   useEffect(() => {
