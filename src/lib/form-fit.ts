@@ -28,14 +28,18 @@ const OVERHEAD: Record<FormKind, Record<'full' | 'compact', number>> = {
 }
 
 const ROW_H_MIN: Record<'full' | 'compact', number> = { full: 22, compact: 15 }
-const ROW_H_MAX: Record<'full' | 'compact', number> = { full: 58, compact: 38 }
+// 398.2 — compact cap 38→72: CK ส่วนมาก 5-10 แถว เดิม fit ชน 38 ทำให้ตารางเล็ก หน้าโล่ง เติมไม่เต็ม A5
+const ROW_H_MAX: Record<'full' | 'compact', number> = { full: 58, compact: 72 }
 const FONT_MIN:  Record<'full' | 'compact', number> = { full: 10, compact: 9 }
-const FONT_MAX:  Record<'full' | 'compact', number> = { full: 15, compact: 13 }
+// 398.2 — compact 13→15: แถวสูงขึ้นได้ ฟอนต์ใหญ่ตามอ่านง่าย
+const FONT_MAX:  Record<'full' | 'compact', number> = { full: 15, compact: 15 }
 
 /** preset (manual) base row height — px */
+// 398.2 — re-tune compact (เดิม 30/22/17 ทุกค่า < fit(≤38) → 3 ปุ่ม "โปร่ง/ปกติ/แน่น" กลายเป็นแค่ระดับบีบ)
+//   ใหม่ 56/40/28: span ตั้งแต่โปร่ง→แน่น ใช้ได้จริงสำหรับ CK 5-10 แถว (full คงเดิม — LF a4 เดี่ยว 10-30 แถวพอดีอยู่แล้ว)
 const PRESET_ROW_H: Record<'full' | 'compact', Record<'loose' | 'normal' | 'dense', number>> = {
   full:    { loose: 46, normal: 32, dense: 24 },
-  compact: { loose: 30, normal: 22, dense: 17 },
+  compact: { loose: 56, normal: 40, dense: 28 },
 }
 
 const FONT_RATIO = 0.34    // font ≈ rowH × ratio (clamp)

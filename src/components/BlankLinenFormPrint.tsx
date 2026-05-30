@@ -66,6 +66,11 @@ export default function BlankLinenFormPrint({
   const pad = compact ? 'p-3' : 'p-8'
   const coTitle = compact ? 'text-sm' : 'text-xl'
 
+  // 398.1 — ลายเซ็นขยับตามการบีบ/ขยายตาราง: ระยะห่างบน (gap) + ความสูงช่องเซ็น ผูกกับ rowHeightPx
+  //   เดิม mt-8/pb-6 เป็นค่าคงที่ → บีบตารางแต่ส่วนลายเซ็นไม่หด (พื้นที่ล่างยังอ้วน "ไม่ขยับขึ้น")
+  const sigGap = Math.round(Math.max(8, Math.min(40, rowHeightPx * 0.8)))
+  const sigLineH = Math.round(Math.max(10, Math.min(32, rowHeightPx * 0.85)))
+
   // 394.2 — เอา "จัดกลุ่มตามหมวด" ออก (ติ๊ดวาดปีกกาครอบ aggregate เองมากกว่า) → render รายการเรียงเดียว
   let rowNo = 0
 
@@ -123,12 +128,12 @@ export default function BlankLinenFormPrint({
           {DATA_COLS.map(c => <col key={c.num} style={{ width: c.w }} />)}
         </colgroup>
         <thead>
-          {/* 380.3 เอาแถว (ลูกค้ากรอก) ออก · 380.5 header row เตี้ยลง (py-0.5 + leading-none) */}
+          {/* 380.3 เอาแถว (ลูกค้ากรอก) ออก · 398 header row เตี้ยลงอีก (py-0.5 ทั้ง full/compact + leading-none) */}
           <tr className="text-[#1B3A5C] align-bottom leading-none">
-            <th className={`text-center px-0.5 ${compact ? 'py-0.5' : 'py-1.5'} border border-slate-500`}><Tri label={FL.no} langs={langs} center /></th>
-            <th className={`text-left px-1 ${compact ? 'py-0.5' : 'py-1.5'} border border-slate-500`}><Tri label={FL.item} langs={langs} /></th>
+            <th className="text-center px-0.5 py-0.5 border border-slate-500"><Tri label={FL.no} langs={langs} center /></th>
+            <th className="text-left px-1 py-0.5 border border-slate-500"><Tri label={FL.item} langs={langs} /></th>
             {DATA_COLS.map(c => (
-              <th key={c.num} className={cn('text-center px-0.5 border border-slate-500', compact ? 'py-0.5' : 'py-1.5')}>
+              <th key={c.num} className="text-center px-0.5 py-0.5 border border-slate-500">
                 <span className="block text-[0.8em] opacity-60">{c.num}</span>
                 <Tri label={c.label} langs={langs} center />
               </th>
@@ -171,18 +176,18 @@ export default function BlankLinenFormPrint({
 
       {/* 385.1 — ลายเซ็นแถวเดียว 2 จุด (ลูกค้า | FlowClean) · "_ / _" = เซ็น 1 หรือ 2 ครั้งก็ได้
           ไม่ระบุ ส่งซัก/รับกลับ — บางลูกค้าเซ็นครั้งเดียว, กัน audit ไม่ผ่านเพราะลายเซ็นไม่ครบ 4 จุด */}
-      <div className={`grid grid-cols-2 ${compact ? 'gap-x-8 mt-4 text-[9px]' : 'gap-x-16 mt-8 text-xs'}`}>
+      <div className={cn('grid grid-cols-2', compact ? 'gap-x-8 text-[9px]' : 'gap-x-16 text-xs')} style={{ marginTop: sigGap }}>
         <div className="flex items-end gap-2 min-w-0">
           <span className="flex-shrink-0"><Tri label={FL.signCustomer} langs={langs} /></span>
-          <span className={`flex-1 border-b border-slate-400 ${compact ? 'pb-3' : 'pb-6'}`}></span>
+          <span className="flex-1 border-b border-slate-400" style={{ paddingBottom: sigLineH }}></span>
           <span className="flex-shrink-0 text-slate-400">/</span>
-          <span className={`flex-1 border-b border-slate-400 ${compact ? 'pb-3' : 'pb-6'}`}></span>
+          <span className="flex-1 border-b border-slate-400" style={{ paddingBottom: sigLineH }}></span>
         </div>
         <div className="flex items-end gap-2 min-w-0">
           <span className="flex-shrink-0 font-semibold">FlowClean</span>
-          <span className={`flex-1 border-b border-slate-400 ${compact ? 'pb-3' : 'pb-6'}`}></span>
+          <span className="flex-1 border-b border-slate-400" style={{ paddingBottom: sigLineH }}></span>
           <span className="flex-shrink-0 text-slate-400">/</span>
-          <span className={`flex-1 border-b border-slate-400 ${compact ? 'pb-3' : 'pb-6'}`}></span>
+          <span className="flex-1 border-b border-slate-400" style={{ paddingBottom: sigLineH }}></span>
         </div>
       </div>
 

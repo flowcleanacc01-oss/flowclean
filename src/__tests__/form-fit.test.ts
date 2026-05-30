@@ -87,6 +87,21 @@ describe('computeFormMetrics — preset modes', () => {
   })
 })
 
+// 398.2 — CK ส่วนมาก 5-10 แถว (2-up = compact): เดิม fit ชน cap 38 + presets < fit → 3 ปุ่มเป็นแค่ระดับบีบ
+describe('computeFormMetrics — 398.2 CK 2-up few rows', () => {
+  it('CK 8 แถว fit → เติมเต็มหน้า (rowH ชน cap ใหม่ 72 ไม่ใช่ 38) + ฟอนต์ใหญ่สุด', () => {
+    const m = computeFormMetrics(8, { kind: 'checklist', printMode: 'a4-2up', fitMode: 'fit', fineLevel: 0 })
+    expect(m.rowHeightPx).toBe(72)
+    expect(m.fontPx).toBe(15)
+  })
+  it('CK presets โปร่ง/ปกติ/แน่น = 56/40/28 (span ใช้ได้จริง ไม่ใช่ไล่บีบอย่างเดียว)', () => {
+    const o = { kind: 'checklist' as const, printMode: 'a4-2up' as const, fineLevel: 0 }
+    expect(computeFormMetrics(8, { ...o, fitMode: 'loose' }).rowHeightPx).toBe(56)
+    expect(computeFormMetrics(8, { ...o, fitMode: 'normal' }).rowHeightPx).toBe(40)
+    expect(computeFormMetrics(8, { ...o, fitMode: 'dense' }).rowHeightPx).toBe(28)
+  })
+})
+
 describe('pageBoxPx', () => {
   it('a4 เดี่ยว = portrait (สูง > กว้าง)', () => {
     const p = pageBoxPx('a4')
