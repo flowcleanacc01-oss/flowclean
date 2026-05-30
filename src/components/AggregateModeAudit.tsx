@@ -41,7 +41,8 @@ interface PendingFix {
   reason: AggReason
 }
 
-type SortCol = 'severity' | 'date' | 'lfNumber' | 'customer'
+// 399 — sort ได้ทุก Col (เพิ่ม snapshot / curSnapshot / issue)
+type SortCol = 'severity' | 'date' | 'lfNumber' | 'customer' | 'snapshot' | 'curSnapshot' | 'issue'
 type SortDir = 'asc' | 'desc'
 
 export default function AggregateModeAudit() {
@@ -160,6 +161,13 @@ export default function AggregateModeAudit() {
         case 'date': cmp = a.date.localeCompare(b.date); break
         case 'lfNumber': cmp = a.sourceLabel.localeCompare(b.sourceLabel); break
         case 'customer': cmp = a.customerShortName.localeCompare(b.customerShortName); break
+        case 'snapshot': cmp = stringifySnap(a.lfSnap).localeCompare(stringifySnap(b.lfSnap)); break
+        case 'curSnapshot': cmp = stringifySnap(a.curSnap).localeCompare(stringifySnap(b.curSnap)); break
+        case 'issue': {
+          const ak = a.reason === null ? '' : REASON_CONFIG[a.reason].label
+          const bk = b.reason === null ? '' : REASON_CONFIG[b.reason].label
+          cmp = ak.localeCompare(bk); break
+        }
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
@@ -353,9 +361,9 @@ export default function AggregateModeAudit() {
                 <SortHeader col="date" label="วันที่" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} />
                 <SortHeader col="lfNumber" label="ที่มา" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} />
                 <SortHeader col="customer" label="ลูกค้า" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} className="text-left" />
-                <th className="text-left px-2 py-2.5 font-medium text-slate-600 text-xs">Snapshot</th>
-                <th className="text-left px-2 py-2.5 font-medium text-slate-600 text-xs">Customer now</th>
-                <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">Issue</th>
+                <SortHeader col="snapshot" label="Snapshot" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} className="text-left" />
+                <SortHeader col="curSnapshot" label="Customer now" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} className="text-left" />
+                <SortHeader col="issue" label="Issue" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} className="text-left" />
                 <th className="text-center px-2 py-2.5 font-medium text-slate-600 text-xs">Action</th>
               </tr>
             </thead>

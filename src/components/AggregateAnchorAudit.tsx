@@ -35,6 +35,10 @@ import {
 
 type Severity = 'high' | 'medium'
 
+// 399.1 — sort ได้ทุก Col
+type SortKey = 'severity' | 'date' | 'lfNumber' | 'customer' | 'group' | 'drift' | 'column' | 'value' | 'anchor' | 'sum'
+const SEV_RANK: Record<Severity, number> = { high: 0, medium: 1 }
+
 interface DriftRow {
   id: string
   lfId: string
@@ -69,6 +73,9 @@ export default function AggregateAnchorAudit() {
   const [dateTo, setDateTo] = useState<string>(() => endOfMonthISO())
   const [customerId, setCustomerId] = useState<string>('all')
   const [search, setSearch] = useState('')
+  // 399.1 — sort ได้ทุก Col (default = severity high-first เหมือนเดิม)
+  const [sortKey, setSortKey] = useState<SortKey>('severity')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   const rows = useMemo<DriftRow[]>(() => {
     const result: DriftRow[] = []
@@ -173,6 +180,33 @@ export default function AggregateAnchorAudit() {
     return list
   }, [rows, search])
 
+  // 399.1 — sort ตาม Col ที่เลือก (SEV_RANK = module const → ไม่ต้องใส่ deps)
+  const sorted = useMemo(() => {
+    const list = [...filtered]
+    list.sort((a, b) => {
+      let cmp = 0
+      switch (sortKey) {
+        case 'severity': cmp = SEV_RANK[a.severity] - SEV_RANK[b.severity]; if (cmp === 0) cmp = b.date.localeCompare(a.date); break
+        case 'date': cmp = a.date.localeCompare(b.date); break
+        case 'lfNumber': cmp = a.lfNumber.localeCompare(b.lfNumber); break
+        case 'customer': cmp = a.customerShortName.localeCompare(b.customerShortName); break
+        case 'group': cmp = a.groupKey.localeCompare(b.groupKey) || a.anchorCode.localeCompare(b.anchorCode); break
+        case 'drift': cmp = a.driftCode.localeCompare(b.driftCode); break
+        case 'column': cmp = a.driftColumn.localeCompare(b.driftColumn); break
+        case 'value': cmp = a.driftValue - b.driftValue; break
+        case 'anchor': cmp = a.anchorValue - b.anchorValue; break
+        case 'sum': cmp = a.groupSum - b.groupSum; break
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return list
+  }, [filtered, sortKey, sortDir])
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir(key === 'severity' ? 'asc' : 'desc') }
+  }
+
   const stats = useMemo(() => {
     let high = 0, medium = 0
     for (const r of rows) {
@@ -183,9 +217,9 @@ export default function AggregateAnchorAudit() {
   }, [rows])
 
   const handleExportCSV = () => {
-    if (filtered.length === 0) return
+    if (sorted.length === 0) return
     const headers = ['Severity', 'วันที่', 'LF#', 'ลูกค้า', 'Group', 'Anchor', 'Drift Row', 'Column', 'Drift Value', 'Anchor Value', 'Group Sum']
-    const data = filtered.map(r => [
+    const data = sorted.map(r => [
       r.severity, r.date, r.lfNumber, r.customerShortName,
       r.groupKey, `${r.anchorCode} ${r.anchorName}`, `${r.driftCode} ${r.driftName}`,
       r.driftColumn, String(r.driftValue), String(r.anchorValue), String(r.groupSum),
@@ -240,7 +274,7 @@ export default function AggregateAnchorAudit() {
               onChange={(id) => setCustomerId(id || 'all')} allowAll />
           </div>
         </div>
-        <button onClick={handleExportCSV} disabled={filtered.length === 0}
+        <button onClick={handleExportCSV} disabled={sorted.length === 0}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200 disabled:opacity-50">
           <FileSpreadsheet className="w-3.5 h-3.5" />Export CSV
         </button>
@@ -251,25 +285,25 @@ export default function AggregateAnchorAudit() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-center px-2 py-2.5 font-medium text-slate-600 text-xs w-16">Sev</th>
-                <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">วันที่</th>
-                <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">LF#</th>
-                <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">ลูกค้า</th>
-                <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">Group / Anchor</th>
-                <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">Drift</th>
-                <th className="text-center px-2 py-2.5 font-medium text-slate-600 text-xs">Col</th>
-                <th className="text-right px-2 py-2.5 font-medium text-slate-600 text-xs">Value</th>
-                <th className="text-right px-2 py-2.5 font-medium text-slate-600 text-xs">Anchor</th>
-                <th className="text-right px-2 py-2.5 font-medium text-slate-600 text-xs">Sum</th>
+                <SortHeader sortKey="severity" label="Sev" sortCol={sortKey} sortDir={sortDir} onClick={toggleSort} className="text-center px-2 w-16" />
+                <SortHeader sortKey="date" label="วันที่" sortCol={sortKey} sortDir={sortDir} onClick={toggleSort} className="text-left px-3" />
+                <SortHeader sortKey="lfNumber" label="LF#" sortCol={sortKey} sortDir={sortDir} onClick={toggleSort} className="text-left px-3" />
+                <SortHeader sortKey="customer" label="ลูกค้า" sortCol={sortKey} sortDir={sortDir} onClick={toggleSort} className="text-left px-3" />
+                <SortHeader sortKey="group" label="Group / Anchor" sortCol={sortKey} sortDir={sortDir} onClick={toggleSort} className="text-left px-3" />
+                <SortHeader sortKey="drift" label="Drift" sortCol={sortKey} sortDir={sortDir} onClick={toggleSort} className="text-left px-3" />
+                <SortHeader sortKey="column" label="Col" sortCol={sortKey} sortDir={sortDir} onClick={toggleSort} className="text-center px-2" />
+                <SortHeader sortKey="value" label="Value" sortCol={sortKey} sortDir={sortDir} onClick={toggleSort} className="text-right px-2" />
+                <SortHeader sortKey="anchor" label="Anchor" sortCol={sortKey} sortDir={sortDir} onClick={toggleSort} className="text-right px-2" />
+                <SortHeader sortKey="sum" label="Sum" sortCol={sortKey} sortDir={sortDir} onClick={toggleSort} className="text-right px-2" />
                 <th className="text-center px-2 py-2.5 font-medium text-slate-600 text-xs w-16"></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {sorted.length === 0 ? (
                 <tr><td colSpan={11} className="text-center py-12 text-slate-400">
                   {stats.total === 0 ? '✓ ไม่พบ anchor drift — aggregate ทำงานปกติ' : 'ไม่พบที่ตรงเงื่อนไข'}
                 </td></tr>
-              ) : filtered.map(r => (
+              ) : sorted.map(r => (
                 <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-2 py-2 text-center">
                     <span className={cn('inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border',
@@ -327,10 +361,27 @@ export default function AggregateAnchorAudit() {
         แต่ getCarryOver ยัง sum group ถูก (ค่ารวมไม่หาย)
       </div>
 
-      <FloatingTotalBar show={filtered.length > 0}>
-        <span>แสดง <strong className="text-[#1B3A5C]">{filtered.length.toLocaleString()}</strong> drift instance</span>
+      <FloatingTotalBar show={sorted.length > 0}>
+        <span>แสดง <strong className="text-[#1B3A5C]">{sorted.length.toLocaleString()}</strong> drift instance</span>
       </FloatingTotalBar>
     </div>
+  )
+}
+
+// 399.1 — sortable header (px/alignment/width มาจาก className → คงคอลัมน์เดิม) · arrow บอก active
+function SortHeader({ sortKey: key, label, sortCol, sortDir, onClick, className }: {
+  sortKey: SortKey; label: string; sortCol: SortKey; sortDir: 'asc' | 'desc'
+  onClick: (key: SortKey) => void; className?: string
+}) {
+  const active = sortCol === key
+  return (
+    <th onClick={() => onClick(key)}
+      className={cn('py-2.5 font-medium text-slate-600 text-xs cursor-pointer select-none hover:bg-slate-100 transition-colors', className)}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active && <span className="text-[#3DD8D8]">{sortDir === 'asc' ? '↑' : '↓'}</span>}
+      </span>
+    </th>
   )
 }
 
