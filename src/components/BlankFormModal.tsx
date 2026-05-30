@@ -14,6 +14,7 @@ import BlankLinenFormPrint from '@/components/BlankLinenFormPrint'
 import BlankChecklistPrint from '@/components/BlankChecklistPrint'
 import ExportButtons from '@/components/ExportButtons'
 import SortableHeader from '@/components/SortableHeader'
+import CustomerSearchInline from '@/components/CustomerSearchInline'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { loadFormTemplates, saveFormTemplates, type FormTemplate } from '@/lib/form-template-service'
 import { type FormLang } from '@/lib/form-i18n'
@@ -107,10 +108,14 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
     if (custSortKey === key) setCustSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setCustSortKey(key as 'shortName' | 'count'); setCustSortDir('asc') }
   }
-  // Enter ในช่องค้นหา → จั๊มเข้าหน้า 2 ด้วยลูกค้าตัวแรกที่เลือกได้ (มี QT)
-  const jumpFirstCustomer = () => {
-    const first = customerRows.find(r => r.count > 0)
-    if (first) pickCustomer(first.c.id)
+  // 398 — ช่อง "กระโดดเข้า" (dropdown แยก เป๊ะแบบหน้าลูกค้า) → เลือกแล้วเข้าหน้า 2 ทันที
+  //   guard: ลูกค้าไม่มี QT = ฟอร์มเปล่าจะไม่มีรายการ → แนะนำใช้ "ฟอร์มกลาง" แทน (ไม่พาเข้า dead-end)
+  const jumpToCustomer = (id: string) => {
+    if (getCustomerEnabledCodes(id, quotations).length === 0) {
+      alert('ลูกค้านี้ยังไม่มีใบเสนอราคา (QT) — ฟอร์มจะไม่มีรายการ\nใช้ปุ่ม "ฟอร์มกลาง" ด้านบนเพื่อพิมพ์ฟอร์มเปล่าแทนได้')
+      return
+    }
+    pickCustomer(id)
   }
 
   // 396.2 — metrics ต่อใบ (fit-to-page ตามจำนวนรายการ + แถวว่าง) → ส่งเข้า FormComp (rowHeightPx/fontPx)
@@ -207,14 +212,22 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
             <span className="font-medium text-[#1B3A5C]">ฟอร์มกลาง (ไม่ระบุลูกค้า)</span>
             <span className="text-xs text-slate-500">— เว้นช่องชื่อ/วันที่ให้เขียนมือ ใช้ได้ทุกเจ้า · รายการทั้งหมด {linenCatalog.length}</span>
           </button>
-          {/* 395 — search: กรองตาราง + กด Enter จั๊มเข้าหน้า 2 (ลูกค้าตัวแรกที่มี QT) · theme หน้าลูกค้า */}
+          {/* 398 — 2 ช่องแยก เป๊ะแบบหน้าลูกค้า: (1) กระโดดเข้า dropdown (เลือกแล้วเข้าหน้า 2 ทันที) */}
+          <CustomerSearchInline
+            mode="filter"
+            onSelect={jumpToCustomer}
+            accent="orange"
+            placeholder="กระโดดเข้าฟอร์มลูกค้า — พิมพ์ชื่อ / รหัส / เลขผู้เสียภาษี แล้วเลือก"
+            className="!max-w-none"
+          />
+
+          {/* 398 — (2) กรองตาราง: filter ตารางด้านล่างอย่างเดียว (teal · เหมือนหน้าลูกค้า) */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3DD8D8]" />
             <input
               value={custSearch}
               onChange={e => setCustSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); jumpFirstCustomer() } }}
-              placeholder="ค้นหาลูกค้า — พิมพ์ชื่อย่อ/ชื่อ/รหัส แล้วกด Enter เข้าเลย"
+              placeholder="กรองตาราง — ชื่อย่อ / ชื่อบริษัท / รหัส"
               className="w-full pl-10 pr-4 py-2 border-2 border-[#3DD8D8] rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none"
             />
           </div>
