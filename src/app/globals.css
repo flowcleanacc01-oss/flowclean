@@ -43,6 +43,10 @@ input[type="number"] {
 
 /* 394.1 — เอา .font-my (Burmese) ออก: ฟอร์มเปล่าเลิกใช้ภาษาพม่า */
 
+/* 396.2 — เซลล์ตารางฟอร์ม: ชิดบน → ชื่อรายการอยู่บน เหลือพื้นที่ว่างด้านล่างให้เขียน (rowHeightPx) */
+.blank-form-table td { vertical-align: top; }
+/* 396 — preview ตั้ง zoom inline (screen) ให้พอดีคอลัมน์ · print reset zoom:1 !important (@media print ด้านล่าง) */
+
 /* Print styles — proper A4 output for mobile and desktop */
 /*
  * Note: @page rule is INJECTED dynamically by lib/print-utils.ts (applyPrintSettings)
@@ -146,6 +150,10 @@ input[type="number"] {
     break-inside: avoid; page-break-inside: avoid;
   }
   .blank-a4-2up-page > .blank-a5-half { width: 50% !important; }  /* ครึ่ง A4 landscape = A5 */
+
+  /* 396 — preview ใช้ zoom + min-height (screen เท่านั้น เพื่อโชว์ขอบหน้า/ย่อให้พอดีคอลัมน์) → reset ตอนพิมพ์จริง */
+  #print-blank-area { zoom: 1 !important; }
+  .blank-a5-page, .blank-a4-2up-page, .blank-a5-half { min-height: 0 !important; }
 }
 
 /* Custom animations */

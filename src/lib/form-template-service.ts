@@ -7,7 +7,7 @@
  * - Writes: dbWrite proxy via /api/db (service_role)
  */
 import { supabase } from './supabase'
-import type { FormDensity } from './form-i18n'
+import type { FitMode } from './form-fit'
 
 const FORM_TEMPLATES_KEY = 'form_templates'
 
@@ -18,7 +18,8 @@ export interface FormTemplate {
   showCustomer: boolean
   showDate: boolean
   printMode: 'a4-2up' | 'a4'   // 381: a5 → a4 (template เก่าที่เป็น 'a5' ถูก migrate ตอนโหลด)
-  density?: FormDensity        // 394.3 บันทึกความหนาแน่นที่เลือก (template เก่าไม่มี → default 'normal' ตอนโหลด)
+  fitMode?: FitMode            // 396.2 โหมดพื้นที่พิมพ์ (พอดีหน้า/โปร่ง/ปกติ/แน่น) — template เก่าไม่มี → 'fit'
+  fineLevel?: number           // 396.2 ปรับละเอียด ± (default 0)
   sheets: { title: string; codes: string[]; extraRows?: number }[]   // 389.4 extraRows per-sheet (optional, default 0 สำหรับ template เก่า)
   updatedAt: string
 }

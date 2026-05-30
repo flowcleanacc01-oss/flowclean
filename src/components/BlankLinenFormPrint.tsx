@@ -9,7 +9,7 @@
 //  · 2 กล่องนับถุง (ส่งซัก/แพคส่ง) + 385.1 ลายเซ็นแถวเดียว 2 จุด (ลูกค้า | FlowClean) "_ / _" เซ็น 1-2 ครั้งก็ได้
 
 import { formatDate, cn } from '@/lib/utils'
-import { FL, DENSITY, type FormLang, type FormDensity, type TriLabel } from '@/lib/form-i18n'
+import { FL, type FormLang, type TriLabel } from '@/lib/form-i18n'
 import type { Customer, CompanyInfo, LinenItemDef } from '@/types'
 
 interface Props {
@@ -23,7 +23,8 @@ interface Props {
   compact?: boolean
   id?: string
   langs?: FormLang[]                 // 376.4 ภาษาที่แสดง · 394.1 ถอดพม่า (เหลือ th/en)
-  density?: FormDensity              // 376.1 ความหนาแน่นแถว
+  rowHeightPx: number                // 396.2 ความสูงแถว (fit-to-page) — แทน density
+  fontPx: number                     // 396.2 ฟอนต์ตาราง
   extraRows?: number                 // 376.3 แถวว่างต่อท้าย (ad-hoc)
 }
 
@@ -60,11 +61,10 @@ function Tri({ label, langs, center }: { label: TriLabel; langs: FormLang[]; cen
 export default function BlankLinenFormPrint({
   customer, company, items, date,
   showCustomer = true, showDate = true, sheetTitle, compact = false, id = 'print-blank-lf',
-  langs = ['th', 'en'], density = 'normal', extraRows = 0,
+  langs = ['th', 'en'], rowHeightPx, fontPx, extraRows = 0,
 }: Props) {
   const pad = compact ? 'p-3' : 'p-8'
   const coTitle = compact ? 'text-sm' : 'text-xl'
-  const d = DENSITY[density]
 
   // 394.2 — เอา "จัดกลุ่มตามหมวด" ออก (ติ๊ดวาดปีกกาครอบ aggregate เองมากกว่า) → render รายการเรียงเดียว
   let rowNo = 0
@@ -116,7 +116,7 @@ export default function BlankLinenFormPrint({
       </div>
 
       {/* Items Table — 8 cols · trilingual head · thead ซ้ำตอน paginate */}
-      <table className={`blank-form-table w-full border-2 border-slate-600 ${compact ? 'mb-2' : 'mb-4'}`} style={{ fontSize: `${d.fontPx}px`, tableLayout: 'fixed' }}>
+      <table className={`blank-form-table w-full border-2 border-slate-600 ${compact ? 'mb-2' : 'mb-4'}`} style={{ fontSize: `${fontPx}px`, tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: COL_W.no }} />
           <col style={{ width: COL_W.item }} />
@@ -136,12 +136,13 @@ export default function BlankLinenFormPrint({
           </tr>
         </thead>
         <tbody>
+          {/* 396.2 — ความสูงแถว = rowHeightPx (fit-to-page) บน cell แรก · td vertical-align:top (globals) → เนื้อหาบน เหลือที่เขียนล่าง */}
           {items.map(item => {
             rowNo++
             return (
               <tr key={item.code}>
-                <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-400`}>{rowNo}</td>
-                <td className={`px-1 ${d.cellPy} border border-slate-500`}>
+                <td className="text-center px-0.5 py-0.5 border border-slate-500 text-slate-400" style={{ height: `${rowHeightPx}px` }}>{rowNo}</td>
+                <td className="px-1 py-0.5 border border-slate-500">
                   <div className="flex items-start justify-between gap-1">
                     <span className="min-w-0 leading-tight">
                       {langs.includes('th') && <span className="block font-medium leading-tight">{item.name}</span>}
@@ -159,8 +160,8 @@ export default function BlankLinenFormPrint({
             rowNo++
             return (
               <tr key={`blank-${i}`}>
-                <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-300`}>{rowNo}</td>
-                <td className={`border border-slate-500 ${d.cellPy}`}></td>
+                <td className="text-center px-0.5 py-0.5 border border-slate-500 text-slate-300" style={{ height: `${rowHeightPx}px` }}>{rowNo}</td>
+                <td className="border border-slate-500"></td>
                 {DATA_COLS.map(c => <td key={c.num} className="border border-slate-500"></td>)}
               </tr>
             )

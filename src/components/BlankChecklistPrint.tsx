@@ -7,7 +7,7 @@
 //  · scan-friendly: code เด่นทุกแถว + สีปากกา (แดง/น้ำเงิน) ช่วย AI สแกนแม่น
 
 import { formatDate, cn } from '@/lib/utils'
-import { FL, DENSITY, type FormLang, type FormDensity, type TriLabel } from '@/lib/form-i18n'
+import { FL, type FormLang, type TriLabel } from '@/lib/form-i18n'
 import type { Customer, CompanyInfo, LinenItemDef } from '@/types'
 
 interface BlankChecklistPrintProps {
@@ -21,7 +21,8 @@ interface BlankChecklistPrintProps {
   compact?: boolean
   id?: string
   langs?: FormLang[]
-  density?: FormDensity
+  rowHeightPx: number     // 396.2 ความสูงแถว (fit-to-page) — แทน density
+  fontPx: number          // 396.2 ฟอนต์ตาราง
   extraRows?: number
 }
 
@@ -47,19 +48,18 @@ function Tri({ label, langs, center }: { label: TriLabel; langs: FormLang[]; cen
 export default function BlankChecklistPrint({
   customer, company, items, date,
   showCustomer = true, showDate = true, sheetTitle, compact = false, id = 'print-blank-checklist',
-  langs = ['th', 'en'], density = 'normal', extraRows = 0,
+  langs = ['th', 'en'], rowHeightPx, fontPx, extraRows = 0,
 }: BlankChecklistPrintProps) {
   const pad = compact ? 'p-3' : 'p-8'
   const coTitle = compact ? 'text-sm' : 'text-xl'
   const provVal = compact ? 'text-sm' : 'text-2xl'   // 383 — เตี้ยลงให้ฟิต 2-up
-  const d = DENSITY[density]
 
   // 394.2 — เอา "จัดกลุ่มตามหมวด" ออก → render รายการเรียงเดียว
   let rowNo = 0
 
   return (
     // 376: print:px-2 print:py-0 — คืน padding ที่ซ้ำกับ @page margin (กันล้นหน้า 2)
-    <div className={`bg-white ${pad} mx-auto print:shadow-none print:px-2 print:py-0 w-full`} id={id} style={{ fontSize: `${d.fontPx}px` }}>
+    <div className={`bg-white ${pad} mx-auto print:shadow-none print:px-2 print:py-0 w-full`} id={id} style={{ fontSize: `${fontPx}px` }}>
       {/* Header */}
       <div className={`flex justify-between items-start border-b-2 border-[#1B3A5C] ${compact ? 'mb-2 pb-1' : 'mb-4 pb-3'}`}>
         <div>
@@ -128,12 +128,13 @@ export default function BlankChecklistPrint({
           </tr>
         </thead>
         <tbody>
+          {/* 396.2 — ความสูงแถว = rowHeightPx (fit-to-page) บน cell แรก · td vertical-align:top (globals) */}
           {items.map(item => {
             rowNo++
             return (
               <tr key={item.code}>
-                <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-400`}>{rowNo}</td>
-                <td className={`px-1 ${d.cellPy} border border-slate-500`}>
+                <td className="text-center px-0.5 py-0.5 border border-slate-500 text-slate-400" style={{ height: `${rowHeightPx}px` }}>{rowNo}</td>
+                <td className="px-1 py-0.5 border border-slate-500">
                   <div className="flex items-start justify-between gap-1">
                     <span className="min-w-0 leading-none">
                       {langs.includes('th') && <span className="block font-medium leading-none">{item.name}</span>}
@@ -142,9 +143,9 @@ export default function BlankChecklistPrint({
                     <span className="flex-shrink-0 font-mono font-bold border border-slate-400 rounded px-1 leading-tight">{item.code}</span>
                   </div>
                 </td>
-                <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>{/* send (แดง) */}
-                <td className={`px-1 ${d.cellPy} border border-slate-500`}></td>{/* 389.5 claim (แดง) */}
-                <td className={`px-1 ${d.cellPy} border border-slate-500`}><div className={compact ? 'min-h-[16px]' : 'min-h-[30px]'}></div></td>{/* pack (น้ำเงิน) — min-h เผื่อ "43+36+..." */}
+                <td className="px-1 border border-slate-500"></td>{/* send (แดง) */}
+                <td className="px-1 border border-slate-500"></td>{/* 389.5 claim (แดง) */}
+                <td className="px-1 border border-slate-500"></td>{/* pack (น้ำเงิน) — ความสูงจาก rowHeightPx */}
               </tr>
             )
           })}
@@ -152,11 +153,11 @@ export default function BlankChecklistPrint({
             rowNo++
             return (
               <tr key={`blank-${i}`}>
-                <td className={`text-center px-0.5 ${d.cellPy} border border-slate-500 text-slate-300`}>{rowNo}</td>
-                <td className={`border border-slate-500 ${d.cellPy}`}></td>
-                <td className={`border border-slate-500 ${d.cellPy}`}></td>
-                <td className={`border border-slate-500 ${d.cellPy}`}></td>
-                <td className={`border border-slate-500 ${d.cellPy}`}></td>
+                <td className="text-center px-0.5 py-0.5 border border-slate-500 text-slate-300" style={{ height: `${rowHeightPx}px` }}>{rowNo}</td>
+                <td className="border border-slate-500"></td>
+                <td className="border border-slate-500"></td>
+                <td className="border border-slate-500"></td>
+                <td className="border border-slate-500"></td>
               </tr>
             )
           })}
