@@ -476,7 +476,8 @@ export default function BillingPage() {
   const pendingWBByCustomer = useMemo(() => {
     const monthStart = `${qbwbMonth}-01`
     const [yr, mo] = qbwbMonth.split('-').map(Number)
-    const nextMonthISO = new Date(yr, mo, 1).toISOString().slice(0, 10)
+    // 400 sweep — string math (timezone-safe): new Date(yr,mo,1).toISOString() เลื่อน -1 วันใน TZ+7 → ตัด SD วันสุดท้ายเดือนทิ้งจาก batch WB
+    const nextMonthISO = mo === 12 ? `${yr + 1}-01-01` : `${yr}-${String(mo + 1).padStart(2, '0')}-01`
     const wbLinkedDnIds = new Set(billingStatements.flatMap(b => b.deliveryNoteIds))
     const map = new Map<string, DeliveryNote[]>()
     for (const dn of deliveryNotes) {
