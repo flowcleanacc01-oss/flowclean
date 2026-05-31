@@ -360,7 +360,18 @@ export default function PriceAudit() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="font-medium text-slate-700">{r.customerShortName}</div>
-                    <div className="text-xs text-slate-400">{r.qtNumber || <em className="text-red-500">— ไม่มี QT —</em>}</div>
+                    {/* 401.1 — QT# = link เปิดใบเสนอราคา (QT) + focus ลูกค้านี้ใน QT list */}
+                    <div className="text-xs">
+                      {r.qtId && r.qtNumber ? (
+                        <button onClick={() => router.push(`/dashboard/billing?tab=quotation&openqt=${r.qtId}&qtcustomer=${r.customerId}`)}
+                          title="เปิดใบเสนอราคา (QT)"
+                          className="font-mono text-[#1B3A5C] hover:underline inline-flex items-center gap-0.5">
+                          {r.qtNumber}<ExternalLink className="w-3 h-3" />
+                        </button>
+                      ) : (
+                        <em className="text-red-500">— ไม่มี QT —</em>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2">
                     <div className="font-mono text-xs text-slate-500">{r.itemCode}</div>
