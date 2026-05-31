@@ -379,15 +379,21 @@ export default function BillingPage() {
     return billingStatements.some(b => b.customerId === selCustomerId && b.billingMonth === selMonth)
   }, [selCustomer, selCustomerId, selMonth, billingStatements])
 
-  // Available delivery notes for billing (unbilled, matching customer+month)
+  // 402 — Available DN: รวม SD ที่ยังไม่วางบิล "ค้างคร่อมเดือน" (จากอดีต → สิ้นเดือนที่เลือก) ไม่ใช่เฉพาะเดือนนั้น
+  //   งานบริการ SD บางใบค้างข้ามเดือน → เดิม dn.date.startsWith(selMonth) ทำให้ค้างค้าง (orphan ไม่ถูกวางบิล)
+  //   guard !alreadyBilledIds = SD ที่อยู่ใน WB แล้วจะไม่ถูกดึงซ้ำ (กันวางบิลซ้ำ) · upper bound = ไม่ดึงเดือนถัดไป
   const availableDNs = useMemo((): DeliveryNote[] => {
     if (!selCustomer) return []
     const alreadyBilledIds = new Set(billingStatements.flatMap(b => b.deliveryNoteIds))
+    // sweep ค้างคร่อมเดือน เฉพาะลูกค้า per-piece (flat-rate ไม่ได้วางบิลจาก SD list → คงเฉพาะเดือนนั้น กันรก)
+    const isPerPiece = selCustomer.enablePerPiece ?? true
+    const [yy, mm] = selMonth.split('-').map(Number)
+    const endExclusive = mm === 12 ? `${yy + 1}-01-01` : `${yy}-${String(mm + 1).padStart(2, '0')}-01`
     return deliveryNotes
       .filter(dn =>
         dn.customerId === selCustomerId &&
-        dn.date.startsWith(selMonth) &&
-        !alreadyBilledIds.has(dn.id)
+        !alreadyBilledIds.has(dn.id) &&
+        (isPerPiece ? dn.date < endExclusive : dn.date.startsWith(selMonth))
       )
       .sort((a, b) => {
         let va: string | number, vb: string | number
@@ -406,6 +412,12 @@ export default function BillingPage() {
   useEffect(() => {
     setSelDnIds(availableDNs.map(dn => dn.id))
   }, [availableDNs])
+
+  // 402 — นับ SD ค้างยกมา (วันที่ไม่อยู่ในเดือนที่เลือก) เพื่อแจ้งให้เห็นว่ารวมมาด้วย
+  const carriedOverCount = useMemo(
+    () => availableDNs.filter(dn => !dn.date.startsWith(selMonth)).length,
+    [availableDNs, selMonth],
+  )
 
   // VAT / WHT rates (from company settings + customer toggle)
   const custVatRate = (selCustomer?.enableVat !== false) ? (companyInfo.vatRate ?? 7) : 0
@@ -472,16 +484,15 @@ export default function BillingPage() {
     setShowCreate(false)
   }
 
-  // Phase B: Quick Batch WB — group SDs by customer ใน month ที่เลือก
+  // Phase B: Quick Batch WB — group SDs by customer · 402 รวม SD ค้างคร่อมเดือนด้วย (consistent กับ create flow)
   const pendingWBByCustomer = useMemo(() => {
-    const monthStart = `${qbwbMonth}-01`
     const [yr, mo] = qbwbMonth.split('-').map(Number)
-    // 400 sweep — string math (timezone-safe): new Date(yr,mo,1).toISOString() เลื่อน -1 วันใน TZ+7 → ตัด SD วันสุดท้ายเดือนทิ้งจาก batch WB
+    // 400 sweep — string math (timezone-safe) · 402 — ดึงตั้งแต่อดีต → สิ้นเดือนที่เลือก (ตัด lower bound, คง upper bound กันเดือนถัดไป)
     const nextMonthISO = mo === 12 ? `${yr + 1}-01-01` : `${yr}-${String(mo + 1).padStart(2, '0')}-01`
     const wbLinkedDnIds = new Set(billingStatements.flatMap(b => b.deliveryNoteIds))
     const map = new Map<string, DeliveryNote[]>()
     for (const dn of deliveryNotes) {
-      if (dn.date < monthStart || dn.date >= nextMonthISO) continue
+      if (dn.date >= nextMonthISO) continue
       if (wbLinkedDnIds.has(dn.id)) continue
       // Skip ลูกค้าที่ flat-rate (enablePerPiece=false) — ใช้ flow ปกติ (อยู่ในหน้าสร้างเดิม)
       const cust = customers.find(c => c.id === dn.customerId)
@@ -1950,7 +1961,12 @@ export default function BillingPage() {
           {selCustomer && availableDNs.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-slate-700">ใบส่งของที่จะนำมาวางบิล ({selDnIds.length}/{availableDNs.length})</h3>
+                <h3 className="text-sm font-medium text-slate-700">
+                  ใบส่งของที่จะนำมาวางบิล ({selDnIds.length}/{availableDNs.length})
+                  {carriedOverCount > 0 && (
+                    <span className="ml-2 text-xs font-normal text-amber-600">· รวม SD ค้างยกมา {carriedOverCount} ใบ</span>
+                  )}
+                </h3>
                 <div className="flex gap-1">
                   <button onClick={() => setSelDnIds(availableDNs.map(d => d.id))}
                     className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors">เลือกทั้งหมด</button>
@@ -1988,7 +2004,13 @@ export default function BillingPage() {
                           <td className="px-3 py-1.5 text-center">
                             <input type="checkbox" checked={checked} readOnly className="rounded border-slate-300 pointer-events-none" />
                           </td>
-                          <td className="px-3 py-1.5 text-slate-700 font-medium whitespace-nowrap">{formatDate(dn.date)}</td>
+                          <td className="px-3 py-1.5 text-slate-700 font-medium whitespace-nowrap">
+                            {formatDate(dn.date)}
+                            {!dn.date.startsWith(selMonth) && (
+                              <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-700 align-middle"
+                                title="SD ค้างจากเดือนก่อน — ยังไม่ได้วางบิล จึงรวมมาในรอบนี้">↩ ยกมา</span>
+                            )}
+                          </td>
                           <td className="px-3 py-1.5 font-mono text-[11px] text-slate-400">{dn.noteNumber}</td>
                           <td className="px-3 py-1.5 text-right">{formatNumber(totalPcs)} ชิ้น</td>
                         </tr>
@@ -2194,8 +2216,8 @@ export default function BillingPage() {
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
                 <p className="font-medium mb-1">🧾 สร้าง WB แบบเร่งด่วน — Multi-customer</p>
                 <ul className="list-disc list-inside space-y-0.5">
-                  <li>เห็นทุกลูกค้าที่มี SD รอออก WB ในเดือนที่เลือก (skip flat-rate)</li>
-                  <li>1 customer ใน month = 1 WB · ใช้ billingMode = by_date</li>
+                  <li>เห็นทุกลูกค้าที่มี SD ยังไม่วางบิล — <strong>รวม SD ค้างคร่อมเดือน</strong> (ตั้งแต่อดีตถึงสิ้นเดือนที่เลือก) · skip flat-rate</li>
+                  <li>1 customer = 1 WB · ใช้ billingMode = by_date</li>
                   <li>ลูกค้าที่ไม่มี QT — ถูก disable (Phase C)</li>
                   <li>กดสร้าง → mark SDs as billed อัตโนมัติ</li>
                 </ul>
