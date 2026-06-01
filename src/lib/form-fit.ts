@@ -86,11 +86,15 @@ export function computeFormMetrics(
     orientation?: Orientation; paperSize?: PaperSize; margin?: MarginPreset
   },
 ): FormMetrics {
-  const size = opts.printMode === 'a4-2up' ? 'compact' : 'full'
   const n = Math.max(1, itemCount)
   const orientation = opts.orientation ?? (opts.printMode === 'a4-2up' ? 'landscape' : 'portrait')
   const paperSize = opts.paperSize ?? 'A4'
   const margin = opts.margin ?? 'narrow'
+  const ori = effectiveOrientation(opts.printMode, orientation)
+  // 408.2 — chrome (full/compact) ตาม "ความสูงหน้าจริง" ไม่ใช่ single/2-up:
+  //   หน้าเตี้ย ~200mm (landscape เดี่ยว หรือ 2-up half) = compact (หัว/ลายเซ็นเล็ก พอดีหน้า)
+  //   portrait เดี่ยว (สูง 287mm) = full (เหมือนเดิม — ติ๊ดยืนยันสวยแล้ว คงไว้)
+  const size = (opts.printMode === 'a4-2up' || ori === 'landscape') ? 'compact' : 'full'
 
   let rowH: number
   if (opts.fitMode === 'fit') {

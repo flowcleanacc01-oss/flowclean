@@ -500,7 +500,8 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
                     const m = metricsFor(s)
                     return (
                       <div key={s.id} className="blank-a5-page bg-white mx-auto mb-4 shadow-sm border border-slate-300 print:shadow-none print:border-0 print:mb-0" style={{ width: `${previewBox.wmm}mm`, minHeight: `${previewBox.hmm}mm` }}>
-                        <FormComp customer={cust} company={companyInfo} items={sheetItems(s)} date={todayISO()} showCustomer={showCustomer} showDate={showDate} sheetTitle={s.title} id={`bf-${s.id}`} langs={langs} rowHeightPx={m.rowHeightPx} fontPx={m.fontPx} extraRows={s.extraRows ?? 0} />
+                        {/* 408.2 — A4 เดี่ยวแนวนอน (หน้าเตี้ย 200mm) ใช้ chrome compact ให้พอดีหน้า (เหมือนครึ่ง 2-up) · portrait = full คงเดิม */}
+                        <FormComp customer={cust} company={companyInfo} items={sheetItems(s)} date={todayISO()} showCustomer={showCustomer} showDate={showDate} sheetTitle={s.title} compact={printSettings.orientation === 'landscape'} id={`bf-${s.id}`} langs={langs} rowHeightPx={m.rowHeightPx} fontPx={m.fontPx} extraRows={s.extraRows ?? 0} />
                       </div>
                     )
                   })
