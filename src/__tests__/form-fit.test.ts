@@ -30,10 +30,10 @@ describe('computeFormMetrics — fit mode', () => {
   })
 
   it('fit: N แถว × rowHeight ≤ พื้นที่ตาราง (ไม่ล้น 1 หน้า)', () => {
-    // a4 portrait content ~1085, overhead LF full 255 → tableH ~830
+    // 405: a4 portrait content ~1085, overhead LF full 265 + safety 24 → tableH ~796
     for (const n of [16, 19, 21, 23, 25, 27]) {
       const m = computeFormMetrics(n, { kind: 'lf', printMode: 'a4', fitMode: 'fit', fineLevel: 0 })
-      expect(m.rowHeightPx * n).toBeLessThanOrEqual(830)   // floor → ไม่เกิน tableH
+      expect(m.rowHeightPx * n).toBeLessThanOrEqual(796)   // floor → ไม่เกิน tableH
     }
   })
 
@@ -89,10 +89,10 @@ describe('computeFormMetrics — preset modes', () => {
 
 // 398.2 — CK ส่วนมาก 5-10 แถว (2-up = compact): เดิม fit ชน cap 38 + presets < fit → 3 ปุ่มเป็นแค่ระดับบีบ
 describe('computeFormMetrics — 398.2 CK 2-up few rows', () => {
-  it('CK 8 แถว fit → เติมเต็มหน้า (rowH ชน cap ใหม่ 72 ไม่ใช่ 38) + ฟอนต์ใหญ่สุด', () => {
+  it('CK 8 แถว fit → เติมเกือบเต็มหน้า (rowH ใหญ่ ~69 + ฟอนต์ใหญ่สุด) · 405 overhead เพิ่มกันล้นหน้า 2', () => {
     const m = computeFormMetrics(8, { kind: 'checklist', printMode: 'a4-2up', fitMode: 'fit', fineLevel: 0 })
-    expect(m.rowHeightPx).toBe(72)
-    expect(m.fontPx).toBe(15)
+    expect(m.rowHeightPx).toBe(69)       // 405: tableH (756−180−24)=552 ÷ 8 = 69 (เดิม 72 ชน cap · overhead น้อยไป → ล้น)
+    expect(m.fontPx).toBe(15)            // ยังชน FONT_MAX.compact
   })
   it('CK presets โปร่ง/ปกติ/แน่น = 56/40/28 (span ใช้ได้จริง ไม่ใช่ไล่บีบอย่างเดียว)', () => {
     const o = { kind: 'checklist' as const, printMode: 'a4-2up' as const, fineLevel: 0 }

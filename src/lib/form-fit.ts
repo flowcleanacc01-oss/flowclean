@@ -21,11 +21,19 @@ const PAGE_CONTENT_H: Record<PrintMode, number> = {
   'a4-2up': Math.round((210 - 10) * MM),   // ~756 (ต่อครึ่ง = 1 ใบ)
 }
 
-/** overhead = หัวเอกสาร + กล่องชื่อ/วันที่/นับถุง + thead + ลายเซ็น(LF) — px (overestimate กันล้น) */
+/** overhead = หัวเอกสาร + กล่องชื่อ/วันที่/นับถุง + thead + ลายเซ็น(LF) — px (overestimate กันล้น)
+ *  405 — re-tune: ค่าเดิม underestimate → fit จัด content เต็มหน้าเป๊ะ → ล้นเป็นหน้า 2 (ติ๊ดเจอ CK 2-up)
+ *  วัด chrome จริง: CK compact ≈ หัว(46)+กล่อง(50)+thead 3 บรรทัด(34)+border(4)+hint(15) ≈ 150-165px
+ *                  LF compact ≈ +ลายเซ็น (sigGap+sigLineH ผูกกับ rowHeight → สูงได้ถึง ~84px)
+ *  → ตั้งให้ "เผื่อมากกว่าจริง" (เหลือพื้นที่ว่างล่างนิดหน่อย = OK · ล้นหน้า 2 = ห้าม) */
 const OVERHEAD: Record<FormKind, Record<'full' | 'compact', number>> = {
-  lf:        { full: 255, compact: 160 },   // มีลายเซ็น (385.1)
-  checklist: { full: 210, compact: 125 },   // 392 ถอดลายเซ็น เหลือ hint line
+  lf:        { full: 265, compact: 210 },   // มีลายเซ็น (385.1) — compact 160→210 (ลายเซ็นโตตาม rowHeight)
+  checklist: { full: 240, compact: 180 },   // 392 ถอดลายเซ็น เหลือ hint line — compact 125→180 (root cause หน้า 2)
 }
+
+/** 405 — safety buffer: หักเพิ่มจากพื้นที่หน้า (mode 'fit' เท่านั้น) เพื่อให้ content "underfill"
+ *  เสมอ — กัน rounding mm→px + ความหนา border สะสม ดันล้นไปหน้า 2 (เนื้อหาเต็มหน้าเป๊ะ = เปราะ) */
+const FIT_SAFETY_PX = 24
 
 const ROW_H_MIN: Record<'full' | 'compact', number> = { full: 22, compact: 15 }
 // 398.2 — compact cap 38→72: CK ส่วนมาก 5-10 แถว เดิม fit ชน 38 ทำให้ตารางเล็ก หน้าโล่ง เติมไม่เต็ม A5
@@ -66,7 +74,8 @@ export function computeFormMetrics(
 
   let rowH: number
   if (opts.fitMode === 'fit') {
-    const tableH = PAGE_CONTENT_H[opts.printMode] - OVERHEAD[opts.kind][size]
+    // 405 — หัก safety เพิ่ม → content < พื้นที่พิมพ์จริงเสมอ (underfill กันล้นหน้า 2)
+    const tableH = PAGE_CONTENT_H[opts.printMode] - OVERHEAD[opts.kind][size] - FIT_SAFETY_PX
     rowH = tableH / n
   } else {
     rowH = PRESET_ROW_H[size][opts.fitMode]
