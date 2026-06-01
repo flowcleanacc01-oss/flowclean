@@ -1506,10 +1506,10 @@ export default function BillingPage() {
                       onChange={e => { if (e.target.checked) setSelectedWbIds(filteredBilling.map(b => b.id)); else setSelectedWbIds([]) }}
                       className="w-4 h-4 rounded border-slate-300 text-[#1B3A5C] focus:ring-[#3DD8D8]" />
                   </th>
-                  <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="วันที่ออกWB" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ชื่อย่อลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="เลขที่" sortKey="billingNumber" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
-                  <SortableHeader label="เดือน" sortKey="billingMonth" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
+                  <SortableHeader label="ค่าซักเดือน" sortKey="billingMonth" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                   <SortableHeader label="ยอดรวม" sortKey="grandTotal" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <SortableHeader label="จ่ายสุทธิ" sortKey="netPayable" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-right" />
                   <SortableHeader label="พิมพ์" sortKey="isPrinted" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-center" />
@@ -1939,12 +1939,12 @@ export default function BillingPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">เดือน</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">วางบิลค่าซักของเดือน</label>
               <input type="month" value={selMonth} onChange={e => setSelMonth(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">วันที่ออกบิล</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">วันที่ออกใบวางบิล</label>
               <input type="date" value={billingIssueDate} onChange={e => setBillingIssueDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
