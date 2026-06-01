@@ -2224,7 +2224,7 @@ export default function BillingPage() {
               </div>
 
               <div className="flex items-center gap-3 border border-slate-200 rounded-lg p-3 bg-slate-50">
-                <label className="text-xs font-medium text-slate-700">เดือน:</label>
+                <label className="text-xs font-medium text-slate-700">วางบิลค่าซักของเดือน:</label>
                 <input type="month" value={qbwbMonth} onChange={e => setQbwbMonth(e.target.value)}
                   className="px-3 py-1.5 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
                 <span className="text-xs text-slate-400 ml-auto">{entries.length} ลูกค้ามี SD รอออก WB</span>
