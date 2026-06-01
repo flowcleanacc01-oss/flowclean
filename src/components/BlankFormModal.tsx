@@ -19,8 +19,27 @@ import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { loadFormTemplates, saveFormTemplates, type FormTemplate } from '@/lib/form-template-service'
 import { type FormLang } from '@/lib/form-i18n'
 import { computeFormMetrics, pageBoxPx, FINE_MIN, FINE_MAX, type FitMode } from '@/lib/form-fit'
+import { PAPER_SIZES, MARGIN_PRESETS, type PrintSettings } from '@/lib/print-utils'
 import { Plus, X, FileText, Users, Check, Search, ArrowUpDown, ChevronUp, ChevronDown, Save, Trash2, BookMarked } from 'lucide-react'
 import type { LinenItemDef } from '@/types'
+
+// 408 — print settings เริ่มต้นตาม printMode: a4 เดี่ยว = portrait · a4-2up = landscape (ฉีกครึ่ง) · narrow เสมอ
+function defaultPrintSettings(printMode: 'a4' | 'a4-2up'): PrintSettings {
+  return printMode === 'a4-2up'
+    ? { paperSize: 'A4', orientation: 'landscape', margin: 'narrow' }
+    : { paperSize: 'A4', orientation: 'portrait', margin: 'narrow' }
+}
+
+// 408 — ขนาดกล่องเนื้อหา 1 ใบ (mm) สำหรับ preview — ตรงกับที่พิมพ์จริง (paper/orientation/margin)
+//   a4-2up บังคับ landscape (A4 แนวนอน ฉีกครึ่ง) · a4 เดี่ยว = ตาม settings.orientation
+function contentBoxMm(printMode: 'a4' | 'a4-2up', s: PrintSettings): { wmm: number; hmm: number; halfWmm: number } {
+  const ori = printMode === 'a4-2up' ? 'landscape' : s.orientation
+  const p = PAPER_SIZES[s.paperSize]
+  const m = MARGIN_PRESETS[s.margin].value
+  const wmm = (ori === 'portrait' ? p.width : p.height) - 2 * m
+  const hmm = (ori === 'portrait' ? p.height : p.width) - 2 * m
+  return { wmm, hmm, halfWmm: wmm / 2 }
+}
 
 interface FormSheet { id: string; title: string; codes: string[]; extraRows?: number }  // 389.4 extraRows per-sheet (optional, default 0)
 const NONE = '__none__'  // ฟอร์มกลาง (ไม่ระบุลูกค้า)
@@ -45,6 +64,15 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   const [sheets, setSheets] = useState<FormSheet[]>([])
   const [activeSheet, setActiveSheet] = useState(0)
   const [printMode, setPrintMode] = useState<'a4-2up' | 'a4'>('a4')        // 387.3/.4 LF default = A4 เดี่ยว (orientation auto = portrait)
+  // 408 — print settings (แนว/ขนาด/ขอบ) ยกมาที่ parent → save ลง template ได้ + fit คำนวณตามแนวจริง
+  const [printSettings, setPrintSettings] = useState<PrintSettings>(() => defaultPrintSettings('a4'))
+  const [settingsKey, setSettingsKey] = useState(0)   // bump → remount ExportButtons re-init จาก printSettings (เฉพาะตอน reset/toggle/โหลด template)
+  // เปลี่ยน printMode + รีเซ็ต settings ตาม default ของ mode นั้น + bump remount key
+  const applyPrintMode = (mode: 'a4' | 'a4-2up') => {
+    setPrintMode(mode)
+    setPrintSettings(defaultPrintSettings(mode))
+    setSettingsKey(k => k + 1)
+  }
   // 375 — item picker enhance (mirror QT picker)
   const [itemSearch, setItemSearch] = useState('')
   const [itemCat, setItemCat] = useState('all')
@@ -67,7 +95,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   const [custSortKey, setCustSortKey] = useState<'shortName' | 'count'>('shortName')
   const [custSortDir, setCustSortDir] = useState<'asc' | 'desc'>('asc')
 
-  const reset = () => { setCustomerId(''); setSheets([]); setActiveSheet(0); setShowCustomer(false); setShowDate(false); setFormType('lf'); setPrintMode('a4'); setItemSearch(''); setItemCat('all'); setReorderMode(false); setFitMode('fit'); setFineLevel(0); setCustSearch(''); setCustSortKey('shortName'); setCustSortDir('asc') }  // 387 defaults · 389.4 extraRows reset auto ผ่าน setSheets([]) · 394.1/.2 ถอด showMy/grouped · 395 reset picker
+  const reset = () => { setCustomerId(''); setSheets([]); setActiveSheet(0); setShowCustomer(false); setShowDate(false); setFormType('lf'); setPrintMode('a4'); setPrintSettings(defaultPrintSettings('a4')); setSettingsKey(k => k + 1); setItemSearch(''); setItemCat('all'); setReorderMode(false); setFitMode('fit'); setFineLevel(0); setCustSearch(''); setCustSortKey('shortName'); setCustSortDir('asc') }  // 387 defaults · 389.4 extraRows reset auto ผ่าน setSheets([]) · 394.1/.2 ถอด showMy/grouped · 395 reset picker · 408 reset print settings
   const handleClose = () => { reset(); onClose() }
 
   // items ที่เลือกได้ (จาก QT ลูกค้า หรือ catalog ทั้งหมดถ้าฟอร์มกลาง)
@@ -84,7 +112,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
     setShowCustomer(id !== NONE)   // ลูกค้า=✓ (สอดคล้อง action) · ฟอร์มกลาง=✗
     setShowDate(false)             // 394.1/.2 ถอด showMy/grouped แล้ว
     setFormType('lf')              // 387.3/.4 default formType = LF เสมอ (ปุ่มซ้าย)
-    setPrintMode('a4')             // 387.3/.4 default printMode = A4 เดี่ยว (orientation auto = portrait via key={printMode})
+    applyPrintMode('a4')           // 387.3/.4 default printMode = A4 เดี่ยว · 408 reset print settings = portrait narrow
   }
 
   // 395 — customer rows + จำนวนรายการ (compute count ครั้งเดียว) → filter (Thai search) → sort
@@ -119,12 +147,15 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   }
 
   // 396.2 — metrics ต่อใบ (fit-to-page ตามจำนวนรายการ + แถวว่าง) → ส่งเข้า FormComp (rowHeightPx/fontPx)
+  // 408 — ส่ง orientation/paperSize/margin → fit คำนวณตามแนว/ขนาด/ขอบจริง (รองรับ landscape เดี่ยว)
   const metricsFor = (s: FormSheet) => computeFormMetrics(
     s.codes.length + (s.extraRows ?? 0),
-    { kind: formType, printMode, fitMode, fineLevel },
+    { kind: formType, printMode, fitMode, fineLevel, orientation: printSettings.orientation, paperSize: printSettings.paperSize, margin: printSettings.margin },
   )
   // 396 — zoom preview ให้พอดีความกว้างคอลัมน์ขวา (screen เท่านั้น · print reset zoom:1)
-  const pageBox = pageBoxPx(printMode)
+  const pageBox = pageBoxPx(printMode, printSettings.orientation, printSettings.paperSize, printSettings.margin)
+  // 408 — ขนาดกล่อง preview (mm) ตรงกับที่พิมพ์จริง (รวม landscape เดี่ยว / margin / paper)
+  const previewBox = contentBoxMm(printMode, printSettings)
   const previewZoom = previewW > 0 ? Math.min(1, (previewW - 16) / pageBox.w) : 0.5
   useEffect(() => {
     if (!previewEl) return
@@ -140,7 +171,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   const switchFormType = (next: 'lf' | 'checklist') => {
     if (next === formType) return
     setFormType(next)
-    setPrintMode(next === 'lf' ? 'a4' : 'a4-2up')
+    applyPrintMode(next === 'lf' ? 'a4' : 'a4-2up')   // 408 — reset print settings ตาม mode default
   }
 
   // 389.4 — extraRows per-sheet · +/- toolbar update เฉพาะ active sheet (เปลี่ยน tab → ค่า +/- ของ tab นั้น)
@@ -178,16 +209,35 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
 
   // 375.1 — template save / apply / delete
   const saveAsTemplate = async () => {
-    const name = prompt('ตั้งชื่อ template ฟอร์มนี้ (จะบันทึกหมวด+ใบ+ตัวเลือก):')?.trim()
+    const name = prompt('ตั้งชื่อ template ฟอร์มนี้ (บันทึก: หมวด+ใบ+ตัวเลือก · แนว/ขนาด/ขอบกระดาษ · แสดงชื่อลูกค้า):')?.trim()
     if (!name) return
-    const t: FormTemplate = { id: genId(), name, formType, showCustomer, showDate, printMode, fitMode, fineLevel, sheets: sheets.map(s => ({ title: s.title, codes: s.codes, extraRows: s.extraRows })), updatedAt: new Date().toISOString() }  // 389.4 extraRows + 396.2 fitMode/fineLevel per-template
+    const t: FormTemplate = {
+      id: genId(), name, formType, showCustomer, showDate, printMode, fitMode, fineLevel,
+      orientation: printSettings.orientation, paperSize: printSettings.paperSize, margin: printSettings.margin,  // 408 save แนว/ขนาด/ขอบ
+      customerId: customerId || NONE,  // 408.1 save ลูกค้า → โหลดแล้วโชว์ชื่อได้
+      sheets: sheets.map(s => ({ title: s.title, codes: s.codes, extraRows: s.extraRows })),
+      updatedAt: new Date().toISOString(),
+    }  // 389.4 extraRows + 396.2 fitMode/fineLevel per-template
     const next = [...templates.filter(x => x.name !== name), t]   // ชื่อซ้ำ = ทับ
     setTemplates(next)
     try { await saveFormTemplates(next) } catch { alert('บันทึก template ไม่สำเร็จ') }
   }
   const applyTemplate = (t: FormTemplate) => {
-    setFormType(t.formType); setShowCustomer(t.showCustomer); setShowDate(t.showDate); setPrintMode(t.printMode === 'a4-2up' ? 'a4-2up' : 'a4')  // 381: migrate 'a5' เก่า → 'a4'
+    const pm = t.printMode === 'a4-2up' ? 'a4-2up' : 'a4'  // 381: migrate 'a5' เก่า → 'a4'
+    setFormType(t.formType); setShowDate(t.showDate); setPrintMode(pm)
     setFitMode(t.fitMode ?? 'fit'); setFineLevel(t.fineLevel ?? 0)  // 396.2 restore (template เก่า → พอดีหน้า)
+    // 408 — restore แนว/ขนาด/ขอบ (template เก่าไม่มี → default ตาม printMode) + remount ExportButtons
+    const def = defaultPrintSettings(pm)
+    setPrintSettings({
+      paperSize: t.paperSize ?? def.paperSize,
+      orientation: t.orientation ?? def.orientation,
+      margin: t.margin ?? def.margin,
+    })
+    setSettingsKey(k => k + 1)
+    // 408.1 — restore ลูกค้า (template เก่าไม่มี customerId → คงลูกค้าที่เลือกอยู่) ก่อน showCustomer
+    //   → cust กลับมา → กล่อง "แสดงชื่อลูกค้า" ไม่ถูก disabled → showCustomer ของ template ทำงานจริง
+    if (t.customerId !== undefined) setCustomerId(t.customerId)
+    setShowCustomer(t.showCustomer)
     setSheets(t.sheets.map(s => ({ id: genId(), title: s.title, codes: s.codes, extraRows: s.extraRows ?? 0 })))  // 389.4 restore extraRows (template เก่าไม่มี → 0)
     setActiveSheet(0); setReorderMode(false)
   }
@@ -285,10 +335,11 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
                 <button onClick={() => switchFormType('checklist')} className={formType === 'checklist' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>ใบเช็คผ้า (CK)</button>
               </div>
               <ExportButtons
-                key={printMode}  /* 387 — remount เมื่อ printMode toggle → ExportButtons re-init defaultSettings (orientation/margin sync) · เดิม useState lazy init = stale orientation */
+                key={settingsKey}  /* 408 — remount เมื่อ reset/toggle/โหลด template (ไม่ remount ตอน user เปลี่ยนใน dropdown เอง → ไม่ flicker) → re-init จาก printSettings */
                 targetId="print-blank-area"
                 filename={`blank-${formType}`}
-                defaultSettings={printMode === 'a4-2up' ? { paperSize: 'A4', orientation: 'landscape', margin: 'narrow' } : { paperSize: 'A4', orientation: 'portrait', margin: 'narrow' }}
+                defaultSettings={printSettings}                 /* 408 — แนว/ขนาด/ขอบ จาก state (save ลง template ได้) */
+                onSettingsChange={setPrintSettings}             /* 408 — user เปลี่ยนใน dropdown → sync ขึ้น parent → fit/preview/template ตามจริง */
                 showPrint={true}
               />
             </div>
@@ -307,8 +358,8 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
             <div className="flex items-center gap-1 ml-auto">
               <span className="text-slate-500">พิมพ์:</span>
               <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-                <button onClick={() => setPrintMode('a4-2up')} className={printMode === 'a4-2up' ? 'px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'px-2 py-1 text-slate-600 hover:bg-slate-50'}>A4 → 2×A5</button>
-                <button onClick={() => setPrintMode('a4')} className={printMode === 'a4' ? 'px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'px-2 py-1 text-slate-600 hover:bg-slate-50'}>A4 เดี่ยว</button>
+                <button onClick={() => applyPrintMode('a4-2up')} className={printMode === 'a4-2up' ? 'px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'px-2 py-1 text-slate-600 hover:bg-slate-50'}>A4 → 2×A5</button>
+                <button onClick={() => applyPrintMode('a4')} className={printMode === 'a4' ? 'px-2 py-1 bg-[#3DD8D8] text-[#1B3A5C] font-medium' : 'px-2 py-1 text-slate-600 hover:bg-slate-50'}>A4 เดี่ยว</button>
               </div>
             </div>
           </div>
@@ -448,23 +499,23 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
                   usableSheets.map(s => {
                     const m = metricsFor(s)
                     return (
-                      <div key={s.id} className="blank-a5-page bg-white mx-auto mb-4 shadow-sm border border-slate-300 print:shadow-none print:border-0 print:mb-0" style={{ width: '200mm', minHeight: '287mm' }}>
+                      <div key={s.id} className="blank-a5-page bg-white mx-auto mb-4 shadow-sm border border-slate-300 print:shadow-none print:border-0 print:mb-0" style={{ width: `${previewBox.wmm}mm`, minHeight: `${previewBox.hmm}mm` }}>
                         <FormComp customer={cust} company={companyInfo} items={sheetItems(s)} date={todayISO()} showCustomer={showCustomer} showDate={showDate} sheetTitle={s.title} id={`bf-${s.id}`} langs={langs} rowHeightPx={m.rowHeightPx} fontPx={m.fontPx} extraRows={s.extraRows ?? 0} />
                       </div>
                     )
                   })
                 ) : (
                   pairs.map((pair, pi) => (
-                    <div key={pi} className="blank-a4-2up-page flex bg-white mx-auto mb-4 shadow-sm border border-slate-300 print:shadow-none print:border-0 print:mb-0" style={{ width: '287mm', minHeight: '200mm' }}>
+                    <div key={pi} className="blank-a4-2up-page flex bg-white mx-auto mb-4 shadow-sm border border-slate-300 print:shadow-none print:border-0 print:mb-0" style={{ width: `${previewBox.wmm}mm`, minHeight: `${previewBox.hmm}mm` }}>
                       {pair.map(s => {
                         const m = metricsFor(s)
                         return (
-                          <div key={s.id} className="blank-a5-half" style={{ width: '143.5mm', minHeight: '200mm', borderRight: '1px dashed #94a3b8' }}>
+                          <div key={s.id} className="blank-a5-half" style={{ width: `${previewBox.halfWmm}mm`, minHeight: `${previewBox.hmm}mm`, borderRight: '1px dashed #94a3b8' }}>
                             <FormComp customer={cust} company={companyInfo} items={sheetItems(s)} date={todayISO()} showCustomer={showCustomer} showDate={showDate} sheetTitle={s.title} compact id={`bf-${s.id}`} langs={langs} rowHeightPx={m.rowHeightPx} fontPx={m.fontPx} extraRows={s.extraRows ?? 0} />
                           </div>
                         )
                       })}
-                      {pair.length === 1 && <div style={{ width: '143.5mm' }} className="flex items-center justify-center text-slate-300 text-xs">(ฉีกครึ่ง — ครึ่งนี้ว่าง)</div>}
+                      {pair.length === 1 && <div style={{ width: `${previewBox.halfWmm}mm` }} className="flex items-center justify-center text-slate-300 text-xs">(ฉีกครึ่ง — ครึ่งนี้ว่าง)</div>}
                     </div>
                   ))
                 )}

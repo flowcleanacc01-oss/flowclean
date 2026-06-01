@@ -18,11 +18,13 @@ interface ExportButtonsProps {
   onPrint?: () => void      // fires only on print button
   onExportFile?: () => void // fires only on JPG/PDF/CSV
   showPrint?: boolean
+  /** 408 — แจ้ง parent เมื่อ user เปลี่ยนแนว/ขนาด/ขอบ (เพื่อ save ลง template) */
+  onSettingsChange?: (settings: PrintSettings) => void
 }
 
 export default function ExportButtons({
   targetId, filename, orientation, defaultSettings,
-  onExportCSV, onExport, onPrint, onExportFile, showPrint = true,
+  onExportCSV, onExport, onPrint, onExportFile, showPrint = true, onSettingsChange,
 }: ExportButtonsProps) {
   const [busy, setBusy] = useState(false)
 
@@ -61,7 +63,7 @@ export default function ExportButtons({
 
   return (
     <div className="flex flex-wrap items-center gap-2 no-print">
-      <PrintSettingsDropdown settings={settings} onChange={setSettings} />
+      <PrintSettingsDropdown settings={settings} onChange={(s) => { setSettings(s); onSettingsChange?.(s) }} />
       <button onClick={handleJPG} disabled={busy}
         className={`${btnBase} bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200`}>
         <ImageIcon className="w-3.5 h-3.5" />JPG

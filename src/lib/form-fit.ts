@@ -8,17 +8,29 @@
 //
 // ⚠️ overhead/clamp = ค่าประมาณ (เผื่อ overestimate กันล้น) — ปรับได้หลังติ๊ดเทสพิมพ์จริง
 
+import { PAPER_SIZES, MARGIN_PRESETS, type Orientation, type PaperSize, type MarginPreset } from './print-utils'
+
 export type FitMode = 'fit' | 'loose' | 'normal' | 'dense'   // พอดีหน้า / โปร่ง / ปกติ / แน่น
 export type PrintMode = 'a4' | 'a4-2up'
 export type FormKind = 'lf' | 'checklist'
 
 const MM = 3.7795275591   // CSS px ต่อ mm (96dpi)
 
-/** พื้นที่เนื้อหาต่อ 1 หน้า (px) หลังหัก @page margin 5mm ('narrow') ทั้งสองด้าน
- *  a4 เดี่ยว = portrait สูง (297−10)mm · a4-2up = ครึ่ง landscape สูง (210−10)mm */
-const PAGE_CONTENT_H: Record<PrintMode, number> = {
-  'a4': Math.round((297 - 10) * MM),       // ~1085
-  'a4-2up': Math.round((210 - 10) * MM),   // ~756 (ต่อครึ่ง = 1 ใบ)
+/** 408 — แนวกระดาษจริงของ 1 ใบ: a4-2up เป็น landscape เสมอ (A4 แนวนอน ฉีกครึ่ง = 2 ใบ),
+ *  a4 เดี่ยว = ตามที่ user เลือก (รองรับ AKARA landscape — 376.6) */
+export function effectiveOrientation(printMode: PrintMode, orientation: Orientation): Orientation {
+  return printMode === 'a4-2up' ? 'landscape' : orientation
+}
+
+/** 408 — พื้นที่เนื้อหา 1 ใบ (px) = (ด้านสูงของหน้า − ขอบบน-ล่าง) คำนวณจาก paper/orientation/margin จริง
+ *  เดิม hardcode 297/210 − 10mm (narrow) → ถ้า user เปลี่ยน margin/แนว/ขนาด จะคำนวณผิด → ล้น
+ *  ค่า default (A4 · a4=portrait/a4-2up=landscape · narrow) = ค่าเดิม (a4 ~1085 · a4-2up ~756) ไม่กระทบ 405 */
+function pageContentHpx(printMode: PrintMode, orientation: Orientation, paperSize: PaperSize, margin: MarginPreset): number {
+  const p = PAPER_SIZES[paperSize]
+  const ori = effectiveOrientation(printMode, orientation)
+  const pageHmm = ori === 'portrait' ? p.height : p.width   // portrait=สูง, landscape=กว้างกลายเป็นสูง
+  const m = MARGIN_PRESETS[margin].value
+  return Math.round((pageHmm - 2 * m) * MM)
 }
 
 /** overhead = หัวเอกสาร + กล่องชื่อ/วันที่/นับถุง + thead + ลายเซ็น(LF) — px (overestimate กันล้น)
@@ -64,18 +76,26 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v))
 }
 
-/** คำนวณ metrics สำหรับ 1 ใบ (N รายการ + แถวว่าง) */
+/** คำนวณ metrics สำหรับ 1 ใบ (N รายการ + แถวว่าง)
+ *  408 — opts.orientation/paperSize/margin (optional) → fit ตามแนว/ขนาด/ขอบจริง
+ *        default: A4 · a4=portrait/a4-2up=landscape · narrow (= พฤติกรรมเดิม) */
 export function computeFormMetrics(
   itemCount: number,
-  opts: { kind: FormKind; printMode: PrintMode; fitMode: FitMode; fineLevel: number },
+  opts: {
+    kind: FormKind; printMode: PrintMode; fitMode: FitMode; fineLevel: number
+    orientation?: Orientation; paperSize?: PaperSize; margin?: MarginPreset
+  },
 ): FormMetrics {
   const size = opts.printMode === 'a4-2up' ? 'compact' : 'full'
   const n = Math.max(1, itemCount)
+  const orientation = opts.orientation ?? (opts.printMode === 'a4-2up' ? 'landscape' : 'portrait')
+  const paperSize = opts.paperSize ?? 'A4'
+  const margin = opts.margin ?? 'narrow'
 
   let rowH: number
   if (opts.fitMode === 'fit') {
     // 405 — หัก safety เพิ่ม → content < พื้นที่พิมพ์จริงเสมอ (underfill กันล้นหน้า 2)
-    const tableH = PAGE_CONTENT_H[opts.printMode] - OVERHEAD[opts.kind][size] - FIT_SAFETY_PX
+    const tableH = pageContentHpx(opts.printMode, orientation, paperSize, margin) - OVERHEAD[opts.kind][size] - FIT_SAFETY_PX
     rowH = tableH / n
   } else {
     rowH = PRESET_ROW_H[size][opts.fitMode]
@@ -90,11 +110,18 @@ export function computeFormMetrics(
   return { rowHeightPx: Math.floor(rowH), fontPx }   // floor กันล้น (underfill นิดเดียว OK)
 }
 
-/** ขนาดกล่อง preview (px) ของ "พื้นที่เนื้อหา 1 หน้า" — กว้าง×สูง (หลัง margin) ใช้วาด page box + คำนวณ zoom */
-export function pageBoxPx(printMode: PrintMode): { w: number; h: number; halfW: number } {
-  if (printMode === 'a4-2up') {
-    // landscape เต็ม (297−10)×(210−10), ครึ่ง = (287/2)
-    return { w: Math.round((297 - 10) * MM), h: Math.round((210 - 10) * MM), halfW: Math.round(((297 - 10) / 2) * MM) }
-  }
-  return { w: Math.round((210 - 10) * MM), h: Math.round((297 - 10) * MM), halfW: 0 }
+/** ขนาดกล่อง preview (px) ของ "พื้นที่เนื้อหา 1 หน้า" — กว้าง×สูง (หลัง margin) ใช้วาด page box + คำนวณ zoom
+ *  408 — orientation/paperSize/margin (optional) → กล่อง preview ตรงกับที่พิมพ์จริง (รวม landscape เดี่ยว)
+ *        default (A4 · a4=portrait/a4-2up=landscape · narrow) = ค่าเดิม */
+export function pageBoxPx(
+  printMode: PrintMode,
+  orientation?: Orientation, paperSize?: PaperSize, margin?: MarginPreset,
+): { w: number; h: number; halfW: number } {
+  const ori = effectiveOrientation(printMode, orientation ?? (printMode === 'a4-2up' ? 'landscape' : 'portrait'))
+  const p = PAPER_SIZES[paperSize ?? 'A4']
+  const m = MARGIN_PRESETS[margin ?? 'narrow'].value
+  const wmm = (ori === 'portrait' ? p.width : p.height) - 2 * m
+  const hmm = (ori === 'portrait' ? p.height : p.width) - 2 * m
+  const w = Math.round(wmm * MM)
+  return { w, h: Math.round(hmm * MM), halfW: printMode === 'a4-2up' ? Math.round(w / 2) : 0 }
 }

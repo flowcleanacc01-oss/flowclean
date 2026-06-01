@@ -114,3 +114,31 @@ describe('pageBoxPx', () => {
     expect(Math.abs(p.halfW - p.w / 2)).toBeLessThanOrEqual(1)
   })
 })
+
+// 408 — orientation/paperSize/margin-aware (AKARA landscape เดี่ยว + save ค่าใน template)
+describe('408 — orientation / margin / paper aware', () => {
+  it('a4 เดี่ยว landscape → พื้นที่สูงน้อยกว่า portrait → rowH เล็กกว่า (N เท่ากัน)', () => {
+    const portrait = computeFormMetrics(20, { kind: 'lf', printMode: 'a4', fitMode: 'fit', fineLevel: 0, orientation: 'portrait' })
+    const landscape = computeFormMetrics(20, { kind: 'lf', printMode: 'a4', fitMode: 'fit', fineLevel: 0, orientation: 'landscape' })
+    expect(landscape.rowHeightPx).toBeLessThan(portrait.rowHeightPx)
+  })
+  it('a4 เดี่ยว default = portrait (ไม่ส่ง orientation = ค่าเดิม)', () => {
+    const def = computeFormMetrics(20, { kind: 'lf', printMode: 'a4', fitMode: 'fit', fineLevel: 0 })
+    const portrait = computeFormMetrics(20, { kind: 'lf', printMode: 'a4', fitMode: 'fit', fineLevel: 0, orientation: 'portrait' })
+    expect(def.rowHeightPx).toBe(portrait.rowHeightPx)
+  })
+  it('margin กว้าง → พื้นที่น้อยลง → rowH เล็กกว่า narrow', () => {
+    const narrow = computeFormMetrics(20, { kind: 'lf', printMode: 'a4', fitMode: 'fit', fineLevel: 0, margin: 'narrow' })
+    const wide = computeFormMetrics(20, { kind: 'lf', printMode: 'a4', fitMode: 'fit', fineLevel: 0, margin: 'wide' })
+    expect(wide.rowHeightPx).toBeLessThan(narrow.rowHeightPx)
+  })
+  it('pageBoxPx a4 landscape = กว้าง > สูง (สลับจาก portrait)', () => {
+    const p = pageBoxPx('a4', 'landscape')
+    expect(p.w).toBeGreaterThan(p.h)
+  })
+  it('a4-2up บังคับ landscape เสมอ (ส่ง portrait ก็ไม่เปลี่ยน)', () => {
+    const a = computeFormMetrics(10, { kind: 'checklist', printMode: 'a4-2up', fitMode: 'fit', fineLevel: 0, orientation: 'portrait' })
+    const b = computeFormMetrics(10, { kind: 'checklist', printMode: 'a4-2up', fitMode: 'fit', fineLevel: 0, orientation: 'landscape' })
+    expect(a.rowHeightPx).toBe(b.rowHeightPx)
+  })
+})
