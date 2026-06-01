@@ -203,6 +203,22 @@ function toCamelCaseArray<T>(rows: Record<string, unknown>[]): T[] {
 // Pagination helper — Supabase API caps at 1000 rows per request
 // Use .range() loop to fetch all rows for unbounded tables
 // ============================================================
+// 403 — กัน duplicate id หลุดเข้า React state · row id ซ้ำ = key collision → ghost rows
+//   (โผล่ข้าม filter, sort แล้วเพิ่มเป็น 2 เท่า, ติ๊ก checkbox ไม่ได้, ลอยบนสุด)
+function dedupById(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  const seen = new Set<unknown>()
+  const out: Record<string, unknown>[] = []
+  for (const r of rows) {
+    const id = r.id
+    if (id != null) {
+      if (seen.has(id)) continue
+      seen.add(id)
+    }
+    out.push(r)
+  }
+  return out
+}
+
 async function fetchAllPaginated<T>(
   tableName: string,
   orderColumn: string,
@@ -215,13 +231,18 @@ async function fetchAllPaginated<T>(
       .from(tableName)
       .select('*')
       .order(orderColumn, { ascending })
+      // 403 — tiebreaker ด้วย id (unique) → .range() pagination เสถียร
+      //   เดิม order ด้วย orderColumn อย่างเดียว (เช่น 'date' ที่ไม่ unique) → row ที่ date เท่ากัน
+      //   เรียงสลับกันได้ระหว่าง 2 request → row ขอบ page ซ้ำ (โผล่ทั้ง page N และ N+1) หรือตกหาย
+      .order('id', { ascending: true })
       .range(from, from + PAGE - 1)
     if (error) throw error
     if (!data || data.length === 0) break
     all.push(...data)
     if (data.length < PAGE) break
   }
-  return toCamelCaseArray<T>(all as Record<string, unknown>[])
+  // safety net: ตัด id ซ้ำทิ้ง (เผื่อ pagination ยังหลุด หรือ source อื่น)
+  return toCamelCaseArray<T>(dedupById(all as Record<string, unknown>[]))
 }
 
 // ============================================================
@@ -562,13 +583,14 @@ export async function fetchLegacyDocuments(): Promise<LegacyDocument[]> {
       .from('legacy_documents')
       .select('*')
       .order('doc_date', { ascending: false })
+      .order('id', { ascending: true })   // 403 — tiebreaker unique → .range() เสถียร (5,093+ docs = 6 pages, doc_date ไม่ unique)
       .range(from, from + PAGE - 1)
     if (error) throw error
     if (!data || data.length === 0) break
     all.push(...data)
     if (data.length < PAGE) break
   }
-  return toCamelCaseArray<LegacyDocument>(all as Record<string, unknown>[])
+  return toCamelCaseArray<LegacyDocument>(dedupById(all as Record<string, unknown>[]))
 }
 
 // ============================================================
