@@ -82,6 +82,7 @@ const FIELD_MAP: Record<string, string> = {
   aggregateSizeGroups: 'aggregate_size_groups',   // 317
   groupInputs: 'group_inputs',                    // 317
   aggregateSnapshot: 'aggregate_snapshot',        // 330
+  excludedCodes: 'excluded_codes',                // 404
   autoBalancedAnchor: 'auto_balanced_anchor',     // 340.3
   isProtected: 'is_protected',                    // 347
   protectedReason: 'protected_reason',            // 347

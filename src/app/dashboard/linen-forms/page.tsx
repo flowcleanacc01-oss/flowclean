@@ -34,6 +34,32 @@ import FloatingTotalBar from '@/components/FloatingTotalBar'
 import AddItemWizard from '@/components/AddItemWizard'
 import DiscrepancyHelperModal from '@/components/DiscrepancyHelperModal'
 
+// 404 — แถบ "ซ่อนรายการไว้" (กู้คืน item ที่ลบออกจาก LF) — ใช้ทั้งหน้า detail + สร้างใหม่
+function ExcludedCodesBanner({ codes, nameOf, onRestore }: {
+  codes: string[] | undefined
+  nameOf: (code: string) => string
+  onRestore: (code: string) => void
+}) {
+  if (!codes || codes.length === 0) return null
+  return (
+    <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs">
+      <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+        <span className="font-medium text-slate-500">🗑 ซ่อนรายการไว้ {codes.length} รายการ:</span>
+        {codes.map(code => (
+          <button key={code} type="button" onClick={() => onRestore(code)}
+            title="กดเพื่อกู้คืนรายการนี้กลับเข้าใบ"
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white border border-slate-300 text-slate-600 hover:border-[#3DD8D8] hover:text-[#1B3A5C] transition-colors">
+            <span className="font-mono">{code}</span>
+            <span className="text-slate-400 max-w-[120px] truncate">{nameOf(code)}</span>
+            <span className="text-[#3DD8D8] font-semibold">↩</span>
+          </button>
+        ))}
+        <span className="text-[10px] text-slate-400">— กดชิปเพื่อกู้คืน</span>
+      </div>
+    </div>
+  )
+}
+
 export default function LinenFormsPage() {
   const {
     currentUser,
@@ -224,6 +250,7 @@ export default function LinenFormsPage() {
   const [newRows, setNewRows] = useState<LinenFormRow[]>([])
   const [newNotes, setNewNotes] = useState('')
   const [newBagsSent, setNewBagsSent] = useState(0)
+  const [newExcludedCodes, setNewExcludedCodes] = useState<string[]>([])  // 404
 
   // 207: AddItemWizard state — เปิดได้ทั้งใน create + detail modal
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -357,6 +384,7 @@ export default function LinenFormsPage() {
     setNewDate(todayISO())
     setNewNotes('')
     setNewBagsSent(0)
+    setNewExcludedCodes([])  // 404
     setShowCreate(true)
   }
 
@@ -384,6 +412,7 @@ export default function LinenFormsPage() {
       notes: newNotes,
       bagsSentCount: newBagsSent,
       workflowMode: cust?.workflowMode ?? 'cross_check',
+      excludedCodes: newExcludedCodes.length > 0 ? newExcludedCodes : undefined,  // 404
     })
     setActiveRowId(newLF.id)
     scrollToActiveRow(newLF.id)
@@ -1004,6 +1033,17 @@ export default function LinenFormsPage() {
                 editableColumns={['col2', 'col3', 'note']}
                 formStatus="draft"
                 highlightQ={highlightQ}
+                excludedCodes={newExcludedCodes}
+                onDeleteRow={(code) => {
+                  setNewRows(prev => prev.filter(r => r.code !== code))
+                  setNewExcludedCodes(prev => Array.from(new Set([...prev, code])))
+                }}
+              />
+              {/* 404: รายการที่ถูกลบในใบใหม่ — กู้คืนได้ */}
+              <ExcludedCodesBanner
+                codes={newExcludedCodes}
+                nameOf={(code) => linenCatalog.find(c => c.code === code)?.name || ''}
+                onRestore={(code) => setNewExcludedCodes(prev => prev.filter(c => c !== code))}
               />
             </>
           )}
@@ -1384,6 +1424,16 @@ export default function LinenFormsPage() {
               formStatus={detailForm.status}
               highlightQ={highlightQ}
               workflowModeOverride={detailForm.workflowMode}
+              excludedCodes={detailForm.excludedCodes}
+              onDeleteRow={
+                // 404: ลบแถวได้เฉพาะช่วงกรอกข้อมูล (กัน desync หลังแพค/วางบิล)
+                ['draft', 'received', 'washing', 'delivered'].includes(detailForm.status)
+                  ? (code) => updateLinenForm(detailForm.id, {
+                      rows: detailForm.rows.filter(r => r.code !== code),
+                      excludedCodes: Array.from(new Set([...(detailForm.excludedCodes ?? []), code])),
+                    })
+                  : undefined
+              }
               editableColumns={
                 detailForm.status === 'draft' ? ['col2', 'col3', 'note'] :
                 detailForm.status === 'received' ? ['col2', 'col3', 'col5', 'note'] :
@@ -1407,6 +1457,15 @@ export default function LinenFormsPage() {
                 )
                 updateLinenForm(detailForm.id, { rows: updatedRows })
               }}
+            />
+
+            {/* 404: รายการที่ถูกลบ — กดกู้คืนได้ */}
+            <ExcludedCodesBanner
+              codes={detailForm.excludedCodes}
+              nameOf={(code) => linenCatalog.find(c => c.code === code)?.name || ''}
+              onRestore={(code) => updateLinenForm(detailForm.id, {
+                excludedCodes: (detailForm.excludedCodes ?? []).filter(c => c !== code),
+              })}
             />
 
             {detailForm.notes && (
@@ -2051,10 +2110,16 @@ export default function LinenFormsPage() {
             if (!newRows.some(r => r.code === result.code)) {
               setNewRows([...newRows, emptyRow])
             }
+            // 404: เพิ่มกลับ = ยกเลิกการซ่อน
+            setNewExcludedCodes(prev => prev.filter(c => c !== result.code))
           } else if (wizardTarget === 'detail' && wizardTargetLfId) {
             const lf = linenForms.find(f => f.id === wizardTargetLfId)
-            if (lf && !lf.rows.some(r => r.code === result.code)) {
-              updateLinenForm(wizardTargetLfId, { rows: [...lf.rows, emptyRow] })
+            if (lf) {
+              // 404: เพิ่ม row (ถ้ายังไม่มี) + ปลดออกจาก excludedCodes (กัน grid filter ทิ้ง)
+              const patch: { rows?: LinenFormRow[]; excludedCodes?: string[] } = {}
+              if (!lf.rows.some(r => r.code === result.code)) patch.rows = [...lf.rows, emptyRow]
+              if (lf.excludedCodes?.includes(result.code)) patch.excludedCodes = lf.excludedCodes.filter(c => c !== result.code)
+              if (Object.keys(patch).length > 0) updateLinenForm(wizardTargetLfId, patch)
             }
           }
         }}

@@ -29,6 +29,10 @@ interface LinenFormGridProps {
   highlightQ?: string
   /** 270: override workflowMode — caller (LF detail) ส่ง LF snapshot ป้องกัน drift เมื่อ customer toggle */
   workflowModeOverride?: WorkflowMode
+  /** 404: codes ที่ถูกลบออกจาก LF ใบนี้ — filter ออกจาก grid (กัน item ใน QT เด้งกลับเป็นแถวเปล่า) */
+  excludedCodes?: string[]
+  /** 404: ลบแถวออกจาก LF — ถ้ามี = แสดงปุ่ม 🗑 ท้ายแต่ละแถว (caller จัดการ rows + excludedCodes) */
+  onDeleteRow?: (code: string) => void
 }
 
 const COL_LABELS = [
@@ -63,6 +67,8 @@ export default function LinenFormGrid({
   onApproveSync,
   highlightQ = '',
   workflowModeOverride,
+  excludedCodes,
+  onDeleteRow,
 }: LinenFormGridProps) {
   // 270 — workflowMode: ใช้ override (LF snapshot) ก่อน, fallback ไป customer.workflowMode
   //   ป้องกัน drift: LF เก่าที่ snapshot 'cross_check' ไว้ต้องคงพฤติกรรม cross_check
@@ -117,7 +123,10 @@ export default function LinenFormGrid({
         sortOrder: 999,
       }
     })
+  // 404 — กรอง codes ที่ user ลบออกจาก LF ใบนี้ (ทั้งฝั่ง QT-derived และ orphan)
+  const excludedSet = useMemo(() => new Set(excludedCodes ?? []), [excludedCodes])
   const rawItems: LinenItemDef[] = [...baseItems, ...orphanItems]
+    .filter(i => !excludedSet.has(i.code))
 
   // 326: Auto-rearrange — group items ที่ลูกค้า opt-in aggregate ติดกัน
   // Order สัมพัทธ์ของแต่ละ group คงเดิม (first occurrence ใน rawItems)
@@ -305,6 +314,26 @@ export default function LinenFormGrid({
     }))
     setLocalRows(cleared)
     onChange(cleared)
+  }
+
+  // 404 — ลบแถวออกจาก LF (universal): confirm + เตือนแรงขึ้นถ้าแถวมีข้อมูล (กระทบ carry-over + วางบิล)
+  const showDelete = !!onDeleteRow && !readOnly
+  const handleDeleteRow = (item: LinenItemDef) => {
+    if (!onDeleteRow) return
+    const row = getRow(item.code)
+    const hasData = !!(
+      row.col2_hotelCountIn || row.col3_hotelClaimCount || row.col4_factoryApproved ||
+      row.col5_factoryClaimApproved || row.col6_factoryPackSend || row.note
+    )
+    const msg = hasData
+      ? `⚠ ลบแถว "${item.name}" (${item.code}) ออกจากใบนี้?\n\n` +
+        `แถวนี้มีข้อมูลกรอกไว้ — ส่งซัก ${row.col2_hotelCountIn || 0} · เคลม ${row.col3_hotelClaimCount || 0} · ` +
+        `นับเข้า ${row.col5_factoryClaimApproved || 0} · แพคส่ง ${row.col6_factoryPackSend || 0}\n\n` +
+        `การลบจะกระทบยอดยกยอด (carry-over) รอบถัดไป และยอดวางบิลของรายการนี้\n` +
+        `(กู้คืนได้จากแถบ "ซ่อนรายการไว้" ด้านล่างตาราง)`
+      : `ลบแถว "${item.name}" (${item.code}) ออกจากใบนี้?\n\n(กู้คืนได้จากแถบ "ซ่อนรายการไว้" ด้านล่างตาราง)`
+    if (!confirm(msg)) return
+    onDeleteRow(item.code)
   }
 
   // Arrow key + Enter navigation — เลื่อน cell ใน grid เท่านั้น (ข้ามกล่อง/ปุ่มใช้ Tab/Shift+Tab)
@@ -614,6 +643,9 @@ export default function LinenFormGrid({
                   </th>
                 )
               })}
+              {showDelete && (
+                <th className="w-10 px-1 py-2 font-medium text-center text-slate-400 bg-slate-50" title="ลบรายการออกจากใบนี้">ลบ</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -1032,6 +1064,17 @@ export default function LinenFormGrid({
                       )}
                     </div>
                   </td>
+
+                  {/* 404: ลบแถวออกจาก LF */}
+                  {showDelete && (
+                    <td className="px-1 py-1 text-center">
+                      <button type="button" onClick={() => handleDeleteRow(item)}
+                        title={`ลบ "${item.name}" ออกจากใบนี้`}
+                        className="p-1 rounded text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               )
             })}
@@ -1069,6 +1112,7 @@ export default function LinenFormGrid({
               </td>
               <td className="px-3 py-2"></td>
               <td className="px-3 py-2 text-center">{totals.col4}</td>
+              {showDelete && <td className="px-3 py-2"></td>}
             </tr>
           </tfoot>
         </table>

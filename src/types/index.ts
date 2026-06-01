@@ -430,6 +430,11 @@ export interface LinenForm {
     col5Mode: 'aggregate' | 'per_row'
     anchorCode?: string
   }>
+  // 404 — codes ที่ user ลบออกจาก LF ใบนี้ (universal row delete)
+  //   grid ดึงรายการจาก QT ตัวจริง → ถ้า item ยังอยู่ใน QT การลบแถวเฉยๆ จะเด้งกลับมาเป็นแถวเปล่า
+  //   เก็บ code ที่ลบไว้ที่นี่ → grid filter ออก (ซ่อนเฉพาะ LF ใบนี้ ไม่แตะ QT)
+  //   undo ได้: เอา code ออกจาก list หรือเพิ่ม item กลับผ่าน AddItemWizard
+  excludedCodes?: string[]
 }
 
 // ============================================================
