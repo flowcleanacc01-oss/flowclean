@@ -1,6 +1,6 @@
-// 390 — Aggregate Impact logic tests (diffConfigs / summarizeAffected / compareSnapshots)
+// 390 — Aggregate Impact logic tests (diffConfigs / summarizeAffected / compareSnapshots / selectDriftingDocs)
 import { describe, it, expect } from 'vitest'
-import { diffConfigs, summarizeAffected, compareSnapshots } from '@/lib/aggregate-audit'
+import { diffConfigs, summarizeAffected, compareSnapshots, selectDriftingDocs } from '@/lib/aggregate-audit'
 import type { AggregateSnapshot } from '@/lib/carry-over-logic'
 import type { AggregateSizeGroupConfig } from '@/types'
 
@@ -125,5 +125,43 @@ describe('compareSnapshots (moved verbatim — lock behavior)', () => {
   it('group ใหม่ฝั่ง customer → missing_groups', () => {
     const cur: AggregateSnapshot = { ...S('X'), ...S('Y') }
     expect(compareSnapshots(S('X'), cur).reason).toBe('missing_groups')
+  })
+})
+
+describe('selectDriftingDocs (390 C)', () => {
+  it('snapshot_missing → เลือก + recalc false (ล็อกเฉย ๆ)', () => {
+    const r = selectDriftingDocs([{ id: 'lf1' }], [C('BEDSHEET')])
+    expect(r).toHaveLength(1)
+    expect(r[0]).toMatchObject({ id: 'lf1', reason: 'snapshot_missing', recalc: false })
+  })
+  it('snapshot ตรง config ใหม่ → ไม่เลือก', () => {
+    const r = selectDriftingDocs(
+      [{ id: 'lf1', aggregateSnapshot: S('BEDSHEET', 'aggregate', 'aggregate') }],
+      [C('BEDSHEET', 'aggregate', 'aggregate')],
+    )
+    expect(r).toHaveLength(0)
+  })
+  it('mode ต่าง → เลือก + recalc true (calc จะเปลี่ยน)', () => {
+    const r = selectDriftingDocs(
+      [{ id: 'lf1', aggregateSnapshot: S('BEDSHEET', 'aggregate', 'aggregate') }],
+      [C('BEDSHEET', 'per_row', 'aggregate')],
+    )
+    expect(r).toHaveLength(1)
+    expect(r[0]).toMatchObject({ id: 'lf1', reason: 'snapshot_mismatch', recalc: true })
+  })
+  it('ไม่เกี่ยว aggregate (ทั้ง doc + config ว่าง) → ข้าม', () => {
+    expect(selectDriftingDocs([{ id: 'lf1' }], [])).toHaveLength(0)
+    expect(selectDriftingDocs([{ id: 'lf1' }], undefined)).toHaveLength(0)
+  })
+  it('คละ — เลือกเฉพาะที่ drift', () => {
+    const docs = [
+      { id: 'a', aggregateSnapshot: S('BEDSHEET', 'aggregate', 'aggregate') }, // ตรง → ข้าม
+      { id: 'b' },                                                              // missing → เลือก (recalc false)
+      { id: 'c', aggregateSnapshot: S('BEDSHEET', 'per_row', 'aggregate') },    // mismatch → เลือก (recalc true)
+    ]
+    const r = selectDriftingDocs(docs, [C('BEDSHEET', 'aggregate', 'aggregate')])
+    expect(r.map(x => x.id).sort()).toEqual(['b', 'c'])
+    expect(r.find(x => x.id === 'b')?.recalc).toBe(false)
+    expect(r.find(x => x.id === 'c')?.recalc).toBe(true)
   })
 })

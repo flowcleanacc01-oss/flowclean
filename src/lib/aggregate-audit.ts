@@ -188,3 +188,37 @@ export function summarizeAffected(
   }
   return { scanned, recalcNow, driftReview, byReason }
 }
+
+// ============================================================
+// 390 C — เลือกเอกสารที่ต้อง rebuild (สำหรับ batch ปรับ snapshot ในตัว Impact Modal)
+// ============================================================
+
+export interface DriftingDoc {
+  id: string
+  reason: AggReason
+  /** true = snapshot ต่างจริง → carry-over จะเปลี่ยนเมื่อ rebuild ·
+   *  false = snapshot_missing (ใช้ config ปัจจุบันผ่าน fallback อยู่แล้ว → rebuild = ล็อกเฉย ๆ calc เท่าเดิม) */
+  recalc: boolean
+}
+
+/**
+ * เลือก LF/adj ที่ drift จาก config ใหม่ (reason !== null) — เกณฑ์เดียวกับ summarizeAffected / AggregateModeAudit
+ * comparison ใช้ snapshot แบบไม่มี catalog (compareSnapshots ไม่เทียบ anchorCode) ให้ตรง summarizeAffected เป๊ะ
+ *
+ * @param docs        {id, aggregateSnapshot} ของ LF หรือ adj ของลูกค้าคนเดียว
+ * @param nextConfigs config ใหม่ที่เพิ่งบันทึก
+ */
+export function selectDriftingDocs(
+  docs: { id: string; aggregateSnapshot?: AggregateSnapshot }[],
+  nextConfigs: AggregateSizeGroupConfig[] | undefined,
+): DriftingDoc[] {
+  const curSnap = buildAggregateSnapshot(nextConfigs)
+  const out: DriftingDoc[] = []
+  for (const d of docs) {
+    if (!d.aggregateSnapshot && !curSnap) continue
+    const { reason } = compareSnapshots(d.aggregateSnapshot, curSnap)
+    if (reason === null) continue
+    out.push({ id: d.id, reason, recalc: reason !== 'snapshot_missing' })
+  }
+  return out
+}

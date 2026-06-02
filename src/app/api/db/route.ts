@@ -19,6 +19,8 @@ interface DbRequest {
   table: string
   data?: Record<string, unknown> | Record<string, unknown>[]
   match?: { column: string; value: string | number }
+  // 390 C — batch match by id list (update/delete หลายแถวใน 1 call) → PATCH/DELETE ... col=in.(...)
+  matchIn?: { column: string; values: (string | number)[] }
   onConflict?: string
 }
 
@@ -31,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: DbRequest = await request.json()
-    const { operation, table, data, match, onConflict } = body
+    const { operation, table, data, match, matchIn, onConflict } = body
 
     if (!ALLOWED_TABLES.has(table)) {
       return NextResponse.json({ error: `Table "${table}" not allowed` }, { status: 400 })
@@ -48,12 +50,25 @@ export async function POST(request: NextRequest) {
         result = await supabaseAdmin.from(table).insert(data!)
         break
       case 'update':
-        if (!match) return NextResponse.json({ error: 'match required for update' }, { status: 400 })
-        result = await supabaseAdmin.from(table).update(data!).eq(match.column, match.value)
+        if (match) {
+          result = await supabaseAdmin.from(table).update(data!).eq(match.column, match.value)
+        } else if (matchIn) {
+          // 390 C — empty list = no-op (กัน update ทั้งตารางโดยไม่ตั้งใจ)
+          if (matchIn.values.length === 0) { result = { error: null }; break }
+          result = await supabaseAdmin.from(table).update(data!).in(matchIn.column, matchIn.values)
+        } else {
+          return NextResponse.json({ error: 'match or matchIn required for update' }, { status: 400 })
+        }
         break
       case 'delete':
-        if (!match) return NextResponse.json({ error: 'match required for delete' }, { status: 400 })
-        result = await supabaseAdmin.from(table).delete().eq(match.column, match.value)
+        if (match) {
+          result = await supabaseAdmin.from(table).delete().eq(match.column, match.value)
+        } else if (matchIn) {
+          if (matchIn.values.length === 0) { result = { error: null }; break }
+          result = await supabaseAdmin.from(table).delete().in(matchIn.column, matchIn.values)
+        } else {
+          return NextResponse.json({ error: 'match or matchIn required for delete' }, { status: 400 })
+        }
         break
       case 'upsert':
         result = await supabaseAdmin.from(table).upsert(data!, onConflict ? { onConflict } : undefined)

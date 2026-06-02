@@ -25,7 +25,7 @@ import * as db from './supabase-service'
 import { DEFAULT_FACET_VOCAB, type FacetVocab } from './linen-vocabulary'
 import { getOrSeedFacetVocab, saveFacetVocab } from './facet-vocab-service'
 // 330 — Group-aware carry-over (fix infinity bug from aggregate size groups)
-import { buildAggregateSnapshot, computeAnchorByGroup, diffsForForm } from './carry-over-logic'
+import { buildAggregateSnapshot, computeAnchorByGroup, diffsForForm, type AggregateSnapshot } from './carry-over-logic'
 
 // ============================================================
 // Store Interface
@@ -146,6 +146,8 @@ interface StoreContextType {
   addCarryOverAdjustment: (adj: Omit<CarryOverAdjustment, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'history' | 'isDeleted'>) => CarryOverAdjustment
   updateCarryOverAdjustment: (id: string, updates: Partial<Omit<CarryOverAdjustment, 'id' | 'createdAt' | 'createdBy'>>, changeNote?: string) => void
   deleteCarryOverAdjustment: (id: string) => void
+  /** 390 C — ปรับ aggregateSnapshot ของ LF + adj หลายใบเป็น config ใหม่แบบ batch (1 ชุด call ต่อ table, กัน fire-and-forget race) */
+  rebuildAggregateSnapshots: (customerId: string, customerLabel: string, lfIds: string[], adjIds: string[], snapshot: AggregateSnapshot | undefined) => void
 
   // 311 P2 — Schedule Overrides
   scheduleOverrides: ScheduleOverride[]
@@ -1049,6 +1051,54 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     logAudit('delete', 'customer', id, 'ลบรายการปรับยอด')
   }, [logAudit])
 
+  // 390 C — Batch rebuild aggregateSnapshot เป็น config ใหม่ (LF + adj พร้อมกัน)
+  //   ⚠️ ห้าม loop update ทีละใบ (fire-and-forget race → save หล่น = carry-over รวน) →
+  //      ใช้ batch 1 ชุด call ต่อ table (db.update*BatchByIds chunk + sequential await)
+  //   snapshot = buildAggregateSnapshot(nextConfigs, catalog) จากฝั่ง modal (drift-proof reprint;
+  //   calc carry-over ใช้ computeAnchorByGroup จาก catalog สด ไม่ใช่ snapshot.anchorCode → anchor ไม่กระทบ calc)
+  const rebuildAggregateSnapshots = useCallback((
+    customerId: string,
+    customerLabel: string,
+    lfIds: string[],
+    adjIds: string[],
+    snapshot: AggregateSnapshot | undefined,
+  ) => {
+    if (lfIds.length === 0 && adjIds.length === 0) return
+
+    if (lfIds.length > 0) {
+      const lfSet = new Set(lfIds)
+      const now = todayISO()
+      // capture เดิมจาก ref (fresh เสมอ) เผื่อ rollback
+      const prevSnaps = new Map(
+        linenFormsRef.current.filter(f => lfSet.has(f.id)).map(f => [f.id, f.aggregateSnapshot] as const),
+      )
+      const apply = (x: LinenForm) => lfSet.has(x.id) ? { ...x, aggregateSnapshot: snapshot, updatedAt: now } : x
+      linenFormsRef.current = linenFormsRef.current.map(apply)
+      setLinenForms(prev => prev.map(apply))
+      dbSave(db.updateLinenFormsBatchByIds(lfIds, { aggregateSnapshot: snapshot, updatedAt: now }), () => {
+        const restore = (x: LinenForm) => prevSnaps.has(x.id) ? { ...x, aggregateSnapshot: prevSnaps.get(x.id) } : x
+        linenFormsRef.current = linenFormsRef.current.map(restore)
+        setLinenForms(prev => prev.map(restore))
+      })
+    }
+
+    if (adjIds.length > 0) {
+      const adjSet = new Set(adjIds)
+      const tsNow = new Date().toISOString()
+      const prevSnaps = new Map(
+        carryOverAdjustments.filter(a => adjSet.has(a.id)).map(a => [a.id, a.aggregateSnapshot] as const),
+      )
+      setCarryOverAdjustments(prev => prev.map(x => adjSet.has(x.id) ? { ...x, aggregateSnapshot: snapshot, updatedAt: tsNow } : x))
+      dbSave(db.updateCarryOverAdjustmentsBatchByIds(adjIds, { aggregateSnapshot: snapshot, updatedAt: tsNow }), () => {
+        setCarryOverAdjustments(prev => prev.map(x => prevSnaps.has(x.id) ? { ...x, aggregateSnapshot: prevSnaps.get(x.id) } : x))
+      })
+    }
+
+    // 1 audit entry สรุป (กัน N audit writes = fire-and-forget race ซ้ำซ้อน — logAudit เขียน DB ต่อ call)
+    logAudit('update', 'customer', customerId,
+      `Rebuild aggregate snapshot — ${customerLabel}: ${lfIds.length} LF + ${adjIds.length} ปรับยอด เป็น config ใหม่`)
+  }, [logAudit, carryOverAdjustments])
+
   // 311 P2 — Schedule Overrides CRUD
   const addScheduleOverride = useCallback((o: Omit<ScheduleOverride, 'id' | 'createdAt' | 'createdBy'>): ScheduleOverride => {
     const newOverride: ScheduleOverride = {
@@ -1272,6 +1322,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       customerCategories, addCustomerCategory, updateCustomerCategory, deleteCustomerCategory, getCustomerCategoryLabel,
       checklists, addChecklist, updateChecklist, updateChecklistStatus, deleteChecklist,
       carryOverAdjustments, addCarryOverAdjustment, updateCarryOverAdjustment, deleteCarryOverAdjustment,
+      rebuildAggregateSnapshots,
       scheduleOverrides, addScheduleOverride, updateScheduleOverride, deleteScheduleOverride,
       routePlans, setRouteOrder,
       facetVocab, updateFacetVocab, resetFacetVocab,

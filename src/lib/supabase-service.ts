@@ -16,6 +16,8 @@ async function dbWrite(params: {
   operation: 'insert' | 'update' | 'delete' | 'upsert'
   data?: Record<string, unknown> | Record<string, unknown>[]
   match?: { column: string; value: string | number }
+  // 390 C — batch by id list (column=in.(...)) สำหรับ update/delete หลายแถวใน 1 call
+  matchIn?: { column: string; values: (string | number)[] }
   onConflict?: string
 }): Promise<void> {
   // Get session user ID for auth header (must match auth.ts SESSION_KEY)
@@ -198,6 +200,23 @@ function toCamelCase<T>(obj: Record<string, unknown>): T {
 
 function toCamelCaseArray<T>(rows: Record<string, unknown>[]): T[] {
   return rows.map(row => toCamelCase<T>(row))
+}
+
+// ============================================================
+// 390 C — Batch update by id list (1 ชุด call, กัน fire-and-forget race)
+// ============================================================
+// id = UUID 36 ตัว → ตัด chunk กัน URL ยาวเกิน (PostgREST ส่ง in.(...) ใน query string)
+// await ทีละ chunk = sequential (ไม่ใช่ parallel fire-and-forget) → ไม่มี race / drop
+const BATCH_UPDATE_CHUNK = 150
+async function updateByIdChunks(
+  table: string,
+  ids: string[],
+  data: Record<string, unknown>,
+): Promise<void> {
+  for (let i = 0; i < ids.length; i += BATCH_UPDATE_CHUNK) {
+    const chunk = ids.slice(i, i + BATCH_UPDATE_CHUNK)
+    await dbWrite({ table, operation: 'update', data, matchIn: { column: 'id', values: chunk } })
+  }
 }
 
 // ============================================================
@@ -481,6 +500,12 @@ export async function deleteLinenFormDB(id: string): Promise<void> {
   await dbWrite({ table: 'linen_forms', operation: 'delete', match: { column: 'id', value: id } })
 }
 
+// 390 C — ปรับ field เดียวกัน (เช่น aggregateSnapshot) ให้ LF หลายใบใน 1 ชุด call (กัน fire-and-forget race)
+export async function updateLinenFormsBatchByIds(ids: string[], updates: Partial<LinenForm>): Promise<void> {
+  if (ids.length === 0) return
+  await updateByIdChunks('linen_forms', ids, toSnakeCase(updates as unknown as Record<string, unknown>))
+}
+
 // ============================================================
 // Delivery Notes
 // ============================================================
@@ -673,6 +698,12 @@ export async function updateCarryOverAdjustmentDB(id: string, updates: Partial<C
 export async function deleteCarryOverAdjustmentDB(id: string): Promise<void> {
   // Soft delete: set is_deleted = true (not actual delete)
   await dbWrite({ table: 'carry_over_adjustments', operation: 'update', data: { is_deleted: true }, match: { column: 'id', value: id } })
+}
+
+// 390 C — ปรับ field เดียวกัน (เช่น aggregateSnapshot) ให้ adjustment หลายใบใน 1 ชุด call (กัน fire-and-forget race)
+export async function updateCarryOverAdjustmentsBatchByIds(ids: string[], updates: Partial<CarryOverAdjustment>): Promise<void> {
+  if (ids.length === 0) return
+  await updateByIdChunks('carry_over_adjustments', ids, toSnakeCase(updates as unknown as Record<string, unknown>))
 }
 
 // ============================================================
