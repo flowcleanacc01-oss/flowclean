@@ -12,6 +12,7 @@ import { getCustomerEnabledCodes } from '@/lib/customer-pricing'
 import { todayISO, genId, cn } from '@/lib/utils'
 import BlankLinenFormPrint from '@/components/BlankLinenFormPrint'
 import BlankChecklistPrint from '@/components/BlankChecklistPrint'
+import BlankInventoryReportPrint from '@/components/BlankInventoryReportPrint'   // 376.6 archetype 3
 import ExportButtons from '@/components/ExportButtons'
 import SortableHeader from '@/components/SortableHeader'
 import CustomerSearchInline from '@/components/CustomerSearchInline'
@@ -60,7 +61,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   const [customerId, setCustomerId] = useState('')   // '' = ยังไม่เลือก
   const [showCustomer, setShowCustomer] = useState(false)  // 387.2/.4 — pickCustomer set ตาม chip
   const [showDate, setShowDate] = useState(false)          // 387.2/.4 default ไม่ติ๊ก
-  const [formType, setFormType] = useState<'lf' | 'checklist'>('lf')      // 387.3/.4 LF เป็น default (ปุ่มแรก ซ้าย)
+  const [formType, setFormType] = useState<'lf' | 'checklist' | 'inventory'>('lf')      // 387.3/.4 LF เป็น default (ปุ่มแรก ซ้าย) · 376.6 + inventory
   const [sheets, setSheets] = useState<FormSheet[]>([])
   const [activeSheet, setActiveSheet] = useState(0)
   const [printMode, setPrintMode] = useState<'a4-2up' | 'a4'>('a4')        // 387.3/.4 LF default = A4 เดี่ยว (orientation auto = portrait)
@@ -168,10 +169,17 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
 
   // 387 — สลับ formType + auto set printMode · idempotent: กดปุ่มเดิม = no-op กัน wipe ค่าที่ user/template เซตไว้
   //   LF → A4 เดี่ยว portrait | CK → A4→2×A5 landscape (orientation มาจาก ExportButtons key={printMode})
-  const switchFormType = (next: 'lf' | 'checklist') => {
+  const switchFormType = (next: 'lf' | 'checklist' | 'inventory') => {
     if (next === formType) return
     setFormType(next)
-    applyPrintMode(next === 'lf' ? 'a4' : 'a4-2up')   // 408 — reset print settings ตาม mode default
+    if (next === 'inventory') {
+      // 376.6 — archetype 3 (AKARA) = A4 แนวนอนเดี่ยว (column เยอะ ต้องนอน) · ไม่ใช่ 2-up
+      setPrintMode('a4')
+      setPrintSettings({ paperSize: 'A4', orientation: 'landscape', margin: 'narrow' })
+      setSettingsKey(k => k + 1)
+    } else {
+      applyPrintMode(next === 'lf' ? 'a4' : 'a4-2up')   // 408 — reset print settings ตาม mode default
+    }
   }
 
   // 389.4 — extraRows per-sheet · +/- toolbar update เฉพาะ active sheet (เปลี่ยน tab → ค่า +/- ของ tab นั้น)
@@ -189,7 +197,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   const removeSheet = (idx: number) => { setSheets(ss => ss.filter((_, i) => i !== idx)); setActiveSheet(a => Math.max(0, a >= idx ? a - 1 : a)) }
 
   const cust = customerId && customerId !== NONE ? (getCustomer(customerId) ?? null) : null
-  const FormComp = formType === 'lf' ? BlankLinenFormPrint : BlankChecklistPrint
+  const FormComp = formType === 'lf' ? BlankLinenFormPrint : formType === 'inventory' ? BlankInventoryReportPrint : BlankChecklistPrint
   const sheetItems = (s: FormSheet) => s.codes.map(code => linenCatalog.find(c => c.code === code)).filter((x): x is typeof linenCatalog[number] => !!x)  // 375: ตาม codes[] order (รองรับ reorder)
   const usableSheets = sheets.filter(s => s.codes.length > 0)
 
@@ -252,7 +260,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
   for (let i = 0; i < usableSheets.length; i += 2) pairs.push(usableSheets.slice(i, i + 2))
 
   return (
-    <Modal open={open} onClose={handleClose} title="พิมพ์ฟอร์มเปล่า ใบส่งรับผ้า (LF) / ใบเช็คผ้า (CK)" size="wide" className="print-target">
+    <Modal open={open} onClose={handleClose} title="พิมพ์ฟอร์มเปล่า ใบส่งรับผ้า (LF) / ใบเช็คผ้า (CK) / รายงานสต๊อก (INV)" size="wide" className="print-target">
       {!customerId ? (
         <div className="space-y-4">
           <label className="block text-sm font-medium text-slate-600">เลือกลูกค้า (ฟอร์มจะล้อรายการตาม QT) หรือทำฟอร์มกลางไว้เขียนมือ</label>
@@ -333,6 +341,7 @@ export default function BlankFormModal({ open, onClose }: { open: boolean; onClo
                 {/* 387.1 — สลับลำดับ LF ↔ CK (LF ซ้าย/แรก = default) + เติม (LF)/(CK) ตามคำขอ */}
                 <button onClick={() => switchFormType('lf')} className={formType === 'lf' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>ใบส่งรับผ้า (LF)</button>
                 <button onClick={() => switchFormType('checklist')} className={formType === 'checklist' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>ใบเช็คผ้า (CK)</button>
+                <button onClick={() => switchFormType('inventory')} className={formType === 'inventory' ? 'px-3 py-1.5 bg-[#1B3A5C] text-white' : 'px-3 py-1.5 text-slate-600 hover:bg-slate-50'}>รายงานสต๊อก (INV)</button>
               </div>
               <ExportButtons
                 key={settingsKey}  /* 408 — remount เมื่อ reset/toggle/โหลด template (ไม่ remount ตอน user เปลี่ยนใน dropdown เอง → ไม่ flicker) → re-init จาก printSettings */

@@ -12,7 +12,7 @@ import { PAPER_SIZES, MARGIN_PRESETS, type Orientation, type PaperSize, type Mar
 
 export type FitMode = 'fit' | 'loose' | 'normal' | 'dense'   // พอดีหน้า / โปร่ง / ปกติ / แน่น
 export type PrintMode = 'a4' | 'a4-2up'
-export type FormKind = 'lf' | 'checklist'
+export type FormKind = 'lf' | 'checklist' | 'inventory'   // 376.6 inventory = archetype 3 (AKARA แนวนอน)
 
 const MM = 3.7795275591   // CSS px ต่อ mm (96dpi)
 
@@ -41,6 +41,7 @@ function pageContentHpx(printMode: PrintMode, orientation: Orientation, paperSiz
 const OVERHEAD: Record<FormKind, Record<'full' | 'compact', number>> = {
   lf:        { full: 265, compact: 210 },   // มีลายเซ็น (385.1) — compact 160→210 (ลายเซ็นโตตาม rowHeight)
   checklist: { full: 240, compact: 180 },   // 392 ถอดลายเซ็น เหลือ hint line — compact 125→180 (root cause หน้า 2)
+  inventory: { full: 240, compact: 180 },   // 376.6 ไม่มีลายเซ็น/กล่องถุง (หัว+กล่องชื่อ-วันที่+thead) — เท่า CK กันล้น
 }
 
 /** 405 — safety buffer: หักเพิ่มจากพื้นที่หน้า (mode 'fit' เท่านั้น) เพื่อให้ content "underfill"

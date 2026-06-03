@@ -15,7 +15,7 @@ const FORM_TEMPLATES_KEY = 'form_templates'
 export interface FormTemplate {
   id: string
   name: string
-  formType: 'checklist' | 'lf'
+  formType: 'checklist' | 'lf' | 'inventory'   // 376.6 inventory = archetype 3 (AKARA)
   showCustomer: boolean
   showDate: boolean
   printMode: 'a4-2up' | 'a4'   // 381: a5 → a4 (template เก่าที่เป็น 'a5' ถูก migrate ตอนโหลด)

@@ -19,6 +19,7 @@ export const FL = {
   // Document titles
   docTitleLf: { th: 'ใบส่ง-รับผ้า', en: 'Linen Delivery Note', my: 'အဝတ်လျှော် ပို့-လက်ခံစာရင်း' },
   docTitleCk: { th: 'ใบเช็คผ้า', en: 'Linen Checklist', my: 'အဝတ်လျှော် စစ်ဆေးစာရင်း' },
+  docTitleInv: { th: 'รายงานสต๊อกผ้า', en: 'Linen Inventory Report', my: '' },   // 376.6 archetype 3 (AKARA)
   // Provenance
   customer: { th: 'ชื่อลูกค้า', en: 'Business Name', my: 'ဖောက်သည်အမည်' },
   date: { th: 'วันที่', en: 'Date', my: 'ရက်စွဲ' },
@@ -52,6 +53,14 @@ export const FL = {
   penRed: { th: 'นับส่ง = ปากกาแดง', en: 'Count sent = red pen', my: 'ပို့ရေတွက် = အနီ' },
   penBlue: { th: 'ต่อถุง = ปากกาน้ำเงิน', en: 'Per bag = blue pen', my: 'အိတ်အလိုက် = အပြာ' },
   page: { th: 'หน้า', en: 'Page', my: 'စာမျက်နှာ' },
+
+  // 376.6 — Inventory Report (archetype 3, AKARA) · ใช้ `total` ที่มีอยู่สำหรับ 2 ช่อง TOTAL
+  //   spot cols ลอก TH จากฟอร์มจริงเป๊ะ (en = '' → โชว์เฉพาะ TH, ไม่เดาคำแปล domain ผ้า)
+  washOutside: { th: 'ส่งซักข้างนอก', en: 'Laundry Wash Outside', my: '' },
+  laundryCome: { th: 'ผ้ากลับมา', en: 'Laundry Come', my: '' },
+  spotPending: { th: 'ผ้าสปอตค้าง', en: '', my: '' },
+  spotDirt: { th: 'ยอดดินผ้าสปอต', en: '', my: '' },
+  remark: { th: 'หมายเหตุ', en: 'Remark', my: '' },
 } as const satisfies Record<string, TriLabel>
 
 /**
