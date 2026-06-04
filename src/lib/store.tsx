@@ -585,9 +585,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const now = todayISO()
     // อ่าน state ล่าสุดจาก ref (sync, ไม่ stale ใน loop)
     const current = deliveryNotesRef.current
+    // 409 — Idempotency guard: กันสร้าง SD ซ้ำสำหรับ LF ที่มี SD อยู่แล้ว
+    //   ป้องกันทุก vector: ghost id ซ้ำ / state stale / กดซ้ำ / partial-retry · ใช้ ref สด = freshest
+    //   ⚠️ guard ด้วย "LF id" (ไม่ใช่ customer+date — LF ซ้ำวันได้ ต้องได้ SD แยก) ·
+    //      ไม่กระทบ "รอบเสริม" (รอบเสริมสร้างผ่าน addDeliveryNote ทีละใบ ไม่ใช่ batch นี้)
+    const linkedLfIds = new Set(current.flatMap(d => d.linenFormIds))   // DN = hard-delete → ทุกใบใน state คือ live
+    const seenLfIds = new Set<string>()
+    const items2 = items.filter(it => {
+      const ids = it.linenFormIds || []
+      // ข้ามถ้า LF ใดผูก SD แล้ว หรือ ซ้ำภายในชุดนี้
+      if (ids.some(id => linkedLfIds.has(id) || seenLfIds.has(id))) return false
+      ids.forEach(id => seenLfIds.add(id))
+      return true
+    })
+    if (items2.length === 0) return []
     const existingNumbers = current.map(x => x.noteNumber)
     const newNumbers: string[] = []
-    const newDNs: DeliveryNote[] = items.map(d => {
+    const newDNs: DeliveryNote[] = items2.map(d => {
       const noteNumber = genDeliveryNoteNumber([...existingNumbers, ...newNumbers])
       newNumbers.push(noteNumber)
       return { ...d, id: genId(), noteNumber, createdBy: userId, updatedAt: now }

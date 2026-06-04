@@ -219,6 +219,16 @@ async function updateByIdChunks(
   }
 }
 
+// 410 — Batch INSERT chunking · กัน "fail to fetch" บน batch ใหญ่ (DN มี items[]+priceSnapshot ต่อใบ →
+//   1399 ใบ payload ก้อนเดียวใหญ่เกิน request limit). await ทีละ chunk = sequential (ไม่ race)
+//   partial-fail ปลอดภัยร่วมกับ idempotency guard (409): retry จะข้ามใบที่ insert ไปแล้ว
+const BATCH_INSERT_CHUNK = 300
+async function insertInChunks(table: string, rows: Record<string, unknown>[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += BATCH_INSERT_CHUNK) {
+    await dbWrite({ table, operation: 'insert', data: rows.slice(i, i + BATCH_INSERT_CHUNK) })
+  }
+}
+
 // ============================================================
 // Pagination helper — Supabase API caps at 1000 rows per request
 // Use .range() loop to fetch all rows for unbounded tables
@@ -488,8 +498,8 @@ export async function insertLinenForm(form: LinenForm): Promise<void> {
 // 372: Batch insert LF — 1 HTTP call (PostgREST รับ array) → กัน fire-and-forget race ตอน batch
 export async function insertLinenFormsBatch(forms: LinenForm[]): Promise<void> {
   if (forms.length === 0) return
-  const rows = forms.map(f => toSnakeCase(f as unknown as Record<string, unknown>))
-  await dbWrite({ table: 'linen_forms', operation: 'insert', data: rows })
+  // 410 — chunk กัน fail-to-fetch บน batch ใหญ่
+  await insertInChunks('linen_forms', forms.map(f => toSnakeCase(f as unknown as Record<string, unknown>)))
 }
 
 export async function updateLinenFormDB(id: string, updates: Partial<LinenForm>): Promise<void> {
@@ -523,8 +533,8 @@ export async function insertDeliveryNote(note: DeliveryNote): Promise<void> {
 //   browser ติด concurrency limit (~6 connections/host) + Supabase rate limit
 export async function insertDeliveryNotesBatch(notes: DeliveryNote[]): Promise<void> {
   if (notes.length === 0) return
-  const rows = notes.map(n => toSnakeCase(n as unknown as Record<string, unknown>))
-  await dbWrite({ table: 'delivery_notes', operation: 'insert', data: rows })
+  // 410 — chunk กัน fail-to-fetch (เคยเจอ 1399 ใบ → fail · payload items[]+priceSnapshot ต่อใบ)
+  await insertInChunks('delivery_notes', notes.map(n => toSnakeCase(n as unknown as Record<string, unknown>)))
 }
 
 export async function updateDeliveryNoteDB(id: string, updates: Partial<DeliveryNote>): Promise<void> {

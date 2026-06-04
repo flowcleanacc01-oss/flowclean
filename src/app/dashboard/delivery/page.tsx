@@ -723,7 +723,10 @@ export default function DeliveryPage() {
       priceSnapshot: priceMap,
       notes: dnNotes,
     }))
-    newDNs.push(...addDeliveryNotesBatch(batchItems))
+    const createdDNs = addDeliveryNotesBatch(batchItems)
+    newDNs.push(...createdDNs)
+    // 409 — store guard อาจข้าม LF ที่มี SD แล้ว → แจ้งจำนวนที่ข้าม (กันงงว่าทำไมได้น้อยกว่าที่เลือก)
+    const skipped = batchItems.length - createdDNs.length
 
     // Pass 4 — apply external updates (existing DNs only — different rows, no race)
     for (const u of externalUpdates) {
@@ -735,6 +738,9 @@ export default function DeliveryPage() {
       scrollToActiveRow(newDNs[0].id)
     }
     setShowCreate(false)
+    if (skipped > 0) {
+      alert(`สร้าง SD ${createdDNs.length} ใบ\n\n⏭️ ข้าม ${skipped} ใบ — LF เหล่านี้มี SD อยู่แล้ว (กันสร้างซ้ำ)`)
+    }
   }
 
   // 283: Quick Batch — สร้าง SD ให้หลายลูกค้าในครั้งเดียว (1 LF = 1 SD per customer)
@@ -745,6 +751,7 @@ export default function DeliveryPage() {
     const allNewDNs: DeliveryNote[] = []
     const itemNameMap = Object.fromEntries(linenCatalog.map(i => [i.code, i.name]))
     let customersWithoutQT = 0
+    let qbSkipped = 0   // 409 — LF ที่ store guard ข้าม (มี SD แล้ว) ข้ามทุกลูกค้า
     // 291.1: นับ LF ค้าง (ไม่ถึง 7/7) ของลูกค้าที่อยู่ใน batch — เตือน user หลังสร้าง
     let stuckLFsTotal = 0
     let stuckCustCount = 0
@@ -888,7 +895,9 @@ export default function DeliveryPage() {
         priceSnapshot: priceMap,
         notes: '',
       }))
-      allNewDNs.push(...addDeliveryNotesBatch(batchItems))
+      const createdForCust = addDeliveryNotesBatch(batchItems)
+      allNewDNs.push(...createdForCust)
+      qbSkipped += batchItems.length - createdForCust.length   // 409 — guard ข้าม LF ที่มี SD แล้ว
 
       // Pass 4 — external updates
       for (const u of externalUpdates) {
@@ -901,12 +910,13 @@ export default function DeliveryPage() {
       scrollToActiveRow(allNewDNs[0].id)
     }
     const msg = `สร้าง SD เสร็จแล้ว ${allNewDNs.length} ใบ (${qbSelectedCusts.size} ลูกค้า)`
+      + (qbSkipped > 0 ? `\n\n⏭️ ข้าม ${qbSkipped} ใบ — LF มี SD อยู่แล้ว (กันสร้างซ้ำ)` : '')
       + (customersWithoutQT > 0 ? `\n\n❌ ${customersWithoutQT} ลูกค้าไม่มี QT — ถูก skip ไม่สร้าง SD\n   กรุณาสร้าง QT ที่หน้า "ใบเสนอราคา" แล้วลองใหม่` : '')
       + (stuckLFsTotal > 0 ? `\n\n⚠ พบ LF ค้าง ${stuckLFsTotal} ใบ ใน ${stuckCustCount} ลูกค้า ที่สถานะยังไม่ถึง 7/7 — ไม่ถูกสร้างในรอบนี้\n   กรุณาตรวจสอบที่หน้า LF อีกครั้ง` : '')
     setShowQuickBatch(false)
     setQbSelectedCusts(new Set())
     setQbDriver(''); setQbVehicle(''); setQbReceiver('')
-    if (allNewDNs.length > 0) alert(msg)
+    if (allNewDNs.length > 0 || qbSkipped > 0) alert(msg)
   }
 
   const handleCreate = () => {
