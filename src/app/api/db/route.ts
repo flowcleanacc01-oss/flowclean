@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
+// 410 — เพิ่มเวลา function (default Vercel 10s) → insert/update batch ใหญ่ไม่ถูก kill กลางคัน
+//   (เคยเจอ: batch 1399 ใบ → timeout → "fail to fetch" + DB commit ไปแล้วบางส่วน 1298 = ข้อมูลซ้ำ)
+//   คู่กับ chunk insert (supabase-service) — แต่ละ chunk เร็วอยู่แล้ว นี่เป็น safety margin
+export const maxDuration = 60
+
 const ALLOWED_TABLES = new Set([
   'linen_items', 'linen_categories', 'app_users', 'company_info', 'customers',
   'linen_forms', 'delivery_notes', 'billing_statements',
