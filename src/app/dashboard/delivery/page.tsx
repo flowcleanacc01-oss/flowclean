@@ -2812,9 +2812,10 @@ export default function DeliveryPage() {
       {/* Print List Modal — พิมพ์รายการ SD */}
       <Modal open={showPrintList} onClose={() => setShowPrintList(false)} title="รายการใบส่งของ" size="xl" className="print-target">
         {(() => {
-          const printDNs = selectedDnIds.length > 0
+          // 412 — เรียงวันที่น้อยสุดอยู่ใบแรกเสมอ (spread กัน mutate memoized filtered)
+          const printDNs = [...(selectedDnIds.length > 0
             ? filtered.filter(d => selectedDnIds.includes(d.id))
-            : filtered
+            : filtered)].sort((a, b) => a.date.localeCompare(b.date) || a.noteNumber.localeCompare(b.noteNumber))
           const grandTotal = printDNs.reduce((s, dn) => s + getDNTotalAmount(dn), 0)
           const totalPieces = printDNs.reduce((s, dn) => s + dn.items.reduce((ss, i) => ss + i.quantity, 0), 0)
           return (
@@ -2954,7 +2955,11 @@ export default function DeliveryPage() {
           <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกเอกสารแล้ว"</p>
         </div>
         <div id="print-bulk-dn">
-          {selectedDnIds.map((dnId, idx) => {
+          {/* 412 — เรียงวันที่น้อยสุดอยู่ใบแรกเสมอ (ไม่ตามลำดับติ๊ก/list) */}
+          {(() => {
+            const dateOf = new Map(deliveryNotes.map(d => [d.id, d.date] as const))
+            return [...selectedDnIds].sort((a, b) => (dateOf.get(a) || '').localeCompare(dateOf.get(b) || ''))
+          })().map((dnId, idx) => {
             const dn = deliveryNotes.find(d => d.id === dnId)
             const cust = dn ? getCustomer(dn.customerId) : null
             if (!dn || !cust) return null

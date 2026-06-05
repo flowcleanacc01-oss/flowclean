@@ -1775,9 +1775,10 @@ export default function LinenFormsPage() {
       {/* LF Print List Modal */}
       <Modal open={showLfPrintList} onClose={() => setShowLfPrintList(false)} title="รายการใบส่งรับผ้า" size="xl" className="print-target">
         {(() => {
-          const printItems = selectedLfIds.length > 0
+          // 412 — เรียงวันที่น้อยสุดอยู่ใบแรกเสมอ
+          const printItems = [...(selectedLfIds.length > 0
             ? filtered.filter(f => selectedLfIds.includes(f.id))
-            : filtered
+            : filtered)].sort((a, b) => a.date.localeCompare(b.date) || a.formNumber.localeCompare(b.formNumber))
           const totalPieces = printItems.reduce((s, f) => s + f.rows.reduce((ss, r) => ss + r.col2_hotelCountIn + r.col3_hotelClaimCount, 0), 0)
           return (
             <div>
@@ -1856,7 +1857,11 @@ export default function LinenFormsPage() {
           <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกเอกสารแล้ว"</p>
         </div>
         <div id="print-bulk-lf">
-          {selectedLfIds.map((lfId, idx) => {
+          {/* 412 — เรียงวันที่น้อยสุดอยู่ใบแรกเสมอ */}
+          {(() => {
+            const dateOf = new Map(linenForms.map(f => [f.id, f.date] as const))
+            return [...selectedLfIds].sort((a, b) => (dateOf.get(a) || '').localeCompare(dateOf.get(b) || ''))
+          })().map((lfId, idx) => {
             const form = linenForms.find(f => f.id === lfId)
             const cust = form ? getCustomer(form.customerId) : null
             if (!form || !cust) return null

@@ -3530,9 +3530,10 @@ export default function BillingPage() {
       {/* WB Print List Modal */}
       <Modal open={showWbPrintList} onClose={() => setShowWbPrintList(false)} title="รายการใบวางบิล" size="xl" className="print-target">
         {(() => {
-          const printItems = selectedWbIds.length > 0
+          // 412 — เรียงวันที่น้อยสุดอยู่ใบแรกเสมอ
+          const printItems = [...(selectedWbIds.length > 0
             ? filteredBilling.filter(b => selectedWbIds.includes(b.id))
-            : filteredBilling
+            : filteredBilling)].sort((a, b) => a.issueDate.localeCompare(b.issueDate) || a.billingNumber.localeCompare(b.billingNumber))
           const grandTotal = printItems.reduce((s, b) => s + b.netPayable, 0)
           return (
             <div>
@@ -3590,9 +3591,10 @@ export default function BillingPage() {
       {/* IV Print List Modal */}
       <Modal open={showIvPrintList} onClose={() => setShowIvPrintList(false)} title="รายการใบกำกับภาษี" size="xl" className="print-target">
         {(() => {
-          const printItems = selectedIvIds.length > 0
+          // 412 — เรียงวันที่น้อยสุดอยู่ใบแรกเสมอ
+          const printItems = [...(selectedIvIds.length > 0
             ? filteredInvoices.filter(i => selectedIvIds.includes(i.id))
-            : filteredInvoices
+            : filteredInvoices)].sort((a, b) => a.issueDate.localeCompare(b.issueDate) || a.invoiceNumber.localeCompare(b.invoiceNumber))
           const grandTotal = printItems.reduce((s, i) => s + i.grandTotal, 0)
           return (
             <div>
@@ -3664,7 +3666,11 @@ export default function BillingPage() {
           <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกเอกสารแล้ว"</p>
         </div>
         <div id="print-bulk-wb">
-          {selectedWbIds.map((bId, idx) => {
+          {/* 412 — เรียงวันที่น้อยสุดอยู่ใบแรกเสมอ */}
+          {(() => {
+            const dateOf = new Map(billingStatements.map(x => [x.id, x.issueDate] as const))
+            return [...selectedWbIds].sort((a, b) => (dateOf.get(a) || '').localeCompare(dateOf.get(b) || ''))
+          })().map((bId, idx) => {
             const b = billingStatements.find(x => x.id === bId)
             const cust = b ? getCustomer(b.customerId) : null
             if (!b || !cust) return null
@@ -3727,7 +3733,11 @@ export default function BillingPage() {
           <p className="text-xs text-slate-400">พิมพ์ → "พิมพ์แล้ว" | JPG/PDF/CSV → "ส่งออกเอกสารแล้ว"</p>
         </div>
         <div id="print-bulk-iv">
-          {selectedIvIds.map((ivId, idx) => {
+          {/* 412 — เรียงวันที่น้อยสุดอยู่ใบแรกเสมอ */}
+          {(() => {
+            const dateOf = new Map(taxInvoices.map(x => [x.id, x.issueDate] as const))
+            return [...selectedIvIds].sort((a, b) => (dateOf.get(a) || '').localeCompare(dateOf.get(b) || ''))
+          })().map((ivId, idx) => {
             const inv = taxInvoices.find(x => x.id === ivId)
             const cust = inv ? getCustomer(inv.customerId) : null
             if (!inv || !cust) return null
@@ -3946,7 +3956,11 @@ export default function BillingPage() {
       {/* 154.3: QT Bulk Print Modal · 314.1: unify pattern (inline pageBreakBefore) */}
       <Modal open={showQtBulkPrint} onClose={() => setShowQtBulkPrint(false)} title={`พิมพ์/ส่งออกเอกสารใบเสนอราคา (${selectedQtIds.length} ใบ)`} size="xl" closeLabel="close" className="print-target">
         <div id="print-bulk-qt">
-          {selectedQtIds.map((id, idx) => {
+          {/* 412 — เรียงวันที่น้อยสุดอยู่ใบแรกเสมอ */}
+          {(() => {
+            const dateOf = new Map(quotations.map(q => [q.id, q.date] as const))
+            return [...selectedQtIds].sort((a, b) => (dateOf.get(a) || '').localeCompare(dateOf.get(b) || ''))
+          })().map((id, idx) => {
             const qt = quotations.find(q => q.id === id)
             if (!qt) return null
             return (
