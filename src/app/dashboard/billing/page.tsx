@@ -41,11 +41,11 @@ type TabKey = 'billing' | 'invoice' | 'quotation'
 export default function BillingPage() {
   const {
     currentUser,
-    billingStatements, addBillingStatement, updateBillingStatement, deleteBillingStatement,
+    billingStatements, addBillingStatement, updateBillingStatement, deleteBillingStatement, deleteBillingStatementsBatch,
     taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
     receipts, addReceipt, // 148
     quotations, addQuotation, updateQuotation, updateQuotationStatus, deleteQuotation,
-    deliveryNotes, updateDeliveryNote, updateCustomer, customers, getCustomer, companyInfo, linenCatalog,
+    deliveryNotes, updateDeliveryNote, updateDeliveryNotesBatchByIds, updateCustomer, customers, getCustomer, companyInfo, linenCatalog,
     linenCategories, getCategoryLabel,
   } = useStore()
 
@@ -133,6 +133,7 @@ export default function BillingPage() {
   // Bulk select state (WB, IV)
   const [selectedWbIds, setSelectedWbIds] = useState<string[]>([])
   const [selectedIvIds, setSelectedIvIds] = useState<string[]>([])
+  const [confirmWbBulkDeleteOpen, setConfirmWbBulkDeleteOpen] = useState(false)   // 411.1
   // 154.3: QT selection + print
   const [selectedQtIds, setSelectedQtIds] = useState<string[]>([])
   const [showQtPrintList, setShowQtPrintList] = useState(false)
@@ -449,6 +450,34 @@ export default function BillingPage() {
     }
     return { lineItems, ...calculateBillingTotals(lineItems, custVatRate, custWhtRate) }
   }, [selCustomer, selMonth, deliveryNotes, selDnIds, linenCatalog, flatRateBillExists, billingMode, quotations, custVatRate, custWhtRate, billingDiscount, billingDiscountNote, billingExtraCharge, billingExtraChargeNote])
+
+  // 411.1 — WB bulk delete (partial): ลบเฉพาะ WB ที่ยังไม่ออก IV/RC · ข้ามที่ออกแล้ว · batch 1 ชุด call
+  //   block เหมือน single delete (hasLinkedIV/RC) · ปลดล็อค SD (isBilled=false) แบบ batch
+  const wbBulkLockedSet = (): Set<string> => new Set(selectedWbIds.filter(id =>
+    taxInvoices.some(ti => ti.billingStatementId === id) || receipts.some(rc => rc.billingStatementId === id)
+  ))
+  const handleWbBulkDelete = () => {
+    const lockedSet = wbBulkLockedSet()
+    const deletableIds = selectedWbIds.filter(id => !lockedSet.has(id))
+    if (deletableIds.length === 0) {
+      alert(`ลบไม่ได้ — WB ที่เลือกทั้งหมด ${lockedSet.size} ใบออกใบกำกับภาษี (IV)/ใบเสร็จ (RC) แล้ว\nต้องย้อน IV/RC ก่อนถึงจะลบได้`)
+      setConfirmWbBulkDeleteOpen(false)
+      return
+    }
+    // ปลดล็อค SD ของ WB ที่ลบได้ (batch) ก่อนลบ WB (batch)
+    const dnIds = new Set<string>()
+    for (const id of deletableIds) {
+      const wb = billingStatements.find(b => b.id === id)
+      if (wb) for (const dnId of wb.deliveryNoteIds) dnIds.add(dnId)
+    }
+    updateDeliveryNotesBatchByIds([...dnIds], { isBilled: false })
+    deleteBillingStatementsBatch(deletableIds)
+    setSelectedWbIds([])
+    setConfirmWbBulkDeleteOpen(false)
+    if (lockedSet.size > 0) {
+      alert(`ลบ WB ${deletableIds.length} ใบ · ปลดล็อค SD ${dnIds.size} ใบ\n\n⏭️ ข้าม ${lockedSet.size} ใบ — ออก IV/RC แล้ว (ต้องย้อนก่อน)`)
+    }
+  }
 
   const handleCreateBilling = () => {
     if (!selCustomer || !previewBilling) return
@@ -1262,6 +1291,13 @@ export default function BillingPage() {
               <button onClick={() => setShowWbBulkPrint(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
                 <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสารที่เลือก ({selectedWbIds.length})
+              </button>
+            )}
+            {/* 411.1 — ลบ WB ที่เลือก (partial: ข้ามที่ออก IV/RC) */}
+            {selectedWbIds.length > 0 && (
+              <button onClick={() => setConfirmWbBulkDeleteOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium">
+                <Trash2 className="w-4 h-4" />ลบที่เลือก ({selectedWbIds.length})
               </button>
             )}
             <button onClick={() => setShowWbPrintList(true)} disabled={filteredBilling.length === 0}
@@ -2597,6 +2633,43 @@ export default function BillingPage() {
           />
         )
       })()}
+
+      {/* 411.1 — WB Bulk Delete Confirmation (partial) */}
+      <Modal open={confirmWbBulkDeleteOpen} onClose={() => setConfirmWbBulkDeleteOpen(false)} title="ยืนยันการลบใบวางบิล" closeLabel="cancel">
+        {(() => {
+          const lockedSet = wbBulkLockedSet()
+          const lockedCount = lockedSet.size
+          const deletableIds = selectedWbIds.filter(id => !lockedSet.has(id))
+          const deletableCount = deletableIds.length
+          const unbillCount = new Set(deletableIds.flatMap(id => billingStatements.find(b => b.id === id)?.deliveryNoteIds || [])).size
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">
+                เลือกไว้ <span className="font-semibold">{selectedWbIds.length} ใบ</span> —
+                ลบได้ <span className="font-semibold text-red-600">{deletableCount} ใบ</span>
+              </p>
+              {lockedCount > 0 && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                  ⏭️ ข้าม <strong>{lockedCount} ใบ</strong> — ออกใบกำกับภาษี (IV)/ใบเสร็จ (RC) แล้ว (ลบไม่ได้ ต้องย้อน IV/RC ก่อน)
+                </p>
+              )}
+              {unbillCount > 0 && (
+                <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+                  หลังลบ ระบบจะปลดล็อค SD ที่เกี่ยวข้อง <strong>{unbillCount} ใบ</strong> ให้กลับไปแก้ไข/ลบได้
+                </p>
+              )}
+              <div className="flex flex-wrap justify-end gap-2">
+                <button onClick={() => setConfirmWbBulkDeleteOpen(false)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+                <button onClick={handleWbBulkDelete} disabled={deletableCount === 0}
+                  className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 rounded-lg flex items-center gap-1.5 font-medium">
+                  <Trash2 className="w-3.5 h-3.5" />ลบ {deletableCount} ใบ
+                </button>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
 
       {/* Billing Print Preview Modal */}
       <Modal open={showPrint && !!detailBilling} onClose={() => setShowPrint(false)} title="ตรวจสอบข้อมูลก่อนพิมพ์" size="xl" className="print-target">

@@ -34,7 +34,7 @@ type DNFilter = 'all' | 'not-printed' | 'printed' | 'not-billed' | 'billed'
 export default function DeliveryPage() {
   const {
     currentUser,
-    deliveryNotes, addDeliveryNote, addDeliveryNotesBatch, updateDeliveryNote, deleteDeliveryNote,
+    deliveryNotes, addDeliveryNote, addDeliveryNotesBatch, updateDeliveryNote, deleteDeliveryNote, deleteDeliveryNotesBatch,
     linenForms, updateLinenForm, getCustomer, companyInfo, linenCatalog,
     billingStatements, quotations,
   } = useStore()
@@ -1213,45 +1213,47 @@ export default function DeliveryPage() {
     }
   }
 
+  // 411 — partial delete: ลบเฉพาะ SD ที่ยังไม่วางบิล · ข้ามที่วางบิลแล้ว (ไม่ block ทั้งหมด) · batch 1 ชุด call
+  const splitDeletableDns = (): { deletableIds: string[]; billedIds: string[] } => {
+    const billedIds = selectedDnIds.filter(id => billingStatements.some(b => b.deliveryNoteIds.includes(id)))
+    const billedSet = new Set(billedIds)
+    return { deletableIds: selectedDnIds.filter(id => !billedSet.has(id)), billedIds }
+  }
+
   const handleBulkDeleteAndStay = () => {
-    const billedCount = selectedDnIds.filter(id =>
-      billingStatements.some(b => b.deliveryNoteIds.includes(id))
-    ).length
-    if (billedCount > 0) {
-      alert(`ไม่สามารถลบได้ — มี SD ที่วางบิลแล้ว ${billedCount} ใบ\nกรุณายกเลิกการเลือก SD ที่วางบิลแล้วก่อน`)
+    const { deletableIds, billedIds } = splitDeletableDns()
+    if (deletableIds.length === 0) {
+      alert(`ลบไม่ได้ — SD ที่เลือกทั้งหมด ${billedIds.length} ใบวางบิลแล้ว\nต้องย้อนการวางบิล (WB) ก่อนถึงจะลบได้`)
       return
     }
-    const ids = [...selectedDnIds]
-    for (const id of ids) {
-      deleteDeliveryNote(id)
-    }
-    recalcAfterDelete(ids) // Feat 267: recalc month fee สำหรับทุก (customer, month) ที่กระทบ
+    deleteDeliveryNotesBatch(deletableIds)
+    recalcAfterDelete(deletableIds) // Feat 267: recalc month fee สำหรับทุก (customer, month) ที่กระทบ
     setSelectedDnIds([])
     setConfirmBulkDeleteOpen(false)
+    if (billedIds.length > 0) {
+      alert(`ลบ SD ${deletableIds.length} ใบ\n\n⏭️ ข้าม ${billedIds.length} ใบ — วางบิลแล้ว (ต้องย้อน WB ก่อน)`)
+    }
   }
 
   const handleBulkDeleteAndRedirect = () => {
-    const billedCount = selectedDnIds.filter(id =>
-      billingStatements.some(b => b.deliveryNoteIds.includes(id))
-    ).length
-    if (billedCount > 0) {
-      alert(`ไม่สามารถลบได้ — มี SD ที่วางบิลแล้ว ${billedCount} ใบ\nกรุณายกเลิกการเลือก SD ที่วางบิลแล้วก่อน`)
+    const { deletableIds, billedIds } = splitDeletableDns()
+    if (deletableIds.length === 0) {
+      alert(`ลบไม่ได้ — SD ที่เลือกทั้งหมด ${billedIds.length} ใบวางบิลแล้ว\nต้องย้อนการวางบิล (WB) ก่อนถึงจะลบได้`)
       return
     }
-    // Collect linked LF IDs from all selected SDs before deleting
+    // Collect linked LF IDs from deletable SDs before deleting
     const linkedLfIds = new Set<string>()
-    for (const id of selectedDnIds) {
+    for (const id of deletableIds) {
       const dn = deliveryNotes.find(d => d.id === id)
       if (dn) for (const lfId of dn.linenFormIds) linkedLfIds.add(lfId)
     }
-    const ids = [...selectedDnIds]
-    // Delete
-    for (const id of ids) {
-      deleteDeliveryNote(id)
-    }
-    recalcAfterDelete(ids) // Feat 267: recalc month fee สำหรับทุก (customer, month) ที่กระทบ
+    deleteDeliveryNotesBatch(deletableIds)
+    recalcAfterDelete(deletableIds)
     setSelectedDnIds([])
     setConfirmBulkDeleteOpen(false)
+    if (billedIds.length > 0) {
+      alert(`ลบ SD ${deletableIds.length} ใบ · ข้าม ${billedIds.length} ใบ (วางบิลแล้ว)`)
+    }
     // Redirect to LF page in focus mode
     if (linkedLfIds.size > 0) {
       router.push(`/dashboard/linen-forms?focus=${[...linkedLfIds].join(',')}`)
@@ -2347,17 +2349,24 @@ export default function DeliveryPage() {
       {/* Bulk Delete Confirmation Modal — 2 ปุ่ม (50.5) */}
       <Modal open={confirmBulkDeleteOpen} onClose={() => setConfirmBulkDeleteOpen(false)} title="ยืนยันการลบ" closeLabel="cancel">
         {(() => {
-          const linkedLfCount = new Set(selectedDnIds.flatMap(id =>
+          // 411 — partial: แยกลบได้ (ยังไม่วางบิล) / ข้าม (วางบิลแล้ว)
+          const billedCount = selectedDnIds.filter(id => billingStatements.some(b => b.deliveryNoteIds.includes(id))).length
+          const deletableCount = selectedDnIds.length - billedCount
+          const billedSet = new Set(selectedDnIds.filter(id => billingStatements.some(b => b.deliveryNoteIds.includes(id))))
+          const linkedLfCount = new Set(selectedDnIds.filter(id => !billedSet.has(id)).flatMap(id =>
             deliveryNotes.find(d => d.id === id)?.linenFormIds || []
           )).size
           return (
             <div className="space-y-4">
               <p className="text-sm text-slate-600">
-                ต้องการลบใบส่งของที่เลือกทั้งหมด <span className="font-semibold text-red-600">{selectedDnIds.length} ใบ</span> หรือไม่?
+                เลือกไว้ <span className="font-semibold">{selectedDnIds.length} ใบ</span> —
+                ลบได้ <span className="font-semibold text-red-600">{deletableCount} ใบ</span>
               </p>
-              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                ⚠️ SD ที่มีใบวางบิลอยู่จะไม่ถูกลบ — ระบบจะหยุดและแจ้งเตือนให้ยกเลิกการเลือกก่อน
-              </p>
+              {billedCount > 0 && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                  ⏭️ ข้าม <strong>{billedCount} ใบ</strong> — วางบิลแล้ว (ลบไม่ได้ ต้องย้อน WB ก่อน)
+                </p>
+              )}
               {linkedLfCount > 0 && (
                 <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
                   หลังลบ ระบบจะปลดล็อค LF ที่เกี่ยวข้อง <strong>{linkedLfCount} ใบ</strong> ให้กลับไปแก้ไขได้
@@ -2366,13 +2375,13 @@ export default function DeliveryPage() {
               <div className="flex flex-wrap justify-end gap-2">
                 <button onClick={() => setConfirmBulkDeleteOpen(false)}
                   className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
-                <button onClick={handleBulkDeleteAndStay}
-                  className="px-4 py-2 text-sm bg-red-100 text-red-700 hover:bg-red-200 rounded-lg flex items-center gap-1.5 font-medium">
-                  <Trash2 className="w-3.5 h-3.5" />ลบ + อยู่หน้านี้
+                <button onClick={handleBulkDeleteAndStay} disabled={deletableCount === 0}
+                  className="px-4 py-2 text-sm bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-40 rounded-lg flex items-center gap-1.5 font-medium">
+                  <Trash2 className="w-3.5 h-3.5" />ลบ {deletableCount} ใบ
                 </button>
                 {linkedLfCount > 0 && (
-                  <button onClick={handleBulkDeleteAndRedirect}
-                    className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 rounded-lg flex items-center gap-1.5 font-medium">
+                  <button onClick={handleBulkDeleteAndRedirect} disabled={deletableCount === 0}
+                    className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 rounded-lg flex items-center gap-1.5 font-medium">
                     <Trash2 className="w-3.5 h-3.5" />ลบ + ไปแก้ LF
                   </button>
                 )}

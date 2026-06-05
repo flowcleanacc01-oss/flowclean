@@ -229,6 +229,14 @@ async function insertInChunks(table: string, rows: Record<string, unknown>[]): P
   }
 }
 
+// 411 — Batch DELETE by id list (DELETE ... id=in.(...)) chunked · sequential await (ไม่ race)
+//   กัน loop ลบทีละใบ N HTTP (ช้า/rate-limit/drop) ตอนลบเยอะ (เคส 3922 SD)
+async function deleteByIdChunks(table: string, ids: string[]): Promise<void> {
+  for (let i = 0; i < ids.length; i += BATCH_UPDATE_CHUNK) {
+    await dbWrite({ table, operation: 'delete', matchIn: { column: 'id', values: ids.slice(i, i + BATCH_UPDATE_CHUNK) } })
+  }
+}
+
 // ============================================================
 // Pagination helper — Supabase API caps at 1000 rows per request
 // Use .range() loop to fetch all rows for unbounded tables
@@ -545,6 +553,16 @@ export async function deleteDeliveryNoteDB(id: string): Promise<void> {
   await dbWrite({ table: 'delivery_notes', operation: 'delete', match: { column: 'id', value: id } })
 }
 
+// 411 — batch delete/update DN (ลบ SD เยอะ + unbill เยอะใน 1 ชุด call)
+export async function deleteDeliveryNotesBatch(ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  await deleteByIdChunks('delivery_notes', ids)
+}
+export async function updateDeliveryNotesBatchByIds(ids: string[], updates: Partial<DeliveryNote>): Promise<void> {
+  if (ids.length === 0) return
+  await updateByIdChunks('delivery_notes', ids, toSnakeCase(updates as unknown as Record<string, unknown>))
+}
+
 // ============================================================
 // Billing Statements
 // ============================================================
@@ -563,6 +581,12 @@ export async function updateBillingStatementDB(id: string, updates: Partial<Bill
 
 export async function deleteBillingStatementDB(id: string): Promise<void> {
   await dbWrite({ table: 'billing_statements', operation: 'delete', match: { column: 'id', value: id } })
+}
+
+// 411 — batch delete WB (ลบ WB เยอะใน 1 ชุด call)
+export async function deleteBillingStatementsBatch(ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  await deleteByIdChunks('billing_statements', ids)
 }
 
 // ============================================================

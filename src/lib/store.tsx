@@ -66,6 +66,9 @@ interface StoreContextType {
   updateDeliveryNote: (id: string, d: Partial<DeliveryNote>) => void
   updateDeliveryNoteStatus: (id: string, status: DeliveryNoteStatus) => void
   deleteDeliveryNote: (id: string) => void
+  /** 411 — batch ลบ/แก้ SD เยอะใน 1 ชุด call (กัน loop N HTTP = ช้า/drop ตอนลบเยอะ) */
+  deleteDeliveryNotesBatch: (ids: string[]) => void
+  updateDeliveryNotesBatchByIds: (ids: string[], updates: Partial<DeliveryNote>) => void
 
   // Billing
   billingStatements: BillingStatement[]
@@ -73,6 +76,8 @@ interface StoreContextType {
   updateBillingStatus: (id: string, status: BillingStatus, paidDate?: string) => void
   updateBillingStatement: (id: string, updates: Partial<BillingStatement>) => void
   deleteBillingStatement: (id: string) => void
+  /** 411 — batch ลบ WB เยอะใน 1 ชุด call */
+  deleteBillingStatementsBatch: (ids: string[]) => void
 
   // Tax Invoices
   taxInvoices: TaxInvoice[]
@@ -656,6 +661,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dbSave(db.deleteDeliveryNoteDB(id))
   }, [logAudit])
 
+  // 411 — Batch ลบ SD (1 setState + chunked DB delete) · กัน loop N HTTP (ช้า/drop ตอนลบ 3922 ใบ)
+  const deleteDeliveryNotesBatch = useCallback((ids: string[]) => {
+    if (ids.length === 0) return
+    const idSet = new Set(ids)
+    const removed = deliveryNotesRef.current.filter(x => idSet.has(x.id))   // capture เผื่อ rollback
+    if (removed.length === 0) return
+    deliveryNotesRef.current = deliveryNotesRef.current.filter(x => !idSet.has(x.id))
+    setDeliveryNotes(prev => prev.filter(x => !idSet.has(x.id)))
+    dbSave(db.deleteDeliveryNotesBatch([...idSet]), () => {
+      deliveryNotesRef.current = [...removed, ...deliveryNotesRef.current]
+      setDeliveryNotes(prev => [...removed, ...prev])
+    })
+    logAudit('delete', 'delivery_note', '', `ลบ SD ${removed.length} ใบ (batch)`)
+  }, [logAudit])
+
+  // 411 — Batch แก้ field SD เยอะ (เช่น unbill isBilled=false ตอนลบ WB) ใน 1 ชุด call
+  const updateDeliveryNotesBatchByIds = useCallback((ids: string[], updates: Partial<DeliveryNote>) => {
+    if (ids.length === 0) return
+    const idSet = new Set(ids)
+    const patch = { ...updates, updatedAt: todayISO() }
+    const prevVals = new Map(deliveryNotesRef.current.filter(x => idSet.has(x.id)).map(x => [x.id, x] as const))
+    const apply = (x: DeliveryNote) => idSet.has(x.id) ? { ...x, ...patch } : x
+    deliveryNotesRef.current = deliveryNotesRef.current.map(apply)
+    setDeliveryNotes(prev => prev.map(apply))
+    dbSave(db.updateDeliveryNotesBatchByIds([...idSet], patch), () => {
+      const restore = (x: DeliveryNote) => prevVals.get(x.id) ?? x
+      deliveryNotesRef.current = deliveryNotesRef.current.map(restore)
+      setDeliveryNotes(prev => prev.map(restore))
+    })
+  }, [])
+
   // ---- Billing Statements ----
   const addBillingStatement = useCallback((b: Omit<BillingStatement, 'id' | 'billingNumber'>): BillingStatement => {
     // Audit fix (post-Phase-B): ใช้ ref แทน closure — กัน billingNumber ซ้ำเมื่อ caller loop
@@ -708,6 +744,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return prev.filter(x => x.id !== id)
     })
     dbSave(db.deleteBillingStatementDB(id))
+  }, [logAudit])
+
+  // 411 — Batch ลบ WB (1 setState + chunked DB delete)
+  const deleteBillingStatementsBatch = useCallback((ids: string[]) => {
+    if (ids.length === 0) return
+    const idSet = new Set(ids)
+    const removed = billingStatementsRef.current.filter(x => idSet.has(x.id))
+    if (removed.length === 0) return
+    billingStatementsRef.current = billingStatementsRef.current.filter(x => !idSet.has(x.id))
+    setBillingStatements(prev => prev.filter(x => !idSet.has(x.id)))
+    dbSave(db.deleteBillingStatementsBatch([...idSet]), () => {
+      billingStatementsRef.current = [...removed, ...billingStatementsRef.current]
+      setBillingStatements(prev => [...removed, ...prev])
+    })
+    logAudit('delete', 'billing', '', `ลบ WB ${removed.length} ใบ (batch)`)
   }, [logAudit])
 
   // ---- Tax Invoices ----
@@ -1322,7 +1373,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       customers, addCustomer, updateCustomer, deleteCustomer, getCustomer,
       linenForms, addLinenForm, addLinenFormsBatch, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
       deliveryNotes, addDeliveryNote, addDeliveryNotesBatch, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
+      deleteDeliveryNotesBatch, updateDeliveryNotesBatchByIds,
       billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,
+      deleteBillingStatementsBatch,
       taxInvoices, addTaxInvoice, updateTaxInvoice, deleteTaxInvoice,
       receipts, addReceipt, updateReceipt, deleteReceipt,
       legacyDocuments,
