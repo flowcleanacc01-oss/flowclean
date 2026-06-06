@@ -77,7 +77,8 @@ export default function TaxInvoicePrint({ invoice, customer, company, withholdin
             )
           })}
         </tbody>
-        <tfoot>
+        {/* 414: print:table-row-group → tfoot ไม่ repeat ทุกหน้าตอนพิมพ์ (เหมือน BillingPrint) */}
+        <tfoot className="print:table-row-group break-inside-avoid">
           <tr className="bg-slate-50">
             <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300 font-medium">{invoice.vat > 0 ? 'รวมก่อน VAT' : 'รวม'}</td>
             <td className="text-right px-3 py-1.5 border border-slate-300 font-medium">{formatCurrency(invoice.subtotal)}</td>

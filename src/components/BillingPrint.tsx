@@ -86,7 +86,9 @@ export default function BillingPrint({ billing, customer, company, idSuffix }: B
             )
           })}
         </tbody>
-        <tfoot>
+        {/* 414: print:table-row-group → tfoot ไม่ repeat ทุกหน้าตอนพิมพ์ (CSS spec: table-footer-group
+            ทำซ้ำทุกหน้า) · แสดง summary ครั้งเดียวท้ายรายการ · break-inside-avoid กันกล่อง summary ฉีกข้ามหน้า */}
+        <tfoot className="print:table-row-group break-inside-avoid">
           <tr className="bg-slate-50">
             <td colSpan={4} className="text-right px-3 py-1.5 border border-slate-300 font-medium">รวม</td>
             <td className="text-right px-3 py-1.5 border border-slate-300 font-medium">{formatCurrency(billing.subtotal)}</td>
