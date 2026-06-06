@@ -199,7 +199,11 @@ export function useWBAudit(filters: WBAuditFilters): WBAuditResult {
       // (2) Total drifts
       const recalcSubtotal = (wb.lineItems || []).reduce((s, i) => s + i.amount, 0)
       const recalcVat = Math.round(recalcSubtotal * 0.07 * 100) / 100
-      const recalcGrandTotal = Math.round((recalcSubtotal + recalcVat) * 100) / 100
+      // internal — grandTotal = subtotal + VAT "จริงของใบนี้" (wb.vat) ไม่ใช่ 7% เสมอ
+      //   เดิมบวก recalcVat (7%) เสมอ → ลูกค้า non-VAT (vat=0, grandTotal=subtotal) โดน flag ผิด
+      //   verified prod: flag ผิด 12 ใบ ล้วน non-VAT (grandTotal==subtotal ถูกต้อง) → แก้แล้วเหลือ 0
+      //   (vat ผิดมี vat_drift / vat_config_mismatch จับแยกอยู่แล้ว ไม่ต้องซ้ำที่นี่)
+      const recalcGrandTotal = Math.round((recalcSubtotal + (wb.vat || 0)) * 100) / 100
       const recalcWht = Math.round(recalcSubtotal * 0.03 * 100) / 100
 
       if (!approxEq(wb.subtotal, recalcSubtotal)) {
