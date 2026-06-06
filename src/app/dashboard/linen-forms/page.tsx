@@ -20,6 +20,7 @@ import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer } from '@/lib/recent-customers'
 import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileDown, ExternalLink, Sparkles, ArrowUpDown, Wrench, Pencil, Calendar, Loader2, Trash2 } from 'lucide-react'
 import { sortByQTOrder } from '@/lib/sort-by-qt'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import LinenFormGrid from '@/components/LinenFormGrid'
@@ -357,6 +358,16 @@ export default function LinenFormsPage() {
     // getPiecesForStatus เป็น pure ต่อ argument (อ่านแค่ f.rows/f.status ไม่มี external state) / linenCatalog เพิ่มเป็น store value
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linenForms, statusFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, alertFilter, printFilter, linkedLFMap, focusMode, focusIds, linenCatalog])
+
+  // 417.2 — virtualize ตาราง LF (รองรับหลักหมื่นแถวไม่ค้าง) · element-scroll + spacer rows + เก็บ row JSX เดิม
+  const listScrollRef = useRef<HTMLDivElement>(null)
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => 57,
+    overscan: 12,
+    getItemKey: (index) => filtered[index]?.id ?? index,
+  })
 
   const statuses: (LinenFormStatus | 'all')[] = ['all', ...ALL_LINEN_STATUSES]
 
@@ -796,9 +807,10 @@ export default function LinenFormsPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* 417.2 — inner-scroll container (virtualize ทำงานบน scroll นี้) · thead sticky */}
+        <div ref={listScrollRef} className="overflow-auto" style={{ maxHeight: '72vh' }}>
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-20 bg-slate-50">
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="px-2 py-3 w-10">
                   <input type="checkbox"
@@ -822,7 +834,15 @@ export default function LinenFormsPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={12} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
-              ) : filtered.map(form => {
+              ) : (() => {
+                const vItems = rowVirtualizer.getVirtualItems()
+                const padTop = vItems.length > 0 ? vItems[0].start : 0
+                const padBottom = vItems.length > 0 ? rowVirtualizer.getTotalSize() - vItems[vItems.length - 1].end : 0
+                return (
+                  <>
+                    {padTop > 0 && <tr aria-hidden><td colSpan={12} style={{ height: padTop, padding: 0, border: 0 }} /></tr>}
+                    {vItems.map(vi => {
+                const form = filtered[vi.index]
                 const customer = getCustomer(form.customerId)
                 const totalPieces = getPiecesForStatus(form)
                 const disc1 = hasType1Discrepancy(form)
@@ -832,7 +852,7 @@ export default function LinenFormsPage() {
                 const linkedDNInfo = linkedLFMap.get(form.id)
 
                 return (
-                  <tr key={form.id} data-row-id={form.id}
+                  <tr key={form.id} data-row-id={form.id} data-index={vi.index} ref={rowVirtualizer.measureElement}
                     className={cn("border-b border-slate-100 cursor-pointer", activeRowId === form.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                     onClick={() => { setActiveRowId(form.id); setShowDetail(form.id) }}>
                     <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
@@ -932,7 +952,11 @@ export default function LinenFormsPage() {
                     </td>
                   </tr>
                 )
-              })}
+                    })}
+                    {padBottom > 0 && <tr aria-hidden><td colSpan={12} style={{ height: padBottom, padding: 0, border: 0 }} /></tr>}
+                  </>
+                )
+              })()}
             </tbody>
           </table>
         </div>
