@@ -809,7 +809,22 @@ export default function LinenFormsPage() {
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {/* 417.2 — inner-scroll container (virtualize ทำงานบน scroll นี้) · thead sticky */}
         <div ref={listScrollRef} className="overflow-auto" style={{ maxHeight: '72vh' }}>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-fixed">
+            {/* 417.2 — ความกว้างตายตัว (table-fixed) → ไม่ขึ้นกับ content แถวที่ virtualize render → ไม่ขยับ/ไม่ flick ตอน scroll */}
+            <colgroup>
+              <col style={{ width: 40 }} />{/* checkbox */}
+              <col style={{ width: 112 }} />{/* วันที่ (dd-MM-yyyy) */}
+              <col style={{ width: 150 }} />{/* ชื่อย่อลูกค้า */}
+              <col style={{ width: 140 }} />{/* เลขที่ (LF-20260507-004) */}
+              <col style={{ width: 48 }} />{/* ⚠ */}
+              <col style={{ width: 140 }} />{/* ส่งออกเอกสาร */}
+              <col style={{ width: 154 }} />{/* สถานะแผนกย่อย */}
+              <col style={{ width: 128 }} />{/* สถานะ */}
+              <col style={{ width: 76 }} />{/* จำนวน */}
+              <col style={{ width: 108 }} />{/* พิมพ์ */}
+              <col style={{ width: 118 }} />{/* SD */}
+              <col style={{ width: 130 }} />{/* จัดการ */}
+            </colgroup>
             <thead className="sticky top-0 z-20 bg-slate-50">
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="px-2 py-3 w-10">
