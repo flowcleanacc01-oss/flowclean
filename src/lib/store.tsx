@@ -26,6 +26,7 @@ import { DEFAULT_FACET_VOCAB, type FacetVocab } from './linen-vocabulary'
 import { getOrSeedFacetVocab, saveFacetVocab } from './facet-vocab-service'
 // 330 — Group-aware carry-over (fix infinity bug from aggregate size groups)
 import { buildAggregateSnapshot, computeAnchorByGroup, diffsForForm, type AggregateSnapshot } from './carry-over-logic'
+import { collapseDuplicateRows } from './lf-row-dedup'
 
 // ============================================================
 // Store Interface
@@ -57,6 +58,8 @@ interface StoreContextType {
   updateLinenForm: (id: string, f: Partial<LinenForm>) => void
   updateLinenFormStatus: (id: string, status: LinenFormStatus) => void
   deleteLinenForm: (id: string) => void
+  /** 413: ล้าง row code ซ้ำ (ลบเฉพาะ row ว่าง, ไม่แตะค่า) สำหรับ LF หลายใบ — sequential กัน fire-and-forget race */
+  mergeDuplicateRowsBatch: (lfIds: string[]) => Promise<{ fixed: number; removed: number }>
 
   // Delivery Notes
   deliveryNotes: DeliveryNote[]
@@ -558,6 +561,43 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return prev.filter(x => x.id !== id)
     })
     dbSave(db.deleteLinenFormDB(id))
+  }, [logAudit])
+
+  // 413 — ล้าง row code ซ้ำหลาย LF (ลบเฉพาะ row ว่าง, ไม่แตะค่าตัวเลข)
+  //   - collapseDuplicateRows คืน null ถ้า LF เป็น "doubled" (non-empty ≥ 2) → ข้าม (ต้องคนตัดสิน)
+  //   - DB write แบบ sequential (await ทีละใบ) — กัน fire-and-forget 80+ PATCH พร้อมกัน drop
+  //     (บทเรียน fire-and-forget batch race) · optimistic state update ทันทีก่อนเขียน DB
+  const mergeDuplicateRowsBatch = useCallback(async (lfIds: string[]): Promise<{ fixed: number; removed: number }> => {
+    const idSet = new Set(lfIds)
+    const plans: { id: string; rows: LinenForm['rows']; removed: number }[] = []
+    for (const lf of linenFormsRef.current) {
+      if (!idSet.has(lf.id)) continue
+      const res = collapseDuplicateRows(lf.rows)
+      if (res && res.removed > 0) plans.push({ id: lf.id, rows: res.rows, removed: res.removed })
+    }
+    if (plans.length === 0) return { fixed: 0, removed: 0 }
+    const now = todayISO()
+    // optimistic — apply ทั้งหมดทีเดียว (sync ref + state)
+    const planMap = new Map(plans.map(p => [p.id, p.rows]))
+    linenFormsRef.current = linenFormsRef.current.map(x =>
+      planMap.has(x.id) ? { ...x, rows: planMap.get(x.id)!, updatedAt: now } : x)
+    setLinenForms(prev => prev.map(x =>
+      planMap.has(x.id) ? { ...x, rows: planMap.get(x.id)!, updatedAt: now } : x))
+    // DB sequential
+    for (const p of plans) {
+      try {
+        await db.updateLinenFormDB(p.id, { rows: p.rows, updatedAt: now })
+        logAudit('update', 'linen_form', p.id, p.id, `ล้าง row ซ้ำ ${p.removed} แถว (413)`)
+      } catch (err) {
+        console.error('[mergeDuplicateRowsBatch]', p.id, err)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('flowclean:db-error', {
+            detail: `ล้าง row ซ้ำ LF ${p.id.slice(0, 8)} ไม่สำเร็จ`,
+          }))
+        }
+      }
+    }
+    return { fixed: plans.length, removed: plans.reduce((s, p) => s + p.removed, 0) }
   }, [logAudit])
 
   // ---- Delivery Notes ----
@@ -1371,7 +1411,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     <StoreContext.Provider value={{
       currentUser, login, logout,
       customers, addCustomer, updateCustomer, deleteCustomer, getCustomer,
-      linenForms, addLinenForm, addLinenFormsBatch, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
+      linenForms, addLinenForm, addLinenFormsBatch, updateLinenForm, updateLinenFormStatus, deleteLinenForm, mergeDuplicateRowsBatch,
       deliveryNotes, addDeliveryNote, addDeliveryNotesBatch, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
       deleteDeliveryNotesBatch, updateDeliveryNotesBatchByIds,
       billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,

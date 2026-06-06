@@ -366,16 +366,25 @@ export default function LinenFormsPage() {
       custId && q.customerId === custId
     ) || null
 
-  const buildRows = (codes: string[]) => codes.map(code => ({
-    code,
-    col1_carryOver: 0,
-    col2_hotelCountIn: 0,
-    col3_hotelClaimCount: 0,
-    col4_factoryApproved: 0,
-    col5_factoryClaimApproved: 0,
-    col6_factoryPackSend: 0,
-    note: '',
-  }))
+  // 413: dedupe codes — กัน row code ซ้ำตั้งแต่ต้นทาง (QT มี code ซ้ำ → buildRows เคยสร้าง row ซ้ำ
+  //   → SD รวม col6 ข้าม row ซ้ำ = qty เกิน ไม่ตรง LF · invariant: 1 row ต่อ 1 code เสมอ)
+  const buildRows = (codes: string[]) => {
+    const seen = new Set<string>()
+    return codes.filter(code => {
+      if (seen.has(code)) return false
+      seen.add(code)
+      return true
+    }).map(code => ({
+      code,
+      col1_carryOver: 0,
+      col2_hotelCountIn: 0,
+      col3_hotelClaimCount: 0,
+      col4_factoryApproved: 0,
+      col5_factoryClaimApproved: 0,
+      col6_factoryPackSend: 0,
+      note: '',
+    }))
+  }
 
   const handleCreateOpen = () => {
     // 181: เริ่มแบบ blank — ผู้ใช้เลือกลูกค้าเอง (กัน default หลุดเป็นรายอื่น)
