@@ -10,9 +10,10 @@ import Link from 'next/link'
 import {
   ShieldAlert, AlertOctagon, AlertTriangle, CircleDashed, Eye,
   Search, ExternalLink, FileText, Receipt, Eraser, Loader2, FileSpreadsheet,
+  ArrowUpDown, ChevronUp, ChevronDown,
 } from 'lucide-react'
 import {
-  useLFRowAudit,
+  useLFRowAudit, LF_ROW_SEVERITY_RANK,
   type LFRowDupSeverity, type LFRowAuditFilters,
 } from '@/lib/use-lf-row-audit'
 import { useStore } from '@/lib/store'
@@ -27,6 +28,10 @@ const SEVERITY_CFG: Record<LFRowDupSeverity, { label: string; badge: string; ico
   latent: { label: 'Latent', badge: 'bg-slate-100 text-slate-600', icon: '⚪', desc: 'row ว่างทั้งหมด — ยังไม่กระทบ แต่ระเบิดได้ถ้าลงยอด' },
 }
 
+// 415 — sort ทุก col (เหมือน audit หน้าอื่น)
+type LFSortCol = 'severity' | 'customer' | 'lf' | 'dups' | 'sds'
+type LFSortDir = 'asc' | 'desc'
+
 export default function LFRowAudit() {
   const { mergeDuplicateRowsBatch } = useStore()
   const [severity, setSeverity] = useState<'all' | LFRowDupSeverity>('all')
@@ -35,12 +40,51 @@ export default function LFRowAudit() {
   const [busy, setBusy] = useState(false)
   const [showQtDup, setShowQtDup] = useState(false)
 
+  const [sortCol, setSortCol] = useState<LFSortCol>('severity')
+  const [sortDir, setSortDir] = useState<LFSortDir>('asc')
+
   const INITIAL_VISIBLE = 200
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE)
-  useEffect(() => { setVisibleCount(INITIAL_VISIBLE) }, [severity, customerId, search])
+  useEffect(() => { setVisibleCount(INITIAL_VISIBLE) }, [severity, customerId, search, sortCol, sortDir])
 
   const filters: LFRowAuditFilters = useMemo(() => ({ severity, customerId, search }), [severity, customerId, search])
   const { rows, qtDupRows, stats } = useLFRowAudit(filters)
+
+  // 415 — sort ตาม col ที่เลือก (default: severity worst-first)
+  const sortedRows = useMemo(() => {
+    const sumCol6 = (r: typeof rows[number]) => r.dups.reduce((s, d) => s + d.col6Sum, 0)
+    const list = [...rows]
+    list.sort((a, b) => {
+      let cmp = 0
+      switch (sortCol) {
+        case 'severity':
+          cmp = LF_ROW_SEVERITY_RANK[a.severity] - LF_ROW_SEVERITY_RANK[b.severity]
+          if (cmp === 0) cmp = b.date.localeCompare(a.date)
+          break
+        case 'customer':
+          cmp = a.customerShortName.localeCompare(b.customerShortName, 'th')
+          break
+        case 'lf':
+          cmp = a.date.localeCompare(b.date)
+          if (cmp === 0) cmp = a.formNumber.localeCompare(b.formNumber)
+          break
+        case 'dups':
+          cmp = a.dups.length - b.dups.length
+          if (cmp === 0) cmp = sumCol6(a) - sumCol6(b)
+          break
+        case 'sds':
+          cmp = a.linkedSds.length - b.linkedSds.length
+          break
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return list
+  }, [rows, sortCol, sortDir])
+
+  const toggleSort = (col: LFSortCol) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir(col === 'severity' || col === 'customer' ? 'asc' : 'desc') }
+  }
 
   // LF ที่ล้างได้ (ghost/latent + มี row ว่างลบได้) จาก list ที่กรองอยู่
   const cleanableIds = useMemo(
@@ -194,20 +238,20 @@ export default function LFRowAudit() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">ระดับ</th>
-                <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">ลูกค้า</th>
-                <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">LF / วันที่</th>
-                <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">Code ซ้ำ (col6 per row)</th>
-                <th className="text-left px-3 py-2.5 font-medium text-slate-600 text-xs">SD ผูก</th>
+                <SortHeader col="severity" label="ระดับ" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} />
+                <SortHeader col="customer" label="ลูกค้า" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} />
+                <SortHeader col="lf" label="LF / วันที่" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} />
+                <SortHeader col="dups" label="Code ซ้ำ (col6 per row)" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} />
+                <SortHeader col="sds" label="SD ผูก" sortCol={sortCol} sortDir={sortDir} onClick={toggleSort} />
                 <th className="text-center px-3 py-2.5 font-medium text-slate-600 text-xs">จัดการ</th>
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {sortedRows.length === 0 ? (
                 <tr><td colSpan={6} className="text-center py-12 text-slate-400">
                   🎉 ไม่พบ row code ซ้ำ
                 </td></tr>
-              ) : rows.slice(0, visibleCount).map(r => (
+              ) : sortedRows.slice(0, visibleCount).map(r => (
                 <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50 align-top">
                   <td className="px-3 py-2">
                     <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold', SEVERITY_CFG[r.severity].badge)}>
@@ -273,10 +317,10 @@ export default function LFRowAudit() {
             </tbody>
           </table>
         </div>
-        {rows.length > visibleCount && (
+        {sortedRows.length > visibleCount && (
           <button onClick={() => setVisibleCount(c => c + 200)}
             className="w-full px-3 py-2.5 text-xs text-[#1B3A5C] bg-slate-50 hover:bg-slate-100 border-t border-slate-200 font-medium">
-            ↓ แสดงเพิ่ม (เหลือ {rows.length - visibleCount})
+            ↓ แสดงเพิ่ม (เหลือ {sortedRows.length - visibleCount})
           </button>
         )}
       </div>
@@ -319,5 +363,24 @@ function StatCard({ icon, label, value, color, sub, active, onClick }: {
       <div className="text-2xl font-bold text-slate-800 mt-1">{value.toLocaleString()}</div>
       <div className="text-xs text-slate-500 mt-0.5">{sub}</div>
     </button>
+  )
+}
+
+// 415 — header คลิก sort ได้ (pattern เดียวกับ CarryDriftAudit/AggregateAudit)
+function SortHeader({ col, label, sortCol, sortDir, onClick, className }: {
+  col: LFSortCol; label: string; sortCol: LFSortCol; sortDir: LFSortDir
+  onClick: (c: LFSortCol) => void; className?: string
+}) {
+  const active = sortCol === col
+  return (
+    <th className={cn('px-3 py-2.5 font-medium text-slate-600 text-xs cursor-pointer hover:bg-slate-100 select-none', className || 'text-left')}
+        onClick={() => onClick(col)}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active
+          ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)
+          : <ArrowUpDown className="w-3 h-3 text-slate-300" />}
+      </span>
+    </th>
   )
 }
