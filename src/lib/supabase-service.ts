@@ -518,6 +518,12 @@ export async function deleteLinenFormDB(id: string): Promise<void> {
   await dbWrite({ table: 'linen_forms', operation: 'delete', match: { column: 'id', value: id } })
 }
 
+// 411 — batch delete LF (ลบ LF เยอะใน 1 ชุด call · chunked กัน URL ยาว/timeout)
+export async function deleteLinenFormsBatch(ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  await deleteByIdChunks('linen_forms', ids)
+}
+
 // 390 C — ปรับ field เดียวกัน (เช่น aggregateSnapshot) ให้ LF หลายใบใน 1 ชุด call (กัน fire-and-forget race)
 export async function updateLinenFormsBatchByIds(ids: string[], updates: Partial<LinenForm>): Promise<void> {
   if (ids.length === 0) return

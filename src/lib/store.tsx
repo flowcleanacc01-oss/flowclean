@@ -58,6 +58,8 @@ interface StoreContextType {
   updateLinenForm: (id: string, f: Partial<LinenForm>) => void
   updateLinenFormStatus: (id: string, status: LinenFormStatus) => void
   deleteLinenForm: (id: string) => void
+  /** 416: batch ลบ LF (1 setState + chunked DB delete) — caller ต้อง guard orphan SD เอง */
+  deleteLinenFormsBatch: (ids: string[]) => void
   /** 413: ล้าง row code ซ้ำ (ลบเฉพาะ row ว่าง, ไม่แตะค่า) สำหรับ LF หลายใบ — sequential กัน fire-and-forget race */
   mergeDuplicateRowsBatch: (lfIds: string[]) => Promise<{ fixed: number; removed: number }>
 
@@ -561,6 +563,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return prev.filter(x => x.id !== id)
     })
     dbSave(db.deleteLinenFormDB(id))
+  }, [logAudit])
+
+  // 416 — Batch ลบ LF (1 setState + chunked DB delete) · caller (UI) guard orphan SD เอง
+  //   pattern เดียวกับ deleteDeliveryNotesBatch/deleteBillingStatementsBatch (411)
+  const deleteLinenFormsBatch = useCallback((ids: string[]) => {
+    if (ids.length === 0) return
+    const idSet = new Set(ids)
+    const removed = linenFormsRef.current.filter(x => idSet.has(x.id))   // capture เผื่อ rollback
+    if (removed.length === 0) return
+    linenFormsRef.current = linenFormsRef.current.filter(x => !idSet.has(x.id))
+    setLinenForms(prev => prev.filter(x => !idSet.has(x.id)))
+    dbSave(db.deleteLinenFormsBatch([...idSet]), () => {
+      linenFormsRef.current = [...removed, ...linenFormsRef.current]
+      setLinenForms(prev => [...removed, ...prev])
+    })
+    logAudit('delete', 'linen_form', '', `ลบ LF ${removed.length} ใบ (batch)`)
   }, [logAudit])
 
   // 413 — ล้าง row code ซ้ำหลาย LF (ลบเฉพาะ row ว่าง, ไม่แตะค่าตัวเลข)
@@ -1411,7 +1429,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     <StoreContext.Provider value={{
       currentUser, login, logout,
       customers, addCustomer, updateCustomer, deleteCustomer, getCustomer,
-      linenForms, addLinenForm, addLinenFormsBatch, updateLinenForm, updateLinenFormStatus, deleteLinenForm, mergeDuplicateRowsBatch,
+      linenForms, addLinenForm, addLinenFormsBatch, updateLinenForm, updateLinenFormStatus, deleteLinenForm, deleteLinenFormsBatch, mergeDuplicateRowsBatch,
       deliveryNotes, addDeliveryNote, addDeliveryNotesBatch, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,
       deleteDeliveryNotesBatch, updateDeliveryNotesBatchByIds,
       billingStatements, addBillingStatement, updateBillingStatus, updateBillingStatement, deleteBillingStatement,

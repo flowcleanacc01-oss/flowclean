@@ -18,7 +18,7 @@ import { applyAiFillToRows } from '@/lib/ai-fill'
 import { hasType1Discrepancy, hasType2Discrepancy } from '@/lib/discrepancy'
 import { applyRowsSync, lfHasSyncedRows } from '@/lib/sync-discrepancy'
 import { trackRecentCustomer } from '@/lib/recent-customers'
-import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileDown, ExternalLink, Sparkles, ArrowUpDown, Wrench, Pencil, Calendar, Loader2 } from 'lucide-react'
+import { Plus, Search, ChevronRight, ChevronLeft, AlertTriangle, X, Check, Printer, FileDown, ExternalLink, Sparkles, ArrowUpDown, Wrench, Pencil, Calendar, Loader2, Trash2 } from 'lucide-react'
 import { sortByQTOrder } from '@/lib/sort-by-qt'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
@@ -63,7 +63,7 @@ function ExcludedCodesBanner({ codes, nameOf, onRestore }: {
 export default function LinenFormsPage() {
   const {
     currentUser,
-    linenForms, addLinenForm, addLinenFormsBatch, updateLinenForm, updateLinenFormStatus, deleteLinenForm,
+    linenForms, addLinenForm, addLinenFormsBatch, updateLinenForm, updateLinenFormStatus, deleteLinenForm, deleteLinenFormsBatch,
     customers, getCustomer, getCarryOver, linenCatalog, quotations, deliveryNotes, companyInfo,
   } = useStore()
 
@@ -146,6 +146,7 @@ export default function LinenFormsPage() {
   }
   const [showLfPrintList, setShowLfPrintList] = useState(false)
   const [showLfBulkPrint, setShowLfBulkPrint] = useState(false)
+  const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false)  // 416 — bulk ลบ LF
   // 384.1 — Quick Print LF (multi-customer) — mirror Quick Print SD (303/310)
   const [showQuickPrintLf, setShowQuickPrintLf] = useState(false)
   const [qpLfSelectedCusts, setQpLfSelectedCusts] = useState<Set<string>>(new Set())
@@ -551,6 +552,30 @@ export default function LinenFormsPage() {
     updateLinenForm(detailForm.id, { rows: sorted })
   }
 
+  // 416 — bulk ลบ LF + guard กัน orphan SD: ข้าม LF ที่มีใบส่งของ (SD) ผูกอยู่
+  //   (SD ผูก LF ผ่าน dn.linenFormIds — ถ้าลบ LF ทิ้ง SD จะกลายเป็นกำพร้า/ยอดเพี้ยน)
+  //   partial pattern เดียวกับ SD→WB / WB→IV: ลบเฉพาะที่ปลอดภัย ข้ามที่ผูก แจ้งจำนวน
+  const splitDeletableLfs = () => {
+    const lfWithSd = new Set(deliveryNotes.flatMap(d => d.linenFormIds || []))
+    const lockedIds = selectedLfIds.filter(id => lfWithSd.has(id))
+    const lockedSet = new Set(lockedIds)
+    return { deletableIds: selectedLfIds.filter(id => !lockedSet.has(id)), lockedIds }
+  }
+
+  const handleBulkDeleteLF = () => {
+    const { deletableIds, lockedIds } = splitDeletableLfs()
+    if (deletableIds.length === 0) {
+      alert(`ลบไม่ได้ — LF ที่เลือกทั้งหมด ${lockedIds.length} ใบมีใบส่งของ (SD) ผูกอยู่\nต้องลบ SD ก่อน ถึงจะลบ LF ได้ (กัน SD กำพร้า)`)
+      return
+    }
+    deleteLinenFormsBatch(deletableIds)
+    setSelectedLfIds([])
+    setConfirmBulkDeleteOpen(false)
+    if (lockedIds.length > 0) {
+      alert(`ลบ LF ${deletableIds.length} ใบ\n\n⏭️ ข้าม ${lockedIds.length} ใบ — มี SD ผูกอยู่ (ต้องลบ SD ก่อน กัน SD กำพร้า)`)
+    }
+  }
+
   const handleAdvanceStatus = (formId: string) => {
     const form = linenForms.find(f => f.id === formId)
     if (!form) return
@@ -621,10 +646,16 @@ export default function LinenFormsPage() {
         </div>
         <div className="flex items-center gap-2">
           {selectedLfIds.length > 0 && (
-            <button onClick={() => setShowLfBulkPrint(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
-              <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสารที่เลือก ({selectedLfIds.length})
-            </button>
+            <>
+              <button onClick={() => setShowLfBulkPrint(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors text-sm font-medium">
+                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสารที่เลือก ({selectedLfIds.length})
+              </button>
+              <button onClick={() => setConfirmBulkDeleteOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium">
+                <Trash2 className="w-4 h-4" />ลบที่เลือก ({selectedLfIds.length})
+              </button>
+            </>
           )}
           {/* 388 — พิมพ์ฟอร์มเปล่า ย้ายมาซ้ายสุด (ก่อน Discrepancy) — flow เริ่มจาก "พิมพ์ฟอร์มเปล่า → เขียนมือ → scan กลับ" */}
           <button onClick={() => setShowBlankForm(true)}
@@ -911,6 +942,35 @@ export default function LinenFormsPage() {
       <FloatingTotalBar show={filtered.length > 0}>
         <span>รวม {filtered.length} รายการ</span>
       </FloatingTotalBar>
+
+      {/* 416 — ยืนยัน bulk ลบ LF (guard กัน orphan SD: ข้ามใบที่มี SD ผูก) */}
+      <Modal open={confirmBulkDeleteOpen} onClose={() => setConfirmBulkDeleteOpen(false)} title="ยืนยันการลบ LF" closeLabel="cancel">
+        {(() => {
+          const { deletableIds, lockedIds } = splitDeletableLfs()
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">
+                เลือกไว้ <span className="font-semibold">{selectedLfIds.length} ใบ</span> —
+                ลบได้ <span className="font-semibold text-red-600">{deletableIds.length} ใบ</span>
+              </p>
+              {lockedIds.length > 0 && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                  ⏭️ ข้าม <strong>{lockedIds.length} ใบ</strong> — มีใบส่งของ (SD) ผูกอยู่ (ลบไม่ได้ ต้องลบ SD ก่อน เพื่อกัน SD กำพร้า)
+                </p>
+              )}
+              <p className="text-xs text-slate-400">การลบ LF เป็นการลบถาวร — ตรวจให้แน่ใจก่อนยืนยัน</p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button onClick={() => setConfirmBulkDeleteOpen(false)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+                <button onClick={handleBulkDeleteLF} disabled={deletableIds.length === 0}
+                  className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 rounded-lg flex items-center gap-1.5 font-medium">
+                  <Trash2 className="w-3.5 h-3.5" />ลบ {deletableIds.length} ใบ
+                </button>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
 
       {/* Create Modal */}
       <LFAiInputModal
