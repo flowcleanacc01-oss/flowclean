@@ -809,26 +809,46 @@ export async function truncateAllTables(): Promise<void> {
 // Bulk Load (for initial hydration)
 // ============================================================
 
+// 422 — retry transient fetch failures (network กระตุก / Supabase timeout / rate-limit)
+//   อาการเดิม: ตารางใด fetch fail → allSettled fallback เป็น [] เงียบๆ → ข้อมูลหายชั่วคราว
+//   (เคส 2026-06-07 19:45 SD หายแล้ว hard refresh กลับมา · delivery_notes paginated = เสี่ยงสุด)
+//   retry 2 ครั้ง + backoff ก่อนยอมแพ้ → blip ชั่วคราวฟื้นเองโดย user ไม่ต้องรีเฟรช
+async function withRetry<T>(fn: () => Promise<T>, label: string, retries = 2): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (attempt < retries) {
+        console.warn(`[fetch retry] ${label} ครั้งที่ ${attempt + 1} ล้มเหลว — ลองใหม่`, err)
+        await new Promise(res => setTimeout(res, 400 * (attempt + 1)))
+      }
+    }
+  }
+  throw lastErr
+}
+
 export async function fetchAllData() {
   const results = await Promise.allSettled([
-    fetchCustomers(),
-    fetchLinenForms(),
-    fetchDeliveryNotes(),
-    fetchBillingStatements(),
-    fetchTaxInvoices(),
-    fetchQuotations(),
-    fetchExpenses(),
-    fetchUsers(),
-    fetchCompanyInfo(),
-    fetchLinenItems(),
-    fetchChecklists(),
-    fetchLinenCategories(),
-    fetchCustomerCategories().catch(() => [] as CustomerCategoryDef[]),
-    fetchCarryOverAdjustments().catch(() => [] as CarryOverAdjustment[]),
-    fetchReceipts().catch(() => [] as Receipt[]),
-    fetchLegacyDocuments().catch(() => [] as LegacyDocument[]),
-    fetchScheduleOverrides().catch(() => [] as ScheduleOverride[]),
-    fetchRoutePlans().catch(() => [] as RoutePlan[]),
+    withRetry(() => fetchCustomers(), 'customers'),
+    withRetry(() => fetchLinenForms(), 'linenForms'),
+    withRetry(() => fetchDeliveryNotes(), 'deliveryNotes'),
+    withRetry(() => fetchBillingStatements(), 'billingStatements'),
+    withRetry(() => fetchTaxInvoices(), 'taxInvoices'),
+    withRetry(() => fetchQuotations(), 'quotations'),
+    withRetry(() => fetchExpenses(), 'expenses'),
+    withRetry(() => fetchUsers(), 'users'),
+    withRetry(() => fetchCompanyInfo(), 'companyInfo'),
+    withRetry(() => fetchLinenItems(), 'linenItems'),
+    withRetry(() => fetchChecklists(), 'checklists'),
+    withRetry(() => fetchLinenCategories(), 'linenCategories'),
+    withRetry(() => fetchCustomerCategories(), 'customerCategories').catch(() => [] as CustomerCategoryDef[]),
+    withRetry(() => fetchCarryOverAdjustments(), 'carryOverAdjustments').catch(() => [] as CarryOverAdjustment[]),
+    withRetry(() => fetchReceipts(), 'receipts').catch(() => [] as Receipt[]),
+    withRetry(() => fetchLegacyDocuments(), 'legacyDocuments').catch(() => [] as LegacyDocument[]),
+    withRetry(() => fetchScheduleOverrides(), 'scheduleOverrides').catch(() => [] as ScheduleOverride[]),
+    withRetry(() => fetchRoutePlans(), 'routePlans').catch(() => [] as RoutePlan[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
