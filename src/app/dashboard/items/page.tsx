@@ -685,9 +685,10 @@ export default function ItemsPage() {
               </div>
             )}
 
-            <div className="overflow-x-auto">
+            {/* 421: inner-scroll + sticky thead (เห็นเมนูด้านบน + หัวตารางติดตอนเลื่อน) · ไม่ virtualize rows — คง drag-drop reorder + inline edit ไว้ (catalog เล็ก render เร็วอยู่แล้ว) */}
+            <div className="overflow-auto" style={{ maxHeight: '72vh' }}>
               <table className="w-full text-sm">
-                <thead>
+                <thead className="sticky top-0 z-20 bg-slate-50">
                   <tr className="bg-slate-50">
                     <th className="w-8 px-2 py-2">
                       <input type="checkbox"
