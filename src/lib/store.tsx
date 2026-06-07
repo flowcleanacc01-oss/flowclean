@@ -43,6 +43,10 @@ interface StoreContextType {
   login: (email: string, password: string) => Promise<boolean>
   logout: () => void
 
+  // 422 — data-load resilience: รายชื่อ core table ที่โหลดไม่สำเร็จ (null = ปกติ) + ปุ่มลองใหม่
+  loadError: string[] | null
+  reloadData: () => Promise<void>
+
   // Customers
   customers: Customer[]
   addCustomer: (c: Omit<Customer, 'id' | 'createdAt'>) => Customer
@@ -238,6 +242,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // 255: Facet Vocabulary — start with defaults, replaced after DB load
   const [facetVocab, setFacetVocab] = useState<FacetVocab>(DEFAULT_FACET_VOCAB)
   const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState<string[] | null>(null) // 422 — core table ที่โหลดไม่สำเร็จ
   const seeded = useRef(false)
   const currentUserRef = useRef<AppUser | null>(null)
   // 295: deliveryNotes ref — sync update ใน batch loop กัน closure stale
@@ -282,6 +287,67 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dbSave(db.insertAuditLog(log))
   }, [])
 
+  // 422 — apply fetched data → React state (ดึงออกมา component scope เพื่อให้ทั้ง mount effect + reloadData ใช้ร่วม)
+  const applyData = useCallback((data: Awaited<ReturnType<typeof db.fetchAllData>>) => {
+    setCustomers(data.customers)
+    // Normalize legacy data: map old statuses + ensure fields exist
+    setLinenForms(data.linenForms.map(form => ({
+      ...form,
+      status: (LEGACY_STATUS_MAP[form.status] || form.status) as LinenFormStatus,
+      bagsSentCount: form.bagsSentCount ?? 0,
+      bagsPackCount: form.bagsPackCount ?? 0,
+      deptDrying: form.deptDrying ?? false,
+      deptIroning: form.deptIroning ?? false,
+      deptFolding: form.deptFolding ?? false,
+      deptQc: form.deptQc ?? false,
+      rows: form.rows.map(row => ({
+        ...row,
+        col6_factoryPackSend: row.col6_factoryPackSend ?? 0,
+      })),
+    })))
+    setDeliveryNotes(data.deliveryNotes)
+    setBillingStatements(data.billingStatements)
+    setTaxInvoices(data.taxInvoices)
+    setReceipts(data.receipts || [])
+    setLegacyDocuments(data.legacyDocuments || [])
+    setQuotations(data.quotations)
+    setExpenses(data.expenses)
+    // Strip passwordHash from all users in React state
+    const loadedUsers = data.users.length > 0 ? data.users : SAMPLE_USERS
+    setUsers(loadedUsers.map(stripHash))
+    setCompanyInfo(data.companyInfo || DEFAULT_COMPANY_INFO)
+    setLinenCatalog(data.linenItems.length > 0 ? data.linenItems : STANDARD_LINEN_ITEMS)
+    setLinenCategories(data.linenCategories.length > 0 ? data.linenCategories : DEFAULT_LINEN_CATEGORIES)
+    if (data.customerCategories) {
+      setCustomerCategories(data.customerCategories.length > 0 ? data.customerCategories : DEFAULT_CUSTOMER_CATEGORIES)
+    }
+    setChecklists(data.checklists)
+    setCarryOverAdjustments(data.carryOverAdjustments || [])
+    setScheduleOverrides(data.scheduleOverrides || [])
+    setRoutePlans(data.routePlans || [])
+
+    // Build defaultPrices from linenItems
+    if (data.linenItems.length > 0) {
+      const prices: Record<string, number> = {}
+      for (const item of data.linenItems) {
+        prices[item.code] = item.defaultPrice
+      }
+      setDefaultPrices(prices)
+    }
+  }, [])
+
+  // 422 — reload ทั้งหมด (ปุ่ม "ลองใหม่" ใน banner) → fetch + apply + อัปเดต loadError
+  const reloadData = useCallback(async () => {
+    try {
+      const data = await db.fetchAllData()
+      applyData(data)
+      setLoadError(data._partialFailures.length > 0 ? data._partialFailures : null)
+    } catch (err) {
+      console.error('[reloadData] failed', err)
+      setLoadError(['ข้อมูลทั้งหมด (เชื่อมต่อฐานข้อมูลไม่ได้)'])
+    }
+  }, [applyData])
+
   // ---- Load from Supabase on mount ----
   useEffect(() => {
     let cancelled = false
@@ -303,8 +369,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const fresh = await db.fetchAllData()
           if (cancelled) return
           applyData(fresh)
+          setLoadError(fresh._partialFailures.length > 0 ? fresh._partialFailures : null)
         } else {
           applyData(data)
+          setLoadError(data._partialFailures.length > 0 ? data._partialFailures : null)
         }
       } catch (err) {
         console.error('[Supabase load error]', err)
@@ -345,57 +413,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!cancelled) setLoaded(true)
     }
 
-    function applyData(data: Awaited<ReturnType<typeof db.fetchAllData>>) {
-      setCustomers(data.customers)
-      // Normalize legacy data: map old statuses + ensure fields exist
-      setLinenForms(data.linenForms.map(form => ({
-        ...form,
-        status: (LEGACY_STATUS_MAP[form.status] || form.status) as LinenFormStatus,
-        bagsSentCount: form.bagsSentCount ?? 0,
-        bagsPackCount: form.bagsPackCount ?? 0,
-        deptDrying: form.deptDrying ?? false,
-        deptIroning: form.deptIroning ?? false,
-        deptFolding: form.deptFolding ?? false,
-        deptQc: form.deptQc ?? false,
-        rows: form.rows.map(row => ({
-          ...row,
-          col6_factoryPackSend: row.col6_factoryPackSend ?? 0,
-        })),
-      })))
-      setDeliveryNotes(data.deliveryNotes)
-      setBillingStatements(data.billingStatements)
-      setTaxInvoices(data.taxInvoices)
-      setReceipts(data.receipts || [])
-      setLegacyDocuments(data.legacyDocuments || [])
-      setQuotations(data.quotations)
-      setExpenses(data.expenses)
-      // Strip passwordHash from all users in React state
-      const loadedUsers = data.users.length > 0 ? data.users : SAMPLE_USERS
-      setUsers(loadedUsers.map(stripHash))
-      setCompanyInfo(data.companyInfo || DEFAULT_COMPANY_INFO)
-      setLinenCatalog(data.linenItems.length > 0 ? data.linenItems : STANDARD_LINEN_ITEMS)
-      setLinenCategories(data.linenCategories.length > 0 ? data.linenCategories : DEFAULT_LINEN_CATEGORIES)
-      if (data.customerCategories) {
-        setCustomerCategories(data.customerCategories.length > 0 ? data.customerCategories : DEFAULT_CUSTOMER_CATEGORIES)
-      }
-      setChecklists(data.checklists)
-      setCarryOverAdjustments(data.carryOverAdjustments || [])
-      setScheduleOverrides(data.scheduleOverrides || [])
-      setRoutePlans(data.routePlans || [])
-
-      // Build defaultPrices from linenItems
-      if (data.linenItems.length > 0) {
-        const prices: Record<string, number> = {}
-        for (const item of data.linenItems) {
-          prices[item.code] = item.defaultPrice
-        }
-        setDefaultPrices(prices)
-      }
-    }
-
     loadFromSupabase()
     return () => { cancelled = true }
-  }, [])
+  }, [applyData])
 
   // ---- Auth ----
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
@@ -1428,6 +1448,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout,
+      loadError, reloadData,
       customers, addCustomer, updateCustomer, deleteCustomer, getCustomer,
       linenForms, addLinenForm, addLinenFormsBatch, updateLinenForm, updateLinenFormStatus, deleteLinenForm, deleteLinenFormsBatch, mergeDuplicateRowsBatch,
       deliveryNotes, addDeliveryNote, addDeliveryNotesBatch, updateDeliveryNote, updateDeliveryNoteStatus, deleteDeliveryNote,

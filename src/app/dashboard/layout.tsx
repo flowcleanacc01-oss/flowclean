@@ -6,6 +6,7 @@ import { useStore } from '@/lib/store'
 import Sidebar from '@/components/Sidebar'
 import HeaderActions from '@/components/HeaderActions'
 import FindBar from '@/components/FindBar'
+import DataLoadBanner from '@/components/DataLoadBanner'
 import { useSidebarCollapsed } from '@/lib/sidebar-state'
 import { cn } from '@/lib/utils'
 
@@ -37,6 +38,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <HeaderActions />
           </div>
         </header>
+        {/* 422 — เตือนเมื่อโหลดข้อมูลบางส่วนไม่สำเร็จ (แทนตารางว่างเงียบๆ) + ปุ่มลองใหม่ */}
+        <DataLoadBanner />
         <div className="p-4 lg:p-8 max-w-7xl mx-auto">
           {children}
         </div>

@@ -854,6 +854,13 @@ export async function fetchAllData() {
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
     r.status === 'fulfilled' ? r.value : (console.error('[fetchAllData] partial fail:', r.reason), fallback)
 
+  // 422 — รายชื่อ core table ที่ fetch ล้มเหลว (หลัง retry) → ให้ UI เตือน user แทนแสดงว่างเงียบๆ
+  //   index 0-11 = core (ไม่มี .catch fallback) · 12-17 = non-critical (มี .catch รับไว้แล้ว)
+  const CORE_TABLE_LABELS = ['ลูกค้า', 'ใบรับส่งผ้า (LF)', 'ใบส่งของ (SD)', 'ใบวางบิล (WB)', 'ใบกำกับภาษี (IV)', 'ใบเสนอราคา (QT)', 'ค่าใช้จ่าย', 'ผู้ใช้', 'ข้อมูลบริษัท', 'รายการผ้า', 'ใบเช็คผ้า', 'หมวดผ้า']
+  const _partialFailures = results.slice(0, 12)
+    .map((r, i) => (r.status === 'rejected' ? CORE_TABLE_LABELS[i] : null))
+    .filter((x): x is string => x !== null)
+
   const [
     customers, linenForms, deliveryNotes, billingStatements,
     taxInvoices, quotations, expenses, users, companyInfo,
@@ -899,5 +906,6 @@ export async function fetchAllData() {
     legacyDocuments,
     scheduleOverrides,
     routePlans,
+    _partialFailures,
   }
 }
