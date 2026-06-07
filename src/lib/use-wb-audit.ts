@@ -214,32 +214,43 @@ export function useWBAudit(filters: WBAuditFilters): WBAuditResult {
       }
 
       const wbHasVat = (wb.vat || 0) > 0
-      if (cust.enableVat && wbHasVat) {
+      // 418 — per-WB tax override ทับค่าลูกค้า: 'none'=ไม่มีภาษี · 'full'=มีภาษี · undefined=ตามลูกค้า (เดิม)
+      //   → ใบที่ตั้งใจไม่มีภาษี (เช่น J19 วันคี่) ไม่ถูก flag เป็น mismatch อีก แต่ความผิดจริงยังจับได้
+      const vatShouldApply = wb.taxOverride === 'none' ? false : wb.taxOverride === 'full' ? true : !!cust.enableVat
+      const whtShouldApply = wb.taxOverride === 'none' ? false : wb.taxOverride === 'full' ? true : !!cust.enableWithholding
+      const ovNote = wb.taxOverride ? ` (override='${wb.taxOverride}')` : ''
+      if (vatShouldApply && wbHasVat) {
         if (!approxEq(wb.vat, recalcVat)) {
           issues.push({
             reason: 'vat_drift', severity: 'high',
             detail: `VAT: WB=${wb.vat.toFixed(2)} vs 7%×subtotal=${recalcVat.toFixed(2)}`,
           })
         }
-      } else if (cust.enableVat && !wbHasVat) {
+      } else if (vatShouldApply && !wbHasVat) {
         issues.push({
           reason: 'vat_config_mismatch', severity: 'high',
-          detail: 'ลูกค้า enableVat=true แต่ WB.vat=0',
+          detail: `ควรมี VAT แต่ WB.vat=0${ovNote}`,
         })
-      } else if (!cust.enableVat && wbHasVat) {
+      } else if (!vatShouldApply && wbHasVat) {
         issues.push({
           reason: 'vat_config_mismatch', severity: 'high',
-          detail: 'ลูกค้า enableVat=false แต่ WB.vat>0',
+          detail: `ไม่ควรมี VAT แต่ WB.vat>0${ovNote}`,
         })
       }
+      // !vatShouldApply && !wbHasVat → ถูกต้อง (non-VAT/override='none') — ไม่ flag
 
-      if (cust.enableWithholding) {
+      if (whtShouldApply) {
         if (!approxEq(wb.withholdingTax || 0, recalcWht)) {
           issues.push({
             reason: 'wht_drift', severity: 'high',
             detail: `WHT: WB=${(wb.withholdingTax || 0).toFixed(2)} vs 3%×subtotal=${recalcWht.toFixed(2)}`,
           })
         }
+      } else if ((wb.withholdingTax || 0) > 0) {
+        issues.push({
+          reason: 'wht_drift', severity: 'high',
+          detail: `ไม่ควรมีหัก ณ ที่จ่าย แต่ WB=${(wb.withholdingTax || 0).toFixed(2)}${ovNote}`,
+        })
       }
 
       // grandTotal sanity (subtotal + vat)

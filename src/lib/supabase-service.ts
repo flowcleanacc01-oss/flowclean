@@ -157,6 +157,7 @@ const FIELD_MAP: Record<string, string> = {
   deptFolding: 'dept_folding',
   deptQc: 'dept_qc',
   billingMode: 'billing_mode',
+  taxOverride: 'tax_override',  // 418 — per-WB tax override
   // Audit log fields
   userId: 'user_id',
   userName: 'user_name',

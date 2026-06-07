@@ -532,6 +532,9 @@ export interface BillingStatement {
   isPrinted?: boolean
   isExported?: boolean
   billingMode?: 'by_date' | 'by_item' | 'by_total' // how line items were grouped
+  /** 418: per-WB tax override — undefined = ตามค่าลูกค้า (เดิม) · 'full' = VAT+หัก ณ ที่จ่าย · 'none' = ไม่มีภาษี
+   *  ใช้กับลูกค้าที่ WB บางใบมีภาษี บางใบไม่มี (เช่น J19 วันคี่/คู่) — เลิก toggle flag ลูกค้า + audit รับรู้ว่าตั้งใจ */
+  taxOverride?: 'full' | 'none'
 }
 
 // ============================================================

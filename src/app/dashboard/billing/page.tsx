@@ -286,6 +286,8 @@ export default function BillingPage() {
   const [dnSortKey, setDnSortKey] = useState('date')
   const [dnSortDir, setDnSortDir] = useState<'asc' | 'desc'>('asc')
   const [billingIssueDate, setBillingIssueDate] = useState(todayISO())
+  // 418 — per-WB tax override: 'default' = ตามลูกค้า · 'full' = VAT+หัก ณ ที่จ่าย · 'none' = ไม่มีภาษี
+  const [wbTaxOverride, setWbTaxOverride] = useState<'default' | 'full' | 'none'>('default')
   const [billingDiscount, setBillingDiscount] = useState(0)
   const [billingDiscountNote, setBillingDiscountNote] = useState('')
   const [billingExtraCharge, setBillingExtraCharge] = useState(0)
@@ -421,8 +423,13 @@ export default function BillingPage() {
   )
 
   // VAT / WHT rates (from company settings + customer toggle)
-  const custVatRate = (selCustomer?.enableVat !== false) ? (companyInfo.vatRate ?? 7) : 0
-  const custWhtRate = (selCustomer?.enableWithholding !== false) ? (companyInfo.withholdingRate ?? 3) : 0
+  // 418 — per-WB override ทับค่าลูกค้าได้ ('full'=บังคับมีภาษี / 'none'=บังคับไม่มีภาษี / 'default'=ตามลูกค้า)
+  const companyVatRate = companyInfo.vatRate ?? 7
+  const companyWhtRate = companyInfo.withholdingRate ?? 3
+  const customerVatRate = (selCustomer?.enableVat !== false) ? companyVatRate : 0
+  const customerWhtRate = (selCustomer?.enableWithholding !== false) ? companyWhtRate : 0
+  const custVatRate = wbTaxOverride === 'none' ? 0 : wbTaxOverride === 'full' ? companyVatRate : customerVatRate
+  const custWhtRate = wbTaxOverride === 'none' ? 0 : wbTaxOverride === 'full' ? companyWhtRate : customerWhtRate
 
   const previewBilling = useMemo(() => {
     if (!selCustomer) return null
@@ -501,6 +508,7 @@ export default function BillingPage() {
       paidAmount: 0,
       notes: '',
       billingMode,
+      taxOverride: wbTaxOverride === 'default' ? undefined : wbTaxOverride,  // 418
     })
     setActiveWbId(newWB.id)
     scrollToActiveRow(newWB.id)
@@ -511,6 +519,7 @@ export default function BillingPage() {
     }
 
     setShowCreate(false)
+    setWbTaxOverride('default')  // 418 — reset กัน carry ไปใบถัดไป
   }
 
   // Phase B: Quick Batch WB — group SDs by customer · 402 รวม SD ค้างคร่อมเดือนด้วย (consistent กับ create flow)
@@ -1959,7 +1968,7 @@ export default function BillingPage() {
       )}
 
       {/* Create Billing Modal */}
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); setBillingDiscount(0); setBillingDiscountNote(''); setBillingExtraCharge(0); setBillingExtraChargeNote('') }} title="สร้างใบวางบิล" size="xl" closeLabel="cancel">
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setBillingDiscount(0); setBillingDiscountNote(''); setBillingExtraCharge(0); setBillingExtraChargeNote(''); setWbTaxOverride('default') }} title="สร้างใบวางบิล" size="xl" closeLabel="cancel">
         {/* 181.1.1: min-h ให้ panel ของ CustomerPicker (~400px) ไม่ดูใหญ่กว่า modal */}
         <div className="space-y-4 min-h-[480px]">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1985,6 +1994,32 @@ export default function BillingPage() {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
             </div>
           </div>
+
+          {/* 418 — เลือกภาษีต่อใบ (per-WB tax override) แทนการ toggle VAT ที่หน้าลูกค้า */}
+          {selCustomer && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <label className="text-sm font-medium text-slate-600">ภาษีของใบวางบิลนี้</label>
+                <span className="text-[11px] text-slate-400">
+                  ค่าลูกค้า: {selCustomer.enableVat !== false ? 'มี VAT' : 'ไม่มี VAT'}{selCustomer.enableWithholding !== false ? ' + หัก ณ ที่จ่าย' : ''}
+                </span>
+              </div>
+              <div className="flex gap-1.5">
+                {([['default', 'ตามลูกค้า'], ['full', 'มีภาษี (VAT+หัก ณ ที่จ่าย)'], ['none', 'ไม่มีภาษี']] as const).map(([v, label]) => (
+                  <button key={v} type="button" onClick={() => setWbTaxOverride(v)}
+                    className={cn('flex-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                      wbTaxOverride === v ? 'bg-[#1B3A5C] text-white border-[#1B3A5C]' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300')}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {wbTaxOverride !== 'default' && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1.5">
+                  ⚠ ใบนี้ใช้ภาษีแบบ <strong>{wbTaxOverride === 'full' ? 'มีภาษี' : 'ไม่มีภาษี'}</strong> เฉพาะใบนี้ — ไม่กระทบใบอื่น/ตั้งค่าลูกค้า (เลิก toggle VAT หน้าลูกค้า)
+                </p>
+              )}
+            </div>
+          )}
 
           {/* 181.1.1: empty state เมื่อยังไม่เลือกลูกค้า */}
           {!selCustomerId && (
