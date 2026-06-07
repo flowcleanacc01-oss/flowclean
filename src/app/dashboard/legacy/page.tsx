@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { formatDate, formatCurrency, cn } from '@/lib/utils'
 import { highlightText, highlightAmount, matchesAmountQuery } from '@/lib/highlight'
@@ -76,6 +77,16 @@ export default function LegacyPage() {
     // matchesDate อ่าน dateFrom/dateTo/dateFilterMode ที่อยู่ใน deps แล้ว
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [legacyDocuments, kindFilter, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir])
+
+  // 421 — virtualize ตาราง legacy (5,093 docs ไม่ค้าง · เลิก cap 6,000) · element-scroll + spacer rows
+  const listScrollRef = useRef<HTMLDivElement>(null)
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => 46,
+    overscan: 12,
+    getItemKey: (index) => filtered[index]?.id ?? index,
+  })
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -169,11 +180,19 @@ export default function LegacyPage() {
               onDateToChange={setDateTo} onClear={() => { setDateFrom(''); setDateTo('') }} />
           </div>
 
-          {/* Table */}
+          {/* Table — 421: virtualize (inner-scroll + table-fixed + colgroup %) · thead sticky */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
+            <div ref={listScrollRef} className="overflow-auto" style={{ maxHeight: '72vh' }}>
+              <table className="w-full text-sm table-fixed lf-list-table">
+                <colgroup>
+                  <col style={{ width: '14%' }} />{/* วันที่ */}
+                  <col style={{ width: '26%' }} />{/* ชื่อย่อลูกค้า */}
+                  <col style={{ width: '12%' }} />{/* ประเภท */}
+                  <col style={{ width: '24%' }} />{/* เลขที่ */}
+                  <col style={{ width: '14%' }} />{/* ยอดเงิน */}
+                  <col style={{ width: '10%' }} />{/* สถานะ */}
+                </colgroup>
+                <thead className="sticky top-0 z-20 bg-slate-50">
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <SortableHeader label="วันที่" sortKey="date" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
                     <SortableHeader label="ชื่อย่อลูกค้า" sortKey="customer" currentSortKey={sortKey} currentSortDir={sortDir} onSort={handleSort} className="text-left" />
@@ -186,28 +205,41 @@ export default function LegacyPage() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr><td colSpan={6} className="text-center py-12 text-slate-400">ไม่พบเอกสาร</td></tr>
-                  ) : filtered.slice(0, 6000).map(d => {
-                    const c = d.customerId ? getCustomer(d.customerId) : null
-                    const cfg = KIND_CONFIG[d.kind]
+                  ) : (() => {
+                    const vItems = rowVirtualizer.getVirtualItems()
+                    const padTop = vItems.length > 0 ? vItems[0].start : 0
+                    const padBottom = vItems.length > 0 ? rowVirtualizer.getTotalSize() - vItems[vItems.length - 1].end : 0
                     return (
-                      <tr key={d.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
-                        onClick={() => setDetailId(d.id)}>
-                        <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(d.docDate)}</td>
-                        <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>
-                          {highlightText(c?.shortName || d.customerName || '-', search)}
-                          {!c && <span className="ml-1 text-[10px] text-slate-400">[unmatched]</span>}
-                        </td>
-                        <td className={cn("px-4 py-3 text-center", sortedBg('kind'))}>
-                          <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>
-                            {d.kind}
-                          </span>
-                        </td>
-                        <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('docNumber'))}>{highlightText(d.docNumber, search)}</td>
-                        <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('amount'))}>{highlightAmount(formatCurrency(d.amount), search)}</td>
-                        <td className="px-4 py-3 text-center text-xs text-slate-500">{d.status || '-'}</td>
-                      </tr>
+                      <>
+                        {padTop > 0 && <tr aria-hidden><td colSpan={6} style={{ height: padTop, padding: 0, border: 0 }} /></tr>}
+                        {vItems.map(vi => {
+                          const d = filtered[vi.index]
+                          const c = d.customerId ? getCustomer(d.customerId) : null
+                          const cfg = KIND_CONFIG[d.kind]
+                          return (
+                            <tr key={d.id} data-row-id={d.id} data-index={vi.index} ref={rowVirtualizer.measureElement}
+                              className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
+                              onClick={() => setDetailId(d.id)}>
+                              <td className={cn("px-4 py-3 text-slate-700 font-medium whitespace-nowrap", sortedBg('date'))}>{formatDate(d.docDate)}</td>
+                              <td className={cn("px-4 py-3 text-slate-800 font-medium", sortedBg('customer'))}>
+                                {highlightText(c?.shortName || d.customerName || '-', search)}
+                                {!c && <span className="ml-1 text-[10px] text-slate-400">[unmatched]</span>}
+                              </td>
+                              <td className={cn("px-4 py-3 text-center", sortedBg('kind'))}>
+                                <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', cfg.bgColor, cfg.color)}>
+                                  {d.kind}
+                                </span>
+                              </td>
+                              <td className={cn("px-4 py-3 font-mono text-[11px] text-slate-400", sortedBg('docNumber'))}>{highlightText(d.docNumber, search)}</td>
+                              <td className={cn("px-4 py-3 text-right text-slate-700", sortedBg('amount'))}>{highlightAmount(formatCurrency(d.amount), search)}</td>
+                              <td className="px-4 py-3 text-center text-xs text-slate-500">{d.status || '-'}</td>
+                            </tr>
+                          )
+                        })}
+                        {padBottom > 0 && <tr aria-hidden><td colSpan={6} style={{ height: padBottom, padding: 0, border: 0 }} /></tr>}
+                      </>
                     )
-                  })}
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -220,7 +252,7 @@ export default function LegacyPage() {
         const totalAmount = filtered.reduce((s, d) => s + d.amount, 0)
         return (
           <FloatingTotalBar>
-            <span>รวม {filtered.length} เอกสาร{filtered.length > 6000 && ` (แสดง 6,000 แรก)`}</span>
+            <span>รวม {filtered.length} เอกสาร</span>
             <span className="ml-auto">ยอดรวม <span className="text-[#1B3A5C]">{formatCurrency(totalAmount)}</span></span>
           </FloatingTotalBar>
         )

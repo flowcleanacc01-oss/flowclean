@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { cn, formatCurrency, sanitizeNumber, scrollToActiveRow } from '@/lib/utils'
 import { highlightText } from '@/lib/highlight'
@@ -144,6 +145,16 @@ export default function CustomersPage() {
     })
   }, [customers, filterCat, filterStatus, search, sortKey, sortDir, getCustomerCategoryLabel, linkedQTMap])
 
+  // 421 — virtualize ตารางลูกค้า · element-scroll + spacer rows · rowVirtualizer ต้องอยู่ก่อน focus effect (?focus= ใช้ scrollToIndex)
+  const listScrollRef = useRef<HTMLDivElement>(null)
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => 64,
+    overscan: 12,
+    getItemKey: (index) => filtered[index]?.id ?? index,
+  })
+
   // 274.1: Workflow tab data — memoize O(N×M) heuristic + LF count map
   const workflowData = useMemo(() => {
     const activeCustomers = customers.filter(c => c.isActive)
@@ -197,6 +208,7 @@ export default function CustomersPage() {
   }, [urlEditId, customers])
 
   // 322: ?focus=<id> URL trigger — highlight + scroll to customer row
+  // 421: virtualize-aware — แถวเป้าหมายอาจยังไม่ render → scrollToIndex เลื่อน virtualizer ไปก่อน
   useEffect(() => {
     if (!urlFocusId) return
     const c = customers.find(x => x.id === urlFocusId)
@@ -204,7 +216,13 @@ export default function CustomersPage() {
     setPageTab('customers')
     setActiveCustomerId(urlFocusId)
     // Wait for render → scroll to row
-    setTimeout(() => scrollToActiveRow(urlFocusId), 100)
+    setTimeout(() => {
+      const idx = filtered.findIndex(x => x.id === urlFocusId)
+      if (idx >= 0) rowVirtualizer.scrollToIndex(idx, { align: 'center' })
+      else scrollToActiveRow(urlFocusId)
+    }, 100)
+    // filtered/rowVirtualizer อ่าน ณ เวลา effect ทำงาน — ไม่ใส่ deps กัน re-scroll ตอนพิมพ์ค้นหา
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlFocusId, customers])
 
   const handleSave = () => {
@@ -339,11 +357,24 @@ export default function CustomersPage() {
             </div>
           </div>
 
-          {/* Table */}
+          {/* Table — 421: virtualize (inner-scroll + table-fixed + colgroup %) · thead sticky */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
+            <div ref={listScrollRef} className="overflow-auto" style={{ maxHeight: '72vh' }}>
+              <table className="w-full text-sm table-fixed lf-list-table">
+                <colgroup>
+                  <col style={{ width: '3%' }} />{/* checkbox */}
+                  <col style={{ width: '11%' }} />{/* ชื่อย่อลูกค้า */}
+                  <col style={{ width: '16%' }} />{/* ชื่อบริษัท */}
+                  <col style={{ width: '8%' }} />{/* หมวด */}
+                  <col style={{ width: '11%' }} />{/* รูปแบบบิล */}
+                  <col style={{ width: '6%' }} />{/* เครดิต */}
+                  <col style={{ width: '9%' }} />{/* ภาษี */}
+                  <col style={{ width: '9%' }} />{/* QT */}
+                  <col style={{ width: '10%' }} />{/* ผู้ติดต่อ */}
+                  <col style={{ width: '7%' }} />{/* สถานะ */}
+                  <col style={{ width: '10%' }} />{/* action */}
+                </colgroup>
+                <thead className="sticky top-0 z-20 bg-slate-50">
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="px-2 py-3 w-10">
                       <input type="checkbox"
@@ -366,9 +397,19 @@ export default function CustomersPage() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr><td colSpan={11} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
-                  ) : filtered.map(c => (
+                  ) : (() => {
+                    const vItems = rowVirtualizer.getVirtualItems()
+                    const padTop = vItems.length > 0 ? vItems[0].start : 0
+                    const padBottom = vItems.length > 0 ? rowVirtualizer.getTotalSize() - vItems[vItems.length - 1].end : 0
+                    return (
+                      <>
+                        {padTop > 0 && <tr aria-hidden><td colSpan={11} style={{ height: padTop, padding: 0, border: 0 }} /></tr>}
+                        {vItems.map(vi => {
+                          const c = filtered[vi.index]
+                          return (
                     <tr key={c.id}
                       data-row-id={c.id}
+                      data-index={vi.index} ref={rowVirtualizer.measureElement}
                       className={cn('border-b border-slate-100 cursor-pointer',
                         activeCustomerId === c.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50',
                         !c.isActive && 'bg-red-50/30')}
@@ -469,7 +510,12 @@ export default function CustomersPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                          )
+                        })}
+                        {padBottom > 0 && <tr aria-hidden><td colSpan={11} style={{ height: padBottom, padding: 0, border: 0 }} /></tr>}
+                      </>
+                    )
+                  })()}
                 </tbody>
               </table>
             </div>
