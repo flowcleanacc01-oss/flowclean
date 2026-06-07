@@ -18,6 +18,7 @@ import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import DeliveryNotePrint from '@/components/DeliveryNotePrint'
 import TransportFeeImpactPreview from '@/components/TransportFeeImpactPreview'
 import { canViewSD } from '@/lib/permissions'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { applyRowsSync, recalcTransportAfterSync, recalcTransportAfterAdj } from '@/lib/sync-discrepancy'
 import { createDNLastOfMonthCompare } from '@/lib/transport-fee'
 import { trackRecentCustomer } from '@/lib/recent-customers'
@@ -298,6 +299,16 @@ export default function DeliveryPage() {
     // getDNTotalAmount อ่าน getCustomer (ใน deps) + quotations — รักษา behavior เดิม / linenCatalog เพิ่มเป็น store value
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliveryNotes, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, dnFilter, billingStatements, selectedDnIds, focusMode, focusIds, linenCatalog])
+
+  // 417.2 — virtualize ตาราง SD (รองรับหลักหมื่นแถวไม่ค้าง) · pattern เดียวกับ LF
+  const listScrollRef = useRef<HTMLDivElement>(null)
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => 57,
+    overscan: 12,
+    getItemKey: (index) => filtered[index]?.id ?? index,
+  })
 
   // Forms available for delivery (confirmed status) — sorted oldest first (122.4b)
   const availableForms = useMemo(() => {
@@ -1387,9 +1398,21 @@ export default function DeliveryPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
+        {/* 417.3 — inner-scroll + table-fixed + colgroup % → virtualize, ไม่ flick, fit พอดีจอ */}
+        <div ref={listScrollRef} className="overflow-auto" style={{ maxHeight: '72vh' }}>
+          <table className="w-full text-sm table-fixed lf-list-table">
+            <colgroup>
+              <col style={{ width: '4%' }} />{/* checkbox */}
+              <col style={{ width: '11%' }} />{/* วันที่ */}
+              <col style={{ width: '16%' }} />{/* ชื่อย่อลูกค้า */}
+              <col style={{ width: '15%' }} />{/* เลขที่ */}
+              <col style={{ width: '9%' }} />{/* จำนวน */}
+              <col style={{ width: '12%' }} />{/* ยอดรวม */}
+              <col style={{ width: '12%' }} />{/* คนขับ */}
+              <col style={{ width: '11%' }} />{/* พิมพ์ */}
+              <col style={{ width: '10%' }} />{/* WB */}
+            </colgroup>
+            <thead className="sticky top-0 z-20 bg-slate-50">
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="px-2 py-3 w-10">
                   <input type="checkbox"
@@ -1413,7 +1436,15 @@ export default function DeliveryPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={9} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
-              ) : filtered.map(dn => {
+              ) : (() => {
+                const vItems = rowVirtualizer.getVirtualItems()
+                const padTop = vItems.length > 0 ? vItems[0].start : 0
+                const padBottom = vItems.length > 0 ? rowVirtualizer.getTotalSize() - vItems[vItems.length - 1].end : 0
+                return (
+                  <>
+                    {padTop > 0 && <tr aria-hidden><td colSpan={9} style={{ height: padTop, padding: 0, border: 0 }} /></tr>}
+                    {vItems.map(vi => {
+                const dn = filtered[vi.index]
                 const customer = getCustomer(dn.customerId)
                 const totalItems = dn.items.reduce((s, i) => s + i.quantity, 0)
                 const dnAmount = getDNTotalAmount(dn)
@@ -1421,6 +1452,7 @@ export default function DeliveryPage() {
                 return (
                   <tr key={dn.id}
                     data-row-id={dn.id}
+                    data-index={vi.index} ref={rowVirtualizer.measureElement}
                     className={cn(
                       'border-b border-slate-100 cursor-pointer transition-colors',
                       activeRowId === dn.id
@@ -1466,7 +1498,11 @@ export default function DeliveryPage() {
                     </td>
                   </tr>
                 )
-              })}
+                    })}
+                    {padBottom > 0 && <tr aria-hidden><td colSpan={9} style={{ height: padBottom, padding: 0, border: 0 }} /></tr>}
+                  </>
+                )
+              })()}
             </tbody>
           </table>
         </div>

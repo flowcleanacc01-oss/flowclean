@@ -21,6 +21,7 @@ import DeleteWithRedirectModal from '@/components/DeleteWithRedirectModal'
 import ExportButtons from '@/components/ExportButtons'
 import PaymentRecordModal from '@/components/PaymentRecordModal'
 import { canViewBilling } from '@/lib/permissions'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { exportCSV } from '@/lib/export'
 import DateFilter from '@/components/DateFilter'
 import SortableHeader from '@/components/SortableHeader'
@@ -373,6 +374,16 @@ export default function BillingPage() {
     // matchesDateFilter อ่าน dateFrom/dateTo/dateFilterMode ที่อยู่ใน deps แล้ว
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billingStatements, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, wbFilter, wbCustomerFilter, taxInvoices, focusMode, focusIds, tab])
+
+  // 417.2 — virtualize ตาราง WB (รองรับหลักหมื่นแถวไม่ค้าง) · pattern เดียวกับ LF/SD
+  const listScrollRef = useRef<HTMLDivElement>(null)
+  const rowVirtualizer = useVirtualizer({
+    count: filteredBilling.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => 57,
+    overscan: 12,
+    getItemKey: (index) => filteredBilling[index]?.id ?? index,
+  })
 
   // Preview for billing creation
   const selCustomer = selCustomerId ? getCustomer(selCustomerId) : null
@@ -1541,9 +1552,24 @@ export default function BillingPage() {
       {/* Billing Tab */}
       {tab === 'billing' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
+          {/* 417.3 — inner-scroll + table-fixed + colgroup % → virtualize, ไม่ flick, fit พอดีจอ */}
+          <div ref={listScrollRef} className="overflow-auto" style={{ maxHeight: '72vh' }}>
+            <table className="w-full text-sm table-fixed lf-list-table">
+              <colgroup>
+                <col style={{ width: '3%' }} />{/* checkbox */}
+                <col style={{ width: '8%' }} />{/* วันที่ออกWB */}
+                <col style={{ width: '11%' }} />{/* ชื่อย่อลูกค้า */}
+                <col style={{ width: '11%' }} />{/* เลขที่ */}
+                <col style={{ width: '8%' }} />{/* ค่าซักเดือน */}
+                <col style={{ width: '10%' }} />{/* ยอดรวม */}
+                <col style={{ width: '10%' }} />{/* จ่ายสุทธิ */}
+                <col style={{ width: '8%' }} />{/* พิมพ์ */}
+                <col style={{ width: '11%' }} />{/* เกินกำหนด */}
+                <col style={{ width: '8%' }} />{/* IV/RC */}
+                <col style={{ width: '7%' }} />{/* ชำระ */}
+                <col style={{ width: '5%' }} />{/* action */}
+              </colgroup>
+              <thead className="sticky top-0 z-20 bg-slate-50">
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="px-2 py-3 w-10">
                     <input type="checkbox"
@@ -1569,11 +1595,20 @@ export default function BillingPage() {
               <tbody>
                 {filteredBilling.length === 0 ? (
                   <tr><td colSpan={11} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
-                ) : filteredBilling.map(b => {
+                ) : (() => {
+                  const vItems = rowVirtualizer.getVirtualItems()
+                  const padTop = vItems.length > 0 ? vItems[0].start : 0
+                  const padBottom = vItems.length > 0 ? rowVirtualizer.getTotalSize() - vItems[vItems.length - 1].end : 0
+                  return (
+                    <>
+                      {padTop > 0 && <tr aria-hidden><td colSpan={12} style={{ height: padTop, padding: 0, border: 0 }} /></tr>}
+                      {vItems.map(vi => {
+                  const b = filteredBilling[vi.index]
                   const customer = getCustomer(b.customerId)
                   return (
                     <tr key={b.id}
                       data-row-id={b.id}
+                      data-index={vi.index} ref={rowVirtualizer.measureElement}
                       className={cn("border-b border-slate-100 cursor-pointer", activeWbId === b.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                       onClick={() => { setActiveWbId(b.id); setShowDetail(b.id) }}>
                       <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
@@ -1677,7 +1712,11 @@ export default function BillingPage() {
                       </td>
                     </tr>
                   )
-                })}
+                      })}
+                      {padBottom > 0 && <tr aria-hidden><td colSpan={12} style={{ height: padBottom, padding: 0, border: 0 }} /></tr>}
+                    </>
+                  )
+                })()}
               </tbody>
               {/* 127: Totals footer — sum of displayed WBs */}
               {filteredBilling.length > 0 && (() => {
