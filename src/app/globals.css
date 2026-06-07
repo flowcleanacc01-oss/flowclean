@@ -164,6 +164,14 @@ input[type="number"] {
   padding-right: 0.5rem;
 }
 
+/* 417.4 — กันคอลัมน์เบียด/ทับกันตอนย่อหน้าต่างเล็ก (multitask)
+   จอกว้างปกติ table = w-full พอดีจอ ไม่ scroll · พอแคบกว่า min-width
+   → container .overflow-auto สร้าง scroll แนวนอนแทน คอลัมน์คงความกว้างอ่านได้
+   (วันที่ 8% ใน LF/WB ต้องการ ~85px ถึงไม่ล้นทับชื่อลูกค้า) */
+.lf-list-table {
+  min-width: 1050px;
+}
+
 /* Custom animations */
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(-8px); }
