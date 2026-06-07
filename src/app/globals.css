@@ -156,6 +156,14 @@ input[type="number"] {
   .blank-a5-page, .blank-a4-2up-page, .blank-a5-half { min-height: 0 !important; }
 }
 
+/* 417.3 — LF list table: padding cell กระชับ (override px-3/px-4 ของทุก cell ที่เดียว)
+   ให้ 12 คอลัมน์พอดีพื้นที่ ไม่ล้นจอ — คู่กับ colgroup % + table-fixed (กัน content เบียด) */
+.lf-list-table th,
+.lf-list-table td {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
 /* Custom animations */
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(-8px); }

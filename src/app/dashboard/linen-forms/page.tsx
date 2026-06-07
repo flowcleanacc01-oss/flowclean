@@ -809,21 +809,22 @@ export default function LinenFormsPage() {
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {/* 417.2 — inner-scroll container (virtualize ทำงานบน scroll นี้) · thead sticky */}
         <div ref={listScrollRef} className="overflow-auto" style={{ maxHeight: '72vh' }}>
-          <table className="w-full text-sm table-fixed">
-            {/* 417.2 — ความกว้างตายตัว (table-fixed) → ไม่ขึ้นกับ content แถวที่ virtualize render → ไม่ขยับ/ไม่ flick ตอน scroll */}
+          <table className="w-full text-sm table-fixed lf-list-table">
+            {/* 417.3 — ความกว้างเป็น % (รวม 100%) → ตารางพอดีพื้นที่ ไม่ล้นจอ ไม่ต้อง scroll ซ้ายขวา
+                + table-fixed คุมไม่ให้คอลัมน์ขยับตอน virtualize · padding cell ลด (.lf-list-table ใน globals.css) */}
             <colgroup>
-              <col style={{ width: 40 }} />{/* checkbox */}
-              <col style={{ width: 112 }} />{/* วันที่ (dd-MM-yyyy) */}
-              <col style={{ width: 150 }} />{/* ชื่อย่อลูกค้า */}
-              <col style={{ width: 140 }} />{/* เลขที่ (LF-20260507-004) */}
-              <col style={{ width: 48 }} />{/* ⚠ */}
-              <col style={{ width: 140 }} />{/* ส่งออกเอกสาร */}
-              <col style={{ width: 154 }} />{/* สถานะแผนกย่อย */}
-              <col style={{ width: 128 }} />{/* สถานะ */}
-              <col style={{ width: 76 }} />{/* จำนวน */}
-              <col style={{ width: 108 }} />{/* พิมพ์ */}
-              <col style={{ width: 118 }} />{/* SD */}
-              <col style={{ width: 130 }} />{/* จัดการ */}
+              <col style={{ width: '3%' }} />{/* checkbox */}
+              <col style={{ width: '8%' }} />{/* วันที่ */}
+              <col style={{ width: '11%' }} />{/* ชื่อย่อลูกค้า */}
+              <col style={{ width: '10%' }} />{/* เลขที่ */}
+              <col style={{ width: '4%' }} />{/* ⚠ */}
+              <col style={{ width: '10%' }} />{/* ส่งออกเอกสาร */}
+              <col style={{ width: '13%' }} />{/* สถานะแผนกย่อย */}
+              <col style={{ width: '11%' }} />{/* สถานะ */}
+              <col style={{ width: '6%' }} />{/* จำนวน */}
+              <col style={{ width: '8%' }} />{/* พิมพ์ */}
+              <col style={{ width: '9%' }} />{/* SD */}
+              <col style={{ width: '7%' }} />{/* จัดการ */}
             </colgroup>
             <thead className="sticky top-0 z-20 bg-slate-50">
               <tr className="bg-slate-50 border-b border-slate-200">
