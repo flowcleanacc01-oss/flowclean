@@ -12,9 +12,12 @@ interface TaxInvoicePrintProps {
   netPayable?: number
   /** 275.3: bulk print — set idSuffix per row to avoid duplicate DOM IDs */
   idSuffix?: string
+  /** 420: variant ของเอกสาร — 'invoice' (default) = ใบกำกับภาษี/ใบเสร็จ · 'delivery_note' = ใบส่งสินค้า
+   *  เปลี่ยนแค่ "ชื่อหัวกระดาษ" — เนื้อหา/รหัส/ยอด เหมือน IV ทุกอย่าง (เอกสารเสริมจาก IV เดียวกัน) */
+  docVariant?: 'invoice' | 'delivery_note'
 }
 
-export default function TaxInvoicePrint({ invoice, customer, company, withholdingTax, netPayable, idSuffix }: TaxInvoicePrintProps) {
+export default function TaxInvoicePrint({ invoice, customer, company, withholdingTax, netPayable, idSuffix, docVariant = 'invoice' }: TaxInvoicePrintProps) {
   const wht = withholdingTax ?? (invoice.subtotal * 0.03)
   const net = netPayable ?? (invoice.grandTotal - wht)
   return (
@@ -32,8 +35,17 @@ export default function TaxInvoicePrint({ invoice, customer, company, withholdin
           </div>
         </div>
         <div className="text-right">
-          <h2 className="text-lg font-bold text-[#1B3A5C]">ใบกำกับภาษี/ใบเสร็จรับเงิน</h2>
-          <p className="text-xs text-slate-500">Tax Invoice / Receipt</p>
+          {docVariant === 'delivery_note' ? (
+            <>
+              <h2 className="text-lg font-bold text-[#1B3A5C]">ใบส่งสินค้า</h2>
+              <p className="text-xs text-slate-500">Delivery Note</p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-lg font-bold text-[#1B3A5C]">ใบกำกับภาษี/ใบเสร็จรับเงิน</h2>
+              <p className="text-xs text-slate-500">Tax Invoice / Receipt</p>
+            </>
+          )}
           <p className="font-mono text-sm font-medium mt-2">{invoice.invoiceNumber}</p>
           <p className="text-sm font-semibold text-[#1B3A5C]">วันที่: {formatDate(invoice.issueDate)}</p>
         </div>

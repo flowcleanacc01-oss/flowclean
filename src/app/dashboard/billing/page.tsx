@@ -114,6 +114,8 @@ export default function BillingPage() {
   const [showPrint, setShowPrint] = useState(false)
   const [showInvoiceDetail, setShowInvoiceDetail] = useState<string | null>(null)
   const [showInvoicePrint, setShowInvoicePrint] = useState(false)
+  // 420 — variant ตอนพิมพ์ IV: 'invoice' = ใบกำกับภาษี (ปกติ) · 'delivery_note' = ใบส่งสินค้า (เปลี่ยนแค่ชื่อหัว)
+  const [ivPrintVariant, setIvPrintVariant] = useState<'invoice' | 'delivery_note'>('invoice')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   // Filter tabs for WB and IV
@@ -2918,24 +2920,34 @@ export default function BillingPage() {
               </table>
             </div>
 
-            <div className="flex justify-between pt-2">
+            <div className="flex justify-between items-center pt-2">
               <button onClick={() => openReverseIVConfirm(detailInvoice.id)}
                 className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1">
                 <X className="w-3.5 h-3.5" />ลบ
               </button>
-              <button onClick={() => setShowInvoicePrint(true)}
-                className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
-                <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสาร
-              </button>
+              <div className="flex items-center gap-2">
+                {/* 420 — พิมพ์เอกสารเสริม "ใบส่งสินค้า" (รหัสเดียวกับ IV เปลี่ยนแค่ชื่อหัว) */}
+                <button onClick={() => { setIvPrintVariant('delivery_note'); setShowInvoicePrint(true) }}
+                  className="px-4 py-2 text-sm bg-teal-50 text-teal-700 border border-teal-200 rounded-lg hover:bg-teal-100 flex items-center gap-1"
+                  title="พิมพ์เอกสารหน้าตาเดียวกับ IV แต่เปลี่ยนชื่อหัวเป็น 'ใบส่งสินค้า' (รหัสเดียวกัน)">
+                  <FileDown className="w-4 h-4" />พิมพ์เป็นใบส่งสินค้า (DN)
+                </button>
+                <button onClick={() => { setIvPrintVariant('invoice'); setShowInvoicePrint(true) }}
+                  className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-1">
+                  <FileDown className="w-4 h-4" />พิมพ์/ส่งออกเอกสาร
+                </button>
+              </div>
             </div>
           </div>
         )}
       </Modal>
 
       {/* Invoice Print Preview Modal */}
-      <Modal open={showInvoicePrint && !!detailInvoice} onClose={() => setShowInvoicePrint(false)} title="พิมพ์ใบกำกับภาษี/ใบเสร็จรับเงิน" size="xl" className="print-target">
+      <Modal open={showInvoicePrint && !!detailInvoice} onClose={() => { setShowInvoicePrint(false); setIvPrintVariant('invoice') }} title={ivPrintVariant === 'delivery_note' ? 'พิมพ์ใบส่งสินค้า (DN)' : 'พิมพ์ใบกำกับภาษี/ใบเสร็จรับเงิน'} size="xl" className="print-target">
         {detailInvoice && detailInvoiceCustomer && (
           <div>
+            {/* 420 — ลบ IV/ย้อน WB + เช็ค "พิมพ์แล้ว/ส่งออกแล้ว" = เฉพาะ IV ปกติ · ใบส่งสินค้า (DN) เป็นเอกสารเสริม ไม่ต้อง track/ลบ */}
+            {ivPrintVariant === 'invoice' && (<>
             <div className="flex items-center mb-2 no-print">
               <button
                 type="button"
@@ -2960,17 +2972,24 @@ export default function BillingPage() {
                 <span className="text-sm font-medium text-violet-700 flex items-center gap-1"><Check className="w-4 h-4" />ส่งออกเอกสารแล้ว</span>
               </label>
             </div>
+            </>)}
+            {ivPrintVariant === 'delivery_note' && (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-teal-50 border border-teal-200 text-xs text-teal-800 no-print">
+                📄 กำลังพิมพ์เป็น <strong>ใบส่งสินค้า</strong> — เนื้อหา/รหัส/ยอดเหมือน IV {detailInvoice.invoiceNumber} ทุกอย่าง เปลี่ยนแค่ชื่อหัวกระดาษ
+              </div>
+            )}
             <TaxInvoicePrint
               invoice={detailInvoice}
               customer={detailInvoiceCustomer}
               company={companyInfo}
+              docVariant={ivPrintVariant}
               withholdingTax={billingStatements.find(b => b.id === detailInvoice.billingStatementId)?.withholdingTax}
               netPayable={billingStatements.find(b => b.id === detailInvoice.billingStatementId)?.netPayable}
             />
             <div className="flex justify-end mt-4 no-print">
-              <ExportButtons targetId="print-tax-invoice" filename={formatExportFilename(detailInvoice.invoiceNumber, getCustomer(detailInvoice.customerId)?.shortName || getCustomer(detailInvoice.customerId)?.name, detailInvoice.issueDate)} onExportCSV={handleInvoiceCSV}
-                onPrint={() => { if (!detailInvoice.isPrinted) updateTaxInvoice(detailInvoice.id, { isPrinted: true }) }}
-                onExportFile={() => { if (!detailInvoice.isExported) updateTaxInvoice(detailInvoice.id, { isExported: true }) }} />
+              <ExportButtons targetId="print-tax-invoice" filename={formatExportFilename(detailInvoice.invoiceNumber + (ivPrintVariant === 'delivery_note' ? ' (ใบส่งสินค้า)' : ''), getCustomer(detailInvoice.customerId)?.shortName || getCustomer(detailInvoice.customerId)?.name, detailInvoice.issueDate)} onExportCSV={handleInvoiceCSV}
+                onPrint={() => { if (ivPrintVariant === 'invoice' && !detailInvoice.isPrinted) updateTaxInvoice(detailInvoice.id, { isPrinted: true }) }}
+                onExportFile={() => { if (ivPrintVariant === 'invoice' && !detailInvoice.isExported) updateTaxInvoice(detailInvoice.id, { isExported: true }) }} />
             </div>
           </div>
         )}
