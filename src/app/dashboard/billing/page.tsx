@@ -1195,6 +1195,15 @@ export default function BillingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quotations, qtCustomerFilter, search, qtDateFrom, qtDateTo, qtDateFilterMode, sortKey, sortDir, getCustomer])
 
+  // 417.2 — virtualize ตาราง QT
+  const qtScrollRef = useRef<HTMLDivElement>(null)
+  const qtVirtualizer = useVirtualizer({
+    count: filteredQuotations.length,
+    getScrollElement: () => qtScrollRef.current,
+    estimateSize: () => 57, overscan: 12,
+    getItemKey: (index) => filteredQuotations[index]?.id ?? index,
+  })
+
   // Invoice list (filtered + sorted)
   const filteredInvoices = useMemo(() => {
     return taxInvoices.filter(inv => {
@@ -1238,6 +1247,15 @@ export default function BillingPage() {
     // matchesDateFilter อ่าน dateFrom/dateTo/dateFilterMode ที่อยู่ใน deps แล้ว
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taxInvoices, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, ivFilter, ivCustomerFilter, billingStatements])
+
+  // 417.2 — virtualize ตาราง IV
+  const ivScrollRef = useRef<HTMLDivElement>(null)
+  const ivVirtualizer = useVirtualizer({
+    count: filteredInvoices.length,
+    getScrollElement: () => ivScrollRef.current,
+    estimateSize: () => 57, overscan: 12,
+    getItemKey: (index) => filteredInvoices[index]?.id ?? index,
+  })
 
   // Map WB id → IV info (for badge in WB list/detail)
   const wbInvoiceMap = useMemo(() => {
@@ -1732,9 +1750,19 @@ export default function BillingPage() {
       {/* Invoice Tab */}
       {tab === 'invoice' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
+          <div ref={ivScrollRef} className="overflow-auto" style={{ maxHeight: '72vh' }}>
+            <table className="w-full text-sm table-fixed lf-list-table">
+              <colgroup>
+                <col style={{ width: '4%' }} />{/* checkbox */}
+                <col style={{ width: '11%' }} />{/* วันที่ */}
+                <col style={{ width: '17%' }} />{/* ชื่อย่อลูกค้า */}
+                <col style={{ width: '16%' }} />{/* เลขที่ */}
+                <col style={{ width: '14%' }} />{/* ยอดรวม VAT */}
+                <col style={{ width: '13%' }} />{/* พิมพ์ */}
+                <col style={{ width: '13%' }} />{/* WB */}
+                <col style={{ width: '12%' }} />{/* ชำระ */}
+              </colgroup>
+              <thead className="sticky top-0 z-20 bg-slate-50">
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="px-2 py-3 w-10">
                     <input type="checkbox"
@@ -1754,12 +1782,21 @@ export default function BillingPage() {
               <tbody>
                 {filteredInvoices.length === 0 ? (
                   <tr><td colSpan={8} className="text-center py-12 text-slate-400">ยังไม่มีใบกำกับภาษี — สร้างจากใบวางบิล</td></tr>
-                ) : filteredInvoices.map(inv => {
+                ) : (() => {
+                  const vItems = ivVirtualizer.getVirtualItems()
+                  const padTop = vItems.length > 0 ? vItems[0].start : 0
+                  const padBottom = vItems.length > 0 ? ivVirtualizer.getTotalSize() - vItems[vItems.length - 1].end : 0
+                  return (
+                    <>
+                      {padTop > 0 && <tr aria-hidden><td colSpan={8} style={{ height: padTop, padding: 0, border: 0 }} /></tr>}
+                      {vItems.map(vi => {
+                  const inv = filteredInvoices[vi.index]
                   const customer = getCustomer(inv.customerId)
                   const wbInfo = ivBillingMap.get(inv.id)
                   return (
                     <tr key={inv.id}
                       data-row-id={inv.id}
+                      data-index={vi.index} ref={ivVirtualizer.measureElement}
                       className={cn("border-b border-slate-100 cursor-pointer", activeIvId === inv.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                       onClick={() => { setActiveIvId(inv.id); setShowInvoiceDetail(inv.id) }}>
                       <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
@@ -1804,7 +1841,11 @@ export default function BillingPage() {
                       </td>
                     </tr>
                   )
-                })}
+                      })}
+                      {padBottom > 0 && <tr aria-hidden><td colSpan={8} style={{ height: padBottom, padding: 0, border: 0 }} /></tr>}
+                    </>
+                  )
+                })()}
               </tbody>
               {/* 127: Totals footer — sum of displayed IVs */}
               {/* totals shown in FloatingTotalBar at end of return tree */}
@@ -1886,9 +1927,19 @@ export default function BillingPage() {
           )
         })()}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
+          <div ref={qtScrollRef} className="overflow-auto" style={{ maxHeight: '72vh' }}>
+            <table className="w-full text-sm table-fixed lf-list-table">
+              <colgroup>
+                <col style={{ width: '4%' }} />{/* checkbox */}
+                <col style={{ width: '11%' }} />{/* วันที่ */}
+                <col style={{ width: '15%' }} />{/* ชื่อย่อลูกค้า */}
+                <col style={{ width: '14%' }} />{/* เลขที่ */}
+                <col style={{ width: '10%' }} />{/* รายการ */}
+                <col style={{ width: '18%' }} />{/* หมายเหตุ */}
+                <col style={{ width: '13%' }} />{/* สถานะ */}
+                <col style={{ width: '15%' }} />{/* action */}
+              </colgroup>
+              <thead className="sticky top-0 z-20 bg-slate-50">
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="px-2 py-3 w-10">
                     <input type="checkbox"
@@ -1908,12 +1959,21 @@ export default function BillingPage() {
               <tbody>
                 {filteredQuotations.length === 0 ? (
                   <tr><td colSpan={8} className="text-center py-12 text-slate-400">ไม่พบข้อมูล</td></tr>
-                ) : filteredQuotations.map(q => {
+                ) : (() => {
+                  const vItems = qtVirtualizer.getVirtualItems()
+                  const padTop = vItems.length > 0 ? vItems[0].start : 0
+                  const padBottom = vItems.length > 0 ? qtVirtualizer.getTotalSize() - vItems[vItems.length - 1].end : 0
+                  return (
+                    <>
+                      {padTop > 0 && <tr aria-hidden><td colSpan={8} style={{ height: padTop, padding: 0, border: 0 }} /></tr>}
+                      {vItems.map(vi => {
+                  const q = filteredQuotations[vi.index]
                   const cfg = QUOTATION_STATUS_CONFIG[q.status]
                   const nextStatus: QuotationStatus | null = q.status === 'draft' ? 'sent' : q.status === 'sent' ? 'accepted' : null
                   return (
                     <tr key={q.id}
                       data-row-id={q.id}
+                      data-index={vi.index} ref={qtVirtualizer.measureElement}
                       className={cn(
                         "border-b border-slate-100 cursor-pointer",
                         activeQtId === q.id
@@ -1971,7 +2031,11 @@ export default function BillingPage() {
                       </td>
                     </tr>
                   )
-                })}
+                      })}
+                      {padBottom > 0 && <tr aria-hidden><td colSpan={8} style={{ height: padBottom, padding: 0, border: 0 }} /></tr>}
+                    </>
+                  )
+                })()}
               </tbody>
               {/* totals shown in FloatingTotalBar at end of return tree */}
             </table>

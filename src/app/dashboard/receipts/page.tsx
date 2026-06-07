@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatDate, formatCurrency, cn, todayISO, startOfMonthISO, endOfMonthISO, formatExportFilename } from '@/lib/utils'
@@ -119,6 +120,17 @@ export default function ReceiptsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receipts, customerFilter, search, getCustomer, dateFrom, dateTo, dateFilterMode, sortKey, sortDir, rcFilter, billingStatements])
 
+  // 417.2 — virtualize ตาราง RC · eslint-disable ตาม pattern เดิมของหน้านี้ (guard ก่อน hook — stable)
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const listScrollRef = useRef<HTMLDivElement>(null)
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => 57, overscan: 12,
+    getItemKey: (index) => filtered[index]?.id ?? index,
+  })
+
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
@@ -198,9 +210,19 @@ export default function ReceiptsPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
+        <div ref={listScrollRef} className="overflow-auto" style={{ maxHeight: '72vh' }}>
+          <table className="w-full text-sm table-fixed lf-list-table">
+            <colgroup>
+              <col style={{ width: '4%' }} />{/* checkbox */}
+              <col style={{ width: '11%' }} />{/* วันที่ */}
+              <col style={{ width: '18%' }} />{/* ชื่อย่อลูกค้า */}
+              <col style={{ width: '17%' }} />{/* เลขที่ */}
+              <col style={{ width: '14%' }} />{/* ยอดรวม */}
+              <col style={{ width: '13%' }} />{/* พิมพ์ */}
+              <col style={{ width: '12%' }} />{/* WB */}
+              <col style={{ width: '11%' }} />{/* ชำระ */}
+            </colgroup>
+            <thead className="sticky top-0 z-20 bg-slate-50">
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="px-2 py-3 w-10">
                   <input type="checkbox"
@@ -221,11 +243,20 @@ export default function ReceiptsPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={8} className="text-center py-12 text-slate-400">ยังไม่มีใบเสร็จรับเงิน — ออกจากใบวางบิลของลูกค้าที่ไม่คิด VAT</td></tr>
-              ) : filtered.map(rc => {
+              ) : (() => {
+                const vItems = rowVirtualizer.getVirtualItems()
+                const padTop = vItems.length > 0 ? vItems[0].start : 0
+                const padBottom = vItems.length > 0 ? rowVirtualizer.getTotalSize() - vItems[vItems.length - 1].end : 0
+                return (
+                  <>
+                    {padTop > 0 && <tr aria-hidden><td colSpan={8} style={{ height: padTop, padding: 0, border: 0 }} /></tr>}
+                    {vItems.map(vi => {
+                const rc = filtered[vi.index]
                 const c = getCustomer(rc.customerId)
                 const linkedWb = billingStatements.find(b => b.id === rc.billingStatementId)
                 return (
                   <tr key={rc.id} data-row-id={rc.id}
+                    data-index={vi.index} ref={rowVirtualizer.measureElement}
                     className={cn("border-b border-slate-100 cursor-pointer", activeRowId === rc.id ? 'bg-[#3DD8D8]/10 border-l-2 border-l-[#3DD8D8]' : 'hover:bg-slate-50')}
                     onClick={() => { setActiveRowId(rc.id); setShowDetail(rc.id) }}>
                     <td className="px-2 py-3 w-10" onClick={e => e.stopPropagation()}>
@@ -265,7 +296,11 @@ export default function ReceiptsPage() {
                     </td>
                   </tr>
                 )
-              })}
+                    })}
+                    {padBottom > 0 && <tr aria-hidden><td colSpan={8} style={{ height: padBottom, padding: 0, border: 0 }} /></tr>}
+                  </>
+                )
+              })()}
             </tbody>
             {/* Totals footer */}
             {/* totals shown via FloatingTotalBar below */}
