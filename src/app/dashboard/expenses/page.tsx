@@ -233,21 +233,24 @@ export default function ExpensesPage() {
 
 function ExpenseFormModal({ initial, onSave, onClose }: {
   initial: Expense | null
-  onSave: (data: { date: string; category: ExpenseCategory; description: string; amount: number; reference: string }) => void
+  onSave: (data: { date: string; category: ExpenseCategory; description: string; amount: number; reference: string; vehicleId?: string }) => void
   onClose: () => void
 }) {
+  const { vehicles } = useStore()
   const [form, setForm] = useState({
     date: initial?.date || todayISO(),
     category: (initial?.category || 'chemicals') as ExpenseCategory,
     description: initial?.description || '',
     amount: initial?.amount || 0,
     reference: initial?.reference || '',
+    vehicleId: initial?.vehicleId || '',
   })
 
   const handleSave = () => {
     if (!form.description) return alert('กรุณากรอกรายละเอียด')
     if (form.amount <= 0) return alert('กรุณากรอกจำนวนเงิน')
-    onSave(form)
+    // 423 — vehicleId ผูกเฉพาะหมวดซ่อมบำรุง · หมวดอื่น clear ทิ้ง
+    onSave({ ...form, vehicleId: form.category === 'maintenance' ? form.vehicleId : '' })
   }
 
   return (
@@ -276,6 +279,21 @@ function ExpenseFormModal({ initial, onSave, onClose }: {
             </select>
           </div>
         </div>
+        {form.category === 'maintenance' && vehicles.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">ผูกกับรถ <span className="text-slate-400">(ไว้ดูต้นทุนต่อคัน)</span></label>
+            <select
+              value={form.vehicleId}
+              onChange={e => setForm(prev => ({ ...prev, vehicleId: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]"
+            >
+              <option value="">— ไม่ระบุ —</option>
+              {[...vehicles].sort((a, b) => a.code.localeCompare(b.code, 'th')).map(v => (
+                <option key={v.id} value={v.id}>คัน {v.code} · {v.licensePlate}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">รายละเอียด *</label>
           <input

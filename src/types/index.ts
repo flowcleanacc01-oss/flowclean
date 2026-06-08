@@ -656,6 +656,7 @@ export interface Expense {
   amount: number
   reference: string
   createdBy: string
+  vehicleId?: string // 423 — ผูกค่าซ่อมบำรุงเข้ารถคันไหน (optional, ใช้เมื่อ category='maintenance')
 }
 
 export type ExpenseCategory = 'chemicals' | 'water' | 'electricity' | 'labor' | 'transport' | 'maintenance' | 'rent' | 'other'
@@ -669,6 +670,73 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategory, { label: string; icon: 
   maintenance: { label: 'ซ่อมบำรุง', icon: '🔧' },
   rent: { label: 'ค่าเช่า', icon: '🏭' },
   other: { label: 'อื่นๆ', icon: '📦' },
+}
+
+// ============================================================
+// 423 Phase A — Fleet & Compliance (ฟลีตรถ + ปฏิบัติตามกฎหมาย + บำรุงเชิงป้องกัน)
+// ============================================================
+export interface Vehicle {
+  id: string
+  code: string                  // ชื่อย่อ A B C D
+  licensePlate: string          // ทะเบียน (ชื่อจริง)
+  brand: string
+  usageType: string
+  registeredDate: string        // ISO yyyy-mm-dd ('' = ไม่ทราบ) → คำนวณอายุ 7 ปี (ตรวจสภาพ)
+  // ประกันภาคสมัครใจ
+  insuranceCompany: string
+  insuranceClass: string
+  insuranceExpiry: string
+  // ภาคบังคับ + ราชการ (เว้น '' ได้ — กรอกภายหลัง)
+  actExpiry: string             // พ.ร.บ.
+  taxExpiry: string             // ภาษีรถ
+  inspectionExpiry: string      // ตรวจสภาพ ตรอ.
+  // PM (บำรุงเชิงป้องกัน ตามระยะไมล์)
+  currentOdometer: number
+  serviceIntervalKm: number     // ระยะเช็ค (default 8000)
+  nextServiceOdometer: number   // 0 = ยังไม่ตั้ง
+  isActive: boolean
+  note: string
+  createdAt: string
+}
+
+// บันทึกเลขไมล์ (ถ่ายรูปหน้าปัดตอนออกงาน — ป้อนข้อมูล PM)
+export interface OdometerLog {
+  id: string
+  vehicleId: string
+  date: string
+  odometer: number
+  fuelLevel: string             // หมายเหตุน้ำมัน (จากหน้าปัด)
+  photoPath: string             // path ใน Supabase Storage ('' = ไม่มีรูป)
+  note: string
+  createdBy: string
+  createdAt: string
+}
+
+// ประวัติงานซ่อม/บำรุง
+export interface MaintenanceRecord {
+  id: string
+  vehicleId: string
+  date: string
+  odometer: number              // ระยะที่ทำ (0 = ไม่ระบุ)
+  type: string                  // จาก MAINTENANCE_TYPES
+  description: string
+  cost: number
+  expenseId: string             // ผูก Expense ('' = ไม่ผูก)
+  nextDueOdometer: number       // 0 = ไม่ตั้ง (ผ้าเบรค set เองได้)
+  createdBy: string
+  createdAt: string
+}
+
+// preset ประเภทงานซ่อม (เลือกจาก dropdown + กรอกเองได้)
+export const MAINTENANCE_TYPES = ['น้ำมันเครื่อง', 'ผ้าเบรคหน้า', 'ผ้าเบรคหลัง', 'ยาง', 'แบตเตอรี่', 'ช่วงล่าง', 'ตัวถัง/สี', 'อื่นๆ'] as const
+
+// สถานะการปฏิบัติตามกฎหมาย/PM (ใกล้ครบกำหนด)
+export type ComplianceStatus = 'overdue' | 'near' | 'ok'
+
+export const COMPLIANCE_STATUS_CONFIG: Record<ComplianceStatus, { label: string; dot: string; badge: string }> = {
+  overdue: { label: 'เกินกำหนด',     dot: '🔴', badge: 'bg-red-100 text-red-700 border-red-200' },
+  near:    { label: 'ใกล้ครบกำหนด', dot: '🟠', badge: 'bg-amber-100 text-amber-700 border-amber-200' },
+  ok:      { label: 'ปกติ',          dot: '🟢', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
 }
 
 // ============================================================
@@ -707,6 +775,7 @@ export type AuditAction = 'create' | 'update' | 'delete' | 'login' | 'login_fail
 export type AuditEntityType =
   | 'customer' | 'linen_form' | 'delivery_note' | 'billing' | 'tax_invoice'
   | 'quotation' | 'expense' | 'checklist' | 'user' | 'company' | 'linen_item' | 'linen_category' | 'session'
+  | 'vehicle' // 423 — ฟลีตรถ (vehicle + odometer + maintenance)
 
 export interface AuditLog {
   id: string

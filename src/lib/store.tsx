@@ -9,6 +9,7 @@ import type {
   AuditAction, AuditEntityType, AuditLog,
   CarryOverAdjustment, CarryOverMode, CarryOverAdjustmentHistory,
   LegacyDocument, ScheduleOverride, RoutePlan,
+  Vehicle, OdometerLog, MaintenanceRecord,
 } from '@/types'
 import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES, DEFAULT_CUSTOMER_CATEGORIES } from '@/types'
 import {
@@ -173,6 +174,19 @@ interface StoreContextType {
   routePlans: RoutePlan[]
   setRouteOrder: (date: string, orderedCustomerIds: string[]) => void
 
+  // 423 Phase A — Fleet (vehicles / odometer / maintenance)
+  vehicles: Vehicle[]
+  addVehicle: (v: Omit<Vehicle, 'id' | 'createdAt'>) => Vehicle
+  updateVehicle: (id: string, updates: Partial<Vehicle>) => void
+  deleteVehicle: (id: string) => void
+  odometerLogs: OdometerLog[]
+  addOdometerLog: (o: Omit<OdometerLog, 'id' | 'createdBy' | 'createdAt'>) => OdometerLog
+  deleteOdometerLog: (id: string) => void
+  maintenanceRecords: MaintenanceRecord[]
+  addMaintenanceRecord: (m: Omit<MaintenanceRecord, 'id' | 'createdBy' | 'createdAt'>) => MaintenanceRecord
+  updateMaintenanceRecord: (id: string, updates: Partial<MaintenanceRecord>) => void
+  deleteMaintenanceRecord: (id: string) => void
+
   // 255: Facet Vocabulary (Wizard 2.0 — admin-editable)
   facetVocab: FacetVocab
   updateFacetVocab: (vocab: FacetVocab) => Promise<void>
@@ -239,6 +253,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
   // P5.2 — Route plans (ลำดับวิ่งต่อวัน)
   const [routePlans, setRoutePlans] = useState<RoutePlan[]>([])
+  // 423 Phase A — Fleet
+  const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [odometerLogs, setOdometerLogs] = useState<OdometerLog[]>([])
+  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([])
   // 255: Facet Vocabulary — start with defaults, replaced after DB load
   const [facetVocab, setFacetVocab] = useState<FacetVocab>(DEFAULT_FACET_VOCAB)
   const [loaded, setLoaded] = useState(false)
@@ -255,6 +273,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const billingStatementsRef = useRef<BillingStatement[]>([])
   const routePlansRef = useRef<RoutePlan[]>([])
   const linenFormsRef = useRef<LinenForm[]>([])
+  const vehiclesRef = useRef<Vehicle[]>([]) // 423 — addOdometerLog อ่านไมล์ปัจจุบันเพื่อ sync (กัน closure-stale)
 
   // Keep refs in sync for use in callbacks without dependency
   useEffect(() => { currentUserRef.current = currentUser }, [currentUser])
@@ -262,6 +281,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => { billingStatementsRef.current = billingStatements }, [billingStatements])
   useEffect(() => { routePlansRef.current = routePlans }, [routePlans])
   useEffect(() => { linenFormsRef.current = linenForms }, [linenForms])
+  useEffect(() => { vehiclesRef.current = vehicles }, [vehicles])
 
   // ---- Audit Log Helper (fire-and-forget) ----
   const logAudit = useCallback((
@@ -325,6 +345,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setCarryOverAdjustments(data.carryOverAdjustments || [])
     setScheduleOverrides(data.scheduleOverrides || [])
     setRoutePlans(data.routePlans || [])
+    setVehicles(data.vehicles || [])
+    setOdometerLogs(data.odometerLogs || [])
+    setMaintenanceRecords(data.maintenanceRecords || [])
 
     // Build defaultPrices from linenItems
     if (data.linenItems.length > 0) {
@@ -1285,6 +1308,76 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     logAudit('update', 'customer', plan.id, `จัดลำดับวิ่ง ${date}`, `${orderedCustomerIds.length} ลูกค้า`)
   }, [logAudit])
 
+  // ---- 423 Phase A: Fleet (vehicles / odometer / maintenance) ----
+  const addVehicle = useCallback((v: Omit<Vehicle, 'id' | 'createdAt'>): Vehicle => {
+    const newV: Vehicle = { ...v, id: genId(), createdAt: todayISO() }
+    setVehicles(prev => [...prev, newV])
+    dbSave(db.insertVehicle(newV), () => {
+      setVehicles(prev => prev.filter(x => x.id !== newV.id))
+    })
+    logAudit('create', 'vehicle', newV.id, `${newV.code} ${newV.licensePlate}`)
+    return newV
+  }, [logAudit])
+
+  const updateVehicle = useCallback((id: string, updates: Partial<Vehicle>) => {
+    setVehicles(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('update', 'vehicle', id, old ? `${old.code} ${old.licensePlate}` : id)
+      return prev.map(x => x.id === id ? { ...x, ...updates } : x)
+    })
+    dbSave(db.updateVehicleDB(id, updates))
+  }, [logAudit])
+
+  const deleteVehicle = useCallback((id: string) => {
+    setVehicles(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('delete', 'vehicle', id, old ? `${old.code} ${old.licensePlate}` : id)
+      return prev.filter(x => x.id !== id)
+    })
+    dbSave(db.deleteVehicleDB(id))
+  }, [logAudit])
+
+  const addOdometerLog = useCallback((o: Omit<OdometerLog, 'id' | 'createdBy' | 'createdAt'>): OdometerLog => {
+    const newO: OdometerLog = { ...o, id: genId(), createdBy: currentUserRef.current?.id || 'unknown', createdAt: new Date().toISOString() }
+    setOdometerLogs(prev => [newO, ...prev])
+    dbSave(db.insertOdometerLog(newO), () => {
+      setOdometerLogs(prev => prev.filter(x => x.id !== newO.id))
+    })
+    // sync เลขไมล์ปัจจุบันเข้า vehicle ถ้าไมล์ใหม่ > เดิม (อ่านจาก ref กัน closure-stale) — เงียบ ไม่ log ซ้ำ
+    const veh = vehiclesRef.current.find(x => x.id === o.vehicleId)
+    if (veh && o.odometer > veh.currentOdometer) {
+      setVehicles(prev => prev.map(x => x.id === o.vehicleId ? { ...x, currentOdometer: o.odometer } : x))
+      dbSave(db.updateVehicleDB(o.vehicleId, { currentOdometer: o.odometer }))
+    }
+    logAudit('update', 'vehicle', o.vehicleId, `บันทึกไมล์ ${o.odometer.toLocaleString()} km`)
+    return newO
+  }, [logAudit])
+
+  const deleteOdometerLog = useCallback((id: string) => {
+    setOdometerLogs(prev => prev.filter(x => x.id !== id))
+    dbSave(db.deleteOdometerLogDB(id))
+  }, [])
+
+  const addMaintenanceRecord = useCallback((m: Omit<MaintenanceRecord, 'id' | 'createdBy' | 'createdAt'>): MaintenanceRecord => {
+    const newM: MaintenanceRecord = { ...m, id: genId(), createdBy: currentUserRef.current?.id || 'unknown', createdAt: new Date().toISOString() }
+    setMaintenanceRecords(prev => [newM, ...prev])
+    dbSave(db.insertMaintenanceRecord(newM), () => {
+      setMaintenanceRecords(prev => prev.filter(x => x.id !== newM.id))
+    })
+    logAudit('update', 'vehicle', m.vehicleId, `บันทึกซ่อม/บำรุง: ${m.type}`)
+    return newM
+  }, [logAudit])
+
+  const updateMaintenanceRecord = useCallback((id: string, updates: Partial<MaintenanceRecord>) => {
+    setMaintenanceRecords(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    dbSave(db.updateMaintenanceRecordDB(id, updates))
+  }, [])
+
+  const deleteMaintenanceRecord = useCallback((id: string) => {
+    setMaintenanceRecords(prev => prev.filter(x => x.id !== id))
+    dbSave(db.deleteMaintenanceRecordDB(id))
+  }, [])
+
   // ---- Computed Helpers ----
 
   // 255 Phase 1.b: Facet Vocabulary update / reset
@@ -1471,6 +1564,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       rebuildAggregateSnapshots,
       scheduleOverrides, addScheduleOverride, updateScheduleOverride, deleteScheduleOverride,
       routePlans, setRouteOrder,
+      vehicles, addVehicle, updateVehicle, deleteVehicle,
+      odometerLogs, addOdometerLog, deleteOdometerLog,
+      maintenanceRecords, addMaintenanceRecord, updateMaintenanceRecord, deleteMaintenanceRecord,
       facetVocab, updateFacetVocab, resetFacetVocab,
       getCarryOver, getDiscrepancies,
     }}>

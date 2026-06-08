@@ -17,6 +17,7 @@ const ALLOWED_TABLES = new Set([
   'app_settings', // 255: Facet vocabulary (admin-editable)
   'schedule_overrides', // 311 P2: schedule overrides (ลืม allowlist ตอน P2 → writes fail rollback)
   'route_plans', // P5.2: ลำดับวิ่งต่อวัน
+  'vehicles', 'odometer_logs', 'maintenance_records', // 423 Phase A: fleet
 ])
 
 interface DbRequest {

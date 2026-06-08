@@ -4,6 +4,7 @@ import type {
   Quotation, Expense, AppUser, CompanyInfo, LinenItemDef, LinenCategoryDef,
   CustomerCategoryDef, ProductChecklist, AuditLog, CarryOverAdjustment,
   LegacyDocument, ScheduleOverride, RoutePlan,
+  Vehicle, OdometerLog, MaintenanceRecord,
 } from '@/types'
 
 // ============================================================
@@ -171,6 +172,24 @@ const FIELD_MAP: Record<string, string> = {
   // 213.2 Phase 1.1 — Catalog facets + customer nicknames
   facetKey: 'facet_key',
   itemNicknames: 'item_nicknames',
+  // 423 — Fleet (vehicles / odometer_logs / maintenance_records)
+  licensePlate: 'license_plate',
+  usageType: 'usage_type',
+  registeredDate: 'registered_date',
+  insuranceCompany: 'insurance_company',
+  insuranceClass: 'insurance_class',
+  insuranceExpiry: 'insurance_expiry',
+  actExpiry: 'act_expiry',
+  taxExpiry: 'tax_expiry',
+  inspectionExpiry: 'inspection_expiry',
+  currentOdometer: 'current_odometer',
+  serviceIntervalKm: 'service_interval_km',
+  nextServiceOdometer: 'next_service_odometer',
+  vehicleId: 'vehicle_id',
+  fuelLevel: 'fuel_level',
+  photoPath: 'photo_path',
+  nextDueOdometer: 'next_due_odometer',
+  expenseId: 'expense_id',
   // facets stays the same (single word, no transformation needed)
 }
 
@@ -780,6 +799,54 @@ export async function upsertRoutePlanDB(plan: RoutePlan): Promise<void> {
 }
 
 // ============================================================
+// 423 Phase A — Fleet (vehicles / odometer_logs / maintenance_records)
+// ============================================================
+
+export async function fetchVehicles(): Promise<Vehicle[]> {
+  return fetchAllPaginated<Vehicle>('vehicles', 'code', true)
+}
+
+export async function insertVehicle(v: Vehicle): Promise<void> {
+  await dbWrite({ table: 'vehicles', operation: 'insert', data: toSnakeCase(v as unknown as Record<string, unknown>) })
+}
+
+export async function updateVehicleDB(id: string, updates: Partial<Vehicle>): Promise<void> {
+  await dbWrite({ table: 'vehicles', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
+}
+
+export async function deleteVehicleDB(id: string): Promise<void> {
+  await dbWrite({ table: 'vehicles', operation: 'delete', match: { column: 'id', value: id } })
+}
+
+export async function fetchOdometerLogs(): Promise<OdometerLog[]> {
+  return fetchAllPaginated<OdometerLog>('odometer_logs', 'date')
+}
+
+export async function insertOdometerLog(o: OdometerLog): Promise<void> {
+  await dbWrite({ table: 'odometer_logs', operation: 'insert', data: toSnakeCase(o as unknown as Record<string, unknown>) })
+}
+
+export async function deleteOdometerLogDB(id: string): Promise<void> {
+  await dbWrite({ table: 'odometer_logs', operation: 'delete', match: { column: 'id', value: id } })
+}
+
+export async function fetchMaintenanceRecords(): Promise<MaintenanceRecord[]> {
+  return fetchAllPaginated<MaintenanceRecord>('maintenance_records', 'date')
+}
+
+export async function insertMaintenanceRecord(m: MaintenanceRecord): Promise<void> {
+  await dbWrite({ table: 'maintenance_records', operation: 'insert', data: toSnakeCase(m as unknown as Record<string, unknown>) })
+}
+
+export async function updateMaintenanceRecordDB(id: string, updates: Partial<MaintenanceRecord>): Promise<void> {
+  await dbWrite({ table: 'maintenance_records', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
+}
+
+export async function deleteMaintenanceRecordDB(id: string): Promise<void> {
+  await dbWrite({ table: 'maintenance_records', operation: 'delete', match: { column: 'id', value: id } })
+}
+
+// ============================================================
 // Default Prices — stored as linen_items.default_price
 // ============================================================
 
@@ -849,6 +916,9 @@ export async function fetchAllData() {
     withRetry(() => fetchLegacyDocuments(), 'legacyDocuments').catch(() => [] as LegacyDocument[]),
     withRetry(() => fetchScheduleOverrides(), 'scheduleOverrides').catch(() => [] as ScheduleOverride[]),
     withRetry(() => fetchRoutePlans(), 'routePlans').catch(() => [] as RoutePlan[]),
+    withRetry(() => fetchVehicles(), 'vehicles').catch(() => [] as Vehicle[]),
+    withRetry(() => fetchOdometerLogs(), 'odometerLogs').catch(() => [] as OdometerLog[]),
+    withRetry(() => fetchMaintenanceRecords(), 'maintenanceRecords').catch(() => [] as MaintenanceRecord[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -866,6 +936,7 @@ export async function fetchAllData() {
     taxInvoices, quotations, expenses, users, companyInfo,
     linenItems, checklists, linenCategories, customerCategories,
     carryOverAdjustments, receipts, legacyDocuments, scheduleOverrides, routePlans,
+    vehicles, odometerLogs, maintenanceRecords,
   ] = [
     val(results[0], [] as Customer[]),
     val(results[1], [] as LinenForm[]),
@@ -885,6 +956,9 @@ export async function fetchAllData() {
     val(results[15], [] as LegacyDocument[]),
     val(results[16], [] as ScheduleOverride[]),
     val(results[17], [] as RoutePlan[]),
+    val(results[18], [] as Vehicle[]),
+    val(results[19], [] as OdometerLog[]),
+    val(results[20], [] as MaintenanceRecord[]),
   ]
 
   return {
@@ -906,6 +980,9 @@ export async function fetchAllData() {
     legacyDocuments,
     scheduleOverrides,
     routePlans,
+    vehicles,
+    odometerLogs,
+    maintenanceRecords,
     _partialFailures,
   }
 }
