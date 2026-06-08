@@ -10,7 +10,7 @@ import type {
   CarryOverAdjustment, CarryOverMode, CarryOverAdjustmentHistory,
   LegacyDocument, ScheduleOverride, RoutePlan,
   Vehicle, OdometerLog, MaintenanceRecord,
-  Round, Crew,
+  Round, Crew, DailyTrip,
 } from '@/types'
 import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES, DEFAULT_CUSTOMER_CATEGORIES } from '@/types'
 import {
@@ -198,6 +198,12 @@ interface StoreContextType {
   updateCrew: (id: string, updates: Partial<Crew>) => void
   deleteCrew: (id: string) => void
 
+  // 423 Phase B2 — Daily Trips (Dispatch Board)
+  dailyTrips: DailyTrip[]
+  addDailyTrips: (trips: DailyTrip[]) => void
+  updateDailyTrip: (id: string, updates: Partial<DailyTrip>) => void
+  deleteDailyTrip: (id: string) => void
+
   // 255: Facet Vocabulary (Wizard 2.0 — admin-editable)
   facetVocab: FacetVocab
   updateFacetVocab: (vocab: FacetVocab) => Promise<void>
@@ -271,6 +277,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // 423 Phase B — Rounds + Crew
   const [rounds, setRounds] = useState<Round[]>([])
   const [crew, setCrew] = useState<Crew[]>([])
+  const [dailyTrips, setDailyTrips] = useState<DailyTrip[]>([]) // B2 — Dispatch Board
   // 255: Facet Vocabulary — start with defaults, replaced after DB load
   const [facetVocab, setFacetVocab] = useState<FacetVocab>(DEFAULT_FACET_VOCAB)
   const [loaded, setLoaded] = useState(false)
@@ -364,6 +371,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setMaintenanceRecords(data.maintenanceRecords || [])
     setRounds(data.rounds || [])
     setCrew(data.crew || [])
+    setDailyTrips(data.dailyTrips || [])
 
     // Build defaultPrices from linenItems
     if (data.linenItems.length > 0) {
@@ -1451,6 +1459,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dbSave(db.deleteCrewDB(id))
   }, [logAudit])
 
+  // ---- 423 Phase B2: Daily Trips (Dispatch Board) ----
+  // id = deterministic (dt_{date}_{roundId}) → ส่ง full object เข้ามา (กัน generate ซ้ำ)
+  // addDailyTrips: batch generate หลายรอบพร้อมกัน (N = จำนวนรอบ active ~6 → insert ขนานได้)
+  const addDailyTrips = useCallback((trips: DailyTrip[]) => {
+    if (trips.length === 0) return
+    setDailyTrips(prev => {
+      const ids = new Set(prev.map(t => t.id))
+      const fresh = trips.filter(t => !ids.has(t.id))   // กันซ้ำใน state (idempotent)
+      return [...prev, ...fresh]
+    })
+    for (const t of trips) {
+      dbSave(db.insertDailyTrip(t), () => {
+        setDailyTrips(prev => prev.filter(x => x.id !== t.id))
+      })
+    }
+    logAudit('create', 'daily_trip', trips[0].date, `สร้างใบงาน ${trips.length} รอบ (${trips[0].date})`)
+  }, [logAudit])
+
+  // update บ่อย (bag count / status / ลำดับ / swap คน) → ไม่ log audit ทุกครั้ง (กัน flood)
+  const updateDailyTrip = useCallback((id: string, updates: Partial<DailyTrip>) => {
+    setDailyTrips(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    dbSave(db.updateDailyTripDB(id, updates))
+  }, [])
+
+  const deleteDailyTrip = useCallback((id: string) => {
+    setDailyTrips(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('delete', 'daily_trip', id, old ? `ใบงาน ${old.date}` : id)
+      return prev.filter(x => x.id !== id)
+    })
+    dbSave(db.deleteDailyTripDB(id))
+  }, [logAudit])
+
   // ---- Computed Helpers ----
 
   // 255 Phase 1.b: Facet Vocabulary update / reset
@@ -1642,6 +1683,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       maintenanceRecords, addMaintenanceRecord, updateMaintenanceRecord, deleteMaintenanceRecord,
       rounds, addRound, updateRound, deleteRound,
       crew, addCrew, updateCrew, deleteCrew,
+      dailyTrips, addDailyTrips, updateDailyTrip, deleteDailyTrip,
       facetVocab, updateFacetVocab, resetFacetVocab,
       getCarryOver, getDiscrepancies,
     }}>

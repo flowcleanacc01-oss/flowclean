@@ -23,6 +23,7 @@ import {
   Archive,
   Wrench,
   Route,
+  ClipboardCheck,
   X,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
@@ -33,7 +34,7 @@ import { USER_ROLE_CONFIG, type UserRole } from '@/types'
 import {
   canViewLF, canViewSD, canViewCustomers, canViewBilling,
   canViewReports, canViewExpenses, canManageItems, canManageSettings,
-  canViewFleet, canManageRounds,
+  canViewFleet, canManageRounds, canManageDispatch,
 } from '@/lib/permissions'
 import type { AppUser } from '@/types'
 
@@ -52,6 +53,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/customers', label: 'ลูกค้า', icon: Building2, guard: canViewCustomers },
   { href: '/dashboard/logistics', label: 'ปฏิทินขนส่ง', icon: CalendarDays, guard: canViewSD },
   { href: '/dashboard/rounds', label: 'รอบเดินรถ', icon: Route, guard: canManageRounds },
+  { href: '/dashboard/dispatch', label: 'จ่ายงานรายวัน', icon: ClipboardCheck, guard: canManageDispatch },
   { href: '/dashboard/fleet', label: 'ฟลีตรถ', icon: Wrench, guard: canViewFleet },
   { href: '/dashboard/billing?tab=quotation', label: 'ใบเสนอราคา (QT)', icon: FileText, guard: canViewBilling },
   { href: '/dashboard/linen-forms', label: '1. ใบส่งรับผ้า (LF)', icon: ClipboardList, guard: canViewLF },

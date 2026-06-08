@@ -5,7 +5,7 @@ import type {
   CustomerCategoryDef, ProductChecklist, AuditLog, CarryOverAdjustment,
   LegacyDocument, ScheduleOverride, RoutePlan,
   Vehicle, OdometerLog, MaintenanceRecord,
-  Round, Crew,
+  Round, Crew, DailyTrip,
 } from '@/types'
 
 // ============================================================
@@ -201,6 +201,9 @@ const FIELD_MAP: Record<string, string> = {
   routeSequence: 'route_sequence',
   pickupWindowStart: 'pickup_window_start',
   pickupWindowEnd: 'pickup_window_end',
+  // 423 Phase B2 — Daily Trip (dispatch). stops[] = JSONB → inner fields ไม่ผ่าน map
+  driverId: 'driver_id',
+  helperId: 'helper_id',
   // facets stays the same (single word, no transformation needed)
 }
 
@@ -894,6 +897,26 @@ export async function deleteCrewDB(id: string): Promise<void> {
 }
 
 // ============================================================
+// 423 Phase B2 — Daily Trips (Dispatch Board)
+// ============================================================
+
+export async function fetchDailyTrips(): Promise<DailyTrip[]> {
+  return fetchAllPaginated<DailyTrip>('daily_trips', 'date')
+}
+
+export async function insertDailyTrip(t: DailyTrip): Promise<void> {
+  await dbWrite({ table: 'daily_trips', operation: 'insert', data: toSnakeCase(t as unknown as Record<string, unknown>) })
+}
+
+export async function updateDailyTripDB(id: string, updates: Partial<DailyTrip>): Promise<void> {
+  await dbWrite({ table: 'daily_trips', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
+}
+
+export async function deleteDailyTripDB(id: string): Promise<void> {
+  await dbWrite({ table: 'daily_trips', operation: 'delete', match: { column: 'id', value: id } })
+}
+
+// ============================================================
 // Default Prices — stored as linen_items.default_price
 // ============================================================
 
@@ -968,6 +991,7 @@ export async function fetchAllData() {
     withRetry(() => fetchMaintenanceRecords(), 'maintenanceRecords').catch(() => [] as MaintenanceRecord[]),
     withRetry(() => fetchRounds(), 'rounds').catch(() => [] as Round[]),
     withRetry(() => fetchCrew(), 'crew').catch(() => [] as Crew[]),
+    withRetry(() => fetchDailyTrips(), 'dailyTrips').catch(() => [] as DailyTrip[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -985,7 +1009,7 @@ export async function fetchAllData() {
     taxInvoices, quotations, expenses, users, companyInfo,
     linenItems, checklists, linenCategories, customerCategories,
     carryOverAdjustments, receipts, legacyDocuments, scheduleOverrides, routePlans,
-    vehicles, odometerLogs, maintenanceRecords, rounds, crew,
+    vehicles, odometerLogs, maintenanceRecords, rounds, crew, dailyTrips,
   ] = [
     val(results[0], [] as Customer[]),
     val(results[1], [] as LinenForm[]),
@@ -1010,6 +1034,7 @@ export async function fetchAllData() {
     val(results[20], [] as MaintenanceRecord[]),
     val(results[21], [] as Round[]),
     val(results[22], [] as Crew[]),
+    val(results[23], [] as DailyTrip[]),
   ]
 
   return {
@@ -1036,6 +1061,7 @@ export async function fetchAllData() {
     maintenanceRecords,
     rounds,
     crew,
+    dailyTrips,
     _partialFailures,
   }
 }

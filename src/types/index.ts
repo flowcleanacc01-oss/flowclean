@@ -789,6 +789,70 @@ export const CREW_STATUS_CONFIG: Record<CrewStatus, { label: string; badge: stri
 }
 
 // ============================================================
+// 423 Phase B2 — Dispatch Board (ใบงานรอบประจำวัน / Daily Trip)
+// ============================================================
+// TripStop มาจากไหน:
+// - regular  : ลูกค้าประจำรอบ + ถึงคิววันนั้น (generate จาก membership+schedule)
+// - inserted : แทรกจุดเฉพาะวันนั้น (เคส A‑C‑B / รอบเสริม) — ไม่อยู่ในรอบประจำ
+// - moved-in : ยืมจากรอบอื่นบางวัน (ลูกค้ามี roundId อื่น แต่วันนี้วิ่งรอบนี้)
+export type TripStopSource = 'regular' | 'inserted' | 'moved-in'
+export type TripStopStatus = 'pending' | 'done' | 'skipped'
+
+export const TRIP_STOP_SOURCE_CONFIG: Record<TripStopSource, { label: string; badge: string }> = {
+  regular:    { label: 'ประจำ',  badge: 'bg-slate-100 text-slate-500 border-slate-200' },
+  inserted:   { label: 'แทรก',   badge: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+  'moved-in': { label: 'ยืมรอบ', badge: 'bg-amber-100 text-amber-700 border-amber-200' },
+}
+
+export const TRIP_STOP_STATUS_CONFIG: Record<TripStopStatus, { label: string; badge: string; dot: string }> = {
+  pending: { label: 'รอ',   badge: 'bg-slate-100 text-slate-500 border-slate-200',         dot: '○' },
+  done:    { label: 'เสร็จ', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200',   dot: '✓' },
+  skipped: { label: 'ข้าม',  badge: 'bg-rose-100 text-rose-600 border-rose-200',            dot: '✕' },
+}
+
+export interface TripStop {
+  customerId: string
+  sequence: number              // ลำดับวิ่งวันนั้น (อาจต่างจาก default ถ้ามี insertion)
+  source: TripStopSource
+  bagCount: number              // จำนวนถุง (load) — ตรงกับ "ยอดรวมท้ายใบ" ใบจดมือ (0 = ยังไม่กรอก)
+  status: TripStopStatus
+  note: string
+  // หน้าต่างเวลา — snapshot จาก customer ตอน generate (กัน drift)
+  timeWindowStart: string
+  timeWindowEnd: string
+  // ePOD (Phase E เติม — เก็บ field ไว้ก่อน)
+  arrivedAt?: string            // ISO timestamp
+  dnId?: string                 // ผูก DeliveryNote (SD) ที่ออก
+}
+
+export type TripStatus = 'planned' | 'running' | 'done'
+
+export const TRIP_STATUS_CONFIG: Record<TripStatus, { label: string; badge: string }> = {
+  planned: { label: 'วางแผน',  badge: 'bg-sky-100 text-sky-700 border-sky-200' },
+  running: { label: 'กำลังวิ่ง', badge: 'bg-amber-100 text-amber-700 border-amber-200' },
+  done:    { label: 'จบรอบ',   badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+}
+
+export interface DailyTrip {
+  id: string                    // deterministic: dt_{date}_{roundId}
+  date: string                  // ISO yyyy-mm-dd
+  roundId: string
+  vehicleId: string             // override รถประจำรอบ ('' = ใช้ default ของรอบ)
+  driverId: string              // override คนขับ (backup swap)
+  helperId: string
+  status: TripStatus
+  note: string
+  stops: TripStop[]
+  createdBy: string
+  createdAt: string
+}
+
+// id ที่คาดเดาได้ → generate idempotent (regenerate ไม่สร้างซ้ำ — บทเรียน 409/410)
+export function dailyTripId(date: string, roundId: string): string {
+  return `dt_${date}_${roundId}`
+}
+
+// ============================================================
 // App User
 // ============================================================
 // 5 roles (69):
@@ -826,6 +890,7 @@ export type AuditEntityType =
   | 'quotation' | 'expense' | 'checklist' | 'user' | 'company' | 'linen_item' | 'linen_category' | 'session'
   | 'vehicle' // 423 — ฟลีตรถ (vehicle + odometer + maintenance)
   | 'round' | 'crew' // 423 Phase B — รอบเดินรถ + คนขับ/เด็กรถ
+  | 'daily_trip' // 423 Phase B2 — ใบงานรอบประจำวัน (Dispatch)
 
 export interface AuditLog {
   id: string

@@ -19,6 +19,7 @@ const ALLOWED_TABLES = new Set([
   'route_plans', // P5.2: ลำดับวิ่งต่อวัน
   'vehicles', 'odometer_logs', 'maintenance_records', // 423 Phase A: fleet
   'rounds', 'crew', // 423 Phase B: rounds + crew
+  'daily_trips', // 423 Phase B2: dispatch board
 ])
 
 interface DbRequest {
