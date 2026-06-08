@@ -22,6 +22,7 @@ import {
   BookOpen,
   Archive,
   Wrench,
+  Route,
   X,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
@@ -32,7 +33,7 @@ import { USER_ROLE_CONFIG, type UserRole } from '@/types'
 import {
   canViewLF, canViewSD, canViewCustomers, canViewBilling,
   canViewReports, canViewExpenses, canManageItems, canManageSettings,
-  canViewFleet,
+  canViewFleet, canManageRounds,
 } from '@/lib/permissions'
 import type { AppUser } from '@/types'
 
@@ -50,6 +51,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/items', label: 'รายการผ้า', icon: Package, guard: canManageItems },
   { href: '/dashboard/customers', label: 'ลูกค้า', icon: Building2, guard: canViewCustomers },
   { href: '/dashboard/logistics', label: 'ปฏิทินขนส่ง', icon: CalendarDays, guard: canViewSD },
+  { href: '/dashboard/rounds', label: 'รอบเดินรถ', icon: Route, guard: canManageRounds },
   { href: '/dashboard/fleet', label: 'ฟลีตรถ', icon: Wrench, guard: canViewFleet },
   { href: '/dashboard/billing?tab=quotation', label: 'ใบเสนอราคา (QT)', icon: FileText, guard: canViewBilling },
   { href: '/dashboard/linen-forms', label: '1. ใบส่งรับผ้า (LF)', icon: ClipboardList, guard: canViewLF },

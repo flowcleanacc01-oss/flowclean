@@ -231,6 +231,11 @@ export interface Customer {
   //   - 'aggregate' = ส่งรวมไม่แยกไซส์ (กรอก col2 ที่ group level)
   //   - 'per_row'   = ส่งแยกไซส์ (กรอก col2 ต่อ row ตามเดิม)
   aggregateSizeGroups?: AggregateSizeGroupConfig[]
+  // 423 Phase B — รอบประจำ (1 ลูกค้า 1 รอบ) + ลำดับวิ่ง default + หน้าต่างเวลา
+  roundId?: string              // รอบที่ลูกค้าผูกประจำ ('' = ยังไม่จัดรอบ)
+  routeSequence?: number        // ลำดับวิ่ง default ในรอบ (1,2,3…)
+  pickupWindowStart?: string    // หน้าต่างเวลาเข้ารับได้ 'HH:MM' ('' = ไม่จำกัด)
+  pickupWindowEnd?: string
 }
 
 // 317 Phase 1 — Aggregate Size Group Config (per customer, per group)
@@ -740,6 +745,50 @@ export const COMPLIANCE_STATUS_CONFIG: Record<ComplianceStatus, { label: string;
 }
 
 // ============================================================
+// 423 Phase B — Rounds + Crew (รอบเดินรถ + คนขับ/เด็กติดรถ)
+// ============================================================
+export interface Round {
+  id: string
+  code: string                  // V/SPA/SZH/AKARA/L7/SWD
+  name: string
+  startTime: string             // 'HH:MM' (เวลาออกรอบ)
+  endTime: string
+  defaultVehicleId: string      // รถประจำรอบ ('' = ไม่ระบุ)
+  defaultDriverId: string       // คนขับประจำ
+  defaultHelperId: string       // เด็กรถประจำ
+  color: string                 // hex สำหรับ badge/ปฏิทิน
+  sortOrder: number
+  isActive: boolean             // SZH = false (พักชั่วคราว)
+  note: string
+  createdAt: string
+}
+
+export type CrewRole = 'driver' | 'helper'
+export type CrewStatus = 'active' | 'standby' | 'leave'
+
+export interface Crew {
+  id: string
+  name: string
+  role: CrewRole
+  phone: string
+  status: CrewStatus            // standby = สำรอง (ใช้แทนเมื่อคนขาด)
+  defaultVehicleId: string      // รถที่ขับประจำ ('' = ไม่ระบุ)
+  note: string
+  createdAt: string
+}
+
+export const CREW_ROLE_LABELS: Record<CrewRole, string> = {
+  driver: 'คนขับ',
+  helper: 'เด็กติดรถ',
+}
+
+export const CREW_STATUS_CONFIG: Record<CrewStatus, { label: string; badge: string }> = {
+  active:  { label: 'พร้อมงาน', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  standby: { label: 'สำรอง',    badge: 'bg-amber-100 text-amber-700 border-amber-200' },
+  leave:   { label: 'ลา/หยุด',  badge: 'bg-slate-100 text-slate-500 border-slate-200' },
+}
+
+// ============================================================
 // App User
 // ============================================================
 // 5 roles (69):
@@ -776,6 +825,7 @@ export type AuditEntityType =
   | 'customer' | 'linen_form' | 'delivery_note' | 'billing' | 'tax_invoice'
   | 'quotation' | 'expense' | 'checklist' | 'user' | 'company' | 'linen_item' | 'linen_category' | 'session'
   | 'vehicle' // 423 — ฟลีตรถ (vehicle + odometer + maintenance)
+  | 'round' | 'crew' // 423 Phase B — รอบเดินรถ + คนขับ/เด็กรถ
 
 export interface AuditLog {
   id: string

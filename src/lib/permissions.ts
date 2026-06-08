@@ -55,6 +55,9 @@ export const canViewExpenses = (u: AppUser | null) => hasRole(u, ['accountant', 
 /** Fleet (423 — ฟลีตรถ + ประกัน/พ.ร.บ./ภาษี/ตรวจสภาพ + ซ่อมบำรุง) — Accountant + Admin */
 export const canViewFleet = (u: AppUser | null) => hasRole(u, ['accountant', 'admin'])
 
+/** Rounds (423 Phase B — รอบเดินรถ + คนขับ/เด็กรถ · งานวางแผน logistics) — Staff + Accountant + Admin */
+export const canManageRounds = (u: AppUser | null) => hasRole(u, ['staff', 'accountant', 'admin'])
+
 /** Items catalog — Admin only (เพราะกระทบราคา default) */
 export const canManageItems = (u: AppUser | null) => hasRole(u, ['admin'])
 

@@ -10,6 +10,7 @@ import type {
   CarryOverAdjustment, CarryOverMode, CarryOverAdjustmentHistory,
   LegacyDocument, ScheduleOverride, RoutePlan,
   Vehicle, OdometerLog, MaintenanceRecord,
+  Round, Crew,
 } from '@/types'
 import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES, DEFAULT_CUSTOMER_CATEGORIES } from '@/types'
 import {
@@ -187,6 +188,16 @@ interface StoreContextType {
   updateMaintenanceRecord: (id: string, updates: Partial<MaintenanceRecord>) => void
   deleteMaintenanceRecord: (id: string) => void
 
+  // 423 Phase B — Rounds + Crew
+  rounds: Round[]
+  addRound: (r: Omit<Round, 'id' | 'createdAt'>) => Round
+  updateRound: (id: string, updates: Partial<Round>) => void
+  deleteRound: (id: string) => void
+  crew: Crew[]
+  addCrew: (c: Omit<Crew, 'id' | 'createdAt'>) => Crew
+  updateCrew: (id: string, updates: Partial<Crew>) => void
+  deleteCrew: (id: string) => void
+
   // 255: Facet Vocabulary (Wizard 2.0 — admin-editable)
   facetVocab: FacetVocab
   updateFacetVocab: (vocab: FacetVocab) => Promise<void>
@@ -257,6 +268,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [odometerLogs, setOdometerLogs] = useState<OdometerLog[]>([])
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([])
+  // 423 Phase B — Rounds + Crew
+  const [rounds, setRounds] = useState<Round[]>([])
+  const [crew, setCrew] = useState<Crew[]>([])
   // 255: Facet Vocabulary — start with defaults, replaced after DB load
   const [facetVocab, setFacetVocab] = useState<FacetVocab>(DEFAULT_FACET_VOCAB)
   const [loaded, setLoaded] = useState(false)
@@ -348,6 +362,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setVehicles(data.vehicles || [])
     setOdometerLogs(data.odometerLogs || [])
     setMaintenanceRecords(data.maintenanceRecords || [])
+    setRounds(data.rounds || [])
+    setCrew(data.crew || [])
 
     // Build defaultPrices from linenItems
     if (data.linenItems.length > 0) {
@@ -1378,6 +1394,63 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dbSave(db.deleteMaintenanceRecordDB(id))
   }, [])
 
+  // ---- 423 Phase B: Rounds + Crew ----
+  const addRound = useCallback((r: Omit<Round, 'id' | 'createdAt'>): Round => {
+    const newR: Round = { ...r, id: genId(), createdAt: todayISO() }
+    setRounds(prev => [...prev, newR])
+    dbSave(db.insertRound(newR), () => {
+      setRounds(prev => prev.filter(x => x.id !== newR.id))
+    })
+    logAudit('create', 'round', newR.id, `${newR.code} ${newR.name}`)
+    return newR
+  }, [logAudit])
+
+  const updateRound = useCallback((id: string, updates: Partial<Round>) => {
+    setRounds(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('update', 'round', id, old ? `${old.code} ${old.name}` : id)
+      return prev.map(x => x.id === id ? { ...x, ...updates } : x)
+    })
+    dbSave(db.updateRoundDB(id, updates))
+  }, [logAudit])
+
+  const deleteRound = useCallback((id: string) => {
+    setRounds(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('delete', 'round', id, old ? `${old.code} ${old.name}` : id)
+      return prev.filter(x => x.id !== id)
+    })
+    dbSave(db.deleteRoundDB(id))
+  }, [logAudit])
+
+  const addCrew = useCallback((c: Omit<Crew, 'id' | 'createdAt'>): Crew => {
+    const newC: Crew = { ...c, id: genId(), createdAt: todayISO() }
+    setCrew(prev => [...prev, newC])
+    dbSave(db.insertCrew(newC), () => {
+      setCrew(prev => prev.filter(x => x.id !== newC.id))
+    })
+    logAudit('create', 'crew', newC.id, newC.name)
+    return newC
+  }, [logAudit])
+
+  const updateCrew = useCallback((id: string, updates: Partial<Crew>) => {
+    setCrew(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('update', 'crew', id, old?.name || id)
+      return prev.map(x => x.id === id ? { ...x, ...updates } : x)
+    })
+    dbSave(db.updateCrewDB(id, updates))
+  }, [logAudit])
+
+  const deleteCrew = useCallback((id: string) => {
+    setCrew(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('delete', 'crew', id, old?.name || id)
+      return prev.filter(x => x.id !== id)
+    })
+    dbSave(db.deleteCrewDB(id))
+  }, [logAudit])
+
   // ---- Computed Helpers ----
 
   // 255 Phase 1.b: Facet Vocabulary update / reset
@@ -1567,6 +1640,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       vehicles, addVehicle, updateVehicle, deleteVehicle,
       odometerLogs, addOdometerLog, deleteOdometerLog,
       maintenanceRecords, addMaintenanceRecord, updateMaintenanceRecord, deleteMaintenanceRecord,
+      rounds, addRound, updateRound, deleteRound,
+      crew, addCrew, updateCrew, deleteCrew,
       facetVocab, updateFacetVocab, resetFacetVocab,
       getCarryOver, getDiscrepancies,
     }}>

@@ -18,6 +18,7 @@ const ALLOWED_TABLES = new Set([
   'schedule_overrides', // 311 P2: schedule overrides (ลืม allowlist ตอน P2 → writes fail rollback)
   'route_plans', // P5.2: ลำดับวิ่งต่อวัน
   'vehicles', 'odometer_logs', 'maintenance_records', // 423 Phase A: fleet
+  'rounds', 'crew', // 423 Phase B: rounds + crew
 ])
 
 interface DbRequest {

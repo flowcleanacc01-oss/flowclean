@@ -5,6 +5,7 @@ import type {
   CustomerCategoryDef, ProductChecklist, AuditLog, CarryOverAdjustment,
   LegacyDocument, ScheduleOverride, RoutePlan,
   Vehicle, OdometerLog, MaintenanceRecord,
+  Round, Crew,
 } from '@/types'
 
 // ============================================================
@@ -190,6 +191,16 @@ const FIELD_MAP: Record<string, string> = {
   photoPath: 'photo_path',
   nextDueOdometer: 'next_due_odometer',
   expenseId: 'expense_id',
+  // 423 Phase B — Rounds + Crew + customer round fields
+  startTime: 'start_time',
+  endTime: 'end_time',
+  defaultVehicleId: 'default_vehicle_id',
+  defaultDriverId: 'default_driver_id',
+  defaultHelperId: 'default_helper_id',
+  roundId: 'round_id',
+  routeSequence: 'route_sequence',
+  pickupWindowStart: 'pickup_window_start',
+  pickupWindowEnd: 'pickup_window_end',
   // facets stays the same (single word, no transformation needed)
 }
 
@@ -847,6 +858,42 @@ export async function deleteMaintenanceRecordDB(id: string): Promise<void> {
 }
 
 // ============================================================
+// 423 Phase B — Rounds + Crew
+// ============================================================
+
+export async function fetchRounds(): Promise<Round[]> {
+  return fetchAllPaginated<Round>('rounds', 'sort_order', true)
+}
+
+export async function insertRound(r: Round): Promise<void> {
+  await dbWrite({ table: 'rounds', operation: 'insert', data: toSnakeCase(r as unknown as Record<string, unknown>) })
+}
+
+export async function updateRoundDB(id: string, updates: Partial<Round>): Promise<void> {
+  await dbWrite({ table: 'rounds', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
+}
+
+export async function deleteRoundDB(id: string): Promise<void> {
+  await dbWrite({ table: 'rounds', operation: 'delete', match: { column: 'id', value: id } })
+}
+
+export async function fetchCrew(): Promise<Crew[]> {
+  return fetchAllPaginated<Crew>('crew', 'name', true)
+}
+
+export async function insertCrew(c: Crew): Promise<void> {
+  await dbWrite({ table: 'crew', operation: 'insert', data: toSnakeCase(c as unknown as Record<string, unknown>) })
+}
+
+export async function updateCrewDB(id: string, updates: Partial<Crew>): Promise<void> {
+  await dbWrite({ table: 'crew', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
+}
+
+export async function deleteCrewDB(id: string): Promise<void> {
+  await dbWrite({ table: 'crew', operation: 'delete', match: { column: 'id', value: id } })
+}
+
+// ============================================================
 // Default Prices — stored as linen_items.default_price
 // ============================================================
 
@@ -919,6 +966,8 @@ export async function fetchAllData() {
     withRetry(() => fetchVehicles(), 'vehicles').catch(() => [] as Vehicle[]),
     withRetry(() => fetchOdometerLogs(), 'odometerLogs').catch(() => [] as OdometerLog[]),
     withRetry(() => fetchMaintenanceRecords(), 'maintenanceRecords').catch(() => [] as MaintenanceRecord[]),
+    withRetry(() => fetchRounds(), 'rounds').catch(() => [] as Round[]),
+    withRetry(() => fetchCrew(), 'crew').catch(() => [] as Crew[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -936,7 +985,7 @@ export async function fetchAllData() {
     taxInvoices, quotations, expenses, users, companyInfo,
     linenItems, checklists, linenCategories, customerCategories,
     carryOverAdjustments, receipts, legacyDocuments, scheduleOverrides, routePlans,
-    vehicles, odometerLogs, maintenanceRecords,
+    vehicles, odometerLogs, maintenanceRecords, rounds, crew,
   ] = [
     val(results[0], [] as Customer[]),
     val(results[1], [] as LinenForm[]),
@@ -959,6 +1008,8 @@ export async function fetchAllData() {
     val(results[18], [] as Vehicle[]),
     val(results[19], [] as OdometerLog[]),
     val(results[20], [] as MaintenanceRecord[]),
+    val(results[21], [] as Round[]),
+    val(results[22], [] as Crew[]),
   ]
 
   return {
@@ -983,6 +1034,8 @@ export async function fetchAllData() {
     vehicles,
     odometerLogs,
     maintenanceRecords,
+    rounds,
+    crew,
     _partialFailures,
   }
 }
