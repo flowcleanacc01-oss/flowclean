@@ -664,7 +664,7 @@ export interface Expense {
   vehicleId?: string // 423 — ผูกค่าซ่อมบำรุงเข้ารถคันไหน (optional, ใช้เมื่อ category='maintenance')
 }
 
-export type ExpenseCategory = 'chemicals' | 'water' | 'electricity' | 'labor' | 'transport' | 'maintenance' | 'rent' | 'other'
+export type ExpenseCategory = 'chemicals' | 'water' | 'electricity' | 'labor' | 'transport' | 'maintenance' | 'rent' | 'fuel' | 'other'
 
 export const EXPENSE_CATEGORIES: Record<ExpenseCategory, { label: string; icon: string }> = {
   chemicals: { label: 'น้ำยาซักผ้า/เคมี', icon: '🧪' },
@@ -674,6 +674,7 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategory, { label: string; icon: 
   transport: { label: 'ค่าขนส่ง', icon: '🚚' },
   maintenance: { label: 'ซ่อมบำรุง', icon: '🔧' },
   rent: { label: 'ค่าเช่า', icon: '🏭' },
+  fuel: { label: 'ค่าน้ำมันรถ', icon: '⛽' },
   other: { label: 'อื่นๆ', icon: '📦' },
 }
 
@@ -789,6 +790,44 @@ export const CREW_STATUS_CONFIG: Record<CrewStatus, { label: string; badge: stri
 }
 
 // ============================================================
+// 423 งานติ๊ด — Fuel Log (บันทึกการเติมน้ำมัน + เบิกเงินคนขับ + หลักฐาน 3 รูป)
+// ============================================================
+export type FuelPaidBy = 'driver' | 'company'
+
+export const FUEL_PAID_BY_CONFIG: Record<FuelPaidBy, { label: string }> = {
+  driver:  { label: 'คนขับสำรองจ่าย' },
+  company: { label: 'บริษัทจ่ายตรง' },
+}
+
+// ประเภทน้ำมัน (preset + กรอกเองได้) — รถ Hilux Revo = ดีเซล
+export const FUEL_TYPES = ['ดีเซล', 'ดีเซล B7', 'ดีเซลพรีเมียม', 'เบนซิน 95', 'แก๊สโซฮอล์ 95', 'แก๊สโซฮอล์ E20', 'อื่นๆ'] as const
+
+export interface FuelLog {
+  id: string
+  vehicleId: string
+  date: string                  // ISO yyyy-mm-dd
+  liters: number
+  pricePerLiter: number         // บาท/ลิตร (= amount / liters)
+  amount: number                // ยอดเงิน (บาท)
+  odometer: number              // เลขไมล์ตอนเติม (0 = ไม่ระบุ) → คำนวณ km/ลิตร
+  driverId: string              // คนขับ/คนจ่าย (crew id) — track เบิกคืน ('' = ไม่ระบุ)
+  station: string               // ปั๊ม
+  fuelType: string
+  taxInvoiceNumber: string      // เลขใบกำกับภาษี (เอกสารบัญชี)
+  paidBy: FuelPaidBy
+  isReimbursed: boolean         // เบิกคืนคนขับแล้ว (ใช้กับ paidBy='driver')
+  reimbursedDate: string
+  expenseId: string             // ผูก Expense หมวด fuel ('' = ไม่ผูก)
+  // หลักฐาน 3 รูป (Supabase Storage path · กันทุจริต) — '' = ไม่มี
+  receiptPhotoPath: string      // ใบกำกับภาษี
+  slipPhotoPath: string         // slip โอนเงิน
+  gaugePhotoPath: string        // หน้าปัดเข็มน้ำมันหลังเติม
+  note: string
+  createdBy: string
+  createdAt: string
+}
+
+// ============================================================
 // 423 Phase B2 — Dispatch Board (ใบงานรอบประจำวัน / Daily Trip)
 // ============================================================
 // TripStop มาจากไหน:
@@ -891,6 +930,7 @@ export type AuditEntityType =
   | 'vehicle' // 423 — ฟลีตรถ (vehicle + odometer + maintenance)
   | 'round' | 'crew' // 423 Phase B — รอบเดินรถ + คนขับ/เด็กรถ
   | 'daily_trip' // 423 Phase B2 — ใบงานรอบประจำวัน (Dispatch)
+  | 'fuel_log' // 423 — บันทึกการเติมน้ำมัน
 
 export interface AuditLog {
   id: string

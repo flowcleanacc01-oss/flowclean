@@ -10,12 +10,13 @@ import { useStore } from '@/lib/store'
 import { canViewFleet } from '@/lib/permissions'
 import { cn, formatDate, formatNumber, sanitizeNumber, todayISO } from '@/lib/utils'
 import { blockNumberArrowKeys } from '@/lib/modal-nav'
-import { COMPLIANCE_STATUS_CONFIG, MAINTENANCE_TYPES } from '@/types'
-import type { Vehicle, ComplianceStatus } from '@/types'
+import { fuelEfficiencyMap, isEfficiencyAbnormal, pendingReimbursements } from '@/lib/fuel'
+import { COMPLIANCE_STATUS_CONFIG, MAINTENANCE_TYPES, FUEL_TYPES, FUEL_PAID_BY_CONFIG } from '@/types'
+import type { Vehicle, ComplianceStatus, FuelPaidBy } from '@/types'
 import Modal from '@/components/Modal'
 import {
   Plus, Wrench, Gauge, ShieldCheck, Camera, Trash2, Pencil,
-  AlertTriangle, Car,
+  AlertTriangle, Car, Fuel, Receipt, Banknote, Check,
 } from 'lucide-react'
 
 const NEAR_DAYS = 7   // เตือนล่วงหน้า (วัน) ก่อนประกัน/พ.ร.บ./ภาษี/ตรวจสภาพหมด (ติ๊ดเลือก)
@@ -56,6 +57,7 @@ const BLANK_VEHICLE: Omit<Vehicle, 'id' | 'createdAt'> = {
 
 export default function FleetPage() {
   const { currentUser, vehicles, addVehicle, updateVehicle, deleteVehicle } = useStore()
+  const [tab, setTab] = useState<'fleet' | 'fuel'>('fleet')
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [odometerVehicle, setOdometerVehicle] = useState<Vehicle | null>(null)
@@ -113,15 +115,30 @@ export default function FleetPage() {
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <Wrench className="w-6 h-6 text-[#1B3A5C]" /> ฟลีตรถ
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">รถ {vehicles.length} คัน · ประกัน/พ.ร.บ./ภาษี/ตรวจสภาพ + บำรุงเชิงป้องกัน</p>
+          <p className="text-slate-500 text-sm mt-0.5">รถ {vehicles.length} คัน · ประกัน/พ.ร.บ./ภาษี/ตรวจสภาพ + บำรุง + เติมน้ำมัน</p>
         </div>
-        <button
-          onClick={() => { setEditingVehicle(null); setShowForm(true) }}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg text-sm font-semibold hover:bg-[#2bb8b8] transition-colors shadow-sm self-start"
-        >
-          <Plus className="w-4 h-4" /> เพิ่มรถ
-        </button>
+        {tab === 'fleet' && (
+          <button
+            onClick={() => { setEditingVehicle(null); setShowForm(true) }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg text-sm font-semibold hover:bg-[#2bb8b8] transition-colors shadow-sm self-start"
+          >
+            <Plus className="w-4 h-4" /> เพิ่มรถ
+          </button>
+        )}
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-slate-200">
+        {([['fleet', 'รถ & บำรุง'], ['fuel', 'เติมน้ำมัน']] as const).map(([k, label]) => (
+          <button key={k} onClick={() => setTab(k)}
+            className={cn('px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors inline-flex items-center gap-1.5',
+              tab === k ? 'border-[#3DD8D8] text-[#1B3A5C]' : 'border-transparent text-slate-400 hover:text-slate-600')}>
+            {k === 'fleet' ? <Car className="w-4 h-4" /> : <Fuel className="w-4 h-4" />}{label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'fuel' ? <FuelTab /> : <>
 
       {/* Alert strip */}
       {alerts.length > 0 && (
@@ -169,6 +186,7 @@ export default function FleetPage() {
           ))}
         </div>
       )}
+      </>}
 
       {showForm && (
         <VehicleFormModal
@@ -622,6 +640,280 @@ function MaintenanceModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () 
 }
 
 // ============================================================
+// 423 งานติ๊ด — Tab เติมน้ำมัน (Fuel Log)
+// ============================================================
+function FuelTab() {
+  const { fuelLogs, vehicles, crew, updateFuelLog, deleteFuelLog } = useStore()
+  const [showForm, setShowForm] = useState(false)
+  const [filterVehicle, setFilterVehicle] = useState('')
+
+  const vehById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles])
+  const crewById = useMemo(() => new Map(crew.map(c => [c.id, c])), [crew])
+  const effMap = useMemo(() => fuelEfficiencyMap(fuelLogs), [fuelLogs])
+  const pending = useMemo(() => pendingReimbursements(fuelLogs), [fuelLogs])
+
+  const rows = useMemo(
+    () => [...fuelLogs]
+      .filter(f => !filterVehicle || f.vehicleId === filterVehicle)
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
+    [fuelLogs, filterVehicle],
+  )
+
+  const driverName = (id: string) => crewById.get(id)?.name || '—'
+
+  return (
+    <div className="space-y-4">
+      {/* ค้างเบิกคืนคนขับ */}
+      {pending.total > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
+          <div className="bg-amber-50 px-4 py-2.5 flex items-center gap-2 border-b border-amber-100">
+            <Banknote className="w-4 h-4 text-amber-600" />
+            <span className="text-sm font-semibold text-amber-800">ค้างเบิกคืนคนขับ</span>
+            <span className="ml-auto text-base font-bold text-amber-700">฿{formatNumber(pending.total)}</span>
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {pending.byDriver.map(p => (
+              <li key={p.driverId} className="px-4 py-2 flex items-center gap-3 text-sm">
+                <span className="font-medium text-slate-700 flex-1">{driverName(p.driverId)}</span>
+                <span className="text-xs text-slate-400">{p.count} รายการ</span>
+                <span className="font-semibold text-slate-700 w-24 text-right">฿{formatNumber(p.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={filterVehicle} onChange={e => setFilterVehicle(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8] bg-white">
+          <option value="">ทุกคัน</option>
+          {[...vehicles].sort((a, b) => a.code.localeCompare(b.code, 'th')).map(v => <option key={v.id} value={v.id}>คัน {v.code}</option>)}
+        </select>
+        <span className="text-xs text-slate-400">{rows.length} รายการ</span>
+        <button onClick={() => setShowForm(true)}
+          className="ml-auto inline-flex items-center gap-2 px-4 py-2.5 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg text-sm font-semibold hover:bg-[#2bb8b8] transition-colors">
+          <Plus className="w-4 h-4" /> บันทึกการเติม
+        </button>
+      </div>
+
+      {/* list */}
+      {rows.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
+          <Fuel className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-500">ยังไม่มีบันทึกการเติมน้ำมัน — กด “บันทึกการเติม”</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {rows.map(f => {
+            const v = vehById.get(f.vehicleId)
+            const eff = effMap.get(f.id)
+            const abnormal = eff != null && isEfficiencyAbnormal(eff)
+            const photos: [string, string][] = [
+              [f.receiptPhotoPath, 'ใบกำกับ'], [f.slipPhotoPath, 'สลิป'], [f.gaugePhotoPath, 'หน้าปัด'],
+            ]
+            return (
+              <div key={f.id} className="bg-white rounded-xl border border-slate-200 p-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-slate-400 w-20 shrink-0">{formatDate(f.date)}</span>
+                  <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-[#1B3A5C] text-white shrink-0">{v?.code || '?'}</span>
+                  <span className="font-semibold text-slate-700">฿{formatNumber(f.amount)}</span>
+                  <span className="text-xs text-slate-400">· {f.liters} ล. (฿{f.pricePerLiter.toFixed(2)}/ล.)</span>
+                  {eff != null && (
+                    <span className={cn('text-xs px-1.5 py-0.5 rounded border', abnormal ? 'bg-amber-50 text-amber-700 border-amber-200' : 'text-slate-400 border-slate-200')}
+                      title={abnormal ? 'อัตราสิ้นเปลืองผิดปกติ — น่าตรวจสอบ' : undefined}>
+                      {eff.toFixed(1)} กม./ล.{abnormal ? ' ⚠️' : ''}
+                    </span>
+                  )}
+                  <span className="flex-1" />
+                  {f.paidBy === 'driver' && (
+                    f.isReimbursed
+                      ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">เบิกแล้ว</span>
+                      : <button onClick={() => updateFuelLog(f.id, { isReimbursed: true, reimbursedDate: todayISO() })}
+                          className="text-[10px] px-2 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-200 inline-flex items-center gap-1">
+                          <Check className="w-3 h-3" /> ค้างเบิก — กดเมื่อจ่ายคืน
+                        </button>
+                  )}
+                  <button onClick={() => { if (confirm('ลบรายการเติมน้ำมันนี้?')) deleteFuelLog(f.id) }} aria-label="ลบ" className="text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+                <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500 flex-wrap">
+                  {f.driverId && <span>👤 {driverName(f.driverId)}</span>}
+                  {f.station && <span>⛽ {f.station}</span>}
+                  {f.odometer > 0 && <span>{formatNumber(f.odometer)} กม.</span>}
+                  {f.taxInvoiceNumber && <span className="inline-flex items-center gap-0.5"><Receipt className="w-3 h-3" />{f.taxInvoiceNumber}</span>}
+                  {f.expenseId && <span className="text-emerald-600">บันทึกรายจ่ายแล้ว</span>}
+                  <span className="flex-1" />
+                  {photos.filter(([p]) => p).map(([p, label]) => (
+                    <button key={label} onClick={() => viewFleetPhoto(p)} className="text-[#1B3A5C] hover:underline inline-flex items-center gap-0.5">
+                      <Camera className="w-3 h-3" />{label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {showForm && <FuelFormModal onClose={() => setShowForm(false)} />}
+    </div>
+  )
+}
+
+function FuelFormModal({ onClose }: { onClose: () => void }) {
+  const { vehicles, crew, addFuelLog, addExpense } = useStore()
+  const activeVehicles = useMemo(() => [...vehicles].filter(v => v.isActive).sort((a, b) => a.code.localeCompare(b.code, 'th')), [vehicles])
+  const drivers = useMemo(() => [...crew].sort((a, b) => a.name.localeCompare(b.name, 'th')), [crew])
+
+  const [vehicleId, setVehicleId] = useState(activeVehicles[0]?.id || '')
+  const [date, setDate] = useState(todayISO())
+  const [liters, setLiters] = useState(0)
+  const [amount, setAmount] = useState(0)
+  const [odometer, setOdometer] = useState(0)
+  const [driverId, setDriverId] = useState('')
+  const [station, setStation] = useState('')
+  const [fuelType, setFuelType] = useState<string>(FUEL_TYPES[0])
+  const [taxInvoiceNumber, setTaxInvoiceNumber] = useState('')
+  const [paidBy, setPaidBy] = useState<FuelPaidBy>('driver')
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [slipFile, setSlipFile] = useState<File | null>(null)
+  const [gaugeFile, setGaugeFile] = useState<File | null>(null)
+  const [asExpense, setAsExpense] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  const pricePerLiter = liters > 0 ? amount / liters : 0
+
+  const save = async () => {
+    if (!vehicleId) { alert('กรุณาเลือกคันรถ'); return }
+    if (amount <= 0) { alert('กรุณากรอกยอดเงิน'); return }
+    setSaving(true)
+    const up = async (file: File | null, cat: string): Promise<string> => {
+      if (!file) return ''
+      try { return await uploadFleetPhoto(file, vehicleId, cat) }
+      catch { return '' } // อัปไม่ได้ = บันทึกข้อมูลต่อ (ไม่มีรูป)
+    }
+    const [receiptPhotoPath, slipPhotoPath, gaugePhotoPath] = await Promise.all([
+      up(receiptFile, 'fuel-receipt'), up(slipFile, 'fuel-slip'), up(gaugeFile, 'fuel-gauge'),
+    ])
+    let expenseId = ''
+    if (asExpense && amount > 0) {
+      const veh = vehicles.find(v => v.id === vehicleId)
+      const exp = addExpense({
+        date, category: 'fuel', amount,
+        description: `น้ำมัน ${fuelType}${liters > 0 ? ` ${liters} ล.` : ''} คัน ${veh?.code || ''}${station ? ` @${station}` : ''}`,
+        reference: taxInvoiceNumber, vehicleId,
+      })
+      expenseId = exp.id
+    }
+    addFuelLog({
+      vehicleId, date, liters, pricePerLiter, amount, odometer, driverId, station, fuelType,
+      taxInvoiceNumber, paidBy, isReimbursed: false, reimbursedDate: '', expenseId,
+      receiptPhotoPath, slipPhotoPath, gaugePhotoPath, note: '',
+    })
+    setSaving(false)
+    onClose()
+  }
+
+  const fileRow = (label: string, hint: string, file: File | null, setter: (f: File | null) => void) => (
+    <div>
+      <label className={labelCls}>{label} <span className="text-slate-400">{hint}</span></label>
+      <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-slate-300 rounded-lg text-sm text-slate-500 cursor-pointer hover:border-[#3DD8D8]">
+        <Camera className="w-4 h-4 shrink-0" />
+        <span className="truncate">{file ? file.name : 'เลือกรูป...'}</span>
+        <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={e => setter(e.target.files?.[0] || null)} />
+      </label>
+    </div>
+  )
+
+  return (
+    <Modal open onClose={onClose} title="บันทึกการเติมน้ำมัน" size="lg" closeLabel="cancel">
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label className={labelCls}>คันรถ *</label>
+            <select className={inputCls} value={vehicleId} onChange={e => setVehicleId(e.target.value)}>
+              {activeVehicles.length === 0 && <option value="">— ไม่มีรถ —</option>}
+              {activeVehicles.map(v => <option key={v.id} value={v.id}>คัน {v.code}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>วันที่</label>
+            <input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>ยอดเงิน (บาท) *</label>
+            <input type="number" className={inputCls} value={amount || ''} onChange={e => setAmount(sanitizeNumber(e.target.value))} onKeyDown={blockNumberArrowKeys} onFocus={e => e.currentTarget.select()} />
+          </div>
+          <div>
+            <label className={labelCls}>ลิตร</label>
+            <input type="number" className={inputCls} value={liters || ''} onChange={e => setLiters(sanitizeNumber(e.target.value))} onKeyDown={blockNumberArrowKeys} onFocus={e => e.currentTarget.select()} />
+          </div>
+        </div>
+        {pricePerLiter > 0 && <p className="text-xs text-slate-500 -mt-1">≈ ฿{pricePerLiter.toFixed(2)} / ลิตร</p>}
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label className={labelCls}>เลขไมล์ตอนเติม</label>
+            <input type="number" className={inputCls} value={odometer || ''} onChange={e => setOdometer(sanitizeNumber(e.target.value))} onKeyDown={blockNumberArrowKeys} onFocus={e => e.currentTarget.select()} />
+          </div>
+          <div>
+            <label className={labelCls}>ประเภทน้ำมัน</label>
+            <select className={inputCls} value={fuelType} onChange={e => setFuelType(e.target.value)}>
+              {FUEL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>ปั๊ม</label>
+            <input className={inputCls} value={station} onChange={e => setStation(e.target.value)} placeholder="ปตท. ยานนาวา" />
+          </div>
+          <div>
+            <label className={labelCls}>เลขใบกำกับภาษี</label>
+            <input className={inputCls} value={taxInvoiceNumber} onChange={e => setTaxInvoiceNumber(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>คนขับ/คนจ่าย</label>
+            <select className={inputCls} value={driverId} onChange={e => setDriverId(e.target.value)}>
+              <option value="">— ไม่ระบุ —</option>
+              {drivers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>จ่ายโดย</label>
+            <select className={inputCls} value={paidBy} onChange={e => setPaidBy(e.target.value as FuelPaidBy)}>
+              {(Object.keys(FUEL_PAID_BY_CONFIG) as FuelPaidBy[]).map(k => <option key={k} value={k}>{FUEL_PAID_BY_CONFIG[k].label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* หลักฐาน 3 รูป */}
+        <div className="rounded-xl border border-slate-200 p-3 space-y-3 bg-slate-50/40">
+          <p className="text-xs font-semibold text-slate-500">หลักฐาน (ไม่บังคับ — กันทุจริต)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {fileRow('ใบกำกับภาษี', '', receiptFile, setReceiptFile)}
+            {fileRow('สลิปโอนเงิน', '', slipFile, setSlipFile)}
+            {fileRow('หน้าปัดเข็มน้ำมัน', '(หลังเติม)', gaugeFile, setGaugeFile)}
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" checked={asExpense} onChange={e => setAsExpense(e.target.checked)} className="rounded accent-[#1B3A5C]" />
+          บันทึกเป็นรายจ่าย (หมวดค่าน้ำมันรถ) อัตโนมัติ
+        </label>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium rounded-lg bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors disabled:opacity-60">
+            {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ============================================================
 // Storage helpers — รูปหน้าปัด (Supabase Storage ผ่าน /api/fleet-photo)
 // ============================================================
 function sessionUserId(): string {
@@ -631,10 +923,11 @@ function sessionUserId(): string {
   } catch { return '' }
 }
 
-async function uploadFleetPhoto(file: File, vehicleId: string): Promise<string> {
+async function uploadFleetPhoto(file: File, vehicleId: string, category?: string): Promise<string> {
   const fd = new FormData()
   fd.append('file', file)
   fd.append('vehicleId', vehicleId)
+  if (category) fd.append('category', category)
   const res = await fetch('/api/fleet-photo', { method: 'POST', headers: { 'x-fc-session': sessionUserId() }, body: fd })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.error || 'upload failed')

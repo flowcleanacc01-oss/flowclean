@@ -33,6 +33,8 @@ export async function POST(req: NextRequest) {
     const form = await req.formData()
     const file = form.get('file')
     const vehicleId = String(form.get('vehicleId') || '').replace(/[^a-zA-Z0-9_-]/g, '') // กัน path traversal
+    // category (optional) — แยกโฟลเดอร์รูป เช่น fuel-receipt/fuel-slip/fuel-gauge (กันชนกับรูปหน้าปัด odometer)
+    const category = String(form.get('category') || '').replace(/[^a-zA-Z0-9_-]/g, '')
     if (!(file instanceof File) || !vehicleId) {
       return NextResponse.json({ error: 'ต้องมี file + vehicleId' }, { status: 400 })
     }
@@ -41,7 +43,10 @@ export async function POST(req: NextRequest) {
     if (file.size > MAX_BYTES) return NextResponse.json({ error: 'ไฟล์ใหญ่เกิน 10MB' }, { status: 400 })
 
     await ensureBucket()
-    const path = `${vehicleId}/${Date.now()}.${ext}`
+    // random suffix กันชนเมื่ออัปหลายรูปใน ms เดียวกัน (fuel = 3 รูปพร้อมกัน)
+    const rand = Math.random().toString(36).slice(2, 8)
+    const prefix = category ? `${vehicleId}/${category}` : vehicleId
+    const path = `${prefix}/${Date.now()}-${rand}.${ext}`
     const buf = Buffer.from(await file.arrayBuffer())
     const { error } = await supabaseAdmin.storage.from(BUCKET).upload(path, buf, {
       contentType: file.type,

@@ -10,7 +10,7 @@ import type {
   CarryOverAdjustment, CarryOverMode, CarryOverAdjustmentHistory,
   LegacyDocument, ScheduleOverride, RoutePlan,
   Vehicle, OdometerLog, MaintenanceRecord,
-  Round, Crew, DailyTrip,
+  Round, Crew, DailyTrip, FuelLog,
 } from '@/types'
 import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES, DEFAULT_CUSTOMER_CATEGORIES } from '@/types'
 import {
@@ -204,6 +204,12 @@ interface StoreContextType {
   updateDailyTrip: (id: string, updates: Partial<DailyTrip>) => void
   deleteDailyTrip: (id: string) => void
 
+  // 423 งานติ๊ด — Fuel Logs (บันทึกการเติมน้ำมัน)
+  fuelLogs: FuelLog[]
+  addFuelLog: (f: Omit<FuelLog, 'id' | 'createdBy' | 'createdAt'>) => FuelLog
+  updateFuelLog: (id: string, updates: Partial<FuelLog>) => void
+  deleteFuelLog: (id: string) => void
+
   // 255: Facet Vocabulary (Wizard 2.0 — admin-editable)
   facetVocab: FacetVocab
   updateFacetVocab: (vocab: FacetVocab) => Promise<void>
@@ -278,6 +284,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [rounds, setRounds] = useState<Round[]>([])
   const [crew, setCrew] = useState<Crew[]>([])
   const [dailyTrips, setDailyTrips] = useState<DailyTrip[]>([]) // B2 — Dispatch Board
+  const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([])       // งานติ๊ด — เติมน้ำมัน
   // 255: Facet Vocabulary — start with defaults, replaced after DB load
   const [facetVocab, setFacetVocab] = useState<FacetVocab>(DEFAULT_FACET_VOCAB)
   const [loaded, setLoaded] = useState(false)
@@ -372,6 +379,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setRounds(data.rounds || [])
     setCrew(data.crew || [])
     setDailyTrips(data.dailyTrips || [])
+    setFuelLogs(data.fuelLogs || [])
 
     // Build defaultPrices from linenItems
     if (data.linenItems.length > 0) {
@@ -1492,6 +1500,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dbSave(db.deleteDailyTripDB(id))
   }, [logAudit])
 
+  // ---- 423 งานติ๊ด: Fuel Logs (บันทึกการเติมน้ำมัน) ----
+  const addFuelLog = useCallback((f: Omit<FuelLog, 'id' | 'createdBy' | 'createdAt'>): FuelLog => {
+    const newF: FuelLog = { ...f, id: genId(), createdBy: currentUserRef.current?.id || 'unknown', createdAt: new Date().toISOString() }
+    setFuelLogs(prev => [newF, ...prev])
+    dbSave(db.insertFuelLog(newF), () => {
+      setFuelLogs(prev => prev.filter(x => x.id !== newF.id))
+    })
+    // sync เลขไมล์เข้า vehicle ถ้าไมล์ตอนเติม > เดิม (อ่าน ref กัน closure-stale) — เงียบ ไม่ log ซ้ำ
+    const veh = vehiclesRef.current.find(x => x.id === f.vehicleId)
+    if (veh && f.odometer > veh.currentOdometer) {
+      setVehicles(prev => prev.map(x => x.id === f.vehicleId ? { ...x, currentOdometer: f.odometer } : x))
+      dbSave(db.updateVehicleDB(f.vehicleId, { currentOdometer: f.odometer }))
+    }
+    logAudit('create', 'fuel_log', newF.id, `เติมน้ำมัน ${f.liters} ลิตร ${f.amount.toLocaleString()} บาท`)
+    return newF
+  }, [logAudit])
+
+  const updateFuelLog = useCallback((id: string, updates: Partial<FuelLog>) => {
+    setFuelLogs(prev => prev.map(x => x.id === id ? { ...x, ...updates } : x))
+    dbSave(db.updateFuelLogDB(id, updates))
+  }, [])
+
+  const deleteFuelLog = useCallback((id: string) => {
+    setFuelLogs(prev => prev.filter(x => x.id !== id))
+    dbSave(db.deleteFuelLogDB(id))
+    logAudit('delete', 'fuel_log', id, id)
+  }, [logAudit])
+
   // ---- Computed Helpers ----
 
   // 255 Phase 1.b: Facet Vocabulary update / reset
@@ -1684,6 +1720,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       rounds, addRound, updateRound, deleteRound,
       crew, addCrew, updateCrew, deleteCrew,
       dailyTrips, addDailyTrips, updateDailyTrip, deleteDailyTrip,
+      fuelLogs, addFuelLog, updateFuelLog, deleteFuelLog,
       facetVocab, updateFacetVocab, resetFacetVocab,
       getCarryOver, getDiscrepancies,
     }}>

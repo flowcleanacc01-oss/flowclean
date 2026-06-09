@@ -20,6 +20,7 @@ const ALLOWED_TABLES = new Set([
   'vehicles', 'odometer_logs', 'maintenance_records', // 423 Phase A: fleet
   'rounds', 'crew', // 423 Phase B: rounds + crew
   'daily_trips', // 423 Phase B2: dispatch board
+  'fuel_logs', // 423 งานติ๊ด: บันทึกการเติมน้ำมัน
 ])
 
 interface DbRequest {

@@ -5,7 +5,7 @@ import type {
   CustomerCategoryDef, ProductChecklist, AuditLog, CarryOverAdjustment,
   LegacyDocument, ScheduleOverride, RoutePlan,
   Vehicle, OdometerLog, MaintenanceRecord,
-  Round, Crew, DailyTrip,
+  Round, Crew, DailyTrip, FuelLog,
 } from '@/types'
 
 // ============================================================
@@ -204,6 +204,16 @@ const FIELD_MAP: Record<string, string> = {
   // 423 Phase B2 — Daily Trip (dispatch). stops[] = JSONB → inner fields ไม่ผ่าน map
   driverId: 'driver_id',
   helperId: 'helper_id',
+  // 423 งานติ๊ด — Fuel Log
+  pricePerLiter: 'price_per_liter',
+  fuelType: 'fuel_type',
+  taxInvoiceNumber: 'tax_invoice_number',
+  paidBy: 'paid_by',
+  isReimbursed: 'is_reimbursed',
+  reimbursedDate: 'reimbursed_date',
+  receiptPhotoPath: 'receipt_photo_path',
+  slipPhotoPath: 'slip_photo_path',
+  gaugePhotoPath: 'gauge_photo_path',
   // facets stays the same (single word, no transformation needed)
 }
 
@@ -917,6 +927,26 @@ export async function deleteDailyTripDB(id: string): Promise<void> {
 }
 
 // ============================================================
+// 423 งานติ๊ด — Fuel Logs (บันทึกการเติมน้ำมัน)
+// ============================================================
+
+export async function fetchFuelLogs(): Promise<FuelLog[]> {
+  return fetchAllPaginated<FuelLog>('fuel_logs', 'date')
+}
+
+export async function insertFuelLog(f: FuelLog): Promise<void> {
+  await dbWrite({ table: 'fuel_logs', operation: 'insert', data: toSnakeCase(f as unknown as Record<string, unknown>) })
+}
+
+export async function updateFuelLogDB(id: string, updates: Partial<FuelLog>): Promise<void> {
+  await dbWrite({ table: 'fuel_logs', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
+}
+
+export async function deleteFuelLogDB(id: string): Promise<void> {
+  await dbWrite({ table: 'fuel_logs', operation: 'delete', match: { column: 'id', value: id } })
+}
+
+// ============================================================
 // Default Prices — stored as linen_items.default_price
 // ============================================================
 
@@ -992,6 +1022,7 @@ export async function fetchAllData() {
     withRetry(() => fetchRounds(), 'rounds').catch(() => [] as Round[]),
     withRetry(() => fetchCrew(), 'crew').catch(() => [] as Crew[]),
     withRetry(() => fetchDailyTrips(), 'dailyTrips').catch(() => [] as DailyTrip[]),
+    withRetry(() => fetchFuelLogs(), 'fuelLogs').catch(() => [] as FuelLog[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -1009,7 +1040,7 @@ export async function fetchAllData() {
     taxInvoices, quotations, expenses, users, companyInfo,
     linenItems, checklists, linenCategories, customerCategories,
     carryOverAdjustments, receipts, legacyDocuments, scheduleOverrides, routePlans,
-    vehicles, odometerLogs, maintenanceRecords, rounds, crew, dailyTrips,
+    vehicles, odometerLogs, maintenanceRecords, rounds, crew, dailyTrips, fuelLogs,
   ] = [
     val(results[0], [] as Customer[]),
     val(results[1], [] as LinenForm[]),
@@ -1035,6 +1066,7 @@ export async function fetchAllData() {
     val(results[21], [] as Round[]),
     val(results[22], [] as Crew[]),
     val(results[23], [] as DailyTrip[]),
+    val(results[24], [] as FuelLog[]),
   ]
 
   return {
@@ -1062,6 +1094,7 @@ export async function fetchAllData() {
     rounds,
     crew,
     dailyTrips,
+    fuelLogs,
     _partialFailures,
   }
 }
