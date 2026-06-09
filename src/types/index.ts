@@ -236,6 +236,8 @@ export interface Customer {
   routeSequence?: number        // ลำดับวิ่ง default ในรอบ (1,2,3…)
   pickupWindowStart?: string    // หน้าต่างเวลาเข้ารับได้ 'HH:MM' ('' = ไม่จำกัด)
   pickupWindowEnd?: string
+  // 423 B-2 — กลุ่มเจ้าของเดียวกัน (tag) → ยกเว้น skip-queue alert เมื่อสาขาอื่นในกลุ่มส่งแล้ว
+  ownerGroup?: string           // เช่น 'SEN', 'รามบุตรี' ('' = ไม่มีกลุ่ม)
 }
 
 // 317 Phase 1 — Aggregate Size Group Config (per customer, per group)

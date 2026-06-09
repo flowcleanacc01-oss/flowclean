@@ -1,7 +1,7 @@
 // 423 Phase B2 — verify Dispatch generate logic
 //   buildTripStops (membership + schedule + mode) · generateDailyTrips (idempotent) · helpers
 import { describe, it, expect } from 'vitest'
-import { buildTripStops, generateDailyTrips, tripLoad, resequence, capacityStatus } from '@/lib/dispatch'
+import { buildTripStops, generateDailyTrips, tripLoad, resequence, capacityStatus, skipQueueReview } from '@/lib/dispatch'
 import { getWeekStart, addDays } from '@/lib/logistics-week'
 import { dailyTripId } from '@/types'
 import type { Customer, Round, ScheduleOverride, DailyTrip, TripStop } from '@/types'
@@ -128,5 +128,42 @@ describe('capacityStatus (B-1) — เทียบ load กับเป้า', 
     expect(capacityStatus(180, 160)).toBe('ok')    // ≤ 1.25× (200)
     expect(capacityStatus(210, 160)).toBe('warn')  // 1.25×–1.5× (200–240)
     expect(capacityStatus(250, 160)).toBe('high')  // > 1.5× (240)
+  })
+})
+
+describe('skipQueueReview (B-2) — ถึงคิวแต่ถุง=0', () => {
+  const trip = (roundId: string, stops: Partial<TripStop>[]): DailyTrip =>
+    ({ id: dailyTripId(MON, roundId), date: MON, roundId, vehicleId: '', driverId: '', helperId: '',
+       status: 'planned', note: '', stops: stops.map((s, i) => ({ customerId: '', sequence: i + 1, source: 'regular', bagCount: 0, status: 'pending', note: '', timeWindowStart: '', timeWindowEnd: '', ...s })) as TripStop[],
+       createdBy: '', createdAt: '' } as DailyTrip)
+
+  it('flag จุดประจำที่ถุง=0 + ถึงคิว · ข้ามจุดที่มีถุง/แทรก', () => {
+    const customers = [
+      cust({ id: 'c1', shortName: 'A', scheduleType: 'daily' }),
+      cust({ id: 'c2', shortName: 'B', scheduleType: 'daily' }),
+      cust({ id: 'c3', shortName: 'C', scheduleType: 'daily' }),
+    ]
+    const t = trip('round-v', [
+      { customerId: 'c1', bagCount: 0, source: 'regular' },  // ถึงคิว ถุง 0 → flag
+      { customerId: 'c2', bagCount: 12, source: 'regular' }, // มีถุง → ข้าม
+      { customerId: 'c3', bagCount: 0, source: 'inserted' }, // แทรก → ข้าม
+    ])
+    const r = skipQueueReview([t], customers, MON, [])
+    expect(r.map(x => x.customerId)).toEqual(['c1'])
+  })
+
+  it('ยกเว้นกลุ่มเจ้าของเดียวกัน: สาขาอื่นในกลุ่มส่งแล้ว → ไม่ flag', () => {
+    const customers = [
+      cust({ id: 'sen', shortName: 'SEN', scheduleType: 'daily', ownerGroup: 'SEN' }),
+      cust({ id: 'sen2', shortName: 'SEN2', scheduleType: 'daily', ownerGroup: 'SEN' }),
+      cust({ id: 'lone', shortName: 'X', scheduleType: 'daily', ownerGroup: '' }),
+    ]
+    const t = trip('round-v', [
+      { customerId: 'sen', bagCount: 30, source: 'regular' }, // SEN ส่ง 30
+      { customerId: 'sen2', bagCount: 0, source: 'regular' }, // SEN2 = 0 แต่กลุ่มส่งแล้ว → ไม่ flag
+      { customerId: 'lone', bagCount: 0, source: 'regular' }, // ไม่มีกลุ่ม + 0 → flag
+    ])
+    const r = skipQueueReview([t], customers, MON, [])
+    expect(r.map(x => x.customerId)).toEqual(['lone'])
   })
 })

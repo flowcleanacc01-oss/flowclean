@@ -126,3 +126,48 @@ export function capacityStatus(load: number, target: number): CapacityStatus {
 export function resequence(stops: TripStop[]): TripStop[] {
   return stops.map((s, i) => ({ ...s, sequence: i + 1 }))
 }
+
+// 423 B-2 — Skip-queue review: ลูกค้าถึงคิวแต่ถุง=0 (ข้ามคิว? หรือยังไม่กรอก)
+// ติ๊ด: เก็บข้อมูลเตือนลูกค้าให้แจ้งล่วงหน้า · ยกเว้นกลุ่มเจ้าของเดียวกันที่สาขาอื่นส่งแล้ว
+export interface SkipQueueItem {
+  customerId: string
+  roundId: string
+  ownerGroup: string
+}
+
+export function skipQueueReview(
+  trips: DailyTrip[],          // ใบงานของวันนั้น
+  customers: Customer[],
+  date: string,
+  overrides: ScheduleOverride[],
+): SkipQueueItem[] {
+  const custById = new Map(customers.map(c => [c.id, c]))
+
+  // กลุ่มเจ้าของที่ "มีอย่างน้อย 1 สาขาส่งถุง > 0" วันนั้น → ยกเว้นทั้งกลุ่ม
+  const groupSent = new Set<string>()
+  for (const t of trips) {
+    for (const s of t.stops) {
+      if (s.bagCount > 0) {
+        const g = custById.get(s.customerId)?.ownerGroup
+        if (g) groupSent.add(g)
+      }
+    }
+  }
+
+  const out: SkipQueueItem[] = []
+  const seen = new Set<string>()
+  for (const t of trips) {
+    for (const s of t.stops) {
+      if (s.source !== 'regular') continue          // เฉพาะจุดประจำ (ไม่ใช่แทรก/ยืมรอบ)
+      if (s.bagCount > 0) continue                  // มีถุง = ส่งแล้ว
+      const c = custById.get(s.customerId)
+      if (!c) continue
+      if (!isDueOnDate(c, date, overrides)) continue // ต้องถึงคิวจริงวันนั้น (กัน mode='all')
+      if (c.ownerGroup && groupSent.has(c.ownerGroup)) continue // สาขาอื่นในกลุ่มส่งแล้ว
+      if (seen.has(s.customerId)) continue
+      seen.add(s.customerId)
+      out.push({ customerId: s.customerId, roundId: t.roundId, ownerGroup: c.ownerGroup || '' })
+    }
+  }
+  return out
+}

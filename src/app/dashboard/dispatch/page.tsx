@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { toLocalISO, parseLocalDate, addDays } from '@/lib/logistics-week'
-import { buildTripStops, generateDailyTrips, tripLoad, resequence, capacityStatus, type GenerateMode, type CapacityStatus } from '@/lib/dispatch'
+import { buildTripStops, generateDailyTrips, tripLoad, resequence, capacityStatus, skipQueueReview, type GenerateMode, type CapacityStatus } from '@/lib/dispatch'
 import {
   dailyTripId,
   TRIP_STATUS_CONFIG, TRIP_STOP_SOURCE_CONFIG, TRIP_STOP_STATUS_CONFIG,
@@ -21,7 +21,7 @@ import type { DailyTrip, TripStop, TripStatus, TripStopStatus, Round, Crew } fro
 import Modal from '@/components/Modal'
 import {
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown, CalendarDays,
-  ClipboardCheck, Truck, Clock, Plus, Trash2, X, RotateCcw, Package, Search,
+  ClipboardCheck, Truck, Clock, Plus, Trash2, X, RotateCcw, Package, Search, AlertTriangle,
 } from 'lucide-react'
 
 const selCls = 'px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#3DD8D8] bg-white'
@@ -59,6 +59,11 @@ export default function DispatchPage() {
   const roundsWithoutTrip = activeRounds.filter(r => !tripByRound.has(r.id))
   const totalLoad = tripsForDate.reduce((s, t) => s + tripLoad(t), 0)
   const totalStops = tripsForDate.reduce((s, t) => s + t.stops.length, 0)
+
+  // 423 B-2 — ถึงคิวแต่ถุง=0 (ข้ามคิว? / ยังไม่กรอก) · ยกเว้นกลุ่มเจ้าของที่สาขาอื่นส่งแล้ว
+  const skipReview = useMemo(() => skipQueueReview(tripsForDate, customers, date, scheduleOverrides), [tripsForDate, customers, date, scheduleOverrides])
+  const custById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers])
+  const roundCodeById = useMemo(() => new Map(rounds.map(r => [r.id, r.code])), [rounds])
 
   // generate ทุกรอบที่ยังไม่มีใบงานวันนี้
   const runGenerate = () => {
@@ -164,6 +169,29 @@ export default function DispatchPage() {
           {activeRounds.filter(r => tripByRound.has(r.id)).every(r => !r.capacityTarget) && (
             <p className="text-[11px] text-slate-400 mt-2">ตั้ง “ความจุเป้าหมาย” ของแต่ละรอบในหน้ารอบเดินรถ เพื่อให้เตือนงานเยอะ/น้อยอัตโนมัติ</p>
           )}
+        </div>
+      )}
+
+      {/* 423 B-2 — ถึงคิวแต่ถุง=0 (ข้ามคิว? / ยังไม่กรอก) */}
+      {skipReview.length > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
+          <div className="bg-amber-50 px-4 py-2.5 flex items-center gap-2 border-b border-amber-100">
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            <span className="text-sm font-semibold text-amber-800">ถึงคิวแต่ยังไม่มีถุง ({skipReview.length})</span>
+            <span className="ml-auto text-xs text-amber-700/70">ตรวจสอบ: ข้ามคิว หรือยังไม่ได้กรอก</span>
+          </div>
+          <div className="px-4 py-2.5 flex flex-wrap gap-1.5">
+            {skipReview.map(it => {
+              const c = custById.get(it.customerId)
+              return (
+                <span key={it.customerId} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 text-xs text-slate-600">
+                  <span className="px-1 py-0.5 rounded bg-slate-100 text-[10px] font-semibold text-slate-500">{roundCodeById.get(it.roundId) || '?'}</span>
+                  <span className="font-medium text-slate-700">{c?.shortName || c?.name || '—'}</span>
+                  {it.ownerGroup && <span className="text-[10px] text-slate-400">·{it.ownerGroup}</span>}
+                </span>
+              )
+            })}
+          </div>
         </div>
       )}
 

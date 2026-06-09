@@ -35,6 +35,7 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   notes: '', isActive: true,
   enableVat: true, enableWithholding: true,
   workflowMode: 'cross_check',
+  ownerGroup: '',
 }
 
 export default function CustomersPage() {
@@ -187,6 +188,7 @@ export default function CustomersPage() {
       itemNicknames: c.itemNicknames ? { ...c.itemNicknames } : {},
       workflowMode: c.workflowMode ?? 'cross_check',
       defaultCarryOverMode: c.defaultCarryOverMode,
+      ownerGroup: c.ownerGroup ?? '',
     })
     setShowForm(true)
   }
@@ -1077,6 +1079,13 @@ export default function CustomersPage() {
               <label className="block font-medium text-slate-600 mb-1">อีเมล</label>
               <input value={form.contactEmail} onChange={e => setForm({ ...form, contactEmail: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-600 mb-1">กลุ่มเจ้าของเดียวกัน <span className="text-slate-400 font-normal">(ไม่บังคับ)</span></label>
+              <input value={form.ownerGroup ?? ''} onChange={e => setForm({ ...form, ownerGroup: e.target.value })}
+                placeholder="เช่น SEN, รามบุตรี"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+              <p className="text-[11px] text-slate-400 mt-0.5">สาขาเจ้าของเดียวกัน — ถ้าสาขาอื่นในกลุ่มส่งแล้ว จะไม่เตือน “ข้ามคิว”</p>
             </div>
           </div>
 
