@@ -175,7 +175,7 @@ function RoundsTab() {
 const BLANK_ROUND: Omit<Round, 'id' | 'createdAt'> = {
   code: '', name: '', startTime: '', endTime: '',
   defaultVehicleId: '', defaultDriverId: '', defaultHelperId: '',
-  color: '#0ea5e9', sortOrder: 0, isActive: true, note: '',
+  color: '#0ea5e9', sortOrder: 0, isActive: true, capacityTarget: 0, note: '',
 }
 
 function RoundFormModal({ round, onClose }: { round: Round | null; onClose: () => void }) {
@@ -228,6 +228,13 @@ function RoundFormModal({ round, onClose }: { round: Round | null; onClose: () =
           <div>
             <label className={labelCls}>ลำดับแสดง</label>
             <input type="number" className={inputCls} value={form.sortOrder || ''} onChange={e => set('sortOrder', Number(e.target.value) || 0)} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="col-span-2 sm:col-span-1">
+            <label className={labelCls}>ความจุเป้าหมาย (กระสอบ)</label>
+            <input type="number" className={inputCls} value={form.capacityTarget || ''} onChange={e => set('capacityTarget', Number(e.target.value) || 0)} placeholder="เช่น 55" />
+            <p className="text-[10px] text-slate-400 mt-0.5">เทียบ load จริง → เตือนงานเยอะ/น้อยในกระดานจ่ายงาน</p>
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

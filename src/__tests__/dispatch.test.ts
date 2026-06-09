@@ -1,7 +1,7 @@
 // 423 Phase B2 — verify Dispatch generate logic
 //   buildTripStops (membership + schedule + mode) · generateDailyTrips (idempotent) · helpers
 import { describe, it, expect } from 'vitest'
-import { buildTripStops, generateDailyTrips, tripLoad, resequence } from '@/lib/dispatch'
+import { buildTripStops, generateDailyTrips, tripLoad, resequence, capacityStatus } from '@/lib/dispatch'
 import { getWeekStart, addDays } from '@/lib/logistics-week'
 import { dailyTripId } from '@/types'
 import type { Customer, Round, ScheduleOverride, DailyTrip, TripStop } from '@/types'
@@ -116,5 +116,17 @@ describe('helpers', () => {
   it('resequence = 1..n ต่อเนื่อง', () => {
     const stops = [{ sequence: 5 }, { sequence: 9 }, { sequence: 2 }] as TripStop[]
     expect(resequence(stops).map(s => s.sequence)).toEqual([1, 2, 3])
+  })
+})
+
+describe('capacityStatus (B-1) — เทียบ load กับเป้า', () => {
+  it('ไม่ตั้งเป้า = none', () => {
+    expect(capacityStatus(100, 0)).toBe('none')
+  })
+  it('ตามเคสติ๊ด: เป้า 160 → <160 น้อย · ~ปกติ · 200 เริ่มเยอะ · 250 เตือน', () => {
+    expect(capacityStatus(150, 160)).toBe('low')   // < เป้า → เสี่ยงต้นทุน
+    expect(capacityStatus(180, 160)).toBe('ok')    // ≤ 1.25× (200)
+    expect(capacityStatus(210, 160)).toBe('warn')  // 1.25×–1.5× (200–240)
+    expect(capacityStatus(250, 160)).toBe('high')  // > 1.5× (240)
   })
 })

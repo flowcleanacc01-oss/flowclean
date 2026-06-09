@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { toLocalISO, parseLocalDate, addDays } from '@/lib/logistics-week'
-import { buildTripStops, generateDailyTrips, tripLoad, resequence, type GenerateMode } from '@/lib/dispatch'
+import { buildTripStops, generateDailyTrips, tripLoad, resequence, capacityStatus, type GenerateMode, type CapacityStatus } from '@/lib/dispatch'
 import {
   dailyTripId,
   TRIP_STATUS_CONFIG, TRIP_STOP_SOURCE_CONFIG, TRIP_STOP_STATUS_CONFIG,
@@ -27,6 +27,15 @@ import {
 const selCls = 'px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#3DD8D8] bg-white'
 
 const STATUS_NEXT: Record<TripStopStatus, TripStopStatus> = { pending: 'done', done: 'skipped', skipped: 'pending' }
+
+// 423 B-1 — capacity status → label + สี (เทียบ load กับ capacityTarget ของรอบ)
+const CAPACITY_CONFIG: Record<CapacityStatus, { label: string; text: string; bar: string }> = {
+  none: { label: '',            text: 'text-slate-400',   bar: 'bg-slate-300' },
+  low:  { label: 'น้อย',        text: 'text-sky-600',     bar: 'bg-sky-400' },
+  ok:   { label: 'ปกติ',        text: 'text-emerald-600', bar: 'bg-emerald-500' },
+  warn: { label: 'เริ่มเยอะ',   text: 'text-amber-600',   bar: 'bg-amber-500' },
+  high: { label: 'เตือน!',      text: 'text-rose-600',    bar: 'bg-rose-500' },
+}
 
 function todayLocal(): string {
   return toLocalISO(new Date())
@@ -119,6 +128,44 @@ export default function DispatchPage() {
           </span>
         )}
       </div>
+
+      {/* 423 B-1 — Capacity panel: load จริงเทียบเป้าต่อรอบ (เตือนงานเยอะ/น้อย) */}
+      {tripsForDate.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Package className="w-4 h-4 text-[#1B3A5C]" />
+            <span className="text-sm font-semibold text-slate-700">ปริมาณงานวันนี้</span>
+            <span className="ml-auto text-lg font-bold text-[#1B3A5C]">{totalLoad} ถุง</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            {activeRounds.filter(r => tripByRound.has(r.id)).map(round => {
+              const load = tripLoad(tripByRound.get(round.id)!)
+              const target = round.capacityTarget || 0
+              const status = capacityStatus(load, target)
+              const cfg = CAPACITY_CONFIG[status]
+              const pct = target > 0 ? Math.min(100, Math.round((load / (target * 1.5)) * 100)) : 0
+              return (
+                <div key={round.id} className="rounded-lg border border-slate-100 p-2.5">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="px-1.5 py-0.5 rounded font-bold text-white text-[10px]" style={{ backgroundColor: round.color }}>{round.code}</span>
+                    <span className="font-semibold text-slate-700">{load}</span>
+                    {target > 0 && <span className="text-slate-400">/ {target}</span>}
+                    {status !== 'none' && <span className={cn('ml-auto font-medium', cfg.text)}>{cfg.label}</span>}
+                  </div>
+                  {target > 0 && (
+                    <div className="mt-1.5 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={cn('h-full rounded-full transition-all', cfg.bar)} style={{ width: `${pct}%` }} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {activeRounds.filter(r => tripByRound.has(r.id)).every(r => !r.capacityTarget) && (
+            <p className="text-[11px] text-slate-400 mt-2">ตั้ง “ความจุเป้าหมาย” ของแต่ละรอบในหน้ารอบเดินรถ เพื่อให้เตือนงานเยอะ/น้อยอัตโนมัติ</p>
+          )}
+        </div>
+      )}
 
       {activeRounds.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-xl border border-slate-200">

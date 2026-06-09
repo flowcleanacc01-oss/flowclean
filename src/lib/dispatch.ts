@@ -110,6 +110,18 @@ export function tripLoad(trip: DailyTrip): number {
   return trip.stops.reduce((s, st) => s + (st.bagCount || 0), 0)
 }
 
+// 423 B-1 — Capacity status: เทียบ load จริง กับ capacityTarget ของรอบ
+// ติ๊ด: <เป้า=เสี่ยงต้นทุน(under-utilize) · ~เป้า=ปกติ · เกิน 1.25×=เริ่มเยอะ · เกิน 1.5×=เตือนบริหารเวลา
+export type CapacityStatus = 'none' | 'low' | 'ok' | 'warn' | 'high'
+
+export function capacityStatus(load: number, target: number): CapacityStatus {
+  if (!target || target <= 0) return 'none'   // ไม่ได้ตั้งเป้า
+  if (load < target) return 'low'             // น้อยกว่าเป้า → เสี่ยงต้นทุน
+  if (load <= target * 1.25) return 'ok'      // ~ปกติ
+  if (load <= target * 1.5) return 'warn'     // เริ่มเยอะ
+  return 'high'                               // เตือนบริหารเวลาให้ทัน
+}
+
 /** re-number sequence ให้ต่อเนื่อง 1..n หลัง reorder/insert/remove */
 export function resequence(stops: TripStop[]): TripStop[] {
   return stops.map((s, i) => ({ ...s, sequence: i + 1 }))

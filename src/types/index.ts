@@ -760,6 +760,7 @@ export interface Round {
   color: string                 // hex สำหรับ badge/ปฏิทิน
   sortOrder: number
   isActive: boolean             // SZH = false (พักชั่วคราว)
+  capacityTarget: number        // 423 B-1 — ความจุเป้าหมาย (กระสอบ/ถุง) · 0 = ไม่ตั้ง · เทียบ load ใน Dispatch
   note: string
   createdAt: string
 }
