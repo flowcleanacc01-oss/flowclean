@@ -1,0 +1,186 @@
+// V2X GPS API client — ⚠️ SERVER ONLY (เรียกจาก src/app/api/gps/route.ts เท่านั้น)
+//   credentials อยู่ใน env (V2X_BASE_URL / V2X_USERNAME / V2X_PASSWORD) ห้ามให้หลุดถึง client
+//   auth flow: POST /api/login/login → JWT (อายุ ~14 วัน) → แนบ header `Authorization: <token>` (raw ไม่มี Bearer)
+//   token cache ระดับ module + re-login อัตโนมัติเมื่อใกล้หมดอายุ (อ่าน exp จาก JWT payload)
+// Feat 423 C — GPS integration
+
+import type {
+  V2xEnvelope, V2xCar, V2xPosition, V2xTrip,
+  GpsCar, GpsPosition, GpsTrip,
+} from './v2x-types'
+
+/** ยังไม่ได้ตั้ง env (→ 503) */
+export class V2xConfigError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'V2xConfigError'
+  }
+}
+
+/** V2X ตอบ code != 0 หรือ HTTP error (→ 502) */
+export class V2xApiError extends Error {
+  code?: number
+  constructor(message: string, code?: number) {
+    super(message)
+    this.name = 'V2xApiError'
+    this.code = code
+  }
+}
+
+function getConfig() {
+  const baseUrl = process.env.V2X_BASE_URL
+  const username = process.env.V2X_USERNAME
+  const password = process.env.V2X_PASSWORD
+  if (!baseUrl || !username || !password) {
+    throw new V2xConfigError('ยังไม่ได้ตั้งค่า V2X_BASE_URL / V2X_USERNAME / V2X_PASSWORD บนเซิร์ฟเวอร์')
+  }
+  return { baseUrl: baseUrl.replace(/\/+$/, ''), username, password }
+}
+
+// ── token cache (module-level — อยู่ได้ตลอดอายุ serverless instance) ──
+let cachedToken: { value: string; expMs: number } | null = null
+
+/** อ่าน exp (วินาที) จาก JWT payload → ms · fallback 12 ชม. ถ้า decode ไม่ได้ */
+function decodeJwtExpMs(token: string): number {
+  try {
+    const payload = token.split('.')[1]
+    const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { exp?: number }
+    if (typeof json.exp === 'number') return json.exp * 1000
+  } catch {
+    /* ignore — ใช้ fallback */
+  }
+  return Date.now() + 12 * 3600 * 1000
+}
+
+interface FetchOpts {
+  method?: 'GET' | 'POST'
+  body?: unknown
+  auth?: boolean // default true
+}
+
+async function v2xFetch<T>(path: string, opts: FetchOpts = {}): Promise<T> {
+  const { baseUrl } = getConfig()
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (opts.auth !== false) headers['Authorization'] = await getToken()
+
+  const res = await fetch(`${baseUrl}/api${path}`, {
+    method: opts.method || 'GET',
+    headers,
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    // V2X cert = Let's Encrypt ของจริง → ไม่ต้อง disable TLS
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new V2xApiError(`V2X HTTP ${res.status} (${path})`)
+
+  const json = (await res.json()) as V2xEnvelope<T>
+  if (json.code !== 0) throw new V2xApiError(json.message || `V2X code ${json.code} (${path})`, json.code)
+  return json.data
+}
+
+async function login(): Promise<string> {
+  const { username, password } = getConfig()
+  const data = await v2xFetch<{ accessToken: string }>('/login/login', {
+    method: 'POST',
+    body: { loginname: username, loginpwd: password },
+    auth: false,
+  })
+  if (!data?.accessToken) throw new V2xApiError('V2X login ไม่คืน accessToken')
+  return data.accessToken
+}
+
+async function getToken(): Promise<string> {
+  const SKEW_MS = 60_000 // re-login ล่วงหน้า 1 นาทีกัน edge
+  if (cachedToken && cachedToken.expMs - SKEW_MS > Date.now()) return cachedToken.value
+  const token = await login()
+  cachedToken = { value: token, expMs: decodeJwtExpMs(token) }
+  return token
+}
+
+// ── normalize helpers ──
+
+/** แปลงค่าที่ V2X ส่งมา (string/number/null ปน) → number ปลอดภัย */
+function num(v: unknown): number {
+  const n = typeof v === 'number' ? v : parseFloat(String(v))
+  return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * normalize ทะเบียนสำหรับ match V2X ↔ FlowClean
+ *   V2X "C 4ฒฆ-8053" → "4ฒฆ-8053" · FlowClean "4ฒฆ-8053" → "4ฒฆ-8053"
+ *   ตัดช่องว่าง + prefix อักษรอังกฤษนำหน้า (A/B/C/D) · ตัวอักษรไทยในทะเบียนคงไว้
+ */
+export function normalizePlate(plate: string): string {
+  return (plate || '').replace(/\s+/g, '').replace(/^[A-Za-z]+/, '').toLowerCase()
+}
+
+function toGpsCar(c: V2xCar): GpsCar {
+  return {
+    carId: c.carId,
+    plate: c.licensePlate,
+    plateNorm: normalizePlate(c.licensePlate),
+    vin: c.ecuVin || '',
+    sim: c.sim || '',
+    model: [c.brandName, c.seriesName, c.modelName].filter(Boolean).join(' '),
+    fuelType: c.fuelType || '',
+  }
+}
+
+function toGpsPosition(p: V2xPosition): GpsPosition {
+  return {
+    carId: p.carId,
+    plate: p.licensePlate,
+    plateNorm: normalizePlate(p.licensePlate),
+    lat: num(p.lat),
+    lng: num(p.lng),
+    speed: num(p.speed),
+    rpm: num(p.rpm),
+    direction: num(p.direction),
+    voltage: num(p.voltage),
+    online: p.online === 1,
+    driving: p.driving === 1,
+    gpsTime: p.gpsTime || '',
+    lastActiveTime: p.lastActiveTime || '',
+  }
+}
+
+function toGpsTrip(t: V2xTrip): GpsTrip {
+  return {
+    plate: t.licensePlate,
+    plateNorm: normalizePlate(t.licensePlate),
+    vin: t.ecuvin || '',
+    startAddress: t.tripStartAddress || '',
+    endAddress: t.tripEndAddress || '',
+    startTime: t.begintime || '',
+    endTime: t.endTime || '',
+    distanceKm: num(t.mileage),
+    drivingMin: num(t.drivingtime),
+    idleMin: num(t.totalFreeTime),
+    maxSpeed: num(t.tripMaxSpeed),
+    avgSpeed: num(t.tripAvgSpeed),
+    fuelLiters: num(t.fuelConsumption),
+    kmPerLiter: num(t.consumptionRate),
+  }
+}
+
+// ── public API (คืน normalized Gps*) ──
+
+/** รายชื่อรถที่ติด terminal (มี GPS/OBD) */
+export async function getCars(): Promise<GpsCar[]> {
+  const raw = await v2xFetch<V2xCar[]>('/car/list', { method: 'POST', body: { pageNum: 1, pageSize: 200 } })
+  return (raw || []).map(toGpsCar)
+}
+
+/** ตำแหน่ง realtime ของรถทุกคัน */
+export async function getRealtimePositions(): Promise<GpsPosition[]> {
+  const raw = await v2xFetch<V2xPosition[]>('/map/all/gps', { method: 'GET' })
+  return (raw || []).map(toGpsPosition)
+}
+
+/** เที่ยววิ่งของรถ 1 คันในช่วงเวลา (format "yyyy-mm-dd HH:MM:SS") */
+export async function getTrips(carId: string, startTime: string, endTime: string): Promise<GpsTrip[]> {
+  const raw = await v2xFetch<V2xTrip[]>('/report/trip/list', {
+    method: 'POST',
+    body: { carId, startTime, endTime, pageNum: 1, pageSize: 200 },
+  })
+  return (raw || []).map(toGpsTrip)
+}
