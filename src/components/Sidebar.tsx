@@ -24,6 +24,7 @@ import {
   Wrench,
   Route,
   ClipboardCheck,
+  Satellite,
   X,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
@@ -55,6 +56,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/rounds', label: 'รอบเดินรถ', icon: Route, guard: canManageRounds },
   { href: '/dashboard/dispatch', label: 'จ่ายงานรายวัน', icon: ClipboardCheck, guard: canManageDispatch },
   { href: '/dashboard/fleet', label: 'ฟลีตรถ', icon: Wrench, guard: canViewFleet },
+  { href: '/dashboard/gps', label: 'GPS / ติดตามรถ', icon: Satellite, guard: canViewFleet },
   { href: '/dashboard/billing?tab=quotation', label: 'ใบเสนอราคา (QT)', icon: FileText, guard: canViewBilling },
   { href: '/dashboard/linen-forms', label: '1. ใบส่งรับผ้า (LF)', icon: ClipboardList, guard: canViewLF },
   { href: '/dashboard/delivery', label: '2. ใบส่งของชั่วคราว (SD)', icon: Truck, guard: canViewSD },

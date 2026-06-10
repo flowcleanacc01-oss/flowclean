@@ -8,6 +8,7 @@ import type {
   V2xEnvelope, V2xCar, V2xPosition, V2xTrip,
   GpsCar, GpsPosition, GpsTrip,
 } from './v2x-types'
+import { normalizePlate } from './v2x-types'
 
 /** ยังไม่ได้ตั้ง env (→ 503) */
 export class V2xConfigError extends Error {
@@ -102,15 +103,6 @@ async function getToken(): Promise<string> {
 function num(v: unknown): number {
   const n = typeof v === 'number' ? v : parseFloat(String(v))
   return Number.isFinite(n) ? n : 0
-}
-
-/**
- * normalize ทะเบียนสำหรับ match V2X ↔ FlowClean
- *   V2X "C 4ฒฆ-8053" → "4ฒฆ-8053" · FlowClean "4ฒฆ-8053" → "4ฒฆ-8053"
- *   ตัดช่องว่าง + prefix อักษรอังกฤษนำหน้า (A/B/C/D) · ตัวอักษรไทยในทะเบียนคงไว้
- */
-export function normalizePlate(plate: string): string {
-  return (plate || '').replace(/\s+/g, '').replace(/^[A-Za-z]+/, '').toLowerCase()
 }
 
 function toGpsCar(c: V2xCar): GpsCar {

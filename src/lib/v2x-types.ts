@@ -121,3 +121,14 @@ export interface GpsTrip {
   fuelLiters: number
   kmPerLiter: number
 }
+
+// ──────────────────────────── helpers ────────────────────────────
+
+/**
+ * normalize ทะเบียนสำหรับ match V2X ↔ FlowClean (pure — ใช้ได้ทั้ง client/server)
+ *   V2X "C 4ฒฆ-8053" → "4ฒฆ-8053" · FlowClean "4ฒฆ-8053" → "4ฒฆ-8053"
+ *   ตัดช่องว่าง + prefix อักษรอังกฤษนำหน้า (A/B/C/D) · ตัวอักษรไทยในทะเบียนคงไว้
+ */
+export function normalizePlate(plate: string): string {
+  return (plate || '').replace(/\s+/g, '').replace(/^[A-Za-z]+/, '').toLowerCase()
+}
