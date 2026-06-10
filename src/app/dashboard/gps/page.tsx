@@ -5,16 +5,20 @@
 //   ดึงผ่าน /api/gps (server proxy) · ไม่ฝัง map (ใช้ลิงก์ Google Maps) เลี่ยง map API key
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { subDays, parseISO, format } from 'date-fns'
 import { useStore } from '@/lib/store'
 import { fetchGpsCars, fetchGpsRealtime, fetchGpsTrips } from '@/lib/gps-service'
 import { normalizePlate, type GpsCar, type GpsPosition, type GpsTrip } from '@/lib/v2x-types'
+import { buildRoundAudit, medianDailyKm, hhmmOf, type RoundAudit, type AuditFlag } from '@/lib/gps-audit'
+import { buildTripStops } from '@/lib/dispatch'
 import { todayISO, cn } from '@/lib/utils'
 import { canViewFleet } from '@/lib/permissions'
+import { dailyTripId, type Vehicle } from '@/types'
 import {
   Satellite, MapPin, Navigation, RefreshCw, Radio, Gauge,
   ExternalLink, Route, TrendingUp, Fuel, AlertCircle, Loader2, Car, CircleDot, Clock,
+  ClipboardCheck, CheckCircle2, AlertTriangle, Info,
 } from 'lucide-react'
-import type { Vehicle } from '@/types'
 
 // "2026-06-10 20:35:16" → "20:35"
 function hhmm(s: string): string {
@@ -44,7 +48,7 @@ function fmtMin(min: number): string {
 
 export default function GpsPage() {
   const { currentUser, vehicles } = useStore()
-  const [tab, setTab] = useState<'realtime' | 'trips'>('realtime')
+  const [tab, setTab] = useState<'realtime' | 'trips' | 'audit'>('realtime')
 
   // plateNorm → vehicle (แสดง code A/B/C ของฟลีต)
   const vehicleByPlate = useMemo(() => {
@@ -73,7 +77,7 @@ export default function GpsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-200">
-        {([['realtime', 'ตำแหน่งสด', Radio], ['trips', 'เที่ยววิ่ง', Route]] as const).map(([k, label, Icon]) => (
+        {([['realtime', 'ตำแหน่งสด', Radio], ['trips', 'เที่ยววิ่ง', Route], ['audit', 'เทียบแผน', ClipboardCheck]] as const).map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)}
             className={cn('px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors inline-flex items-center gap-1.5',
               tab === k ? 'border-[#3DD8D8] text-[#1B3A5C]' : 'border-transparent text-slate-400 hover:text-slate-600')}>
@@ -82,7 +86,9 @@ export default function GpsPage() {
         ))}
       </div>
 
-      {tab === 'realtime' ? <RealtimeTab vehicleByPlate={vehicleByPlate} /> : <TripsTab vehicleByPlate={vehicleByPlate} />}
+      {tab === 'realtime' ? <RealtimeTab vehicleByPlate={vehicleByPlate} />
+        : tab === 'trips' ? <TripsTab vehicleByPlate={vehicleByPlate} />
+        : <AuditTab />}
     </div>
   )
 }
@@ -293,6 +299,166 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
           <p className="text-slate-500">เลือกรถ + วันที่ แล้วกด “ดึงข้อมูล”</p>
         </div>
       )}
+    </div>
+  )
+}
+
+// ───────────────────────── เทียบแผน (audit) ─────────────────────────
+
+function AuditTab() {
+  const { rounds, customers, vehicles, dailyTrips, scheduleOverrides } = useStore()
+  const [date, setDate] = useState(todayISO())
+  const [cars, setCars] = useState<GpsCar[]>([])
+  const [audits, setAudits] = useState<RoundAudit[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => { fetchGpsCars().then(setCars).catch(() => {}) }, [])
+
+  const run = useCallback(async () => {
+    setLoading(true); setErr(null); setAudits(null)
+    try {
+      const activeRounds = [...rounds].filter(r => r.isActive).sort((a, b) => a.sortOrder - b.sortOrder)
+      const carByPlate = new Map(cars.map(c => [c.plateNorm, c]))
+
+      const plan = activeRounds.map(round => {
+        const dt = dailyTrips.find(t => t.id === dailyTripId(date, round.id))
+        const vehicleId = dt?.vehicleId || round.defaultVehicleId
+        const vehicle = vehicleId ? vehicles.find(v => v.id === vehicleId) : undefined
+        const car = vehicle ? carByPlate.get(normalizePlate(vehicle.licensePlate)) : undefined
+        const stops = dt?.stops ?? buildTripStops(round, customers, date, scheduleOverrides, 'schedule')
+        return { round, vehicle, car, stops }
+      })
+
+      const carIds = [...new Set(plan.map(p => p.car?.carId).filter((x): x is string => !!x))]
+      // historical 3 วันก่อน (V2X /report/trip/list ช้ากับช่วงยาว — 7 วัน = timeout 504)
+      const histFrom = format(subDays(parseISO(date), 3), 'yyyy-MM-dd')
+      const yesterday = format(subDays(parseISO(date), 1), 'yyyy-MM-dd')
+      const dayTrips = new Map<string, GpsTrip[]>()
+      const histMedian = new Map<string, number | null>()
+      for (const carId of carIds) {
+        dayTrips.set(carId, await fetchGpsTrips(carId, date))
+        // historical = best-effort: ถ้า V2X timeout/error → median null (มิติอื่นยังทำงาน)
+        try {
+          const hist = await fetchGpsTrips(carId, histFrom, yesterday)
+          histMedian.set(carId, medianDailyKm(hist, date))
+        } catch {
+          histMedian.set(carId, null)
+        }
+      }
+
+      setAudits(plan.map(p => buildRoundAudit(
+        p.round,
+        p.vehicle?.code ?? null,
+        p.car?.plate ?? null,
+        !!p.car,
+        p.stops,
+        p.car ? (dayTrips.get(p.car.carId) || []) : [],
+        p.car ? (histMedian.get(p.car.carId) ?? null) : null,
+      )))
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'วิเคราะห์ไม่สำเร็จ')
+    } finally {
+      setLoading(false)
+    }
+  }, [rounds, customers, vehicles, dailyTrips, scheduleOverrides, cars, date])
+
+  const warnCount = useMemo(
+    () => audits?.reduce((s, a) => s + a.flags.filter(f => f.level === 'warn').length, 0) ?? 0,
+    [audits],
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-end gap-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">วันที่ตรวจ</label>
+          <input type="date" value={date} max={todayISO()} onChange={e => setDate(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+        </div>
+        <button onClick={run} disabled={loading || cars.length === 0}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg text-sm font-semibold hover:bg-[#2bb8b8] transition-colors disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardCheck className="w-4 h-4" />} เทียบแผน vs จริง
+        </button>
+        <p className="text-xs text-slate-400 sm:ml-auto sm:self-center">เทียบจุดในรอบ · เวลาออก/เลิก · ระยะทาง/น้ำมัน</p>
+      </div>
+
+      {err && <ErrorBlock msg={err} onRetry={run} />}
+      {loading && <LoadingBlock />}
+
+      {audits && !loading && (
+        <>
+          <div className={cn('rounded-xl border px-4 py-3 flex items-center gap-2 text-sm font-medium',
+            warnCount > 0 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800')}>
+            {warnCount > 0
+              ? <><AlertTriangle className="w-4 h-4" /> พบ {warnCount} ข้อควรตรวจสอบ จาก {audits.length} รอบ</>
+              : <><CheckCircle2 className="w-4 h-4" /> ทุกรอบวิ่งตามแผน ({audits.length} รอบ)</>}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {audits.map(a => (
+              <div key={a.roundId} className="bg-white rounded-xl border border-slate-200 p-4">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: a.roundColor }}>{a.roundCode}</span>
+                    <span className="text-xs text-slate-400">{a.roundStart}-{a.roundEnd}</span>
+                  </div>
+                  {a.vehicleCode
+                    ? <span className="text-xs font-semibold text-slate-600">คัน {a.vehicleCode}{a.plate ? ` · ${a.plate}` : ''}</span>
+                    : <span className="text-xs text-slate-400">ไม่มีรถผูกรอบ</span>}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                  <div className="bg-slate-50 rounded-lg p-2.5">
+                    <p className="text-xs text-slate-400 mb-0.5">แผน</p>
+                    <p className="text-slate-700 font-medium">{a.plannedStops} จุด{a.plannedBags > 0 ? ` · ${a.plannedBags} ถุง` : ''}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-2.5">
+                    <p className="text-xs text-slate-400 mb-0.5">จริง (GPS)</p>
+                    {a.matched
+                      ? <p className="text-slate-700 font-medium">{a.actual.count} เที่ยว · {a.actual.km.toFixed(0)} กม.</p>
+                      : <p className="text-slate-400">—</p>}
+                  </div>
+                </div>
+
+                {a.matched && a.actual.count > 0 && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 mb-3">
+                    <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{hhmmOf(a.actual.firstTime)}-{hhmmOf(a.actual.lastTime)}</span>
+                    <span className="inline-flex items-center gap-1"><Fuel className="w-3.5 h-3.5" />{a.actual.fuel.toFixed(1)} ล. ({a.actual.kmPerLiter.toFixed(1)} กม./ล.)</span>
+                    {a.medianKm != null && <span className="text-slate-400">ปกติ ~{a.medianKm.toFixed(0)} กม./วัน</span>}
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  {a.flags.map((f, i) => <FlagRow key={i} flag={f} />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {!audits && !loading && !err && (
+        <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
+          <ClipboardCheck className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-500">เลือกวัน แล้วกด เทียบแผน vs จริง</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FlagRow({ flag }: { flag: AuditFlag }) {
+  const cfg = {
+    warn: { Icon: AlertTriangle, cls: 'text-amber-700 bg-amber-50 border-amber-200' },
+    info: { Icon: Info, cls: 'text-slate-600 bg-slate-50 border-slate-200' },
+    ok: { Icon: CheckCircle2, cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+  }[flag.level]
+  const Icon = cfg.Icon
+  return (
+    <div className={cn('flex items-start gap-2 text-xs px-2.5 py-1.5 rounded-lg border', cfg.cls)}>
+      <Icon className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+      <span>{flag.message}</span>
     </div>
   )
 }

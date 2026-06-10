@@ -20,7 +20,8 @@ export function fetchGpsRealtime(): Promise<GpsPosition[]> {
   return gpsFetch<GpsPosition[]>('action=realtime')
 }
 
-/** เที่ยววิ่งของรถ 1 คันในวันที่กำหนด (yyyy-mm-dd) */
-export function fetchGpsTrips(carId: string, date: string): Promise<GpsTrip[]> {
-  return gpsFetch<GpsTrip[]>(`action=trips&carId=${encodeURIComponent(carId)}&date=${date}`)
+/** เที่ยววิ่งของรถ 1 คัน — วันเดียว (date) หรือช่วง (date..to) สำหรับ historical */
+export function fetchGpsTrips(carId: string, date: string, to?: string): Promise<GpsTrip[]> {
+  const range = to ? `&to=${to}` : ''
+  return gpsFetch<GpsTrip[]>(`action=trips&carId=${encodeURIComponent(carId)}&date=${date}${range}`)
 }

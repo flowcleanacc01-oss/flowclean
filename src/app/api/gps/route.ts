@@ -30,10 +30,11 @@ export async function GET(req: NextRequest) {
     if (action === 'trips') {
       const carId = req.nextUrl.searchParams.get('carId')
       const date = req.nextUrl.searchParams.get('date')
-      if (!carId || !date || !DATE_RE.test(date)) {
+      const to = req.nextUrl.searchParams.get('to') // optional — ถ้ามี = ช่วง [date..to] (สำหรับ historical)
+      if (!carId || !date || !DATE_RE.test(date) || (to && !DATE_RE.test(to))) {
         return NextResponse.json({ ok: false, error: 'ต้องมี carId + date (yyyy-mm-dd)' }, { status: 400 })
       }
-      const trips = await getTrips(carId, `${date} 00:00:00`, `${date} 23:59:59`)
+      const trips = await getTrips(carId, `${date} 00:00:00`, `${to || date} 23:59:59`)
       return NextResponse.json({ ok: true, data: trips })
     }
     return NextResponse.json({ ok: false, error: 'action ไม่ถูกต้อง (cars|realtime|trips)' }, { status: 400 })
