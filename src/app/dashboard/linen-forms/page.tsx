@@ -421,11 +421,11 @@ export default function LinenFormsPage() {
     }
   }
 
-  const handleCreate = () => {
-    if (!newCustomerId || newRows.length === 0) return
-    // 265 — snapshot workflowMode ตอนสร้าง (กัน drift เมื่อ customer toggle ภายหลัง)
+  // 265 — snapshot workflowMode ตอนสร้าง (กัน drift เมื่อ customer toggle ภายหลัง)
+  const createLF = () => {
+    if (!newCustomerId || newRows.length === 0) return null
     const cust = getCustomer(newCustomerId)
-    const newLF = addLinenForm({
+    return addLinenForm({
       customerId: newCustomerId,
       date: newDate,
       status: 'draft',
@@ -435,9 +435,23 @@ export default function LinenFormsPage() {
       workflowMode: cust?.workflowMode ?? 'cross_check',
       excludedCodes: newExcludedCodes.length > 0 ? newExcludedCodes : undefined,  // 404
     })
+  }
+
+  const handleCreate = () => {
+    const newLF = createLF()
+    if (!newLF) return
     setActiveRowId(newLF.id)
     scrollToActiveRow(newLF.id)
     setShowCreate(false)
+  }
+
+  // 424 — ปุ่มลัด "ไป 4/7": สร้าง LF แล้วข้ามไป washing + เปิด detail กรอก grid ทันที (ลดคลิก break-down 1/7-3/7)
+  const handleCreateJumpWashing = () => {
+    const newLF = createLF()
+    if (!newLF) return
+    updateLinenFormStatus(newLF.id, 'washing')
+    setShowCreate(false)
+    setShowDetail(newLF.id)
   }
 
   const aiCust = newCustomerId ? getCustomer(newCustomerId) : null
@@ -611,6 +625,24 @@ export default function LinenFormsPage() {
       updateLinenForm(formId, { rows: updatedRows })
     }
     updateLinenFormStatus(formId, next)
+  }
+
+  // 424 — ปุ่มลัด "เสร็จสมบูรณ์": ข้าม washing -> confirmed ตรง (ข้าม packed/delivered ที่หน้างานไม่ break down)
+  //   reuse logic เดิมเป๊ะ: validation ต้องมี col6 (แพคส่ง) + auto-fill col4 (นับกลับ) = col6
+  const handleJumpToConfirmed = (formId: string) => {
+    const form = linenForms.find(f => f.id === formId)
+    if (!form) return
+    const hasPack = form.rows.some(r => (r.col6_factoryPackSend || 0) > 0)
+    if (!hasPack) {
+      alert('กรุณากรอกจำนวนแพคส่งอย่างน้อย 1 รายการ')
+      return
+    }
+    const updatedRows = form.rows.map(row => ({
+      ...row,
+      col4_factoryApproved: row.col6_factoryPackSend || 0,
+    }))
+    updateLinenForm(formId, { rows: updatedRows })
+    updateLinenFormStatus(formId, 'confirmed')
   }
 
   const handleRevertStatus = (formId: string) => {
@@ -1112,6 +1144,14 @@ export default function LinenFormsPage() {
                   placeholder="0" />
               </div>
               <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleCreateJumpWashing}
+                  disabled={!newCustomerId || newRows.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors disabled:opacity-50"
+                  title="สร้างใบส่งรับผ้าแล้วข้ามไปสถานะ 4/7 (ซักอบเสร็จ) กรอกจำนวนทั้งหมดทีเดียว — ข้ามขั้นตอน 1/7-3/7 ที่หน้างานไม่ได้ใช้">
+                  ⏩ ไป 4/7 กรอกข้อมูลทั้งหมด
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowAiInput(true)}
@@ -1684,6 +1724,13 @@ export default function LinenFormsPage() {
                       )
                     })()}
 
+                    {detailForm.status === 'washing' && detailForm.rows.some(r => (r.col6_factoryPackSend || 0) > 0) && (
+                      <button onClick={() => handleJumpToConfirmed(detailForm.id)}
+                        className="px-4 py-2.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+                        title="ข้ามขั้นตอน 5/7-6/7 ที่หน้างานไม่ได้ใช้ — จบที่ 7/7 (ลูกค้านับกลับ) auto-fill นับกลับ = แพคส่ง">
+                        <Check className="w-4 h-4" /> เสร็จสมบูรณ์
+                      </button>
+                    )}
                     {(() => {
                       const nextSt = NEXT_LINEN_STATUS[detailForm.status]
                       return nextSt ? (
