@@ -700,6 +700,7 @@ export interface Vehicle {
   inspectionExpiry: string      // ตรวจสภาพ ตรอ.
   // PM (บำรุงเชิงป้องกัน ตามระยะไมล์)
   currentOdometer: number
+  odometerAnchorDate: string    // 428 — วันที่ของ currentOdometer (yyyy-mm-dd · '' = ไม่รู้) → ฐานคำนวณไมล์จาก GPS
   serviceIntervalKm: number     // ระยะเช็ค (default 8000)
   nextServiceOdometer: number   // 0 = ยังไม่ตั้ง
   isActive: boolean

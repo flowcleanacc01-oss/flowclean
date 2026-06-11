@@ -74,6 +74,17 @@ export interface V2xTrip {
   areaName: string
 }
 
+/** /travelAnalysis/getTripStatistics (POST {beginTime,endTime,pageNum,pageSize}) — สถิติรายวันต่อคัน
+ *  ⚠️ data เป็น array ตรงๆ (ไม่มี .list) · ใช้คำนวณไมล์สะสม (428) */
+export interface V2xTripStat {
+  carId: string
+  licensePlate: string
+  day: string // "2026-06-10"
+  mileageTotal: number // กม. รวมของวันนั้น
+  oilTotal: number
+  tripCount: number
+}
+
 // ──────────────────────── NORMALIZED (UI ใช้) ────────────────────────
 
 /** รถที่ติด terminal — normalized */
@@ -120,6 +131,15 @@ export interface GpsTrip {
   avgSpeed: number
   fuelLiters: number
   kmPerLiter: number
+}
+
+/** ระยะวิ่งรายวันต่อคัน — normalized (428: ไมล์ auto จาก GPS) */
+export interface GpsDailyKm {
+  carId: string
+  plate: string
+  plateNorm: string
+  day: string // yyyy-mm-dd
+  km: number
 }
 
 // ──────────────────────────── helpers ────────────────────────────

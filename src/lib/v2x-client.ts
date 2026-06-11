@@ -5,8 +5,8 @@
 // Feat 423 C — GPS integration
 
 import type {
-  V2xEnvelope, V2xCar, V2xPosition, V2xTrip,
-  GpsCar, GpsPosition, GpsTrip,
+  V2xEnvelope, V2xCar, V2xPosition, V2xTrip, V2xTripStat,
+  GpsCar, GpsPosition, GpsTrip, GpsDailyKm,
 } from './v2x-types'
 import { normalizePlate } from './v2x-types'
 
@@ -175,4 +175,27 @@ export async function getTrips(carId: string, startTime: string, endTime: string
     body: { carId, startTime, endTime, pageNum: 1, pageSize: 200 },
   })
   return (raw || []).map(toGpsTrip)
+}
+
+/** 428 — ระยะวิ่งรายวันของทุกคันในช่วง [from..to] (yyyy-mm-dd)
+ *  ใช้ getTripStatistics (aggregate ฝั่ง V2X — เร็วกว่า trip list ที่ geocode ทุกเที่ยว)
+ *  ⚠️ data เป็น array ตรงๆ + page ละ ~100 → paginate จนหมด */
+export async function getDailyMileage(from: string, to: string): Promise<GpsDailyKm[]> {
+  const out: GpsDailyKm[] = []
+  for (let pageNum = 1; pageNum <= 12; pageNum++) {
+    const raw = await v2xFetch<V2xTripStat[]>('/travelAnalysis/getTripStatistics', {
+      method: 'POST',
+      body: { beginTime: `${from} 00:00:00`, endTime: `${to} 23:59:59`, pageNum, pageSize: 100 },
+    })
+    const rows = raw || []
+    out.push(...rows.map(r => ({
+      carId: r.carId,
+      plate: r.licensePlate,
+      plateNorm: normalizePlate(r.licensePlate),
+      day: r.day,
+      km: num(r.mileageTotal),
+    })))
+    if (rows.length < 100) break
+  }
+  return out
 }

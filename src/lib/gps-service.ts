@@ -1,6 +1,6 @@
 // GPS client service — เรียก /api/gps (proxy ไป V2X) · Feat 423 C
 //   คืน normalized Gps* (number/boolean ล้วน) · auth x-fc-session เหมือน qt-scan-service
-import type { GpsCar, GpsPosition, GpsTrip } from './v2x-types'
+import type { GpsCar, GpsPosition, GpsTrip, GpsDailyKm } from './v2x-types'
 import { sessionUserId } from './ai-scan-client'
 
 async function gpsFetch<T>(qs: string): Promise<T> {
@@ -24,4 +24,9 @@ export function fetchGpsRealtime(): Promise<GpsPosition[]> {
 export function fetchGpsTrips(carId: string, date: string, to?: string): Promise<GpsTrip[]> {
   const range = to ? `&to=${to}` : ''
   return gpsFetch<GpsTrip[]>(`action=trips&carId=${encodeURIComponent(carId)}&date=${date}${range}`)
+}
+
+/** 428 — ระยะวิ่งรายวันของทุกคันในช่วง [from..to] (ใช้คำนวณไมล์ประมาณจาก GPS) */
+export function fetchGpsDailyMileage(from: string, to: string): Promise<GpsDailyKm[]> {
+  return gpsFetch<GpsDailyKm[]>(`action=mileage&from=${from}&to=${to}`)
 }

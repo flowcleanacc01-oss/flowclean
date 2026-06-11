@@ -184,6 +184,7 @@ const FIELD_MAP: Record<string, string> = {
   taxExpiry: 'tax_expiry',
   inspectionExpiry: 'inspection_expiry',
   currentOdometer: 'current_odometer',
+  odometerAnchorDate: 'odometer_anchor_date',
   serviceIntervalKm: 'service_interval_km',
   nextServiceOdometer: 'next_service_odometer',
   vehicleId: 'vehicle_id',

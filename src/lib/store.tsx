@@ -1378,8 +1378,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // sync เลขไมล์ปัจจุบันเข้า vehicle ถ้าไมล์ใหม่ > เดิม (อ่านจาก ref กัน closure-stale) — เงียบ ไม่ log ซ้ำ
     const veh = vehiclesRef.current.find(x => x.id === o.vehicleId)
     if (veh && o.odometer > veh.currentOdometer) {
-      setVehicles(prev => prev.map(x => x.id === o.vehicleId ? { ...x, currentOdometer: o.odometer } : x))
-      dbSave(db.updateVehicleDB(o.vehicleId, { currentOdometer: o.odometer }))
+      setVehicles(prev => prev.map(x => x.id === o.vehicleId ? { ...x, currentOdometer: o.odometer, odometerAnchorDate: o.date } : x))
+      dbSave(db.updateVehicleDB(o.vehicleId, { currentOdometer: o.odometer, odometerAnchorDate: o.date }))
     }
     logAudit('update', 'vehicle', o.vehicleId, `บันทึกไมล์ ${o.odometer.toLocaleString()} km`)
     return newO
@@ -1510,8 +1510,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // sync เลขไมล์เข้า vehicle ถ้าไมล์ตอนเติม > เดิม (อ่าน ref กัน closure-stale) — เงียบ ไม่ log ซ้ำ
     const veh = vehiclesRef.current.find(x => x.id === f.vehicleId)
     if (veh && f.odometer > veh.currentOdometer) {
-      setVehicles(prev => prev.map(x => x.id === f.vehicleId ? { ...x, currentOdometer: f.odometer } : x))
-      dbSave(db.updateVehicleDB(f.vehicleId, { currentOdometer: f.odometer }))
+      setVehicles(prev => prev.map(x => x.id === f.vehicleId ? { ...x, currentOdometer: f.odometer, odometerAnchorDate: f.date } : x))
+      dbSave(db.updateVehicleDB(f.vehicleId, { currentOdometer: f.odometer, odometerAnchorDate: f.date }))
     }
     logAudit('create', 'fuel_log', newF.id, `เติมน้ำมัน ${f.liters} ลิตร ${f.amount.toLocaleString()} บาท`)
     return newF

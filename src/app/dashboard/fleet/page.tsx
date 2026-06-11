@@ -4,19 +4,22 @@
 //   การ์ดรถ 4 คัน + แถบเตือนต่ออายุ (ประกัน/พ.ร.บ./ภาษี/ตรวจสภาพ) + PM ตามระยะไมล์
 //   + บันทึกเลขไมล์ (อัปโหลดรูปหน้าปัด) + ประวัติงานซ่อม (ผูก Expense)
 
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { differenceInDays, parseISO } from 'date-fns'
 import { useStore } from '@/lib/store'
 import { canViewFleet } from '@/lib/permissions'
 import { cn, formatDate, formatNumber, sanitizeNumber, todayISO } from '@/lib/utils'
 import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { fuelEfficiencyMap, isEfficiencyAbnormal, pendingReimbursements } from '@/lib/fuel'
+import { deriveAnchorDate, estimateOdometer, anchorAgeDays, ANCHOR_MAX_AGE_DAYS, type OdometerEstimate } from '@/lib/odometer'
+import { fetchGpsDailyMileage } from '@/lib/gps-service'
+import { normalizePlate } from '@/lib/v2x-types'
 import { COMPLIANCE_STATUS_CONFIG, MAINTENANCE_TYPES, FUEL_TYPES, FUEL_PAID_BY_CONFIG } from '@/types'
 import type { Vehicle, ComplianceStatus, FuelPaidBy } from '@/types'
 import Modal from '@/components/Modal'
 import {
   Plus, Wrench, Gauge, ShieldCheck, Camera, Trash2, Pencil,
-  AlertTriangle, Car, Fuel, Receipt, Banknote, Check,
+  AlertTriangle, Car, Fuel, Receipt, Banknote, Check, Satellite, Loader2,
 } from 'lucide-react'
 
 const NEAR_DAYS = 7   // เตือนล่วงหน้า (วัน) ก่อนประกัน/พ.ร.บ./ภาษี/ตรวจสภาพหมด (ติ๊ดเลือก)
@@ -52,7 +55,7 @@ const BLANK_VEHICLE: Omit<Vehicle, 'id' | 'createdAt'> = {
   code: '', licensePlate: '', brand: 'Toyota Hilux Revo Standard Cab + ตู้ทึบ', usageType: 'พาณิชย์',
   registeredDate: '', insuranceCompany: '', insuranceClass: 'ชั้น 1', insuranceExpiry: '',
   actExpiry: '', taxExpiry: '', inspectionExpiry: '',
-  currentOdometer: 0, serviceIntervalKm: 8000, nextServiceOdometer: 0, isActive: true, note: '',
+  currentOdometer: 0, odometerAnchorDate: '', serviceIntervalKm: 8000, nextServiceOdometer: 0, isActive: true, note: '',
 }
 
 export default function FleetPage() {
@@ -62,6 +65,7 @@ export default function FleetPage() {
   const [showForm, setShowForm] = useState(false)
   const [odometerVehicle, setOdometerVehicle] = useState<Vehicle | null>(null)
   const [maintenanceVehicle, setMaintenanceVehicle] = useState<Vehicle | null>(null)
+  const [showGpsOdometer, setShowGpsOdometer] = useState(false) // 428
 
   const sorted = useMemo(
     () => [...vehicles].sort((a, b) => a.code.localeCompare(b.code, 'th')),
@@ -118,12 +122,21 @@ export default function FleetPage() {
           <p className="text-slate-500 text-sm mt-0.5">รถ {vehicles.length} คัน · ประกัน/พ.ร.บ./ภาษี/ตรวจสภาพ + บำรุง + เติมน้ำมัน</p>
         </div>
         {tab === 'fleet' && (
-          <button
-            onClick={() => { setEditingVehicle(null); setShowForm(true) }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg text-sm font-semibold hover:bg-[#2bb8b8] transition-colors shadow-sm self-start"
-          >
-            <Plus className="w-4 h-4" /> เพิ่มรถ
-          </button>
+          <div className="flex flex-wrap gap-2 self-start">
+            <button
+              onClick={() => setShowGpsOdometer(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#3DD8D8]/15 text-[#1B3A5C] border border-[#3DD8D8] rounded-lg text-sm font-medium hover:bg-[#3DD8D8]/25 transition-colors"
+              title="คำนวณไมล์ประมาณ = ไมล์จริงล่าสุดที่กรอก + ระยะวิ่งสะสมจาก GPS (V2X)"
+            >
+              <Satellite className="w-4 h-4" /> อัปเดตไมล์จาก GPS
+            </button>
+            <button
+              onClick={() => { setEditingVehicle(null); setShowForm(true) }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg text-sm font-semibold hover:bg-[#2bb8b8] transition-colors shadow-sm"
+            >
+              <Plus className="w-4 h-4" /> เพิ่มรถ
+            </button>
+          </div>
         )}
       </div>
 
@@ -193,6 +206,8 @@ export default function FleetPage() {
           vehicle={editingVehicle}
           onClose={() => setShowForm(false)}
           onSubmit={(data) => {
+            // 428 — กรอกไมล์ใหม่ในฟอร์ม = ตั้งฐานวันคำนวณ GPS ใหม่ (anchor = วันนี้)
+            if (data.currentOdometer !== (editingVehicle?.currentOdometer ?? 0)) data.odometerAnchorDate = todayISO()
             if (editingVehicle) updateVehicle(editingVehicle.id, data)
             else addVehicle(data)
             setShowForm(false)
@@ -205,7 +220,175 @@ export default function FleetPage() {
       {maintenanceVehicle && (
         <MaintenanceModal vehicle={maintenanceVehicle} onClose={() => setMaintenanceVehicle(null)} />
       )}
+      {showGpsOdometer && (
+        <GpsOdometerModal onClose={() => setShowGpsOdometer(false)} />
+      )}
     </div>
+  )
+}
+
+// ============================================================
+// 428 — อัปเดตไมล์จาก GPS
+//   ไมล์ประมาณ = ไมล์จริงล่าสุดที่กรอก (ฐาน ณ วัน anchor) + Σ ระยะวิ่ง V2X หลังวันนั้น
+//   เปิด modal → ดึงระยะรายวันทุกคันรอบเดียว → เสนอค่าต่อคัน → ติ๊กเลือก → บันทึก
+// ============================================================
+interface GpsOdoRow {
+  v: Vehicle
+  anchorDate: string // '' = ไม่รู้วันฐาน
+  age: number // วันตั้งแต่ anchor (Infinity ถ้าไม่รู้)
+  matched: boolean // ทะเบียนเจอใน GPS ไหม
+  est: OdometerEstimate
+}
+
+function GpsOdometerModal({ onClose }: { onClose: () => void }) {
+  const { vehicles, odometerLogs, fuelLogs, maintenanceRecords, updateVehicle } = useStore()
+  const [rows, setRows] = useState<GpsOdoRow[] | null>(null)
+  const [checked, setChecked] = useState<Set<string>>(new Set())
+  const [err, setErr] = useState<string | null>(null)
+  const today = todayISO()
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const prep = [...vehicles].filter(v => v.isActive)
+          .sort((a, b) => a.code.localeCompare(b.code, 'th'))
+          .map(v => {
+            const anchorDate = deriveAnchorDate(v, odometerLogs, fuelLogs, maintenanceRecords)
+            return { v, anchorDate, age: anchorAgeDays(anchorDate, today) }
+          })
+        const eligible = prep.filter(p => p.anchorDate && p.age >= 0 && p.age <= ANCHOR_MAX_AGE_DAYS)
+        // ดึงรอบเดียวครอบทุกคัน: from = anchor เก่าสุดในกลุ่มที่คำนวณได้ (ไม่มีใครคำนวณได้ → ไม่ต้องยิง)
+        const from = eligible.map(p => p.anchorDate).sort()[0]
+        const daily = from ? await fetchGpsDailyMileage(from, today) : []
+        if (cancelled) return
+        const gpsPlates = new Set(daily.map(d => d.plateNorm))
+        const result: GpsOdoRow[] = prep.map(p => ({
+          ...p,
+          matched: gpsPlates.has(normalizePlate(p.v.licensePlate)),
+          est: estimateOdometer(p.v, p.anchorDate, daily, today),
+        }))
+        setRows(result)
+        // default ติ๊กเฉพาะคันที่คำนวณได้ + GPS มีระยะวิ่งจริง
+        setChecked(new Set(result
+          .filter(r => r.anchorDate && r.age <= ANCHOR_MAX_AGE_DAYS && r.matched && r.est.gpsKm > 0)
+          .map(r => r.v.id)))
+      } catch (e) {
+        if (!cancelled) setErr(e instanceof Error ? e.message : 'ดึงข้อมูล GPS ไม่สำเร็จ')
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const toggle = (id: string) => {
+    setChecked(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const save = () => {
+    if (!rows) return
+    for (const r of rows) {
+      if (!checked.has(r.v.id)) continue
+      updateVehicle(r.v.id, { currentOdometer: r.est.estimate, odometerAnchorDate: today })
+    }
+    onClose()
+  }
+
+  /** เหตุผลที่คำนวณไม่ได้ (null = คำนวณได้) */
+  const blockReason = (r: GpsOdoRow): string | null => {
+    if (!r.matched) return 'ทะเบียนไม่ตรงกับรถใน GPS — เช็คทะเบียนในฟอร์มรถ'
+    if (!r.anchorDate) return 'ยังไม่รู้ว่าไมล์ล่าสุดกรอกวันไหน — กด "บันทึกไมล์" จากหน้าปัดจริง 1 ครั้งก่อน'
+    if (r.age > ANCHOR_MAX_AGE_DAYS) return `ไมล์ล่าสุดกรอกไว้นานเกิน ${ANCHOR_MAX_AGE_DAYS} วัน — กรอกไมล์จริงตั้งต้นใหม่ก่อน`
+    return null
+  }
+
+  return (
+    <Modal open onClose={onClose} title="อัปเดตไมล์จาก GPS" size="lg" closeLabel="cancel">
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600">
+          ไมล์ประมาณ = <b>ไมล์จริงล่าสุดที่กรอก</b> + <b>ระยะวิ่งสะสมจาก GPS</b> หลังวันนั้นถึงวันนี้
+          — ทุกครั้งที่กรอกไมล์จริง (บันทึกไมล์/เติมน้ำมัน) ระบบจะตั้งฐานใหม่ให้ค่าแม่นตลอด
+        </p>
+
+        {err && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {err}
+          </div>
+        )}
+
+        {!rows && !err && (
+          <div className="text-center py-10">
+            <Loader2 className="w-7 h-7 text-slate-300 mx-auto animate-spin mb-2" />
+            <p className="text-sm text-slate-400">กำลังดึงระยะวิ่งจาก GPS…</p>
+          </div>
+        )}
+
+        {rows && (
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-slate-500 text-xs">
+                  <th className="px-3 py-2 w-8"></th>
+                  <th className="px-3 py-2 text-left font-medium">รถ</th>
+                  <th className="px-3 py-2 text-right font-medium">ไมล์ที่บันทึก</th>
+                  <th className="px-3 py-2 text-right font-medium">+ GPS</th>
+                  <th className="px-3 py-2 text-right font-medium">ไมล์ใหม่ (≈)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map(r => {
+                  const blocked = blockReason(r)
+                  return (
+                    <tr key={r.v.id} className={cn(blocked && 'opacity-70')}>
+                      <td className="px-3 py-2.5 text-center">
+                        <input type="checkbox" checked={checked.has(r.v.id)} disabled={!!blocked}
+                          onChange={() => toggle(r.v.id)} className="accent-[#1B3A5C]" />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="text-xs font-bold bg-[#1B3A5C] text-white px-1.5 py-0.5 rounded">คัน {r.v.code}</span>
+                        <span className="ml-1.5 text-slate-700">{r.v.licensePlate}</span>
+                        {blocked && <p className="text-[11px] text-amber-600 mt-0.5">{blocked}</p>}
+                      </td>
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-600">
+                        {formatNumber(r.v.currentOdometer)}
+                        {r.anchorDate && <span className="block text-[10px] text-slate-400">ณ {formatDate(r.anchorDate)}</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-600">
+                        {blocked ? '—' : <>
+                          +{formatNumber(Math.round(r.est.gpsKm))}
+                          <span className="block text-[10px] text-slate-400">{r.est.days} วันที่วิ่ง</span>
+                        </>}
+                      </td>
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap font-semibold text-[#1B3A5C]">
+                        {blocked ? '—' : `≈ ${formatNumber(r.est.estimate)}`}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <p className="text-xs text-slate-400">
+          ค่าจาก GPS เป็นค่าประมาณ (ไม่นับวันที่กรอกไมล์เอง) — กรอกไมล์จริงจากหน้าปัดเป็นระยะเพื่อ
+          ตั้งฐานใหม่ให้ตรงเป๊ะ · กรอก manual ได้เหมือนเดิมทุกช่องทาง
+        </p>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+          <button onClick={save} disabled={!rows || checked.size === 0}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] disabled:opacity-40 transition-colors">
+            บันทึก {checked.size > 0 ? `(${checked.size} คัน)` : ''}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -272,6 +455,7 @@ function VehicleCard({ vehicle, onEdit, onDelete, onOdometer, onMaintenance }: {
         <div className="flex-1 min-w-0 text-xs">
           <span className="text-slate-500">ไมล์ปัจจุบัน </span>
           <span className="font-semibold text-slate-700">{formatNumber(v.currentOdometer)} กม.</span>
+          {v.odometerAnchorDate && <span className="text-[10px] text-slate-400"> · ณ {formatDate(v.odometerAnchorDate)}</span>}
           {v.nextServiceOdometer > 0 && (
             <>
               <span className="text-slate-400"> · เช็คถัดไป </span>
@@ -555,7 +739,7 @@ function MaintenanceModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () 
     addMaintenanceRecord({ vehicleId: vehicle.id, date, odometer, type, description, cost, expenseId, nextDueOdometer: nextDue })
     // sync เข้า vehicle: ไมล์ที่ทำ (ถ้า > ปัจจุบัน) + ระยะเช็คถัดไป (ถ้ากรอก)
     const patch: Partial<Vehicle> = {}
-    if (odometer > vehicle.currentOdometer) patch.currentOdometer = odometer
+    if (odometer > vehicle.currentOdometer) { patch.currentOdometer = odometer; patch.odometerAnchorDate = date }
     if (nextDue > 0) patch.nextServiceOdometer = nextDue
     if (Object.keys(patch).length > 0) updateVehicle(vehicle.id, patch)
     // reset form
