@@ -3,7 +3,7 @@
 //     1) จำนวน — จุดในแผน vs เที่ยว GPS (flag รถไม่ออกทั้งที่มีจุด)
 //     2) เวลา — เวลาออก/เลิกจริง vs รอบ (flag ออกช้า/เลิกเกิน)
 //     3) ระยะทาง/น้ำมัน — km/น้ำมันวันนั้น vs median ย้อนหลัง + อัตราสิ้นเปลือง
-import type { GpsTrip } from './v2x-types'
+import type { GpsCar, GpsTrip } from './v2x-types'
 import type { Round, TripStop } from '@/types'
 
 export interface TripSummary {
@@ -85,6 +85,18 @@ const KMPL_LOW = 7 // Hilux Revo ดีเซล ปกติ ~10-13 กม./ล
 const START_LATE_MIN = 45 // ออกช้ากว่ารอบ > 45 นาที = เตือน
 const KM_ANOMALY_MULT = 1.5 // ระยะทาง > 1.5× median = ผิดปกติ
 
+/** มิติ 3 (ระยะทาง/น้ำมัน) — ใช้ร่วมทั้งมุมมองรายรอบ + รายคัน */
+function anomalyFlags(actual: TripSummary, medianKm: number | null): AuditFlag[] {
+  const flags: AuditFlag[] = []
+  if (actual.count > 0 && actual.kmPerLiter > 0 && actual.kmPerLiter < KMPL_LOW) {
+    flags.push({ level: 'warn', message: `สิ้นเปลืองน้ำมันผิดปกติ (${actual.kmPerLiter.toFixed(1)} กม./ลิตร)` })
+  }
+  if (medianKm != null && medianKm > 0 && actual.km > medianKm * KM_ANOMALY_MULT) {
+    flags.push({ level: 'warn', message: `ระยะทางสูงผิดปกติ (${actual.km.toFixed(0)} กม. · ปกติ ~${medianKm.toFixed(0)} กม./วัน)` })
+  }
+  return flags
+}
+
 /** ประกอบผล audit 1 รอบ + คำนวณ flags ทั้ง 3 มิติ */
 export function buildRoundAudit(
   round: Round,
@@ -113,7 +125,12 @@ export function buildRoundAudit(
   }
 
   if (!matched) {
-    audit.flags.push({ level: 'info', message: 'จับคู่ทะเบียนรถกับ GPS ไม่ได้ (รถคันนี้อาจยังไม่ติด terminal)' })
+    audit.flags.push({
+      level: 'info',
+      message: vehicleCode == null
+        ? 'ยังไม่ผูกรถกับรอบนี้ — ระบุรถในกระดานจ่ายงาน หรือกด "เดารถจาก GPS"'
+        : 'จับคู่ทะเบียนรถกับ GPS ไม่ได้ (รถคันนี้อาจยังไม่ติด terminal)',
+    })
     return audit
   }
 
@@ -134,22 +151,107 @@ export function buildRoundAudit(
     }
     const roundEndMin = toMinutes(round.endTime)
     const lastMin = toMinutes(actual.lastTime)
-    if (roundEndMin != null && lastMin != null && lastMin > roundEndMin) {
-      audit.flags.push({ level: 'info', message: `เลิกงานเกินเวลารอบ (รอบจบ ${round.endTime} · จริง ${hhmmOf(actual.lastTime)})` })
+    if (roundStartMin != null && roundEndMin != null && lastMin != null) {
+      // รอบข้ามเที่ยงคืน (AKARA 15:30-01:30) — ขยายปลายรอบ +24 ชม. และเที่ยวหลังเที่ยงคืนก็ shift ตาม
+      const overnight = roundEndMin < roundStartMin
+      const endAdj = overnight ? roundEndMin + 1440 : roundEndMin
+      const lastAdj = overnight && lastMin < roundStartMin ? lastMin + 1440 : lastMin
+      if (lastAdj > endAdj) {
+        audit.flags.push({ level: 'info', message: `เลิกงานเกินเวลารอบ (รอบจบ ${round.endTime} · จริง ${hhmmOf(actual.lastTime)})` })
+      }
     }
   }
 
   // ── มิติ 3: ระยะทาง/น้ำมัน ──
-  if (actual.count > 0 && actual.kmPerLiter > 0 && actual.kmPerLiter < KMPL_LOW) {
-    audit.flags.push({ level: 'warn', message: `สิ้นเปลืองน้ำมันผิดปกติ (${actual.kmPerLiter.toFixed(1)} กม./ลิตร)` })
-  }
-  if (medianKm != null && medianKm > 0 && actual.km > medianKm * KM_ANOMALY_MULT) {
-    audit.flags.push({ level: 'warn', message: `ระยะทางสูงผิดปกติ (${actual.km.toFixed(0)} กม. · ปกติ ~${medianKm.toFixed(0)} กม./วัน)` })
-  }
+  audit.flags.push(...anomalyFlags(actual, medianKm))
 
   if (audit.flags.length === 0 && actual.count > 0) {
     audit.flags.push({ level: 'ok', message: 'ปกติ — วิ่งตามแผน' })
   }
 
   return audit
+}
+
+// ═══════════════ 426 — มุมมองรายคัน/ฟลีต + เดารถจาก GPS ═══════════════
+
+/** audit รายคัน (ไม่ต้องผูกรถกับรอบ) — ใช้ในมุมมอง "รายคัน/ฟลีต" */
+export interface VehicleAudit {
+  carId: string
+  plate: string
+  plateNorm: string
+  vehicleCode: string | null // code ในฟลีต (null = ทะเบียนไม่ match)
+  actual: TripSummary
+  medianKm: number | null
+  flags: AuditFlag[]
+}
+
+export function buildVehicleAudit(
+  car: GpsCar,
+  vehicleCode: string | null,
+  trips: GpsTrip[],
+  medianKm: number | null,
+): VehicleAudit {
+  const actual = summarizeTrips(trips)
+  const flags: AuditFlag[] = []
+  if (actual.count === 0) flags.push({ level: 'info', message: 'GPS ไม่พบการวิ่งในวันนี้' })
+  flags.push(...anomalyFlags(actual, medianKm))
+  if (flags.length === 0) flags.push({ level: 'ok', message: 'ปกติ' })
+  return { carId: car.carId, plate: car.plate, plateNorm: car.plateNorm, vehicleCode, actual, medianKm, flags }
+}
+
+/**
+ * รวมนาทีที่เที่ยววิ่งทับหน้าต่างเวลารอบ (รองรับรอบ/เที่ยวข้ามเที่ยงคืน)
+ *   ใช้เดาว่ารถคันไหนวิ่งรอบนี้ — overlap มาก = น่าจะใช่
+ */
+export function roundWindowOverlapMin(startTime: string, endTime: string, trips: GpsTrip[]): number {
+  const s = toMinutes(startTime)
+  const e = toMinutes(endTime)
+  if (s == null || e == null) return 0
+  const end = e < s ? e + 1440 : e // รอบข้ามเที่ยงคืน → ขยายปลาย +24 ชม.
+  let total = 0
+  for (const t of trips) {
+    const ts = toMinutes(t.startTime)
+    let te = toMinutes(t.endTime)
+    if (ts == null || te == null) continue
+    if (te < ts) te += 1440 // เที่ยวข้ามเที่ยงคืน
+    // ลอง 2 กรอบ: ช่วงตามจริง และ shift +24 ชม. (เที่ยวหลังเที่ยงคืนของรอบ overnight)
+    for (const off of [0, 1440]) {
+      const a = Math.max(s, ts + off)
+      const b = Math.min(end, te + off)
+      if (b > a) { total += b - a; break }
+    }
+  }
+  return Math.round(total)
+}
+
+/** ผลเดารถของรอบ 1 ตัวเลือก */
+export interface VehicleGuess {
+  carId: string
+  plate: string
+  plateNorm: string
+  overlapMin: number // นาทีที่วิ่งทับหน้าต่างรอบ
+  tripCount: number // เที่ยวทั้งวันของคันนั้น
+  km: number
+}
+
+/** เดารถจากเวลาวิ่งจริง — คืนทุกคันที่ทับหน้าต่างรอบ เรียง overlap มาก→น้อย (ตัวแรก = แนะนำ) */
+export function guessVehiclesForRound(
+  round: Round,
+  cars: GpsCar[],
+  tripsByCar: Map<string, GpsTrip[]>,
+): VehicleGuess[] {
+  return cars
+    .map(c => {
+      const trips = tripsByCar.get(c.carId) || []
+      return {
+        carId: c.carId,
+        plate: c.plate,
+        plateNorm: c.plateNorm,
+        overlapMin: roundWindowOverlapMin(round.startTime, round.endTime, trips),
+        tripCount: trips.length,
+        km: trips.reduce((sum, t) => sum + t.distanceKm, 0),
+      }
+    })
+    .filter(g => g.overlapMin > 0)
+    .sort((a, b) => b.overlapMin - a.overlapMin)
 }

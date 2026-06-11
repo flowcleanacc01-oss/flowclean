@@ -5,7 +5,8 @@
 //   - override รถ/คน รายวัน (standby = backup pool) · เรียงลำดับจุด · bag count (load)
 //   - เพิ่มจุด: ยืมรอบ (moved-in) / แทรก (inserted) · สถานะรอบ planned/running/done
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { canManageDispatch } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
@@ -41,9 +42,21 @@ function todayLocal(): string {
   return toLocalISO(new Date())
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
 export default function DispatchPage() {
   const { currentUser, rounds, customers, vehicles, crew, dailyTrips, scheduleOverrides, addDailyTrips, updateDailyTrip, deleteDailyTrip } = useStore()
-  const [date, setDate] = useState<string>(todayLocal())
+  const searchParams = useSearchParams()
+  // 426 — deep-link ?date= จากหน้า GPS (เทียบแผน → เปิดกระดานวันเดียวกัน) · [[feedback_url_state_sync]]
+  const [date, setDate] = useState<string>(() => {
+    const d = searchParams.get('date')
+    return d && DATE_RE.test(d) ? d : todayLocal()
+  })
+  useEffect(() => {
+    const d = searchParams.get('date')
+    if (d && DATE_RE.test(d)) setDate(d)
+    // deps เฉพาะ searchParams — refire เมื่อ URL เปลี่ยนเท่านั้น ไม่ทับตอน user เปลี่ยนวันเอง
+  }, [searchParams])
   const [mode, setMode] = useState<GenerateMode>('schedule')
   const [showGenerate, setShowGenerate] = useState(false)
   const [addStopTrip, setAddStopTrip] = useState<DailyTrip | null>(null)

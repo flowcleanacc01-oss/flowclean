@@ -5,19 +5,24 @@
 //   ดึงผ่าน /api/gps (server proxy) · ไม่ฝัง map (ใช้ลิงก์ Google Maps) เลี่ยง map API key
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import Link from 'next/link'
 import { subDays, parseISO, format } from 'date-fns'
 import { useStore } from '@/lib/store'
 import { fetchGpsCars, fetchGpsRealtime, fetchGpsTrips } from '@/lib/gps-service'
 import { normalizePlate, type GpsCar, type GpsPosition, type GpsTrip } from '@/lib/v2x-types'
-import { buildRoundAudit, medianDailyKm, hhmmOf, type RoundAudit, type AuditFlag } from '@/lib/gps-audit'
+import {
+  buildRoundAudit, buildVehicleAudit, guessVehiclesForRound, medianDailyKm, hhmmOf,
+  type RoundAudit, type VehicleAudit, type AuditFlag,
+} from '@/lib/gps-audit'
 import { buildTripStops } from '@/lib/dispatch'
 import { todayISO, cn } from '@/lib/utils'
 import { canViewFleet } from '@/lib/permissions'
-import { dailyTripId, type Vehicle } from '@/types'
+import { dailyTripId, type Round, type Vehicle } from '@/types'
+import Modal from '@/components/Modal'
 import {
   Satellite, MapPin, Navigation, RefreshCw, Radio, Gauge,
   ExternalLink, Route, TrendingUp, Fuel, AlertCircle, Loader2, Car, CircleDot, Clock,
-  ClipboardCheck, CheckCircle2, AlertTriangle, Info,
+  ClipboardCheck, CheckCircle2, AlertTriangle, Info, Wand2,
 } from 'lucide-react'
 
 // "2026-06-10 20:35:16" → "20:35"
@@ -308,15 +313,27 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
 function AuditTab() {
   const { rounds, customers, vehicles, dailyTrips, scheduleOverrides } = useStore()
   const [date, setDate] = useState(todayISO())
+  const [view, setView] = useState<'round' | 'fleet'>('round') // 426 — รายรอบ / รายคัน/ฟลีต
   const [cars, setCars] = useState<GpsCar[]>([])
   const [audits, setAudits] = useState<RoundAudit[] | null>(null)
+  const [vehicleAudits, setVehicleAudits] = useState<VehicleAudit[] | null>(null)
+  const [tripsByCar, setTripsByCar] = useState<Map<string, GpsTrip[]> | null>(null) // 426 — ใช้เดารถ
+  const [plannedTotal, setPlannedTotal] = useState({ stops: 0, bags: 0 })
+  const [guessRoundId, setGuessRoundId] = useState<string | null>(null)
+  const [pendingRerun, setPendingRerun] = useState(false)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => { fetchGpsCars().then(setCars).catch(() => {}) }, [])
 
+  const vehicleByPlate = useMemo(() => {
+    const m = new Map<string, Vehicle>()
+    vehicles.forEach(v => m.set(normalizePlate(v.licensePlate), v))
+    return m
+  }, [vehicles])
+
   const run = useCallback(async () => {
-    setLoading(true); setErr(null); setAudits(null)
+    setLoading(true); setErr(null); setAudits(null); setVehicleAudits(null)
     try {
       const activeRounds = [...rounds].filter(r => r.isActive).sort((a, b) => a.sortOrder - b.sortOrder)
       const carByPlate = new Map(cars.map(c => [c.plateNorm, c]))
@@ -330,20 +347,20 @@ function AuditTab() {
         return { round, vehicle, car, stops }
       })
 
-      const carIds = [...new Set(plan.map(p => p.car?.carId).filter((x): x is string => !!x))]
+      // 426 — ดึงเที่ยวของทุกคัน (ใช้ทั้งรายรอบ + รายคัน + เดารถ) · V2X มี ~3 คัน
       // historical 3 วันก่อน (V2X /report/trip/list ช้ากับช่วงยาว — 7 วัน = timeout 504)
       const histFrom = format(subDays(parseISO(date), 3), 'yyyy-MM-dd')
       const yesterday = format(subDays(parseISO(date), 1), 'yyyy-MM-dd')
       const dayTrips = new Map<string, GpsTrip[]>()
       const histMedian = new Map<string, number | null>()
-      for (const carId of carIds) {
-        dayTrips.set(carId, await fetchGpsTrips(carId, date))
+      for (const car of cars) {
+        dayTrips.set(car.carId, await fetchGpsTrips(car.carId, date))
         // historical = best-effort: ถ้า V2X timeout/error → median null (มิติอื่นยังทำงาน)
         try {
-          const hist = await fetchGpsTrips(carId, histFrom, yesterday)
-          histMedian.set(carId, medianDailyKm(hist, date))
+          const hist = await fetchGpsTrips(car.carId, histFrom, yesterday)
+          histMedian.set(car.carId, medianDailyKm(hist, date))
         } catch {
-          histMedian.set(carId, null)
+          histMedian.set(car.carId, null)
         }
       }
 
@@ -356,17 +373,41 @@ function AuditTab() {
         p.car ? (dayTrips.get(p.car.carId) || []) : [],
         p.car ? (histMedian.get(p.car.carId) ?? null) : null,
       )))
+      setVehicleAudits(cars.map(car => buildVehicleAudit(
+        car,
+        vehicleByPlate.get(car.plateNorm)?.code ?? null,
+        dayTrips.get(car.carId) || [],
+        histMedian.get(car.carId) ?? null,
+      )))
+      setTripsByCar(dayTrips)
+      setPlannedTotal({
+        stops: plan.reduce((s, p) => s + p.stops.length, 0),
+        bags: plan.reduce((s, p) => s + p.stops.reduce((x, st) => x + (st.bagCount || 0), 0), 0),
+      })
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'วิเคราะห์ไม่สำเร็จ')
     } finally {
       setLoading(false)
     }
-  }, [rounds, customers, vehicles, dailyTrips, scheduleOverrides, cars, date])
+  }, [rounds, customers, vehicles, dailyTrips, scheduleOverrides, cars, date, vehicleByPlate])
 
-  const warnCount = useMemo(
-    () => audits?.reduce((s, a) => s + a.flags.filter(f => f.level === 'warn').length, 0) ?? 0,
-    [audits],
-  )
+  // 426 — รัน audit ซ้ำหลังบันทึกรถจากการเดา (effect รอ store flush ก่อน → run closure เห็นข้อมูลใหม่)
+  useEffect(() => {
+    if (pendingRerun) { setPendingRerun(false); run() }
+  }, [pendingRerun, run])
+
+  const warnCount = useMemo(() => {
+    const src = view === 'fleet' ? vehicleAudits : audits
+    return src?.reduce((s, a) => s + a.flags.filter(f => f.level === 'warn').length, 0) ?? 0
+  }, [audits, vehicleAudits, view])
+
+  const fleetTotal = useMemo(() => ({
+    count: vehicleAudits?.reduce((s, a) => s + a.actual.count, 0) ?? 0,
+    km: vehicleAudits?.reduce((s, a) => s + a.actual.km, 0) ?? 0,
+    fuel: vehicleAudits?.reduce((s, a) => s + a.actual.fuel, 0) ?? 0,
+  }), [vehicleAudits])
+
+  const guessRound = guessRoundId ? rounds.find(r => r.id === guessRoundId) : undefined
 
   return (
     <div className="space-y-4">
@@ -376,11 +417,25 @@ function AuditTab() {
           <input type="date" value={date} max={todayISO()} onChange={e => setDate(e.target.value)}
             className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
         </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">มุมมอง</label>
+          <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
+            {([['round', 'รายรอบ'], ['fleet', 'รายคัน/ฟลีต']] as const).map(([k, label]) => (
+              <button key={k} onClick={() => setView(k)}
+                className={cn('px-3 py-2 text-sm font-medium transition-colors',
+                  view === k ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-500 hover:bg-slate-50')}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <button onClick={run} disabled={loading || cars.length === 0}
           className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg text-sm font-semibold hover:bg-[#2bb8b8] transition-colors disabled:opacity-50">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardCheck className="w-4 h-4" />} เทียบแผน vs จริง
         </button>
-        <p className="text-xs text-slate-400 sm:ml-auto sm:self-center">เทียบจุดในรอบ · เวลาออก/เลิก · ระยะทาง/น้ำมัน</p>
+        <p className="text-xs text-slate-400 sm:ml-auto sm:self-center">
+          {view === 'fleet' ? 'ภาพรวมการวิ่งทุกคัน — ไม่ต้องผูกรถกับรอบ' : 'เทียบจุดในรอบ · เวลาออก/เลิก · ระยะทาง/น้ำมัน'}
+        </p>
       </div>
 
       {err && <ErrorBlock msg={err} onRetry={run} />}
@@ -391,50 +446,120 @@ function AuditTab() {
           <div className={cn('rounded-xl border px-4 py-3 flex items-center gap-2 text-sm font-medium',
             warnCount > 0 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800')}>
             {warnCount > 0
-              ? <><AlertTriangle className="w-4 h-4" /> พบ {warnCount} ข้อควรตรวจสอบ จาก {audits.length} รอบ</>
-              : <><CheckCircle2 className="w-4 h-4" /> ทุกรอบวิ่งตามแผน ({audits.length} รอบ)</>}
+              ? <><AlertTriangle className="w-4 h-4" /> พบ {warnCount} ข้อควรตรวจสอบ จาก {view === 'fleet' ? `${vehicleAudits?.length ?? 0} คัน` : `${audits.length} รอบ`}</>
+              : <><CheckCircle2 className="w-4 h-4" /> {view === 'fleet' ? `ทุกคันวิ่งปกติ (${vehicleAudits?.length ?? 0} คัน)` : `ทุกรอบวิ่งตามแผน (${audits.length} รอบ)`}</>}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {audits.map(a => (
-              <div key={a.roundId} className="bg-white rounded-xl border border-slate-200 p-4">
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: a.roundColor }}>{a.roundCode}</span>
-                    <span className="text-xs text-slate-400">{a.roundStart}-{a.roundEnd}</span>
-                  </div>
-                  {a.vehicleCode
-                    ? <span className="text-xs font-semibold text-slate-600">คัน {a.vehicleCode}{a.plate ? ` · ${a.plate}` : ''}</span>
-                    : <span className="text-xs text-slate-400">ไม่มีรถผูกรอบ</span>}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm mb-3">
-                  <div className="bg-slate-50 rounded-lg p-2.5">
-                    <p className="text-xs text-slate-400 mb-0.5">แผน</p>
-                    <p className="text-slate-700 font-medium">{a.plannedStops} จุด{a.plannedBags > 0 ? ` · ${a.plannedBags} ถุง` : ''}</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg p-2.5">
-                    <p className="text-xs text-slate-400 mb-0.5">จริง (GPS)</p>
-                    {a.matched
-                      ? <p className="text-slate-700 font-medium">{a.actual.count} เที่ยว · {a.actual.km.toFixed(0)} กม.</p>
-                      : <p className="text-slate-400">—</p>}
-                  </div>
-                </div>
-
-                {a.matched && a.actual.count > 0 && (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 mb-3">
-                    <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{hhmmOf(a.actual.firstTime)}-{hhmmOf(a.actual.lastTime)}</span>
-                    <span className="inline-flex items-center gap-1"><Fuel className="w-3.5 h-3.5" />{a.actual.fuel.toFixed(1)} ล. ({a.actual.kmPerLiter.toFixed(1)} กม./ล.)</span>
-                    {a.medianKm != null && <span className="text-slate-400">ปกติ ~{a.medianKm.toFixed(0)} กม./วัน</span>}
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  {a.flags.map((f, i) => <FlagRow key={i} flag={f} />)}
-                </div>
+          {view === 'fleet' && vehicleAudits ? (
+            <>
+              {/* 426 — มุมมองรายคัน/ฟลีต: แผนรวมทุกรอบ vs วิ่งจริงทุกคัน (ไม่ต้องผูกรถกับรอบ) */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatCard icon={ClipboardCheck} label="แผนรวมทุกรอบ" value={`${plannedTotal.stops} จุด${plannedTotal.bags > 0 ? ` · ${plannedTotal.bags} ถุง` : ''}`} />
+                <StatCard icon={Route} label="เที่ยวรวม (GPS)" value={`${fleetTotal.count} เที่ยว`} />
+                <StatCard icon={TrendingUp} label="ระยะทางรวม" value={`${fleetTotal.km.toFixed(0)} กม.`} />
+                <StatCard icon={Fuel} label="น้ำมันรวม" value={`${fleetTotal.fuel.toFixed(1)} ลิตร`} />
               </div>
-            ))}
-          </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {vehicleAudits.map(va => (
+                  <div key={va.carId} className="bg-white rounded-xl border border-slate-200 p-4">
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {va.vehicleCode && <span className="text-xs font-bold bg-[#1B3A5C] text-white px-1.5 py-0.5 rounded shrink-0">คัน {va.vehicleCode}</span>}
+                        <span className="font-semibold text-slate-800 truncate">{va.plate}</span>
+                      </div>
+                      {va.actual.count > 0 && (
+                        <span className="text-xs text-slate-400 shrink-0 inline-flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" />{hhmmOf(va.actual.firstTime)}-{hhmmOf(va.actual.lastTime)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-sm mb-3">
+                      <div className="bg-slate-50 rounded-lg p-2.5">
+                        <p className="text-xs text-slate-400 mb-0.5">เที่ยว</p>
+                        <p className="text-slate-700 font-medium">{va.actual.count}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-2.5">
+                        <p className="text-xs text-slate-400 mb-0.5">ระยะทาง</p>
+                        <p className="text-slate-700 font-medium">{va.actual.km.toFixed(0)} กม.</p>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-2.5">
+                        <p className="text-xs text-slate-400 mb-0.5">น้ำมัน</p>
+                        <p className="text-slate-700 font-medium">{va.actual.fuel.toFixed(1)} ล.</p>
+                      </div>
+                    </div>
+
+                    {(va.actual.kmPerLiter > 0 || va.medianKm != null) && (
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 mb-3">
+                        {va.actual.kmPerLiter > 0 && <span className="inline-flex items-center gap-1"><Fuel className="w-3.5 h-3.5" />{va.actual.kmPerLiter.toFixed(1)} กม./ล.</span>}
+                        {va.medianKm != null && <span className="text-slate-400">ปกติ ~{va.medianKm.toFixed(0)} กม./วัน</span>}
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      {va.flags.map((f, i) => <FlagRow key={i} flag={f} />)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {audits.map(a => (
+                <div key={a.roundId} className="bg-white rounded-xl border border-slate-200 p-4">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: a.roundColor }}>{a.roundCode}</span>
+                      <span className="text-xs text-slate-400">{a.roundStart}-{a.roundEnd}</span>
+                    </div>
+                    {a.vehicleCode
+                      ? <span className="text-xs font-semibold text-slate-600">คัน {a.vehicleCode}{a.plate ? ` · ${a.plate}` : ''}</span>
+                      : <span className="text-xs text-slate-400">ไม่มีรถผูกรอบ</span>}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                    <div className="bg-slate-50 rounded-lg p-2.5">
+                      <p className="text-xs text-slate-400 mb-0.5">แผน</p>
+                      <p className="text-slate-700 font-medium">{a.plannedStops} จุด{a.plannedBags > 0 ? ` · ${a.plannedBags} ถุง` : ''}</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-2.5">
+                      <p className="text-xs text-slate-400 mb-0.5">จริง (GPS)</p>
+                      {a.matched
+                        ? <p className="text-slate-700 font-medium">{a.actual.count} เที่ยว · {a.actual.km.toFixed(0)} กม.</p>
+                        : <p className="text-slate-400">—</p>}
+                    </div>
+                  </div>
+
+                  {a.matched && a.actual.count > 0 && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 mb-3">
+                      <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{hhmmOf(a.actual.firstTime)}-{hhmmOf(a.actual.lastTime)}</span>
+                      <span className="inline-flex items-center gap-1"><Fuel className="w-3.5 h-3.5" />{a.actual.fuel.toFixed(1)} ล. ({a.actual.kmPerLiter.toFixed(1)} กม./ล.)</span>
+                      {a.medianKm != null && <span className="text-slate-400">ปกติ ~{a.medianKm.toFixed(0)} กม./วัน</span>}
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    {a.flags.map((f, i) => <FlagRow key={i} flag={f} />)}
+                  </div>
+
+                  {/* 426 — รอบไม่มีรถ: ทางแก้ 2 ปุ่ม (กระดานจ่ายงาน / เดารถจาก GPS) */}
+                  {!a.vehicleCode && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link href={`/dashboard/dispatch?date=${date}`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                        <ClipboardCheck className="w-3.5 h-3.5" /> เปิดกระดานจ่ายงาน
+                      </Link>
+                      <button onClick={() => setGuessRoundId(a.roundId)} disabled={!tripsByCar}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#3DD8D8]/15 text-[#1B3A5C] hover:bg-[#3DD8D8]/30 transition-colors disabled:opacity-50">
+                        <Wand2 className="w-3.5 h-3.5" /> เดารถจาก GPS
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
 
@@ -444,7 +569,112 @@ function AuditTab() {
           <p className="text-slate-500">เลือกวัน แล้วกด เทียบแผน vs จริง</p>
         </div>
       )}
+
+      {guessRound && tripsByCar && (
+        <GuessVehicleModal round={guessRound} cars={cars} tripsByCar={tripsByCar}
+          vehicleByPlate={vehicleByPlate} date={date}
+          onClose={() => setGuessRoundId(null)}
+          onSaved={() => { setGuessRoundId(null); setPendingRerun(true) }} />
+      )}
     </div>
+  )
+}
+
+// 426 — เดารถจาก GPS: เทียบเวลาวิ่งจริงกับหน้าต่างเวลารอบ → เสนอ → ติ๊ดยืนยัน → บันทึก
+function GuessVehicleModal({
+  round, cars, tripsByCar, vehicleByPlate, date, onClose, onSaved,
+}: {
+  round: Round
+  cars: GpsCar[]
+  tripsByCar: Map<string, GpsTrip[]>
+  vehicleByPlate: Map<string, Vehicle>
+  date: string
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { customers, dailyTrips, scheduleOverrides, currentUser, addDailyTrips, updateDailyTrip, updateRound } = useStore()
+  const guesses = useMemo(() => guessVehiclesForRound(round, cars, tripsByCar), [round, cars, tripsByCar])
+  const [selected, setSelected] = useState<string>(guesses[0]?.carId || '')
+  const [setAsDefault, setSetAsDefault] = useState(false)
+
+  const selectedGuess = guesses.find(g => g.carId === selected)
+  const selectedVehicle = selectedGuess ? vehicleByPlate.get(selectedGuess.plateNorm) : undefined
+
+  const save = () => {
+    if (!selectedVehicle) return
+    const id = dailyTripId(date, round.id)
+    const existing = dailyTrips.find(t => t.id === id)
+    if (existing) {
+      updateDailyTrip(id, { vehicleId: selectedVehicle.id })
+    } else {
+      // ยังไม่มีใบงานวันนั้น → สร้างให้เลย (โครงเดียวกับ generateOne ในกระดานจ่ายงาน)
+      addDailyTrips([{
+        id, date, roundId: round.id,
+        vehicleId: selectedVehicle.id, driverId: round.defaultDriverId || '', helperId: round.defaultHelperId || '',
+        status: 'planned', note: '', stops: buildTripStops(round, customers, date, scheduleOverrides, 'schedule'),
+        createdBy: currentUser?.id || 'unknown', createdAt: new Date().toISOString(),
+      }])
+    }
+    if (setAsDefault) updateRound(round.id, { defaultVehicleId: selectedVehicle.id })
+    onSaved()
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`เดารถจาก GPS · รอบ ${round.code}`} size="md" closeLabel="cancel">
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600">
+          ดูจากเวลาวิ่งจริง (GPS) ที่ทับช่วงเวลารอบ <b>{round.startTime}–{round.endTime}</b> ของวันที่ {date}
+          {' '}— รถ 1 คันอาจวิ่งหลายรอบ ตรวจตัวเลขก่อนยืนยัน
+        </p>
+
+        {guesses.length === 0 ? (
+          <div className="text-center py-8 bg-slate-50 rounded-lg">
+            <Car className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm text-slate-500">GPS ไม่พบรถคันไหนวิ่งในช่วงเวลารอบนี้</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {guesses.map((g, i) => {
+              const v = vehicleByPlate.get(g.plateNorm)
+              return (
+                <label key={g.carId}
+                  className={cn('flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
+                    selected === g.carId ? 'border-[#3DD8D8] bg-[#3DD8D8]/5' : 'border-slate-200 hover:bg-slate-50')}>
+                  <input type="radio" name="guess-vehicle" checked={selected === g.carId}
+                    onChange={() => setSelected(g.carId)} className="accent-[#1B3A5C]" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      {v && <span className="text-xs font-bold bg-[#1B3A5C] text-white px-1.5 py-0.5 rounded shrink-0">คัน {v.code}</span>}
+                      <span className="text-sm font-semibold text-slate-800 truncate">{g.plate}</span>
+                      {i === 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium shrink-0">แนะนำ</span>}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      วิ่งทับช่วงรอบ {fmtMin(g.overlapMin)} · ทั้งวัน {g.tripCount} เที่ยว · {g.km.toFixed(0)} กม.
+                    </p>
+                    {!v && <p className="text-xs text-amber-600 mt-0.5">⚠ ทะเบียนนี้ไม่ตรงกับรถในฟลีต — เพิ่ม/แก้ทะเบียนในหน้าฟลีตรถก่อน</p>}
+                  </div>
+                </label>
+              )
+            })}
+
+            <label className="flex items-center gap-2 text-sm text-slate-600 pt-1 cursor-pointer">
+              <input type="checkbox" checked={setAsDefault} onChange={e => setSetAsDefault(e.target.checked)} className="accent-[#1B3A5C]" />
+              ตั้งเป็น “รถประจำรอบ {round.code}” ด้วย (ใช้กับทุกวัน ไม่ใช่แค่วันนี้)
+            </label>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+          {guesses.length > 0 && (
+            <button onClick={save} disabled={!selectedVehicle}
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] disabled:opacity-40 transition-colors">
+              บันทึกลงใบงานวันนี้
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
   )
 }
 
