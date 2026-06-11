@@ -1148,9 +1148,9 @@ export default function LinenFormsPage() {
                   type="button"
                   onClick={handleCreateJumpWashing}
                   disabled={!newCustomerId || newRows.length === 0}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-[#3DD8D8] text-[#1B3A5C] rounded-lg hover:bg-[#2bb8b8] transition-colors disabled:opacity-50"
                   title="สร้างใบส่งรับผ้าแล้วข้ามไปสถานะ 4/7 (ซักอบเสร็จ) กรอกจำนวนทั้งหมดทีเดียว — ข้ามขั้นตอน 1/7-3/7 ที่หน้างานไม่ได้ใช้">
-                  ⏩ ลัดไป 4/7 กรอกข้อมูลทั้งหมด
+                  ลัดไป 4/7 <ChevronRight className="w-3.5 h-3.5" /> (กรอกข้อมูลทั้งหมด)
                 </button>
                 <button
                   type="button"
@@ -1709,9 +1709,10 @@ export default function LinenFormsPage() {
                   <div className="flex items-center gap-2">
                     {detailForm.status === 'washing' && detailForm.rows.some(r => (r.col6_factoryPackSend || 0) > 0) && (
                       <button onClick={() => { handleJumpToConfirmed(detailForm.id); setShowDetail(null) }}
-                        className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors flex items-center gap-1.5"
+                        className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors flex items-center gap-1"
                         title="ข้ามขั้นตอน 5/7-6/7 ที่หน้างานไม่ได้ใช้ — จบที่ 7/7 (ลูกค้านับกลับ) auto-fill นับกลับ = แพคส่ง แล้วปิดหน้าต่าง">
-                        <Check className="w-4 h-4" /> ลัดไป 7/7✓ เสร็จสมบูรณ์
+                        ลัดไป 7/7 <ChevronRight className="w-4 h-4" />
+                        <span className="inline-flex items-center gap-1">(<Check className="w-4 h-4" />เสร็จสมบูรณ์)</span>
                       </button>
                     )}
                     {(() => {
