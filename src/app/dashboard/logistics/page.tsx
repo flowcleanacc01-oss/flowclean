@@ -4,7 +4,7 @@
 // แสดงคิวรับ-ส่งผ้ารายสัปดาห์ (ลูกค้า × 7 วัน) จาก schedule + overrides + SD จริง
 // ลาก cell ข้ามวัน = เลื่อนคิว · คลิก = สร้าง/ดู SD
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
@@ -13,7 +13,8 @@ import {
   type LogisticsCell, type LogisticsRow,
 } from '@/lib/logistics-week'
 import { todayISO, genId, cn, formatExportFilename } from '@/lib/utils'
-import { WEEKDAY_SHORT, SCHEDULE_TYPE_CONFIG, type DeliveryNote, type ScheduleOverride, type Customer } from '@/types'
+import { WEEKDAY_SHORT, SCHEDULE_TYPE_CONFIG, type DeliveryNote, type ScheduleOverride, type Customer, type Round } from '@/types'
+import { effectiveRoundId } from '@/lib/dispatch'
 import { canViewSD } from '@/lib/permissions'
 import Modal from '@/components/Modal'
 import RouteSheetPrint, { type RouteStop } from '@/components/RouteSheetPrint'
@@ -70,8 +71,11 @@ interface PendingDelete {
   hasSD: boolean
 }
 
+// 431 — ป้ายวันสั้น (weekday 0-6) สำหรับ chip ข้อยกเว้นรอบรายวัน (429)
+const DAY_LABELS = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.']
+
 export default function LogisticsPage() {
-  const { currentUser, customers, deliveryNotes, scheduleOverrides, updateDeliveryNote, addScheduleOverride, deleteScheduleOverride, updateCustomer, routePlans, setRouteOrder, companyInfo } = useStore()
+  const { currentUser, customers, deliveryNotes, scheduleOverrides, updateDeliveryNote, addScheduleOverride, deleteScheduleOverride, updateCustomer, routePlans, setRouteOrder, companyInfo, rounds } = useStore()
   const router = useRouter()
 
   const today = todayISO()
@@ -98,8 +102,13 @@ export default function LogisticsPage() {
   const listDragIdx = useRef<number | null>(null)
   const [listDragOver, setListDragOver] = useState<number | null>(null)
 
-  // จุดวิ่งของวันที่เลือก — เรียงตาม routePlan (unordered ต่อท้ายตามชื่อ)
-  const dayStops = useMemo(() => {
+  // 431 — รอบ active เรียงตาม sortOrder (= เรียงเวลาเริ่มรอบ V→SPA→AKARA→L7→SWD)
+  const sortedRounds = useMemo(() => [...rounds].filter(r => r.isActive).sort((a, b) => a.sortOrder - b.sortOrder), [rounds])
+  const roundById = useMemo(() => new Map(rounds.map(r => [r.id, r])), [rounds])
+
+  // จุดวิ่งของวันที่เลือก — 431: จัดกลุ่มตามรอบจริงของวันนั้น (429 override-aware)
+  //   ในกลุ่ม: ลำดับที่ลากจัดมือ (routePlan) ชนะ → เวลานัดรับ → ลำดับวิ่งของรอบ → ชื่อ
+  const dayGroups = useMemo(() => {
     if (!selectedDay) return []
     const plan = routePlans.find(p => p.date === selectedDay)
     const order = plan?.orderedCustomerIds || []
@@ -107,18 +116,77 @@ export default function LogisticsPage() {
       .map(row => ({ row, cell: row.cells.find(c => c.date === selectedDay) }))
       .filter((x): x is { row: LogisticsRow; cell: LogisticsCell } =>
         !!x.cell && x.cell.status !== 'empty' && x.cell.status !== 'skipped')
-    stops.sort((a, b) => {
+
+    const withinSort = (a: { row: LogisticsRow }, b: { row: LogisticsRow }) => {
       const ia = order.indexOf(a.row.customer.id)
       const ib = order.indexOf(b.row.customer.id)
-      if (ia === -1 && ib === -1) {
-        return (a.row.customer.shortName || a.row.customer.name).localeCompare(b.row.customer.shortName || b.row.customer.name, 'th')
+      if (ia !== -1 || ib !== -1) {
+        if (ia === -1) return 1
+        if (ib === -1) return -1
+        return ia - ib
       }
-      if (ia === -1) return 1
-      if (ib === -1) return -1
-      return ia - ib
-    })
-    return stops
-  }, [selectedDay, week, routePlans])
+      const ta = a.row.customer.pickupWindowStart || ''
+      const tb = b.row.customer.pickupWindowStart || ''
+      if (ta !== tb) {
+        if (!ta) return 1
+        if (!tb) return -1
+        return ta.localeCompare(tb)
+      }
+      return (a.row.customer.routeSequence || 0) - (b.row.customer.routeSequence || 0) ||
+        (a.row.customer.shortName || a.row.customer.name).localeCompare(b.row.customer.shortName || b.row.customer.name, 'th')
+    }
+
+    const byRound = new Map<string, typeof stops>()
+    for (const s of stops) {
+      const rid0 = effectiveRoundId(s.row.customer, selectedDay)
+      const rid = rid0 && roundById.has(rid0) ? rid0 : ''
+      if (!byRound.has(rid)) byRound.set(rid, [])
+      byRound.get(rid)!.push(s)
+    }
+    const groups: { round: Round | null; stops: typeof stops }[] = []
+    for (const r of sortedRounds) {
+      const rs = byRound.get(r.id)
+      if (rs?.length) { rs.sort(withinSort); groups.push({ round: r, stops: rs }) }
+    }
+    const rest = [...byRound.entries()]
+      .filter(([rid]) => rid === '' || !sortedRounds.some(r => r.id === rid))
+      .flatMap(([, rs]) => rs)
+    if (rest.length) { rest.sort(withinSort); groups.push({ round: null, stops: rest }) }
+    return groups
+  }, [selectedDay, week, routePlans, sortedRounds, roundById])
+
+  // flat list (ลำดับ = ไล่ตามกลุ่ม) — moveStop/reorderDrag/พิมพ์ ใช้ index จากตัวนี้
+  const dayStops = useMemo(() => dayGroups.flatMap(g => g.stops), [dayGroups])
+  const groupOffsets = useMemo(() => {
+    const offs: number[] = []
+    let acc = 0
+    for (const g of dayGroups) { offs.push(acc); acc += g.stops.length }
+    return offs
+  }, [dayGroups])
+
+  // 431 — แถวปฏิทินจัดกลุ่มตามรอบหลัก (ทั้งสัปดาห์ → ใช้รอบหลัก · ข้อยกเว้นรายวันโชว์เป็น chip)
+  const groupedRows = useMemo(() => {
+    const byRound = new Map<string, LogisticsRow[]>()
+    for (const row of week.rows) {
+      const rid = row.customer.roundId && roundById.has(row.customer.roundId) ? row.customer.roundId : ''
+      if (!byRound.has(rid)) byRound.set(rid, [])
+      byRound.get(rid)!.push(row)
+    }
+    const groups: { round: Round | null; rows: LogisticsRow[] }[] = []
+    for (const r of sortedRounds) {
+      const rs = byRound.get(r.id)
+      if (rs?.length) {
+        rs.sort((a, b) => (a.customer.routeSequence || 0) - (b.customer.routeSequence || 0) ||
+          (a.customer.shortName || a.customer.name).localeCompare(b.customer.shortName || b.customer.name, 'th'))
+        groups.push({ round: r, rows: rs })
+      }
+    }
+    const rest = [...byRound.entries()]
+      .filter(([rid]) => rid === '' || !sortedRounds.some(r => r.id === rid))
+      .flatMap(([, rs]) => rs)
+    if (rest.length) groups.push({ round: null, rows: rest })
+    return groups
+  }, [week, sortedRounds, roundById])
 
   if (!canViewSD(currentUser)) {
     return (
@@ -400,16 +468,44 @@ export default function LogisticsPage() {
               </tr>
             </thead>
             <tbody>
-              {week.rows.map(row => (
+              {groupedRows.map(g => (
+                <Fragment key={g.round?.id || 'no-round'}>
+                  {/* 431 — แถวหัวกลุ่มรอบ (สีรอบ + เวลา + จำนวนลูกค้า) */}
+                  <tr>
+                    <td colSpan={8} className="border-b border-slate-200 bg-slate-50/90 p-0">
+                      <div className="sticky left-0 inline-flex items-center gap-2 px-3 py-1.5">
+                        <span className="px-1.5 py-0.5 rounded text-[11px] font-bold text-white shrink-0"
+                          style={{ backgroundColor: g.round?.color || '#94a3b8' }}>
+                          {g.round?.code || '—'}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">{g.round?.name || 'ไม่ระบุรอบ'}</span>
+                        <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                          {g.round ? `${g.round.startTime || '—'}–${g.round.endTime || '—'} · ` : ''}{g.rows.length} ลูกค้า
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  {g.rows.map(row => (
                 <tr key={row.customer.id} className="group">
-                  <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-b border-r border-slate-100 px-3 py-2 align-top transition-colors">
+                  <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-b border-r border-slate-100 px-3 py-2 align-top transition-colors"
+                    style={g.round ? { boxShadow: `inset 3px 0 0 ${g.round.color}` } : undefined}>
                     <div className="font-medium text-[#1B3A5C] truncate max-w-[180px]" title={row.customer.name}>
                       {row.customer.shortName || row.customer.name}
                     </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                       <span className="text-[10px] text-slate-400" title={SCHEDULE_TYPE_CONFIG[row.customer.scheduleType!]?.description}>
                         {SCHEDULE_TYPE_CONFIG[row.customer.scheduleType!]?.label}
                       </span>
+                      {/* 429 — ข้อยกเว้นรอบรายวัน เช่น "ส.→V" */}
+                      {Object.entries(row.customer.roundDayOverrides || {})
+                        .filter(([, rid]) => rid && rid !== row.customer.roundId)
+                        .sort(([a], [b]) => Number(a) - Number(b))
+                        .map(([d, rid]) => (
+                          <span key={d} className="text-[10px] px-1 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 whitespace-nowrap"
+                            title={`วัน${DAY_LABELS[Number(d)]} ไปรอบ ${roundById.get(rid)?.code || '?'}`}>
+                            {DAY_LABELS[Number(d)]}→{roundById.get(rid)?.code || '?'}
+                          </span>
+                        ))}
                       {row.weekMissing > 0 && (
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
                           ขาด {row.weekMissing}
@@ -446,6 +542,8 @@ export default function LogisticsPage() {
                     )
                   })}
                 </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -598,36 +696,60 @@ export default function LogisticsPage() {
                 ไม่มีจุดวิ่งในวันนี้ (ไม่มีลูกค้าที่ถึงคิวหรือมี SD)
               </div>
             ) : (
-              <div className="space-y-1.5 mb-5 no-print">
-                {dayStops.map((s, idx) => (
-                  <div
-                    key={s.row.customer.id}
-                    draggable
-                    onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(idx)); listDragIdx.current = idx }}
-                    onDragOver={e => { e.preventDefault(); setListDragOver(idx) }}
-                    onDragLeave={() => setListDragOver(o => (o === idx ? null : o))}
-                    onDrop={() => { if (listDragIdx.current != null) reorderDrag(listDragIdx.current, idx); listDragIdx.current = null; setListDragOver(null) }}
-                    onDragEnd={() => { listDragIdx.current = null; setListDragOver(null) }}
-                    className={cn(
-                      'flex items-center gap-2 px-3 py-2 rounded-lg border bg-white',
-                      listDragOver === idx ? 'border-t-2 border-t-[#3DD8D8]' : 'border-slate-200',
-                    )}
-                  >
-                    <GripVertical className="w-4 h-4 text-slate-300 cursor-grab flex-shrink-0" />
-                    <span className="w-6 h-6 flex items-center justify-center rounded-full bg-[#1B3A5C] text-white text-xs font-bold flex-shrink-0">{idx + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-[#1B3A5C] truncate">{s.row.customer.shortName || s.row.customer.name}</div>
-                      <div className="text-xs text-slate-400 truncate">
-                        {cellStatusLabel(s.cell, today)}{s.row.customer.contactPhone ? ` · ${s.row.customer.contactPhone}` : ''}
-                      </div>
+              <div className="space-y-3 mb-5 no-print">
+                {/* 431 — จัดกลุ่มตามรอบ (สีรอบ + เวลา) · ในกลุ่มเรียงเวลานัด/ลำดับวิ่ง + ลากจัดมือได้ */}
+                {dayGroups.map((g, gi) => (
+                  <div key={g.round?.id || 'no-round'}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="px-1.5 py-0.5 rounded text-[11px] font-bold text-white shrink-0"
+                        style={{ backgroundColor: g.round?.color || '#94a3b8' }}>
+                        {g.round?.code || '—'}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-600">{g.round?.name || 'ไม่ระบุรอบ'}</span>
+                      <span className="text-[11px] text-slate-400">
+                        {g.round ? `${g.round.startTime || '—'}–${g.round.endTime || '—'} · ` : ''}{g.stops.length} จุด
+                      </span>
                     </div>
-                    <div className="flex flex-col flex-shrink-0">
-                      <button type="button" onClick={() => moveStop(idx, -1)} disabled={idx === 0} aria-label="เลื่อนขึ้น" className="text-slate-400 hover:text-[#1B3A5C] disabled:opacity-30 disabled:cursor-not-allowed">
-                        <ChevronUp className="w-4 h-4" />
-                      </button>
-                      <button type="button" onClick={() => moveStop(idx, 1)} disabled={idx === dayStops.length - 1} aria-label="เลื่อนลง" className="text-slate-400 hover:text-[#1B3A5C] disabled:opacity-30 disabled:cursor-not-allowed">
-                        <ChevronDown className="w-4 h-4" />
-                      </button>
+                    <div className="space-y-1.5"
+                      style={g.round ? { boxShadow: `inset 3px 0 0 ${g.round.color}`, paddingLeft: 10 } : { paddingLeft: 10 }}>
+                      {g.stops.map((s, si) => {
+                        const idx = groupOffsets[gi] + si // flat index — ใช้กับ routePlan/ลาก
+                        const tw = s.row.customer.pickupWindowStart
+                          ? `⏰ ${s.row.customer.pickupWindowStart}${s.row.customer.pickupWindowEnd ? `-${s.row.customer.pickupWindowEnd}` : ''} · ` : ''
+                        return (
+                          <div
+                            key={s.row.customer.id}
+                            draggable
+                            onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(idx)); listDragIdx.current = idx }}
+                            onDragOver={e => { e.preventDefault(); setListDragOver(idx) }}
+                            onDragLeave={() => setListDragOver(o => (o === idx ? null : o))}
+                            onDrop={() => { if (listDragIdx.current != null) reorderDrag(listDragIdx.current, idx); listDragIdx.current = null; setListDragOver(null) }}
+                            onDragEnd={() => { listDragIdx.current = null; setListDragOver(null) }}
+                            className={cn(
+                              'flex items-center gap-2 px-3 py-2 rounded-lg border bg-white',
+                              listDragOver === idx ? 'border-t-2 border-t-[#3DD8D8]' : 'border-slate-200',
+                            )}
+                          >
+                            <GripVertical className="w-4 h-4 text-slate-300 cursor-grab flex-shrink-0" />
+                            <span className="w-6 h-6 flex items-center justify-center rounded-full text-white text-xs font-bold flex-shrink-0"
+                              style={{ backgroundColor: g.round?.color || '#1B3A5C' }}>{si + 1}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-[#1B3A5C] truncate">{s.row.customer.shortName || s.row.customer.name}</div>
+                              <div className="text-xs text-slate-400 truncate">
+                                {tw}{cellStatusLabel(s.cell, today)}{s.row.customer.contactPhone ? ` · ${s.row.customer.contactPhone}` : ''}
+                              </div>
+                            </div>
+                            <div className="flex flex-col flex-shrink-0">
+                              <button type="button" onClick={() => moveStop(idx, -1)} disabled={si === 0} aria-label="เลื่อนขึ้น" className="text-slate-400 hover:text-[#1B3A5C] disabled:opacity-30 disabled:cursor-not-allowed">
+                                <ChevronUp className="w-4 h-4" />
+                              </button>
+                              <button type="button" onClick={() => moveStop(idx, 1)} disabled={si === g.stops.length - 1} aria-label="เลื่อนลง" className="text-slate-400 hover:text-[#1B3A5C] disabled:opacity-30 disabled:cursor-not-allowed">
+                                <ChevronDown className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 ))}
@@ -639,12 +761,14 @@ export default function LogisticsPage() {
               <RouteSheetPrint
                 dateLabel={`${fmtFull(selectedDay)} ${parseLocalDate(selectedDay).getFullYear() + 543}`}
                 company={companyInfo}
-                stops={dayStops.map(({ row, cell }): RouteStop => ({
+                stops={dayGroups.flatMap(g => g.stops.map(({ row, cell }): RouteStop => ({
                   customerName: row.customer.shortName || row.customer.name,
                   address: row.customer.address || '',
                   phone: row.customer.contactPhone || '',
                   statusLabel: cellStatusLabel(cell, today),
-                }))}
+                  // 431 — section ตามรอบในใบพิมพ์
+                  roundLabel: g.round ? `รอบ ${g.round.code} · ${g.round.startTime || '—'}–${g.round.endTime || '—'}` : 'ไม่ระบุรอบ',
+                })))}
               />
             </div>
           </div>

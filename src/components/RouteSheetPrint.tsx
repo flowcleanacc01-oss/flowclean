@@ -4,6 +4,7 @@
 // landscape · พิมพ์/ส่ง PDF ให้คนขับเอาไปวิ่งตามลำดับ
 
 import Image from 'next/image'
+import type { ReactNode } from 'react'
 import type { CompanyInfo } from '@/types'
 
 export interface RouteStop {
@@ -11,6 +12,7 @@ export interface RouteStop {
   address: string
   phone: string
   statusLabel: string   // เช่น "SD-20260524-003" หรือ "รอสร้าง" / "รอบเสริม"
+  roundLabel?: string   // 431 — หัวกลุ่มรอบ เช่น "รอบ V · 04:00–13:00" (แถวที่ label เปลี่ยน = ขึ้น section ใหม่ + นับ 1 ใหม่)
 }
 
 interface RouteSheetPrintProps {
@@ -62,16 +64,37 @@ export default function RouteSheetPrint({ dateLabel, company, stops }: RouteShee
         <tbody>
           {stops.length === 0 ? (
             <tr><td colSpan={6} className="text-center px-3 py-6 border border-slate-300 text-slate-400">ไม่มีจุดวิ่งในวันนี้</td></tr>
-          ) : stops.map((s, idx) => (
-            <tr key={idx} style={{ breakInside: 'avoid' }}>
-              <td className="text-center px-2 py-3 border border-slate-300 font-bold text-[#1B3A5C]">{idx + 1}</td>
-              <td className="px-3 py-3 border border-slate-300 font-medium">{s.customerName}</td>
-              <td className="px-3 py-3 border border-slate-300 text-xs text-slate-600">{s.address || '-'}</td>
-              <td className="px-3 py-3 border border-slate-300 text-xs">{s.phone || '-'}</td>
-              <td className="px-3 py-3 border border-slate-300 text-xs">{s.statusLabel}</td>
-              <td className="px-3 py-3 border border-slate-300"></td>
-            </tr>
-          ))}
+          ) : (() => {
+            // 431 — แบ่ง section ตามรอบ: label เปลี่ยน = แทรกแถวหัวรอบ + เริ่มนับลำดับใหม่
+            //   เน้นด้วยเส้นหนา + ตัวหนา (ไม่ถมพื้นสี — กันถ่ายเอกสารซ้ำแล้วพื้นกลบตัวหนังสือ)
+            const out: ReactNode[] = []
+            let seq = 0
+            stops.forEach((s, idx) => {
+              if (s.roundLabel && s.roundLabel !== stops[idx - 1]?.roundLabel) {
+                seq = 0
+                out.push(
+                  <tr key={`h-${idx}`} style={{ breakInside: 'avoid' }}>
+                    <td colSpan={6} className="px-3 py-1.5 border border-slate-300 font-bold text-[13px] text-[#1B3A5C]"
+                      style={{ borderTopWidth: 2, borderTopColor: '#334155' }}>
+                      {s.roundLabel}
+                    </td>
+                  </tr>,
+                )
+              }
+              seq++
+              out.push(
+                <tr key={idx} style={{ breakInside: 'avoid' }}>
+                  <td className="text-center px-2 py-3 border border-slate-300 font-bold text-[#1B3A5C]">{seq}</td>
+                  <td className="px-3 py-3 border border-slate-300 font-medium">{s.customerName}</td>
+                  <td className="px-3 py-3 border border-slate-300 text-xs text-slate-600">{s.address || '-'}</td>
+                  <td className="px-3 py-3 border border-slate-300 text-xs">{s.phone || '-'}</td>
+                  <td className="px-3 py-3 border border-slate-300 text-xs">{s.statusLabel}</td>
+                  <td className="px-3 py-3 border border-slate-300"></td>
+                </tr>,
+              )
+            })
+            return out
+          })()}
         </tbody>
       </table>
 
