@@ -8,6 +8,7 @@
 import type { Customer, Round, DailyTrip, TripStop, ScheduleOverride } from '@/types'
 import { dailyTripId } from '@/types'
 import { isScheduledDay } from './schedule-audit'
+import { parseLocalDate } from './logistics-week'
 
 export type GenerateMode = 'schedule' | 'all'
 
@@ -22,8 +23,21 @@ function isDueOnDate(customer: Customer, date: string, overrides: ScheduleOverri
 }
 
 /**
+ * 429 — รอบที่ลูกค้าอยู่จริงในวันนั้น: ข้อยกเว้นรายวัน (roundDayOverrides) ชนะรอบหลัก (roundId)
+ * เคสติ๊ด: IONA รอบหลัก SPA + {เสาร์: V} → เสาร์โผล่ในรอบ V อัตโนมัติ (หายจาก SPA วันนั้น)
+ */
+export function effectiveRoundId(customer: Customer, date: string): string {
+  const ov = customer.roundDayOverrides
+  if (ov) {
+    const target = ov[parseLocalDate(date).getDay()]
+    if (target) return target
+  }
+  return customer.roundId || ''
+}
+
+/**
  * สร้าง TripStop[] ของรอบ 1 รอบ สำหรับวันที่กำหนด
- * - สมาชิกรอบ = customer.roundId === round.id && isActive
+ * - สมาชิกรอบ = effectiveRoundId(customer, date) === round.id && isActive (429: รอบหลัก + ข้อยกเว้นรายวัน)
  * - เรียงตาม routeSequence (default ในรอบ) → ลำดับวิ่ง
  * - snapshot หน้าต่างเวลาเข้า stop (กัน drift เมื่อ customer แก้ทีหลัง)
  */
@@ -35,7 +49,7 @@ export function buildTripStops(
   mode: GenerateMode,
 ): TripStop[] {
   const members = customers
-    .filter(c => c.isActive && c.roundId === round.id)
+    .filter(c => c.isActive && effectiveRoundId(c, date) === round.id)
     .filter(c => mode === 'all' || isDueOnDate(c, date, overrides))
     .sort((a, b) =>
       (a.routeSequence || 0) - (b.routeSequence || 0) ||

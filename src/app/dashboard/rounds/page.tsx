@@ -9,13 +9,16 @@ import { useStore } from '@/lib/store'
 import { canManageRounds } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
-import type { Round, Crew, CrewRole, CrewStatus } from '@/types'
+import type { Round, Crew, CrewRole, CrewStatus, Customer } from '@/types'
 import { CREW_ROLE_LABELS, CREW_STATUS_CONFIG } from '@/types'
 import Modal from '@/components/Modal'
 import {
   Plus, Pencil, Trash2, ChevronUp, ChevronDown, Clock, Truck,
-  UserPlus, Search, Route as RouteIcon, Users, X,
+  UserPlus, Search, Route as RouteIcon, Users, X, CalendarDays,
 } from 'lucide-react'
+
+// 429 — ป้ายวันในสัปดาห์ (index = weekday 0-6 ตรง scheduleDays)
+const DAY_LABELS = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.']
 
 const inputCls = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]'
 const labelCls = 'block text-xs font-medium text-slate-600 mb-1'
@@ -61,6 +64,7 @@ function RoundsTab() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Round | null>(null)
   const [assignRound, setAssignRound] = useState<Round | null>(null)
+  const [dayOverrideCustomer, setDayOverrideCustomer] = useState<Customer | null>(null) // 429
 
   const sortedRounds = useMemo(() => [...rounds].sort((a, b) => a.sortOrder - b.sortOrder), [rounds])
 
@@ -87,6 +91,27 @@ function RoundsTab() {
   }
 
   const removeFromRound = (custId: string) => updateCustomer(custId, { roundId: '', routeSequence: 0 })
+
+  // 429 — ข้อยกเว้นรายวันของสมาชิก (ชี้ออกไปรอบอื่น) → chips "ส.→V"
+  const overrideChips = (c: Customer) =>
+    Object.entries(c.roundDayOverrides || {})
+      .filter(([, rid]) => rid && rid !== c.roundId)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([d, rid]) => ({ day: DAY_LABELS[Number(d)], code: rounds.find(r => r.id === rid)?.code || '?' }))
+
+  // 429 — ลูกค้ารอบอื่นที่มีข้อยกเว้นชี้มารอบนี้ ("มาเฉพาะบางวัน")
+  const guestsOf = (roundId: string) =>
+    customers
+      .filter(c => c.isActive && c.roundId !== roundId &&
+        Object.values(c.roundDayOverrides || {}).includes(roundId))
+      .map(c => ({
+        c,
+        days: Object.entries(c.roundDayOverrides || {})
+          .filter(([, rid]) => rid === roundId)
+          .sort(([a], [b]) => Number(a) - Number(b))
+          .map(([d]) => DAY_LABELS[Number(d)]),
+      }))
+      .sort((a, b) => a.c.shortName.localeCompare(b.c.shortName, 'th'))
 
   return (
     <div className="space-y-3">
@@ -142,6 +167,13 @@ function RoundsTab() {
                         </div>
                         <span className="font-medium text-slate-700 w-28 truncate" title={c.name}>{c.shortName}</span>
                         <span className="flex-1 text-xs text-slate-400 truncate hidden sm:block">{c.name}</span>
+                        {/* 429 — ข้อยกเว้นรายวัน (วันไหนไปรอบอื่น) */}
+                        {overrideChips(c).map(ch => (
+                          <span key={ch.day} className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 whitespace-nowrap"
+                            title={`วัน${ch.day} ไปรอบ ${ch.code}`}>{ch.day}→{ch.code}</span>
+                        ))}
+                        <button onClick={() => setDayOverrideCustomer(c)} aria-label="แบ่งวันไปรอบอื่น" title="แบ่งวันไปรอบอื่น (ประจำตามวันในสัปดาห์)"
+                          className="text-slate-300 hover:text-[#1B3A5C]"><CalendarDays className="w-4 h-4" /></button>
                         {/* time window */}
                         <div className="flex items-center gap-1 text-xs">
                           <Clock className="w-3 h-3 text-slate-300" />
@@ -154,6 +186,24 @@ function RoundsTab() {
                     ))}
                   </ul>
                 )}
+                {/* 429 — ลูกค้ารอบอื่นที่มาประจำบางวัน */}
+                {guestsOf(r.id).length > 0 && (
+                  <div className="pt-2 border-t border-dashed border-slate-200">
+                    <p className="text-[11px] text-slate-400 mb-1.5 inline-flex items-center gap-1">
+                      <CalendarDays className="w-3 h-3" /> มาเฉพาะบางวัน (รอบหลักอยู่รอบอื่น)
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {guestsOf(r.id).map(({ c, days }) => (
+                        <button key={c.id} onClick={() => setDayOverrideCustomer(c)}
+                          title={`รอบหลัก: ${rounds.find(x => x.id === c.roundId)?.code || '—'} · กดเพื่อแก้`}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-violet-200 bg-violet-50 text-xs text-violet-700 hover:bg-violet-100 transition-colors">
+                          <span className="font-medium">{c.shortName}</span>
+                          <span className="text-violet-500">({days.join(' ')})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <button onClick={() => setAssignRound(r)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">
                   <UserPlus className="w-4 h-4" /> เพิ่มลูกค้าเข้ารอบ
                 </button>
@@ -165,7 +215,71 @@ function RoundsTab() {
 
       {showForm && <RoundFormModal round={editing} onClose={() => setShowForm(false)} />}
       {assignRound && <AssignCustomerModal round={assignRound} onClose={() => setAssignRound(null)} />}
+      {dayOverrideCustomer && <DayOverrideModal customer={dayOverrideCustomer} onClose={() => setDayOverrideCustomer(null)} />}
     </div>
+  )
+}
+
+// ============================================================
+// 429 — แบ่งวันไปรอบอื่น (รอบหลัก + ข้อยกเว้นรายวันแบบประจำ)
+//   เคสติ๊ด: IONA รอบหลัก SPA แต่เสาร์ไปรอบ V (TTM/PMSO ราชการหยุด ส-อา → เกลี่ยโหลด)
+// ============================================================
+function DayOverrideModal({ customer, onClose }: { customer: Customer; onClose: () => void }) {
+  const { rounds, updateCustomer } = useStore()
+  const [ov, setOv] = useState<Record<number, string>>({ ...(customer.roundDayOverrides || {}) })
+
+  const activeRounds = [...rounds].filter(r => r.isActive).sort((a, b) => a.sortOrder - b.sortOrder)
+  const mainRound = rounds.find(r => r.id === customer.roundId)
+  const scheduleDays = new Set(customer.scheduleDays || [])
+
+  const save = () => {
+    // เก็บเฉพาะข้อยกเว้นจริง (ตัดค่าว่าง/ค่าที่ชี้กลับรอบหลักทิ้ง)
+    const clean: Record<number, string> = {}
+    for (const [d, rid] of Object.entries(ov)) {
+      if (rid && rid !== customer.roundId) clean[Number(d)] = rid
+    }
+    updateCustomer(customer.id, { roundDayOverrides: clean })
+    onClose()
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`แบ่งวันไปรอบอื่น · ${customer.shortName}`} size="md" closeLabel="cancel">
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600">
+          รอบหลัก: <b>{mainRound ? `${mainRound.code} — ${mainRound.name}` : 'ยังไม่จัดรอบ'}</b>
+          {' '}— เลือกวันที่ต้องการให้ไปรอบอื่น<b>แบบประจำ</b> (มีผลกับกระดานจ่ายงาน/แผน GPS อัตโนมัติ)
+        </p>
+
+        <div className="border border-slate-200 rounded-lg divide-y divide-slate-100">
+          {DAY_LABELS.map((label, d) => (
+            <div key={d} className="flex items-center gap-3 px-3 py-2">
+              <span className={cn('w-10 text-sm', scheduleDays.has(d) ? 'font-semibold text-slate-700' : 'text-slate-400')}>
+                {label}
+              </span>
+              {scheduleDays.has(d) && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#3DD8D8]/15 text-[#1B3A5C] shrink-0">มีคิว</span>}
+              <div className="flex-1" />
+              <select value={ov[d] || ''} onChange={e => setOv(prev => ({ ...prev, [d]: e.target.value }))}
+                className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#3DD8D8] bg-white">
+                <option value="">— ตามรอบหลัก{mainRound ? ` (${mainRound.code})` : ''} —</option>
+                {activeRounds.filter(r => r.id !== customer.roundId).map(r => (
+                  <option key={r.id} value={r.id}>รอบ {r.code} — {r.name}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-xs text-slate-400">
+          วันที่ไม่ได้ตั้ง = อยู่รอบหลักตามปกติ · คิวงาน (วันรับผ้า) ตั้งที่หน้าลูกค้าเหมือนเดิม —
+          ตรงนี้กำหนดแค่ &ldquo;วันนั้นไปกับรอบไหน&rdquo;
+        </p>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+          <button onClick={save} className="px-4 py-2 text-sm font-medium rounded-lg bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors">บันทึก</button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

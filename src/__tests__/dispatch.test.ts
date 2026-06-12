@@ -1,7 +1,7 @@
 // 423 Phase B2 — verify Dispatch generate logic
 //   buildTripStops (membership + schedule + mode) · generateDailyTrips (idempotent) · helpers
 import { describe, it, expect } from 'vitest'
-import { buildTripStops, generateDailyTrips, tripLoad, resequence, capacityStatus, skipQueueReview } from '@/lib/dispatch'
+import { buildTripStops, generateDailyTrips, tripLoad, resequence, capacityStatus, skipQueueReview, effectiveRoundId } from '@/lib/dispatch'
 import { getWeekStart, addDays } from '@/lib/logistics-week'
 import { dailyTripId } from '@/types'
 import type { Customer, Round, ScheduleOverride, DailyTrip, TripStop } from '@/types'
@@ -165,5 +165,42 @@ describe('skipQueueReview (B-2) — ถึงคิวแต่ถุง=0', () 
     ])
     const r = skipQueueReview([t], customers, MON, [])
     expect(r.map(x => x.customerId)).toEqual(['lone'])
+  })
+})
+
+// 429 — รอบหลัก + ข้อยกเว้นรายวัน (เคสติ๊ด: IONA รอบหลัก SPA · เสาร์ไปรอบ V)
+describe('429 — effectiveRoundId + buildTripStops ข้อยกเว้นรายวัน', () => {
+  const SAT = addDays(SUN, 6)
+  const roundV = round({})
+  const roundSpa = round({ id: 'round-spa', code: 'SPA' })
+  // IONA: คิวประจำ อังคาร(2) + เสาร์(6) · รอบหลัก SPA · เสาร์ → V
+  const iona = cust({
+    id: 'iona', shortName: 'IONA', roundId: 'round-spa',
+    scheduleType: 'weekly', scheduleDays: [2, 6],
+    roundDayOverrides: { 6: 'round-v' },
+  })
+
+  it('effectiveRoundId: วัน override → รอบใหม่ · วันอื่น → รอบหลัก', () => {
+    expect(effectiveRoundId(iona, SAT)).toBe('round-v')
+    expect(effectiveRoundId(iona, TUE)).toBe('round-spa')
+  })
+
+  it('เสาร์: IONA โผล่ในรอบ V และหายจาก SPA · อังคาร: กลับด้าน', () => {
+    expect(buildTripStops(roundV, [iona], SAT, [], 'schedule').map(s => s.customerId)).toEqual(['iona'])
+    expect(buildTripStops(roundSpa, [iona], SAT, [], 'schedule')).toEqual([])
+    expect(buildTripStops(roundSpa, [iona], TUE, [], 'schedule').map(s => s.customerId)).toEqual(['iona'])
+    expect(buildTripStops(roundV, [iona], TUE, [], 'schedule')).toEqual([])
+  })
+
+  it('mode=all ก็เคารพข้อยกเว้น (สมาชิกของวันนั้นจริงๆ)', () => {
+    expect(buildTripStops(roundV, [iona], SAT, [], 'all').map(s => s.customerId)).toEqual(['iona'])
+    expect(buildTripStops(roundSpa, [iona], SAT, [], 'all')).toEqual([])
+  })
+
+  it('ไม่มี override → พฤติกรรมเดิมทุกวัน · override ว่าง/ชี้รอบหลักเอง → ไม่เปลี่ยน', () => {
+    const plain = cust({ id: 'p1' })
+    expect(effectiveRoundId(plain, SAT)).toBe('round-v')
+    const selfPoint = cust({ id: 'p2', roundDayOverrides: { 6: '' } })
+    expect(effectiveRoundId(selfPoint, SAT)).toBe('round-v')
   })
 })

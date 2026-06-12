@@ -233,6 +233,7 @@ export interface Customer {
   aggregateSizeGroups?: AggregateSizeGroupConfig[]
   // 423 Phase B — รอบประจำ (1 ลูกค้า 1 รอบ) + ลำดับวิ่ง default + หน้าต่างเวลา
   roundId?: string              // รอบที่ลูกค้าผูกประจำ ('' = ยังไม่จัดรอบ)
+  roundDayOverrides?: Record<number, string> // 429 — ข้อยกเว้นรายวัน {weekday 0-6: roundId} ชนะ roundId วันนั้น (0=อาทิตย์)
   routeSequence?: number        // ลำดับวิ่ง default ในรอบ (1,2,3…)
   pickupWindowStart?: string    // หน้าต่างเวลาเข้ารับได้ 'HH:MM' ('' = ไม่จำกัด)
   pickupWindowEnd?: string

@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { toLocalISO, parseLocalDate, addDays } from '@/lib/logistics-week'
-import { buildTripStops, generateDailyTrips, tripLoad, resequence, capacityStatus, skipQueueReview, type GenerateMode, type CapacityStatus } from '@/lib/dispatch'
+import { buildTripStops, generateDailyTrips, tripLoad, resequence, capacityStatus, skipQueueReview, effectiveRoundId, type GenerateMode, type CapacityStatus } from '@/lib/dispatch'
 import {
   dailyTripId,
   TRIP_STATUS_CONFIG, TRIP_STOP_SOURCE_CONFIG, TRIP_STOP_STATUS_CONFIG,
@@ -455,8 +455,9 @@ function AddStopModal({
   const add = (custId: string) => {
     const c = customers.find(x => x.id === custId)
     if (!c) return
-    // ลูกค้ามีรอบอื่น = ยืมรอบ (moved-in) · ไม่มีรอบ/รอบนี้เอง = แทรก (inserted)
-    const source: TripStop['source'] = (c.roundId && c.roundId !== trip.roundId) ? 'moved-in' : 'inserted'
+    // ลูกค้ามีรอบอื่น "ในวันนั้น" = ยืมรอบ (moved-in) · ไม่มีรอบ/รอบนี้เอง = แทรก (inserted) — 429 ดูรอบจริงของวัน
+    const eff = effectiveRoundId(c, trip.date)
+    const source: TripStop['source'] = (eff && eff !== trip.roundId) ? 'moved-in' : 'inserted'
     const newStop: TripStop = {
       customerId: custId, sequence: trip.stops.length + 1, source,
       bagCount: 0, status: 'pending', note: '',
@@ -477,12 +478,13 @@ function AddStopModal({
           {candidates.length === 0 ? (
             <li className="text-center text-sm text-slate-400 py-6">ไม่พบลูกค้า</li>
           ) : candidates.map(c => {
-            const otherRound = c.roundId && c.roundId !== trip.roundId
+            const eff = effectiveRoundId(c, trip.date)
+            const otherRound = eff && eff !== trip.roundId
             return (
               <li key={c.id} className="flex items-center gap-2 py-2 text-sm">
                 <span className="font-medium text-slate-700 w-24 truncate">{c.shortName || c.name}</span>
                 <span className="flex-1 text-xs text-slate-400 truncate">{c.name}</span>
-                {otherRound && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">รอบ {roundCode(c.roundId!) || '?'}</span>}
+                {otherRound && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">รอบ {roundCode(eff) || '?'}</span>}
                 <button onClick={() => add(c.id)} className="px-2.5 py-1 rounded-lg text-xs font-medium bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors">
                   {otherRound ? 'ยืมมา' : 'เพิ่ม'}
                 </button>
