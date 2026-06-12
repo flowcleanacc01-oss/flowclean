@@ -14,7 +14,7 @@ import { CREW_ROLE_LABELS, CREW_STATUS_CONFIG } from '@/types'
 import Modal from '@/components/Modal'
 import {
   Plus, Pencil, Trash2, ChevronUp, ChevronDown, Clock, Truck,
-  UserPlus, Search, Route as RouteIcon, Users, X, CalendarDays,
+  UserPlus, Search, Route as RouteIcon, Users, X, CalendarDays, GripVertical,
 } from 'lucide-react'
 
 // 429 — ป้ายวันในสัปดาห์ (index = weekday 0-6 ตรง scheduleDays)
@@ -65,6 +65,9 @@ function RoundsTab() {
   const [editing, setEditing] = useState<Round | null>(null)
   const [assignRound, setAssignRound] = useState<Round | null>(null)
   const [dayOverrideCustomer, setDayOverrideCustomer] = useState<Customer | null>(null) // 429
+  // 430 — drag-drop จัดลำดับวิ่ง (pattern เดียวกับหน้ารายการผ้า 173.1/242.1)
+  const [dragCustId, setDragCustId] = useState<string | null>(null)
+  const [dragOverCustId, setDragOverCustId] = useState<string | null>(null)
 
   const sortedRounds = useMemo(() => [...rounds].sort((a, b) => a.sortOrder - b.sortOrder), [rounds])
 
@@ -91,6 +94,22 @@ function RoundsTab() {
   }
 
   const removeFromRound = (custId: string) => updateCustomer(custId, { roundId: '', routeSequence: 0 })
+
+  // 430 — drop = แทรก "เหนือ" target เสมอ (ตรงกับเส้น highlight ด้านบน) · adjust index ตามทิศ [[242.1]]
+  const handleReorderDrop = (roundId: string, sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return
+    const list = [...membersOf(roundId)]
+    const srcIdx = list.findIndex(c => c.id === sourceId)
+    const tgtIdx = list.findIndex(c => c.id === targetId)
+    if (srcIdx < 0 || tgtIdx < 0) return
+    const [moved] = list.splice(srcIdx, 1)
+    // ลากลง (src < tgt) → target shift ขึ้น 1 หลัง splice → tgtIdx-1 · ลากขึ้น → tgtIdx ตรงๆ
+    const insertIdx = srcIdx < tgtIdx ? tgtIdx - 1 : tgtIdx
+    list.splice(insertIdx, 0, moved)
+    list.forEach((c, i) => {
+      if ((c.routeSequence || 0) !== i + 1) updateCustomer(c.id, { routeSequence: i + 1 })
+    })
+  }
 
   // 429 — ข้อยกเว้นรายวันของสมาชิก (ชี้ออกไปรอบอื่น) → chips "ส.→V"
   const overrideChips = (c: Customer) =>
@@ -159,7 +178,25 @@ function RoundsTab() {
                 ) : (
                   <ul className="space-y-1">
                     {members.map((c, i) => (
-                      <li key={c.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-slate-50 text-sm">
+                      <li key={c.id}
+                        onDragEnter={dragCustId ? () => setDragOverCustId(c.id) : undefined}
+                        onDragOver={dragCustId ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } : undefined}
+                        onDrop={dragCustId ? (e) => {
+                          e.preventDefault()
+                          handleReorderDrop(r.id, dragCustId, c.id)
+                          setDragCustId(null); setDragOverCustId(null)
+                        } : undefined}
+                        className={cn('flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-slate-50 text-sm',
+                          dragCustId === c.id && 'opacity-40',
+                          dragOverCustId === c.id && dragCustId !== c.id && 'border-t-2 border-t-amber-500 bg-amber-50')}>
+                        {/* 430 — จับลากที่ grip (เฉพาะ handle — กันชนกับช่องกรอกเวลาในแถว) */}
+                        <div draggable
+                          onDragStart={(e) => { setDragCustId(c.id); e.dataTransfer.effectAllowed = 'move' }}
+                          onDragEnd={() => { setDragCustId(null); setDragOverCustId(null) }}
+                          title="ลากเพื่อจัดลำดับ"
+                          className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-amber-500 shrink-0">
+                          <GripVertical className="w-4 h-4" />
+                        </div>
                         <span className="w-6 text-center text-xs font-semibold text-slate-400">{i + 1}</span>
                         <div className="flex flex-col">
                           <button onClick={() => move(r.id, i, -1)} disabled={i === 0} className="text-slate-300 hover:text-[#1B3A5C] disabled:opacity-30 leading-none"><ChevronUp className="w-3.5 h-3.5" /></button>
