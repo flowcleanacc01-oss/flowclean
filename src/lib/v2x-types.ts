@@ -74,6 +74,37 @@ export interface V2xTrip {
   areaName: string
 }
 
+/** /travelAnalysis/getTravelAnalysis (POST {licensePlate?, startTime, endTime, pageNum, pageSize}) — 1 เที่ยว
+ *  ⚠️ 427: ตัวจริงที่ใช้แทน /report/trip/list — มี "พิกัดจุดเริ่ม/จบ" + driver behavior + tripId ครบ
+ *  ⚠️ param ต้องชื่อ licensePlate/startTime/endTime เป๊ะ (ชื่ออื่นเช่น carId/beginTime = เงียบๆ ไม่ filter เลย!)
+ *  data เป็น array ตรงๆ (ไม่มี .list) · ตัวเลขปน string/number → num() ทุก field */
+export interface V2xTravelTrip {
+  id: string // ใช้เปิด /travelAnalysis/track/{id} (waypoints)
+  tripId: string
+  carId: string
+  licensePlate: string
+  begintime: string // "2026-06-10 16:23:00.0"
+  endtime: string
+  tripStartAddress: string
+  tripEndAddress: string
+  slatitude: number | string // พิกัดจุดเริ่ม
+  slongitude: number | string
+  elatitude: number | string // พิกัดจุดจบ (= จุดจอด/ส่งผ้า)
+  elongitude: number | string
+  mileage: number | string // กม.
+  drivingtime: number | string // นาทีที่ล้อหมุนจริง
+  fuelConsumption: number | string // ลิตร
+  tripMaxSpeed: number | string
+  tripAvgSpeed: number | string
+  score: number | string // คะแนนขับขี่ 0-100
+  overSpeed: number | string // ครั้งที่เร็วเกิน
+  rapidAcceleration: number | string // ออกตัวกระชาก (ครั้ง)
+  rapidDeceleration: number | string // เบรกกระชาก (ครั้ง)
+  quickspeedcount: number | string
+  turncount: number | string // เลี้ยวกระชาก (ครั้ง)
+  tripOilCost: number | string
+}
+
 /** /travelAnalysis/getTripStatistics (POST {beginTime,endTime,pageNum,pageSize}) — สถิติรายวันต่อคัน
  *  ⚠️ data เป็น array ตรงๆ (ไม่มี .list) · ใช้คำนวณไมล์สะสม (428) */
 export interface V2xTripStat {
@@ -115,8 +146,11 @@ export interface GpsPosition {
   lastActiveTime: string
 }
 
-/** เที่ยววิ่ง — normalized (ตัวเลขเป็น number ล้วน) */
+/** เที่ยววิ่ง — normalized (ตัวเลขเป็น number ล้วน)
+ *  427: เพิ่มพิกัดเริ่ม/จบ + driver behavior (จาก getTravelAnalysis)
+ *  idleMin = นาทีติดเครื่องแต่ล้อไม่หมุน (duration - drivingMin) — จับ "จอดนิ่งไม่ดับเครื่อง" */
 export interface GpsTrip {
+  tripId: string // id สำหรับ track waypoints ('' = ไม่มี)
   plate: string
   plateNorm: string
   vin: string
@@ -124,6 +158,10 @@ export interface GpsTrip {
   endAddress: string
   startTime: string // "2026-06-09 23:09:59"
   endTime: string
+  startLat: number
+  startLng: number
+  endLat: number
+  endLng: number
   distanceKm: number
   drivingMin: number
   idleMin: number
@@ -131,6 +169,11 @@ export interface GpsTrip {
   avgSpeed: number
   fuelLiters: number
   kmPerLiter: number
+  score: number // คะแนนขับขี่ 0-100 (0 = ไม่มีข้อมูล)
+  overSpeedCount: number
+  rapidAccelCount: number
+  rapidDecelCount: number
+  sharpTurnCount: number
 }
 
 /** ระยะวิ่งรายวันต่อคัน — normalized (428: ไมล์ auto จาก GPS) */

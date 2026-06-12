@@ -4,7 +4,7 @@
 //   แท็บ "ตำแหน่งสด" (realtime จาก V2X) + "เที่ยววิ่ง" (trip history) · เชื่อมทะเบียนกับฟลีต
 //   ดึงผ่าน /api/gps (server proxy) · ไม่ฝัง map (ใช้ลิงก์ Google Maps) เลี่ยง map API key
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import Link from 'next/link'
 import { subDays, parseISO, format } from 'date-fns'
 import { useStore } from '@/lib/store'
@@ -15,14 +15,18 @@ import {
   type RoundAudit, type VehicleAudit, type AuditFlag,
 } from '@/lib/gps-audit'
 import { buildTripStops } from '@/lib/dispatch'
+import { matchPlace, engineOffGaps, isShuffleTrip, type LatLng } from '@/lib/geo'
+import { isScheduledDay } from '@/lib/schedule-audit'
+import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { todayISO, cn } from '@/lib/utils'
 import { canViewFleet } from '@/lib/permissions'
-import { dailyTripId, type Round, type Vehicle } from '@/types'
+import { dailyTripId, type Customer, type Round, type Vehicle } from '@/types'
 import Modal from '@/components/Modal'
 import {
   Satellite, MapPin, Navigation, RefreshCw, Radio, Gauge,
   ExternalLink, Route, TrendingUp, Fuel, AlertCircle, Loader2, Car, CircleDot, Clock,
   ClipboardCheck, CheckCircle2, AlertTriangle, Info, Wand2,
+  Factory, ParkingCircle, Building2, Award, Search,
 } from 'lucide-react'
 
 // "2026-06-10 20:35:16" → "20:35"
@@ -183,6 +187,7 @@ function RealtimeTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> 
 // ───────────────────────── เที่ยววิ่ง ─────────────────────────
 
 function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) {
+  const { customers, companyInfo } = useStore()
   const [cars, setCars] = useState<GpsCar[]>([])
   const [carId, setCarId] = useState('')
   const [date, setDate] = useState(todayISO())
@@ -190,6 +195,8 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  // 427 — ตั้งพิกัดลูกค้าจากจุดจอดจริง (เสนอจุด → ติ๊ดยืนยันชื่อ)
+  const [coordTarget, setCoordTarget] = useState<{ lat: number; lng: number; address: string } | null>(null)
 
   // โหลดรายชื่อรถครั้งแรก
   useEffect(() => {
@@ -198,28 +205,49 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
       .catch(e => setErr(e instanceof Error ? e.message : 'โหลดรายชื่อรถไม่สำเร็จ'))
   }, [])
 
+  const selectedCar = cars.find(c => c.carId === carId)
+  const selectedVehicle = selectedCar ? vehicleByPlate.get(selectedCar.plateNorm) : undefined
+  const selectedPlate = selectedCar?.plate || ''
+
   const load = useCallback(async () => {
-    if (!carId) return
+    if (!selectedPlate) return
     setLoading(true); setErr(null)
     try {
-      setTrips(await fetchGpsTrips(carId, date))
+      setTrips(await fetchGpsTrips(selectedPlate, date))
       setLoaded(true)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'ดึงเที่ยววิ่งไม่สำเร็จ')
     } finally {
       setLoading(false)
     }
-  }, [carId, date])
+  }, [selectedPlate, date])
 
-  const summary = useMemo(() => ({
-    count: trips.length,
-    km: trips.reduce((s, t) => s + t.distanceKm, 0),
-    fuel: trips.reduce((s, t) => s + t.fuelLiters, 0),
-    drive: trips.reduce((s, t) => s + t.drivingMin, 0),
-  }), [trips])
+  // 427 — timeline เก่า→ใหม่ + ช่วงดับเครื่องจอดระหว่างเที่ยว + จับคู่สถานที่
+  const factory: LatLng | null = useMemo(
+    () => (companyInfo.factoryLat || companyInfo.factoryLng)
+      ? { lat: companyInfo.factoryLat, lng: companyInfo.factoryLng } : null,
+    [companyInfo.factoryLat, companyInfo.factoryLng])
+  const sorted = useMemo(() => [...trips].sort((a, b) => a.startTime.localeCompare(b.startTime)), [trips])
+  const gapAfter = useMemo(() => new Map(engineOffGaps(sorted).map(g => [g.afterIndex, g])), [sorted])
+  const placeOf = useCallback(
+    (lat: number, lng: number) => matchPlace(lat, lng, customers, factory),
+    [customers, factory])
 
-  const selectedCar = cars.find(c => c.carId === carId)
-  const selectedVehicle = selectedCar ? vehicleByPlate.get(selectedCar.plateNorm) : undefined
+  const summary = useMemo(() => {
+    const real = sorted.filter(t => !isShuffleTrip(t))
+    const scored = sorted.filter(t => t.score > 0)
+    return {
+      count: real.length,
+      shuffle: sorted.length - real.length,
+      km: sorted.reduce((s, t) => s + t.distanceKm, 0),
+      fuel: sorted.reduce((s, t) => s + t.fuelLiters, 0),
+      drive: sorted.reduce((s, t) => s + t.drivingMin, 0),
+      score: scored.length ? scored.reduce((s, t) => s + t.score, 0) / scored.length : 0,
+      overSpeed: sorted.reduce((s, t) => s + t.overSpeedCount, 0),
+      harsh: sorted.reduce((s, t) => s + t.rapidAccelCount + t.rapidDecelCount, 0),
+      idle: sorted.reduce((s, t) => s + t.idleMin, 0),
+    }
+  }, [sorted])
 
   return (
     <div className="space-y-4">
@@ -241,7 +269,7 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
           <input type="date" value={date} max={todayISO()} onChange={e => setDate(e.target.value)}
             className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
         </div>
-        <button onClick={load} disabled={!carId || loading}
+        <button onClick={load} disabled={!selectedPlate || loading}
           className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg text-sm font-semibold hover:bg-[#2bb8b8] transition-colors disabled:opacity-50">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} ดึงข้อมูล
         </button>
@@ -251,16 +279,18 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
 
       {loaded && !err && (
         <>
-          {/* สรุปยอด */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard icon={Route} label="จำนวนเที่ยว" value={`${summary.count} เที่ยว`} />
+          {/* สรุปยอด — 427: เพิ่มคะแนนขับขี่ + พฤติกรรม */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <StatCard icon={Route} label="เที่ยววิ่ง" value={`${summary.count}${summary.shuffle > 0 ? ` (+${summary.shuffle} ขยับรถ)` : ''}`} />
             <StatCard icon={TrendingUp} label="ระยะทางรวม" value={`${summary.km.toFixed(1)} กม.`} />
             <StatCard icon={Fuel} label="น้ำมันรวม" value={`${summary.fuel.toFixed(2)} ลิตร`} />
-            <StatCard icon={Clock} label="เวลาขับรวม" value={fmtMin(summary.drive)} />
+            <StatCard icon={Clock} label="ขับ / ติดเครื่องนิ่ง" value={`${fmtMin(summary.drive)} / ${fmtMin(summary.idle)}`} />
+            <StatCard icon={Award} label="คะแนนขับขี่เฉลี่ย" value={summary.score > 0 ? summary.score.toFixed(0) : '—'} />
+            <StatCard icon={Gauge} label="เร็วเกิน / กระชาก" value={`${summary.overSpeed} / ${summary.harsh}`} />
           </div>
 
-          {/* ตารางเที่ยว */}
-          {trips.length === 0 ? (
+          {/* timeline เที่ยว + จุดจอดดับเครื่อง */}
+          {sorted.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
               <Car className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500">ไม่มีเที่ยววิ่งในวันนี้{selectedVehicle ? ` (คัน ${selectedVehicle.code})` : ''}</p>
@@ -272,24 +302,111 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
                   <thead>
                     <tr className="bg-slate-50 text-slate-500 text-xs">
                       <th className="px-3 py-2.5 text-left font-medium">เวลา</th>
-                      <th className="px-3 py-2.5 text-right font-medium">ระยะทาง</th>
                       <th className="px-3 py-2.5 text-left font-medium">ปลายทาง</th>
+                      <th className="px-3 py-2.5 text-right font-medium">ระยะทาง</th>
                       <th className="px-3 py-2.5 text-right font-medium">น้ำมัน</th>
-                      <th className="px-3 py-2.5 text-right font-medium">จอด</th>
+                      <th className="px-3 py-2.5 text-right font-medium" title="ติดเครื่องแต่ล้อไม่หมุน (จอดไม่ดับเครื่อง)">นิ่ง</th>
+                      <th className="px-3 py-2.5 text-left font-medium">พฤติกรรม</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {trips.map((t, i) => (
-                      <tr key={i} className="hover:bg-slate-50">
-                        <td className="px-3 py-2.5 whitespace-nowrap text-slate-700 font-medium">
-                          {hhmm(t.startTime)} → {hhmm(t.endTime)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-700">{t.distanceKm.toFixed(2)} กม.</td>
-                        <td className="px-3 py-2.5 text-slate-600 max-w-[260px] truncate" title={t.endAddress}>{t.endAddress || '—'}</td>
-                        <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-500">{t.fuelLiters.toFixed(2)} ล.</td>
-                        <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-400">{t.idleMin > 0 ? fmtMin(t.idleMin) : '—'}</td>
-                      </tr>
-                    ))}
+                    {sorted.map((t, i) => {
+                      const dest = placeOf(t.endLat, t.endLng)
+                      const shuffle = isShuffleTrip(t)
+                      const gap = gapAfter.get(i)
+                      const gapPlace = gap ? placeOf(gap.lat, gap.lng) : null
+                      return (
+                        <Fragment key={t.tripId || i}>
+                          <tr className="hover:bg-slate-50">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-slate-700 font-medium">
+                              {hhmm(t.startTime)} → {hhmm(t.endTime)}
+                            </td>
+                            <td className="px-3 py-2.5 max-w-[280px]">
+                              {shuffle ? (
+                                <span className="inline-flex items-center gap-1 text-slate-500">
+                                  <ParkingCircle className="w-3.5 h-3.5 text-slate-400" />
+                                  ขยับรถ{dest?.type === 'factory' ? 'ที่โรงงาน' : ''}
+                                </span>
+                              ) : dest?.type === 'customer' ? (
+                                <span className="inline-flex items-center gap-1.5 font-medium text-[#1B3A5C]">
+                                  <Building2 className="w-3.5 h-3.5 text-[#3DD8D8]" />
+                                  {dest.customer!.shortName || dest.customer!.name}
+                                </span>
+                              ) : dest?.type === 'factory' ? (
+                                <span className="inline-flex items-center gap-1.5 text-slate-600">
+                                  <Factory className="w-3.5 h-3.5 text-slate-400" /> กลับโรงงาน
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 min-w-0">
+                                  <span className="text-slate-600 truncate" title={t.endAddress}>{t.endAddress || '—'}</span>
+                                  {(t.endLat !== 0 || t.endLng !== 0) && (
+                                    <button onClick={() => setCoordTarget({ lat: t.endLat, lng: t.endLng, address: t.endAddress })}
+                                      title="จุดนี้คือลูกค้ารายไหน? — บันทึกเป็นพิกัดลูกค้า (ครั้งต่อไปขึ้นชื่อเอง)"
+                                      className="shrink-0 text-slate-300 hover:text-[#1B3A5C]">
+                                      <MapPin className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-700">{t.distanceKm.toFixed(2)} กม.</td>
+                            <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-500">{t.fuelLiters.toFixed(2)} ล.</td>
+                            <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                              {t.idleMin >= 15 ? (
+                                <span className="text-amber-600 font-medium" title={dest?.type === 'customer' ? 'จอดที่ลูกค้าแต่ไม่ดับเครื่อง (เปลืองน้ำมัน)' : 'ติดเครื่องนิ่งนาน'}>
+                                  ⚠ {fmtMin(t.idleMin)}
+                                </span>
+                              ) : t.idleMin > 0 ? (
+                                <span className="text-slate-400">{fmtMin(t.idleMin)}</span>
+                              ) : '—'}
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap text-xs">
+                              <span className="inline-flex items-center gap-2">
+                                {t.score > 0 && (
+                                  <span className={cn('font-semibold',
+                                    t.score >= 90 ? 'text-emerald-600' : t.score >= 70 ? 'text-amber-600' : 'text-rose-600')}>
+                                    {t.score.toFixed(0)}
+                                  </span>
+                                )}
+                                {t.overSpeedCount > 0 && <span className="text-rose-600" title="เร็วเกินกำหนด (ครั้ง)">⚡{t.overSpeedCount}</span>}
+                                {t.rapidAccelCount > 0 && <span className="text-amber-600" title="ออกตัวกระชาก (ครั้ง)">↗{t.rapidAccelCount}</span>}
+                                {t.rapidDecelCount > 0 && <span className="text-amber-600" title="เบรกกระชาก (ครั้ง)">↘{t.rapidDecelCount}</span>}
+                                {t.score === 0 && t.overSpeedCount === 0 && t.rapidAccelCount === 0 && t.rapidDecelCount === 0 && <span className="text-slate-300">—</span>}
+                              </span>
+                            </td>
+                          </tr>
+                          {gap && (
+                            <tr className="bg-slate-50/70">
+                              <td colSpan={6} className="px-3 py-1.5 text-xs text-slate-500">
+                                <span className="inline-flex items-center gap-1.5 flex-wrap">
+                                  <ParkingCircle className="w-3.5 h-3.5 text-slate-400" />
+                                  ดับเครื่องจอด <b className="text-slate-600">{fmtMin(gap.minutes)}</b>
+                                  <span className="text-slate-400">({hhmm(gap.fromTime)}–{hhmm(gap.toTime)})</span>
+                                  {gapPlace?.type === 'customer' ? (
+                                    <span className="inline-flex items-center gap-1 text-[#1B3A5C] font-medium">
+                                      <Building2 className="w-3 h-3 text-[#3DD8D8]" />{gapPlace.customer!.shortName || gapPlace.customer!.name}
+                                    </span>
+                                  ) : gapPlace?.type === 'factory' ? (
+                                    <span className="inline-flex items-center gap-1"><Factory className="w-3 h-3" />ที่โรงงาน</span>
+                                  ) : (
+                                    <>
+                                      <span className="truncate max-w-[300px]" title={gap.address}>{gap.address || '—'}</span>
+                                      {(gap.lat !== 0 || gap.lng !== 0) && (
+                                        <button onClick={() => setCoordTarget({ lat: gap.lat, lng: gap.lng, address: gap.address })}
+                                          title="จุดนี้คือลูกค้ารายไหน? — บันทึกเป็นพิกัดลูกค้า"
+                                          className="shrink-0 text-slate-300 hover:text-[#1B3A5C]">
+                                          <MapPin className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                </span>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -304,7 +421,76 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
           <p className="text-slate-500">เลือกรถ + วันที่ แล้วกด “ดึงข้อมูล”</p>
         </div>
       )}
+
+      {coordTarget && (
+        <SetCustomerCoordModal point={coordTarget} date={date} onClose={() => setCoordTarget(null)} />
+      )}
     </div>
+  )
+}
+
+// 427 — "เดาพิกัดจากจุดจอดซ้ำ" ฉบับใช้งานจริง: ระบบเสนอจุดจอด → ติ๊ดยืนยันว่าเป็นลูกค้ารายไหน
+//   บันทึกครั้งเดียว ทุกเที่ยวที่จบจุดนี้ (รัศมี 150ม.) ขึ้นชื่อลูกค้าอัตโนมัติตลอด
+function SetCustomerCoordModal({
+  point, date, onClose,
+}: {
+  point: { lat: number; lng: number; address: string }
+  date: string
+  onClose: () => void
+}) {
+  const { customers, updateCustomer } = useStore()
+  const [search, setSearch] = useState('')
+
+  const candidates = useMemo(() => {
+    const due = (c: Customer) => isScheduledDay(date, c)
+    return customers
+      .filter(c => c.isActive)
+      .filter(c => !search || matchesThaiQueryAnyField([c.shortName, c.name, c.customerCode], search))
+      .sort((a, b) => Number(due(b)) - Number(due(a)) ||
+        (a.shortName || a.name).localeCompare(b.shortName || b.name, 'th'))
+      .slice(0, 60)
+  }, [customers, search, date])
+
+  const save = (c: Customer) => {
+    if ((c.gpsLat || c.gpsLng) && !confirm(`${c.shortName || c.name} มีพิกัดอยู่แล้ว — แทนที่ด้วยจุดนี้?`)) return
+    updateCustomer(c.id, { gpsLat: point.lat, gpsLng: point.lng })
+    onClose()
+  }
+
+  return (
+    <Modal open onClose={onClose} title="จุดนี้คือลูกค้ารายไหน?" size="md" closeLabel="cancel">
+      <div className="space-y-3">
+        <div className="text-sm text-slate-600 bg-slate-50 rounded-lg p-3">
+          <p className="truncate" title={point.address}>📍 {point.address || `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`}</p>
+          <a href={`https://www.google.com/maps?q=${point.lat},${point.lng}`} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-[#1B3A5C] hover:text-[#3DD8D8] mt-1">
+            <ExternalLink className="w-3 h-3" /> เปิดดูใน Google Maps
+          </a>
+        </div>
+        <p className="text-xs text-slate-400">เลือกลูกค้าเพื่อบันทึกจุดนี้เป็นพิกัดประจำ — เที่ยวต่อๆ ไปที่จบใกล้จุดนี้จะขึ้นชื่อลูกค้าอัตโนมัติ (ลูกค้าที่ถึงคิววันนี้อยู่บนสุด)</p>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3DD8D8]" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาลูกค้า..." autoFocus
+            className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+        </div>
+        <ul className="divide-y divide-slate-100 max-h-72 overflow-auto">
+          {candidates.length === 0 ? (
+            <li className="text-center text-sm text-slate-400 py-6">ไม่พบลูกค้า</li>
+          ) : candidates.map(c => (
+            <li key={c.id} className="flex items-center gap-2 py-2 text-sm">
+              <span className="font-medium text-slate-700 w-28 truncate">{c.shortName || c.name}</span>
+              <span className="flex-1 text-xs text-slate-400 truncate">{c.name}</span>
+              {isScheduledDay(date, c) && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#3DD8D8]/15 text-[#1B3A5C] shrink-0">ถึงคิววันนี้</span>}
+              {(c.gpsLat || c.gpsLng) ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0">มีพิกัดแล้ว</span> : null}
+              <button onClick={() => save(c)}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors shrink-0">
+                ใช้จุดนี้
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Modal>
   )
 }
 
@@ -354,10 +540,10 @@ function AuditTab() {
       const dayTrips = new Map<string, GpsTrip[]>()
       const histMedian = new Map<string, number | null>()
       for (const car of cars) {
-        dayTrips.set(car.carId, await fetchGpsTrips(car.carId, date))
+        dayTrips.set(car.carId, await fetchGpsTrips(car.plate, date))
         // historical = best-effort: ถ้า V2X timeout/error → median null (มิติอื่นยังทำงาน)
         try {
-          const hist = await fetchGpsTrips(car.carId, histFrom, yesterday)
+          const hist = await fetchGpsTrips(car.plate, histFrom, yesterday)
           histMedian.set(car.carId, medianDailyKm(hist, date))
         } catch {
           histMedian.set(car.carId, null)

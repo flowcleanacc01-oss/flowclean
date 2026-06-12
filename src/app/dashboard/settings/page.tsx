@@ -12,6 +12,7 @@ import { USER_ROLE_CONFIG } from '@/types'
 import { Plus, RotateCcw, Check, KeyRound, X, Eye, EyeOff, Info, ChevronDown, UserX } from 'lucide-react'
 import { genId } from '@/lib/utils'
 import { blockNumberArrowKeys } from '@/lib/modal-nav'
+import GpsCoordInput from '@/components/GpsCoordInput'
 
 type TabKey = 'users' | 'company' | 'documents' | 'auditlog'
 
@@ -413,6 +414,13 @@ export default function SettingsPage() {
               <label className="block font-medium text-slate-600 mb-1">ที่อยู่</label>
               <textarea value={companyDraft.address} onChange={e => handleCompanyChange('address', e.target.value)} rows={2}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+            </div>
+            {/* 427 — พิกัดโรงงาน: label "ขยับรถที่โรงงาน / กลับโรงงาน" ในหน้า GPS */}
+            <div className="sm:col-span-2">
+              <label className="block font-medium text-slate-600 mb-1">พิกัด GPS โรงงาน</label>
+              <GpsCoordInput lat={companyDraft.factoryLat || 0} lng={companyDraft.factoryLng || 0}
+                onChange={(lat, lng) => { handleCompanyChange('factoryLat', lat); handleCompanyChange('factoryLng', lng) }} />
+              <p className="text-[11px] text-slate-400 mt-1">ใช้ในหน้า GPS → เที่ยววิ่ง: ระบุ &ldquo;ขยับรถที่โรงงาน / กลับโรงงาน&rdquo; อัตโนมัติ</p>
             </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">เลขผู้เสียภาษี</label>

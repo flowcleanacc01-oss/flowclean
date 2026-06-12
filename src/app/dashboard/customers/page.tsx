@@ -22,6 +22,7 @@ import FloatingTotalBar from '@/components/FloatingTotalBar'
 import { isFlatRateCustomer } from '@/lib/customer-pricing'
 import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { listTrustCandidates } from '@/lib/trust-candidate'
+import GpsCoordInput from '@/components/GpsCoordInput'
 
 type PageTab = 'customers' | 'categories' | 'workflow' | 'schedule' | 'aggregate'
 
@@ -36,6 +37,7 @@ const EMPTY_CUSTOMER: Omit<Customer, 'id' | 'createdAt'> = {
   enableVat: true, enableWithholding: true,
   workflowMode: 'cross_check',
   ownerGroup: '',
+  gpsLat: 0, gpsLng: 0, // 427 — พิกัดจุดส่งผ้า (จับคู่เที่ยววิ่ง GPS)
 }
 
 export default function CustomersPage() {
@@ -1042,6 +1044,14 @@ export default function CustomersPage() {
             <label className="block font-medium text-slate-600 mb-1">ที่อยู่</label>
             <textarea value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} rows={2}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#3DD8D8] focus:outline-none" />
+          </div>
+
+          {/* 427 — พิกัดจุดส่งผ้า: จับคู่เที่ยววิ่ง GPS → แสดงชื่อลูกค้าแทน address */}
+          <div>
+            <label className="block font-medium text-slate-600 mb-1">พิกัด GPS จุดส่งผ้า</label>
+            <GpsCoordInput lat={form.gpsLat || 0} lng={form.gpsLng || 0}
+              onChange={(lat, lng) => setForm({ ...form, gpsLat: lat, gpsLng: lng })} />
+            <p className="text-[11px] text-slate-400 mt-1">ใช้จับคู่เที่ยววิ่งในหน้า GPS — หรือตั้งจากจุดจอดจริงใน GPS → เที่ยววิ่ง ได้เลย</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

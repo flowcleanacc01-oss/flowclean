@@ -205,6 +205,10 @@ const FIELD_MAP: Record<string, string> = {
   capacityTarget: 'capacity_target',  // 423 B-1
   ownerGroup: 'owner_group',          // 423 B-2 (skip-queue exception)
   roundDayOverrides: 'round_day_overrides', // 429 — ข้อยกเว้นรอบรายวัน {weekday: roundId}
+  gpsLat: 'gps_lat',                  // 427 — พิกัดลูกค้า
+  gpsLng: 'gps_lng',
+  factoryLat: 'factory_lat',          // 427 — พิกัดโรงงาน (company_info)
+  factoryLng: 'factory_lng',
   // 423 Phase B2 — Daily Trip (dispatch). stops[] = JSONB → inner fields ไม่ผ่าน map
   driverId: 'driver_id',
   helperId: 'helper_id',

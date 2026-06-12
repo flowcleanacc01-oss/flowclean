@@ -24,6 +24,8 @@ export const DEFAULT_COMPANY_INFO: CompanyInfo = {
   bankAccounts: [],
   vatRate: 7,
   withholdingRate: 3,
+  factoryLat: 0,
+  factoryLng: 0,
 }
 
 // ============================================================

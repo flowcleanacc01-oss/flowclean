@@ -5,7 +5,7 @@
 // Feat 423 C — GPS integration
 
 import type {
-  V2xEnvelope, V2xCar, V2xPosition, V2xTrip, V2xTripStat,
+  V2xEnvelope, V2xCar, V2xPosition, V2xTravelTrip, V2xTripStat,
   GpsCar, GpsPosition, GpsTrip, GpsDailyKm,
 } from './v2x-types'
 import { normalizePlate } from './v2x-types'
@@ -135,22 +135,46 @@ function toGpsPosition(p: V2xPosition): GpsPosition {
   }
 }
 
-function toGpsTrip(t: V2xTrip): GpsTrip {
+/** "2026-06-10 16:23:00.0" → "2026-06-10 16:23:00" (ตัด .0 ท้าย — ให้ format ตรงกับของเดิม) */
+function cleanTime(s: string | undefined): string {
+  return (s || '').replace(/\.\d+$/, '')
+}
+
+// 427 — getTravelAnalysis ให้ครบกว่า /report/trip/list (พิกัด + behavior + tripId)
+function toGpsTrip(t: V2xTravelTrip): GpsTrip {
+  const startTime = cleanTime(t.begintime)
+  const endTime = cleanTime(t.endtime)
+  const distanceKm = num(t.mileage)
+  const drivingMin = num(t.drivingtime)
+  // ติดเครื่องนิ่ง = เวลาเที่ยวทั้งหมด - เวลาล้อหมุนจริง (จับ "จอดไม่ดับเครื่อง" — เคสติ๊ด)
+  const durMs = new Date(endTime.replace(' ', 'T')).getTime() - new Date(startTime.replace(' ', 'T')).getTime()
+  const idleMin = Number.isFinite(durMs) && durMs > 0 ? Math.max(0, Math.round(durMs / 60000 - drivingMin)) : 0
+  const fuelLiters = num(t.fuelConsumption)
   return {
+    tripId: t.id || '',
     plate: t.licensePlate,
     plateNorm: normalizePlate(t.licensePlate),
-    vin: t.ecuvin || '',
+    vin: '',
     startAddress: t.tripStartAddress || '',
     endAddress: t.tripEndAddress || '',
-    startTime: t.begintime || '',
-    endTime: t.endTime || '',
-    distanceKm: num(t.mileage),
-    drivingMin: num(t.drivingtime),
-    idleMin: num(t.totalFreeTime),
+    startTime,
+    endTime,
+    startLat: num(t.slatitude),
+    startLng: num(t.slongitude),
+    endLat: num(t.elatitude),
+    endLng: num(t.elongitude),
+    distanceKm,
+    drivingMin,
+    idleMin,
     maxSpeed: num(t.tripMaxSpeed),
     avgSpeed: num(t.tripAvgSpeed),
-    fuelLiters: num(t.fuelConsumption),
-    kmPerLiter: num(t.consumptionRate),
+    fuelLiters,
+    kmPerLiter: fuelLiters > 0 ? distanceKm / fuelLiters : 0,
+    score: num(t.score),
+    overSpeedCount: num(t.overSpeed),
+    rapidAccelCount: num(t.rapidAcceleration),
+    rapidDecelCount: num(t.rapidDeceleration),
+    sharpTurnCount: num(t.turncount),
   }
 }
 
@@ -168,13 +192,21 @@ export async function getRealtimePositions(): Promise<GpsPosition[]> {
   return (raw || []).map(toGpsPosition)
 }
 
-/** เที่ยววิ่งของรถ 1 คันในช่วงเวลา (format "yyyy-mm-dd HH:MM:SS") */
-export async function getTrips(carId: string, startTime: string, endTime: string): Promise<GpsTrip[]> {
-  const raw = await v2xFetch<V2xTrip[]>('/report/trip/list', {
-    method: 'POST',
-    body: { carId, startTime, endTime, pageNum: 1, pageSize: 200 },
-  })
-  return (raw || []).map(toGpsTrip)
+/** เที่ยววิ่งของรถ 1 คันในช่วงเวลา (format "yyyy-mm-dd HH:MM:SS")
+ *  427 — เปลี่ยนจาก /report/trip/list → getTravelAnalysis: มีพิกัด + driver behavior + เร็วกว่ามาก
+ *  ⚠️ filter ด้วย "ทะเบียนเต็มแบบ V2X" (มี prefix เช่น "C 4ฒฆ-8053") — ส่งชื่อ param ผิด = ไม่ filter เงียบๆ */
+export async function getTrips(plate: string, startTime: string, endTime: string): Promise<GpsTrip[]> {
+  const out: GpsTrip[] = []
+  for (let pageNum = 1; pageNum <= 10; pageNum++) {
+    const raw = await v2xFetch<V2xTravelTrip[]>('/travelAnalysis/getTravelAnalysis', {
+      method: 'POST',
+      body: { licensePlate: plate, startTime, endTime, pageNum, pageSize: 200 },
+    })
+    const rows = raw || []
+    out.push(...rows.map(toGpsTrip))
+    if (rows.length < 200) break
+  }
+  return out
 }
 
 /** 428 — ระยะวิ่งรายวันของทุกคันในช่วง [from..to] (yyyy-mm-dd)

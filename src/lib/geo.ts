@@ -1,0 +1,128 @@
+// 427 — พิกัด GPS: parse ลิงก์ Google Maps · ระยะ haversine · จับคู่จุดกับลูกค้า/โรงงาน · ช่วงดับเครื่องจอด
+//   pure ทั้งไฟล์ (testable · ใช้ได้ทั้ง client/server)
+import type { Customer } from '@/types'
+import type { GpsTrip } from './v2x-types'
+
+/** รัศมีจับคู่ลูกค้า (เมตร) — จุดจบเที่ยวห่างพิกัดลูกค้าไม่เกินนี้ = จุดส่งลูกค้ารายนั้น */
+export const PLACE_MATCH_RADIUS_M = 150
+/** โรงงานพื้นที่ใหญ่กว่า (ลานจอด/หลายประตู) → รัศมีกว้างขึ้น */
+export const FACTORY_MATCH_RADIUS_M = 250
+
+export interface LatLng {
+  lat: number
+  lng: number
+}
+
+function validLatLng(lat: number, lng: number): LatLng | null {
+  return Number.isFinite(lat) && Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat !== 0 || lng !== 0)
+    ? { lat, lng } : null
+}
+
+/**
+ * parse พิกัดจากข้อความ/ลิงก์ Google Maps — รองรับ:
+ *   1) ลิงก์ place เต็ม `!3d13.75!4d100.47` (พิกัดหมุดจริง — แม่นสุด เช็คก่อน)
+ *   2) `?q=13.75,100.47` / `ll=` / `query=` / `destination=`
+ *   3) `@13.75,100.47,17z` (จุดกึ่งกลางแผนที่)
+ *   4) พิกัดดิบ "13.7563, 100.5018"
+ *   ⚠️ ลิงก์สั้น maps.app.goo.gl ไม่มีพิกัดในตัว — ให้เปิดในเบราว์เซอร์ก่อนแล้ว copy URL เต็ม
+ */
+export function parseLatLng(text: string): LatLng | null {
+  const t = (text || '').trim()
+  if (!t) return null
+  let m = t.match(/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/)
+  if (m) return validLatLng(Number(m[1]), Number(m[2]))
+  m = t.match(/[?&](?:q|ll|query|destination)=(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/)
+  if (m) return validLatLng(Number(m[1]), Number(m[2]))
+  m = t.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/)
+  if (m) return validLatLng(Number(m[1]), Number(m[2]))
+  m = t.match(/^(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/)
+  if (m) return validLatLng(Number(m[1]), Number(m[2]))
+  return null
+}
+
+/** ระยะระหว่าง 2 พิกัด (เมตร) */
+export function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(a))
+}
+
+export interface PlaceMatch {
+  type: 'customer' | 'factory'
+  customer?: Customer
+  distanceM: number
+}
+
+/** จับคู่พิกัดกับสถานที่ที่รู้จัก — ลูกค้าที่ใกล้สุดในรัศมีชนะ · ไม่เจอลูกค้าค่อยเช็คโรงงาน */
+export function matchPlace(
+  lat: number,
+  lng: number,
+  customers: Customer[],
+  factory: LatLng | null,
+): PlaceMatch | null {
+  if (!lat && !lng) return null
+  let best: PlaceMatch | null = null
+  for (const c of customers) {
+    if (!c.gpsLat && !c.gpsLng) continue
+    const d = haversineM(lat, lng, c.gpsLat || 0, c.gpsLng || 0)
+    if (d <= PLACE_MATCH_RADIUS_M && (!best || d < best.distanceM)) {
+      best = { type: 'customer', customer: c, distanceM: d }
+    }
+  }
+  if (!best && factory && (factory.lat || factory.lng)) {
+    const d = haversineM(lat, lng, factory.lat, factory.lng)
+    if (d <= FACTORY_MATCH_RADIUS_M) best = { type: 'factory', distanceM: d }
+  }
+  return best
+}
+
+/** "2026-06-10 16:23:00" → ms (local) · NaN ถ้า parse ไม่ได้ */
+function timeMs(s: string): number {
+  return new Date((s || '').replace(' ', 'T')).getTime()
+}
+
+/** ช่วง "ดับเครื่องจอด" ระหว่างเที่ยว — gap ระหว่างจบเที่ยวก่อนหน้า → เริ่มเที่ยวถัดไป
+ *  จุดจอด = จุดจบของเที่ยวก่อนหน้า (ติ๊ด: รู้ว่าคนขับแวะ/ดับเครื่องที่ไหน นานเท่าไหร่) */
+export interface EngineOffGap {
+  afterIndex: number // index ของเที่ยว (ใน list ที่เรียงเวลาแล้ว) ที่ gap นี้ตามหลัง
+  minutes: number
+  lat: number
+  lng: number
+  address: string
+  fromTime: string // เวลาดับเครื่อง (endTime เที่ยวก่อน)
+  toTime: string // เวลาติดเครื่องอีกครั้ง
+}
+
+export function engineOffGaps(sortedTrips: GpsTrip[], minGapMin = 5): EngineOffGap[] {
+  const out: EngineOffGap[] = []
+  for (let i = 0; i < sortedTrips.length - 1; i++) {
+    const a = sortedTrips[i]
+    const b = sortedTrips[i + 1]
+    const end = timeMs(a.endTime)
+    const start = timeMs(b.startTime)
+    if (!Number.isFinite(end) || !Number.isFinite(start)) continue
+    const minutes = Math.round((start - end) / 60000)
+    if (minutes >= minGapMin) {
+      out.push({
+        afterIndex: i,
+        minutes,
+        lat: a.endLat || 0,
+        lng: a.endLng || 0,
+        address: a.endAddress,
+        fromTime: a.endTime,
+        toTime: b.startTime,
+      })
+    }
+  }
+  return out
+}
+
+/** เที่ยวระยะสั้นมาก = ขยับรถ (โหลดของ/เปลี่ยนช่องจอด) — ติ๊ดให้เก็บไว้ ไม่กรองทิ้ง */
+export const SHUFFLE_TRIP_KM = 0.5
+export function isShuffleTrip(t: GpsTrip): boolean {
+  return t.distanceKm < SHUFFLE_TRIP_KM
+}

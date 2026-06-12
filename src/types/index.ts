@@ -239,6 +239,9 @@ export interface Customer {
   pickupWindowEnd?: string
   // 423 B-2 — กลุ่มเจ้าของเดียวกัน (tag) → ยกเว้น skip-queue alert เมื่อสาขาอื่นในกลุ่มส่งแล้ว
   ownerGroup?: string           // เช่น 'SEN', 'รามบุตรี' ('' = ไม่มีกลุ่ม)
+  // 427 — พิกัดหน้างาน (จับคู่จุดจบเที่ยววิ่ง GPS รัศมี ~150ม. → ชื่อลูกค้า) · 0 = ยังไม่ตั้ง
+  gpsLat?: number
+  gpsLng?: number
 }
 
 // 317 Phase 1 — Aggregate Size Group Config (per customer, per group)
@@ -976,6 +979,8 @@ export interface CompanyInfo {
   bankAccounts: BankAccount[]
   vatRate: number           // % VAT (default 7)
   withholdingRate: number   // % หัก ณ ที่จ่าย (default 3)
+  factoryLat: number        // 427 — พิกัดโรงงาน (label "ขยับรถ/กลับโรงงาน" ใน GPS) · 0 = ยังไม่ตั้ง
+  factoryLng: number
 }
 
 // ============================================================

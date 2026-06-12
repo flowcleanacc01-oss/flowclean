@@ -20,10 +20,11 @@ export function fetchGpsRealtime(): Promise<GpsPosition[]> {
   return gpsFetch<GpsPosition[]>('action=realtime')
 }
 
-/** เที่ยววิ่งของรถ 1 คัน — วันเดียว (date) หรือช่วง (date..to) สำหรับ historical */
-export function fetchGpsTrips(carId: string, date: string, to?: string): Promise<GpsTrip[]> {
+/** เที่ยววิ่งของรถ 1 คัน — วันเดียว (date) หรือช่วง (date..to) สำหรับ historical
+ *  427 — ระบุรถด้วยทะเบียนเต็มแบบ V2X (car.plate เช่น "C 4ฒฆ-8053") */
+export function fetchGpsTrips(plate: string, date: string, to?: string): Promise<GpsTrip[]> {
   const range = to ? `&to=${to}` : ''
-  return gpsFetch<GpsTrip[]>(`action=trips&carId=${encodeURIComponent(carId)}&date=${date}${range}`)
+  return gpsFetch<GpsTrip[]>(`action=trips&plate=${encodeURIComponent(plate)}&date=${date}${range}`)
 }
 
 /** 428 — ระยะวิ่งรายวันของทุกคันในช่วง [from..to] (ใช้คำนวณไมล์ประมาณจาก GPS) */

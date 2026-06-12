@@ -14,9 +14,11 @@ const round = (over: Partial<Round>): Round =>
     color: '#0ea5e9', sortOrder: 1, isActive: true, note: '', createdAt: '', ...over } as Round)
 
 const trip = (startTime: string, endTime: string, km = 10, fuel = 1): GpsTrip =>
-  ({ plate: 'C 4ฒฆ-8053', plateNorm: '4ฒฆ-8053', vin: '', startAddress: '', endAddress: '',
-    startTime, endTime, distanceKm: km, drivingMin: 30, idleMin: 0,
-    maxSpeed: 80, avgSpeed: 40, fuelLiters: fuel, kmPerLiter: fuel > 0 ? km / fuel : 0 })
+  ({ tripId: '', plate: 'C 4ฒฆ-8053', plateNorm: '4ฒฆ-8053', vin: '', startAddress: '', endAddress: '',
+    startTime, endTime, startLat: 0, startLng: 0, endLat: 0, endLng: 0,
+    distanceKm: km, drivingMin: 30, idleMin: 0,
+    maxSpeed: 80, avgSpeed: 40, fuelLiters: fuel, kmPerLiter: fuel > 0 ? km / fuel : 0,
+    score: 0, overSpeedCount: 0, rapidAccelCount: 0, rapidDecelCount: 0, sharpTurnCount: 0 })
 
 const car = (carId: string, plate: string): GpsCar =>
   ({ carId, plate, plateNorm: normalizePlate(plate), vin: '', sim: '', model: '', fuelType: '' })
