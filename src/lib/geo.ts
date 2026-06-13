@@ -95,6 +95,38 @@ export function matchPlace(
   return best
 }
 
+/** 435 — จุดที่รู้จักที่เส้นทางผ่านเข้าใกล้ (ตามลำดับ path)
+ *  ใช้ break down เที่ยวยาวที่ "ไม่ดับเครื่อง" — V2X รวมเป็นเที่ยวเดียว เห็นแค่ปลายทางสุดท้าย
+ *  → ไล่ waypoints ดูว่าผ่านลูกค้า/จุดบันทึก/โรงงานรายไหนบ้าง
+ *  ⚠️ waypoints ไม่มี timestamp → บอกได้แค่ "ผ่านจุดไหนบ้าง + ลำดับ" ไม่ใช่ "จอดนานเท่าไหร่" */
+export interface PassedPlace {
+  type: 'customer' | 'factory' | 'saved'
+  name: string
+  key: string
+}
+
+export function passedPlaces(
+  points: LatLng[],
+  customers: Customer[],
+  factory: LatLng | null,
+  savedPlaces: SavedPlace[] = [],
+): PassedPlace[] {
+  const seq: PassedPlace[] = []
+  let lastKey = '' // ออกนอกจุด (no match) → reset → วนกลับเข้าจุดเดิม = ขึ้นซ้ำ (เห็นการวนรอบ)
+  for (const pt of points) {
+    const m = matchPlace(pt.lat, pt.lng, customers, factory, savedPlaces)
+    if (!m) { lastKey = ''; continue }
+    const key = m.type === 'customer' ? `c:${m.customer!.id}`
+      : m.type === 'saved' ? `s:${m.savedPlace!.id}` : 'factory'
+    if (key === lastKey) continue // ยังอยู่จุดเดิม → ไม่ซ้ำ
+    const name = m.type === 'customer' ? (m.customer!.shortName || m.customer!.name)
+      : m.type === 'saved' ? m.savedPlace!.name : 'โรงงาน'
+    seq.push({ type: m.type, name, key })
+    lastKey = key
+  }
+  return seq
+}
+
 /** "2026-06-10 16:23:00" → ms (local) · NaN ถ้า parse ไม่ได้ */
 function timeMs(s: string): number {
   return new Date((s || '').replace(' ', 'T')).getTime()

@@ -1,6 +1,6 @@
 // 427 — verify geo helpers: parse ลิงก์ Google Maps · haversine · จับคู่สถานที่ · ช่วงดับเครื่องจอด
 import { describe, it, expect } from 'vitest'
-import { parseLatLng, haversineM, matchPlace, engineOffGaps, isShuffleTrip } from '@/lib/geo'
+import { parseLatLng, haversineM, matchPlace, engineOffGaps, isShuffleTrip, passedPlaces } from '@/lib/geo'
 import type { GpsTrip } from '@/lib/v2x-types'
 import type { Customer, SavedPlace } from '@/types'
 
@@ -93,6 +93,35 @@ describe('haversineM / matchPlace', () => {
   it('จุดที่บันทึกเกินรัศมี 120ม. → ไม่ match', () => {
     // ~150ม. เหนือจุด → นอกรัศมี saved (120ม.)
     expect(matchPlace(13.75695, 100.4768, [], null, [place({})])).toBeNull()
+  })
+})
+
+describe('passedPlaces — break down เที่ยวยาวที่ผ่านจุดไหนบ้าง (435)', () => {
+  const A = cust({ id: 'A', shortName: 'A', gpsLat: 13.7556, gpsLng: 100.4768 })
+  const B = cust({ id: 'B', shortName: 'B', gpsLat: 13.8000, gpsLng: 100.5200 })
+  const far = { lat: 13.9000, lng: 100.7000 } // นอกทุกจุด
+
+  it('ลำดับจุดที่ผ่าน + dedup จุดที่ติดกัน', () => {
+    const pts = [
+      { lat: 13.7556, lng: 100.4768 }, { lat: 13.7557, lng: 100.4769 }, // A (2 จุดติดกัน → 1)
+      far, // ออกนอกจุด
+      { lat: 13.8000, lng: 100.5200 }, // B
+    ]
+    const seq = passedPlaces(pts, [A, B], null)
+    expect(seq.map(p => p.name)).toEqual(['A', 'B'])
+  })
+
+  it('วนกลับเข้าจุดเดิม (A→B→A) → ขึ้นซ้ำ (เห็นการวนรอบ)', () => {
+    const pts = [
+      { lat: 13.7556, lng: 100.4768 }, far,
+      { lat: 13.8000, lng: 100.5200 }, far,
+      { lat: 13.7556, lng: 100.4768 },
+    ]
+    expect(passedPlaces(pts, [A, B], null).map(p => p.name)).toEqual(['A', 'B', 'A'])
+  })
+
+  it('ไม่ผ่านจุดที่รู้จักเลย → []', () => {
+    expect(passedPlaces([far, far], [A, B], null)).toEqual([])
   })
 })
 

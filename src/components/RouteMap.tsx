@@ -15,6 +15,7 @@ export interface RouteTrack {
   dangers: GpsDangerPoint[]
   startName?: string
   endName?: string
+  passed?: { type: string; name: string }[] // 435 — จุดที่รู้จักที่เส้นทางผ่าน (legend ใช้ · map ไม่ใช้)
 }
 
 export default function RouteMap({ tracks }: { tracks: RouteTrack[] }) {

@@ -20,7 +20,7 @@ import {
   Tooltip, CartesianGrid, Cell,
 } from 'recharts'
 import { buildTripStops } from '@/lib/dispatch'
-import { matchPlace, engineOffGaps, isShuffleTrip, type LatLng, type PlaceMatch } from '@/lib/geo'
+import { matchPlace, engineOffGaps, isShuffleTrip, passedPlaces, type LatLng, type PlaceMatch } from '@/lib/geo'
 import { buildDashboardStats, type DashboardStats, type VehicleTrips } from '@/lib/gps-dashboard'
 import { connStatus, CONN_LEVEL_ORDER, type ConnLevel } from '@/lib/gps-connection'
 import type { RouteTrack } from '@/components/RouteMap'
@@ -570,10 +570,15 @@ function RouteMapModal({
   title: string
   onClose: () => void
 }) {
+  const { customers, companyInfo, savedPlaces } = useStore()
   const [tracks, setTracks] = useState<RouteTrack[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
 
+  const factory: LatLng | null = useMemo(
+    () => (companyInfo.factoryLat || companyInfo.factoryLng)
+      ? { lat: companyInfo.factoryLat, lng: companyInfo.factoryLng } : null,
+    [companyInfo.factoryLat, companyInfo.factoryLng])
   const realTrips = useMemo(() => trips.filter(t => t.tripId && !isShuffleTrip(t)), [trips])
 
   useEffect(() => {
@@ -594,6 +599,8 @@ function RouteMapModal({
             dangers: r.value.dangers,
             startName: placeNameOf(placeOf(t.startLat, t.startLng), t.startAddress),
             endName: placeNameOf(placeOf(t.endLat, t.endLng), t.endAddress),
+            // 435 — จุดที่รู้จักที่เส้นทางผ่าน (break down เที่ยวยาวที่ไม่ดับเครื่อง)
+            passed: passedPlaces(r.value.points, customers, factory, savedPlaces),
           })
         })
         setTracks(out)
@@ -602,7 +609,7 @@ function RouteMapModal({
       })
       .catch(e => { if (!cancelled) { setErr(e instanceof Error ? e.message : 'ดึงเส้นทางไม่สำเร็จ'); setLoading(false) } })
     return () => { cancelled = true }
-  }, [realTrips, placeOf])
+  }, [realTrips, placeOf, customers, factory, savedPlaces])
 
   return (
     <Modal open onClose={onClose} title={title} size="wide" closeLabel="close">
@@ -620,18 +627,26 @@ function RouteMapModal({
             <RouteMap tracks={tracks || []} />
           )}
         </div>
-        {/* legend */}
+        {/* legend + 435 break down จุดที่ผ่าน (เห็นว่าเที่ยวยาวที่ไม่ดับเครื่อง เข้าจุดไหนบ้าง) */}
         {tracks && tracks.length > 0 && (
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
+          <div className="space-y-1.5 text-xs">
             {tracks.map((t, i) => (
-              <span key={i} className="inline-flex items-center gap-1.5 text-slate-600">
-                <span className="w-4 h-1 rounded-full" style={{ backgroundColor: t.color }} />
-                {t.label} <span className="text-slate-400">→ {t.endName}</span>
-              </span>
+              <div key={i} className="flex items-start gap-1.5">
+                <span className="w-4 h-1 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: t.color }} />
+                <div className="min-w-0">
+                  <span className="text-slate-600 font-medium">{t.label}</span>
+                  {t.passed && t.passed.length > 1 ? (
+                    <span className="text-slate-500"> · ผ่าน {t.passed.length} จุด: {t.passed.map(p => p.name).join(' → ')}</span>
+                  ) : (
+                    <span className="text-slate-400"> → จบ: {t.endName}</span>
+                  )}
+                </div>
+              </div>
             ))}
-            <span className="inline-flex items-center gap-1.5 text-slate-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#dc2626]" /> จุดขับขี่เสี่ยง
-            </span>
+            <div className="flex items-center gap-3 pt-1 text-slate-400">
+              <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#dc2626]" /> จุดขับขี่เสี่ยง</span>
+              <span>· “ผ่าน” = เส้นทางเข้าใกล้จุดที่บันทึกพิกัดไว้ (บอกลำดับ ไม่บอกเวลาจอด)</span>
+            </div>
           </div>
         )}
       </div>
