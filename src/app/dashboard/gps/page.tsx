@@ -5,10 +5,11 @@
 //   ดึงผ่าน /api/gps (server proxy) · ไม่ฝัง map (ใช้ลิงก์ Google Maps) เลี่ยง map API key
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { subDays, parseISO, format } from 'date-fns'
 import { useStore } from '@/lib/store'
-import { fetchGpsCars, fetchGpsRealtime, fetchGpsTrips } from '@/lib/gps-service'
+import { fetchGpsCars, fetchGpsRealtime, fetchGpsTrips, fetchGpsTrack } from '@/lib/gps-service'
 import { normalizePlate, type GpsCar, type GpsPosition, type GpsTrip } from '@/lib/v2x-types'
 import {
   buildRoundAudit, buildVehicleAudit, guessVehiclesForRound, medianDailyKm, hhmmOf,
@@ -19,8 +20,9 @@ import {
   Tooltip, CartesianGrid, Cell,
 } from 'recharts'
 import { buildTripStops } from '@/lib/dispatch'
-import { matchPlace, engineOffGaps, isShuffleTrip, type LatLng } from '@/lib/geo'
+import { matchPlace, engineOffGaps, isShuffleTrip, type LatLng, type PlaceMatch } from '@/lib/geo'
 import { buildDashboardStats, type DashboardStats, type VehicleTrips } from '@/lib/gps-dashboard'
+import type { RouteTrack } from '@/components/RouteMap'
 import { isScheduledDay } from '@/lib/schedule-audit'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { todayISO, cn } from '@/lib/utils'
@@ -36,8 +38,25 @@ import {
   ExternalLink, Route, TrendingUp, Fuel, AlertCircle, Loader2, Car, CircleDot, Clock,
   ClipboardCheck, CheckCircle2, AlertTriangle, Info, Wand2,
   Factory, ParkingCircle, Building2, Award, Search, Plus, Pencil, Trash2, Coffee,
-  BarChart3, Timer,
+  BarChart3, Timer, Map as MapIcon,
 } from 'lucide-react'
+
+// 432.2.1 — แผนที่ Leaflet โหลดเฉพาะตอนเปิด (lazy · ssr:false เพราะ leaflet อ้าง window)
+const RouteMap = dynamic(() => import('@/components/RouteMap'), {
+  ssr: false,
+  loading: () => <div className="h-full flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin text-slate-300" /></div>,
+})
+
+// สีเส้นทางต่อเที่ยว (วน) — ต่างกันชัดเพื่อแยกเที่ยวบนแผนที่
+const ROUTE_COLORS = ['#1B3A5C', '#dc2626', '#7c3aed', '#0891b2', '#ea580c', '#16a34a', '#db2777', '#ca8a04']
+
+// ชื่อจุดจาก PlaceMatch → string (ลูกค้า/โรงงาน/จุดบันทึก) · fallback = address
+function placeNameOf(m: PlaceMatch | null, fallback: string): string {
+  if (m?.type === 'customer') return m.customer!.shortName || m.customer!.name
+  if (m?.type === 'factory') return 'โรงงาน'
+  if (m?.type === 'saved') return m.savedPlace!.name
+  return fallback || '—'
+}
 
 // "2026-06-10 20:35:16" → "20:35"
 function hhmm(s: string): string {
@@ -221,6 +240,7 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
   const [err, setErr] = useState<string | null>(null)
   // 427 — ตั้งพิกัดลูกค้าจากจุดจอดจริง (เสนอจุด → ติ๊ดยืนยันชื่อ)
   const [coordTarget, setCoordTarget] = useState<{ lat: number; lng: number; address: string } | null>(null)
+  const [showMap, setShowMap] = useState(false) // 432.2.1 — แผนที่เส้นทางทั้งวัน
 
   // โหลดรายชื่อรถครั้งแรก
   useEffect(() => {
@@ -321,6 +341,14 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-100 bg-slate-50/50">
+                <span className="text-xs text-slate-500">ไทม์ไลน์เที่ยววิ่ง — เรียงเวลาเก่า→ใหม่</span>
+                <button onClick={() => setShowMap(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1B3A5C] text-white hover:bg-[#122740] transition-colors shrink-0"
+                  title="ดูเส้นทางจริงทั้งวันบนแผนที่ — เห็นว่าออกนอกเส้นทาง/วนซ้ำไหม">
+                  <MapIcon className="w-3.5 h-3.5" /> ดูเส้นทางบนแผนที่
+                </button>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -459,7 +487,92 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
       {coordTarget && (
         <SetPlaceModal point={coordTarget} date={date} onClose={() => setCoordTarget(null)} />
       )}
+
+      {showMap && (
+        <RouteMapModal trips={sorted} placeOf={placeOf}
+          title={`เส้นทาง ${selectedVehicle ? `คัน ${selectedVehicle.code} · ` : ''}${date}`}
+          onClose={() => setShowMap(false)} />
+      )}
     </div>
+  )
+}
+
+// 432.2.1 — แผนที่เส้นทางทั้งวัน: ดึง track ต่อเที่ยว (best-effort) → วาดทุกเที่ยวซ้อนกัน
+//   เห็นภาพว่าคนขับออกนอกเส้นทาง / วนซ้ำ / แวะนอกแผน ไหม
+function RouteMapModal({
+  trips, placeOf, title, onClose,
+}: {
+  trips: GpsTrip[]
+  placeOf: (lat: number, lng: number) => PlaceMatch | null
+  title: string
+  onClose: () => void
+}) {
+  const [tracks, setTracks] = useState<RouteTrack[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
+
+  const realTrips = useMemo(() => trips.filter(t => t.tripId && !isShuffleTrip(t)), [trips])
+
+  useEffect(() => {
+    let cancelled = false
+    if (realTrips.length === 0) { setTracks([]); setLoading(false); return }
+    setLoading(true); setErr(null)
+    Promise.allSettled(realTrips.map(t => fetchGpsTrack(t.tripId)))
+      .then(results => {
+        if (cancelled) return
+        const out: RouteTrack[] = []
+        results.forEach((r, i) => {
+          if (r.status !== 'fulfilled' || r.value.points.length === 0) return
+          const t = realTrips[i]
+          out.push({
+            label: `เที่ยว ${i + 1} · ${hhmm(t.startTime)}→${hhmm(t.endTime)}`,
+            color: ROUTE_COLORS[i % ROUTE_COLORS.length],
+            points: r.value.points,
+            dangers: r.value.dangers,
+            startName: placeNameOf(placeOf(t.startLat, t.startLng), t.startAddress),
+            endName: placeNameOf(placeOf(t.endLat, t.endLng), t.endAddress),
+          })
+        })
+        setTracks(out)
+        if (out.length === 0) setErr('ระบบ GPS ไม่มีข้อมูลเส้นทางของเที่ยวเหล่านี้')
+        setLoading(false)
+      })
+      .catch(e => { if (!cancelled) { setErr(e instanceof Error ? e.message : 'ดึงเส้นทางไม่สำเร็จ'); setLoading(false) } })
+    return () => { cancelled = true }
+  }, [realTrips, placeOf])
+
+  return (
+    <Modal open onClose={onClose} title={title} size="wide" closeLabel="close">
+      <div className="space-y-3">
+        <div className="h-[68vh] rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+          {loading ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400">
+              <Loader2 className="w-7 h-7 animate-spin mb-2" /><p className="text-sm">กำลังดึงเส้นทางจาก GPS…</p>
+            </div>
+          ) : err ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400">
+              <MapIcon className="w-10 h-10 mb-2 text-slate-300" /><p className="text-sm">{err}</p>
+            </div>
+          ) : (
+            <RouteMap tracks={tracks || []} />
+          )}
+        </div>
+        {/* legend */}
+        {tracks && tracks.length > 0 && (
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
+            {tracks.map((t, i) => (
+              <span key={i} className="inline-flex items-center gap-1.5 text-slate-600">
+                <span className="w-4 h-1 rounded-full" style={{ backgroundColor: t.color }} />
+                {t.label} <span className="text-slate-400">→ {t.endName}</span>
+              </span>
+            ))}
+            <span className="inline-flex items-center gap-1.5 text-slate-500">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#dc2626]" /> จุดขับขี่เสี่ยง
+            </span>
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
 

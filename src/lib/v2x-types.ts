@@ -105,6 +105,29 @@ export interface V2xTravelTrip {
   tripOilCost: number | string
 }
 
+/** /travelAnalysis/track/{id} (GET) — เส้นทางจริงของเที่ยว (waypoints) + จุดขับขี่เสี่ยง
+ *  ⚠️ verified จาก response จริง (2026-06-13): polyline อยู่ที่ routeRectify.rectify[] (road-snapped, มีแค่ lat/lng)
+ *     · rectify ระดับบนสุด = raw track (อาจ null — มี speed/time เมื่อมีข้อมูล) · dangerPoints = เหตุการณ์ขับขี่เสี่ยง */
+export interface V2xTrackPoint {
+  lat: number | string
+  lng: number | string
+  speed?: number | string | null
+  direction?: number | string | null
+  travelTime?: string | null
+  mileage?: number | string | null
+}
+export interface V2xDangerPoint {
+  type: number | string
+  lat: number | string
+  lng: number | string
+  time: string
+}
+export interface V2xTrackResponse {
+  rectify: V2xTrackPoint[] | null
+  routeRectify: { rectify: V2xTrackPoint[] | null } | null
+  dangerPoints: V2xDangerPoint[] | null
+}
+
 /** /travelAnalysis/getTripStatistics (POST {beginTime,endTime,pageNum,pageSize}) — สถิติรายวันต่อคัน
  *  ⚠️ data เป็น array ตรงๆ (ไม่มี .list) · ใช้คำนวณไมล์สะสม (428) */
 export interface V2xTripStat {
@@ -174,6 +197,23 @@ export interface GpsTrip {
   rapidAccelCount: number
   rapidDecelCount: number
   sharpTurnCount: number
+}
+
+/** เส้นทางเที่ยว — normalized (432.2.1: วาด polyline บนแผนที่) */
+export interface GpsTrackPoint {
+  lat: number
+  lng: number
+  speed: number // 0 = ไม่มีข้อมูล (route-rectified จะไม่มี speed)
+}
+export interface GpsDangerPoint {
+  lat: number
+  lng: number
+  time: string
+  type: number // ประเภทเหตุการณ์เสี่ยง (V2X — ความหมายยังไม่ยืนยัน)
+}
+export interface GpsTrack {
+  points: GpsTrackPoint[]   // waypoints เรียงตามเวลา
+  dangers: GpsDangerPoint[] // จุดขับขี่เสี่ยง
 }
 
 /** ระยะวิ่งรายวันต่อคัน — normalized (428: ไมล์ auto จาก GPS) */

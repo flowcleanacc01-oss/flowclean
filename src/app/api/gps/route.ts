@@ -4,12 +4,13 @@
 //   GET ?action=realtime      → ตำแหน่ง realtime ทุกคัน
 //   GET ?action=trips&carId=<v2xCarId>&date=<yyyy-mm-dd> → เที่ยววิ่งของรถวันนั้น
 //   GET ?action=mileage&from=<yyyy-mm-dd>&to=<yyyy-mm-dd> → ระยะวิ่งรายวันทุกคัน (428: ไมล์ auto)
+//   GET ?action=track&tripId=<uuid> → เส้นทางจริงของเที่ยว (waypoints) (432.2.1: วาดบนแผนที่)
 //
 //   env บนเซิร์ฟเวอร์: V2X_BASE_URL, V2X_USERNAME, V2X_PASSWORD
 // Feat 423 C — GPS integration
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getCars, getRealtimePositions, getTrips, getDailyMileage, V2xConfigError, V2xApiError } from '@/lib/v2x-client'
+import { getCars, getRealtimePositions, getTrips, getDailyMileage, getTripTrack, V2xConfigError, V2xApiError } from '@/lib/v2x-client'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -47,7 +48,14 @@ export async function GET(req: NextRequest) {
       }
       return NextResponse.json({ ok: true, data: await getDailyMileage(from, to) })
     }
-    return NextResponse.json({ ok: false, error: 'action ไม่ถูกต้อง (cars|realtime|trips|mileage)' }, { status: 400 })
+    if (action === 'track') {
+      const tripId = req.nextUrl.searchParams.get('tripId')
+      if (!tripId) {
+        return NextResponse.json({ ok: false, error: 'ต้องมี tripId' }, { status: 400 })
+      }
+      return NextResponse.json({ ok: true, data: await getTripTrack(tripId) })
+    }
+    return NextResponse.json({ ok: false, error: 'action ไม่ถูกต้อง (cars|realtime|trips|mileage|track)' }, { status: 400 })
   } catch (err) {
     if (err instanceof V2xConfigError) {
       return NextResponse.json({ ok: false, error: err.message }, { status: 503 })

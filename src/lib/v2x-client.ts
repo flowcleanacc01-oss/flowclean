@@ -5,8 +5,8 @@
 // Feat 423 C — GPS integration
 
 import type {
-  V2xEnvelope, V2xCar, V2xPosition, V2xTravelTrip, V2xTripStat,
-  GpsCar, GpsPosition, GpsTrip, GpsDailyKm,
+  V2xEnvelope, V2xCar, V2xPosition, V2xTravelTrip, V2xTripStat, V2xTrackResponse,
+  GpsCar, GpsPosition, GpsTrip, GpsDailyKm, GpsTrack, GpsTrackPoint, GpsDangerPoint,
 } from './v2x-types'
 import { normalizePlate } from './v2x-types'
 
@@ -207,6 +207,24 @@ export async function getTrips(plate: string, startTime: string, endTime: string
     if (rows.length < 200) break
   }
   return out
+}
+
+/** 432.2.1 — เส้นทางจริงของเที่ยว (waypoints) จาก track/{id}
+ *  verified shape: polyline = routeRectify.rectify[] (road-snapped lat/lng) · fallback raw rectify (มี speed)
+ *  ⚠️ id = V2xTravelTrip.id (uuid) ไม่ใช่ tripId (เลขลำดับ) */
+export async function getTripTrack(id: string): Promise<GpsTrack> {
+  const raw = await v2xFetch<V2xTrackResponse>(`/travelAnalysis/track/${encodeURIComponent(id)}`, { method: 'GET' })
+  // prefer raw rectify (มี speed/time) → ไม่มีก็ใช้ routeRectify.rectify (road-snapped, lat/lng เท่านั้น)
+  const src = (Array.isArray(raw?.rectify) && raw.rectify.length > 0)
+    ? raw.rectify
+    : (raw?.routeRectify?.rectify || [])
+  const points: GpsTrackPoint[] = src
+    .map(p => ({ lat: num(p.lat), lng: num(p.lng), speed: num(p.speed) }))
+    .filter(p => p.lat !== 0 || p.lng !== 0)
+  const dangers: GpsDangerPoint[] = (raw?.dangerPoints || [])
+    .map(d => ({ lat: num(d.lat), lng: num(d.lng), time: cleanTime(d.time), type: num(d.type) }))
+    .filter(d => d.lat !== 0 || d.lng !== 0)
+  return { points, dangers }
 }
 
 /** 428 — ระยะวิ่งรายวันของทุกคันในช่วง [from..to] (yyyy-mm-dd)
