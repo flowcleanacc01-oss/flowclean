@@ -229,7 +229,9 @@ export async function getTripTrack(id: string): Promise<GpsTrack> {
 
 /** 428 — ระยะวิ่งรายวันของทุกคันในช่วง [from..to] (yyyy-mm-dd)
  *  ใช้ getTripStatistics (aggregate ฝั่ง V2X — เร็วกว่า trip list ที่ geocode ทุกเที่ยว)
- *  ⚠️ data เป็น array ตรงๆ + page ละ ~100 → paginate จนหมด */
+ *  ⚠️ data เป็น array ตรงๆ + page ละ ~100 → paginate จนหมด
+ *  ⚠️ 434: getTripStatistics aggregate "วันที่จบแล้ว" เท่านั้น — วันปัจจุบันยังไม่มี →
+ *     ถ้า `to` ไม่โผล่ใน stats (= วันยังไม่จบ) เติมจาก trips สด (getTravelAnalysis) ให้ครบถึงวันนี้ */
 export async function getDailyMileage(from: string, to: string): Promise<GpsDailyKm[]> {
   const out: GpsDailyKm[] = []
   for (let pageNum = 1; pageNum <= 12; pageNum++) {
@@ -247,5 +249,34 @@ export async function getDailyMileage(from: string, to: string): Promise<GpsDail
     })))
     if (rows.length < 100) break
   }
+  // 434 — วัน `to` ไม่มีใน aggregate (วันยังไม่จบ) → เติมระยะของวันนั้นจาก trips สด
+  if (!out.some(r => r.day === to)) {
+    try {
+      out.push(...await getDayMileageFromTrips(to))
+    } catch {
+      /* live วันนี้ดึงไม่ได้ → ใช้เฉพาะวันที่จบแล้ว (ไม่ล้มทั้งก้อน) */
+    }
+  }
   return out
+}
+
+/** 434 — ระยะวิ่งของ "วันที่ยังไม่จบ" (1 วัน) รวมต่อคัน จาก trips สด
+ *  ไม่ใส่ licensePlate = คืนทุกคัน (verified) · carId='' (estimate match ด้วย plateNorm ไม่ใช้ carId) */
+async function getDayMileageFromTrips(day: string): Promise<GpsDailyKm[]> {
+  const byPlate = new Map<string, number>()
+  for (let pageNum = 1; pageNum <= 10; pageNum++) {
+    const raw = await v2xFetch<V2xTravelTrip[]>('/travelAnalysis/getTravelAnalysis', {
+      method: 'POST',
+      body: { startTime: `${day} 00:00:00`, endTime: `${day} 23:59:59`, pageNum, pageSize: 200 },
+    })
+    const rows = raw || []
+    for (const t of rows) {
+      const plate = t.licensePlate || ''
+      if (plate) byPlate.set(plate, (byPlate.get(plate) || 0) + num(t.mileage))
+    }
+    if (rows.length < 200) break
+  }
+  return [...byPlate.entries()].map(([plate, km]) => ({
+    carId: '', plate, plateNorm: normalizePlate(plate), day, km,
+  }))
 }

@@ -307,6 +307,13 @@ function GpsOdometerModal({ onClose }: { onClose: () => void }) {
     return null
   }
 
+  /** คำนวณได้แต่ระยะ = 0 → อธิบายว่าทำไม (กันเข้าใจผิดว่าระบบพัง) · null = มีระยะแล้ว */
+  const zeroHint = (r: GpsOdoRow): string | null => {
+    if (blockReason(r) || r.est.gpsKm > 0) return null
+    if (r.anchorDate === today) return 'กรอกไมล์วันนี้ — ระบบนับเฉพาะระยะ "หลังวันที่กรอก" จะเริ่มเห็นพรุ่งนี้'
+    return `ยังไม่มีระยะวิ่งใหม่จาก GPS หลังวันที่กรอก (${formatDate(r.anchorDate)})`
+  }
+
   return (
     <Modal open onClose={onClose} title="อัปเดตไมล์จาก GPS" size="lg" closeLabel="cancel">
       <div className="space-y-4">
@@ -353,6 +360,7 @@ function GpsOdometerModal({ onClose }: { onClose: () => void }) {
                         <span className="text-xs font-bold bg-[#1B3A5C] text-white px-1.5 py-0.5 rounded">คัน {r.v.code}</span>
                         <span className="ml-1.5 text-slate-700">{r.v.licensePlate}</span>
                         {blocked && <p className="text-[11px] text-amber-600 mt-0.5">{blocked}</p>}
+                        {!blocked && zeroHint(r) && <p className="text-[11px] text-slate-400 mt-0.5">{zeroHint(r)}</p>}
                       </td>
                       <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-600">
                         {formatNumber(r.v.currentOdometer)}
