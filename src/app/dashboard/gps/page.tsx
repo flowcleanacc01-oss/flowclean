@@ -14,8 +14,13 @@ import {
   buildRoundAudit, buildVehicleAudit, guessVehiclesForRound, medianDailyKm, hhmmOf,
   type RoundAudit, type VehicleAudit, type AuditFlag,
 } from '@/lib/gps-audit'
+import {
+  ResponsiveContainer, ComposedChart, Bar, Line, BarChart, XAxis, YAxis,
+  Tooltip, CartesianGrid, Cell,
+} from 'recharts'
 import { buildTripStops } from '@/lib/dispatch'
 import { matchPlace, engineOffGaps, isShuffleTrip, type LatLng } from '@/lib/geo'
+import { buildDashboardStats, type DashboardStats, type VehicleTrips } from '@/lib/gps-dashboard'
 import { isScheduledDay } from '@/lib/schedule-audit'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { todayISO, cn } from '@/lib/utils'
@@ -31,6 +36,7 @@ import {
   ExternalLink, Route, TrendingUp, Fuel, AlertCircle, Loader2, Car, CircleDot, Clock,
   ClipboardCheck, CheckCircle2, AlertTriangle, Info, Wand2,
   Factory, ParkingCircle, Building2, Award, Search, Plus, Pencil, Trash2, Coffee,
+  BarChart3, Timer,
 } from 'lucide-react'
 
 // "2026-06-10 20:35:16" → "20:35"
@@ -73,7 +79,7 @@ function fmtDurationShort(min: number): string {
 
 export default function GpsPage() {
   const { currentUser, vehicles } = useStore()
-  const [tab, setTab] = useState<'realtime' | 'trips' | 'audit' | 'places'>('realtime')
+  const [tab, setTab] = useState<'realtime' | 'trips' | 'dashboard' | 'audit' | 'places'>('realtime')
 
   // plateNorm → vehicle (แสดง code A/B/C ของฟลีต)
   const vehicleByPlate = useMemo(() => {
@@ -102,7 +108,7 @@ export default function GpsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-200">
-        {([['realtime', 'ตำแหน่งสด', Radio], ['trips', 'เที่ยววิ่ง', Route], ['audit', 'เทียบแผน', ClipboardCheck], ['places', 'สถานที่', MapPin]] as const).map(([k, label, Icon]) => (
+        {([['realtime', 'ตำแหน่งสด', Radio], ['trips', 'เที่ยววิ่ง', Route], ['dashboard', 'ภาพรวม', BarChart3], ['audit', 'เทียบแผน', ClipboardCheck], ['places', 'สถานที่', MapPin]] as const).map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)}
             className={cn('px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors inline-flex items-center gap-1.5',
               tab === k ? 'border-[#3DD8D8] text-[#1B3A5C]' : 'border-transparent text-slate-400 hover:text-slate-600')}>
@@ -113,6 +119,7 @@ export default function GpsPage() {
 
       {tab === 'realtime' ? <RealtimeTab vehicleByPlate={vehicleByPlate} />
         : tab === 'trips' ? <TripsTab vehicleByPlate={vehicleByPlate} />
+        : tab === 'dashboard' ? <DashboardTab vehicleByPlate={vehicleByPlate} />
         : tab === 'audit' ? <AuditTab />
         : <PlacesTab />}
     </div>
@@ -593,6 +600,232 @@ function SetPlaceModal({
         )}
       </div>
     </Modal>
+  )
+}
+
+// ───────────────────────── ภาพรวม (dashboard 432.2.2) ─────────────────────────
+//   สรุปเที่ยววิ่งหลายคัน/หลายวัน → KPI + แนวโน้มรายวัน + เทียบรายคัน + จุดแวะส่วนตัว
+//   ดึง trip ต่อคันแบบ best-effort (V2X ช้ากับช่วงยาว → ต่อคัน try/catch, คันที่ fail ไม่ล้มทั้งหมด)
+
+function DashboardTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) {
+  const { customers, companyInfo, savedPlaces } = useStore()
+  const [cars, setCars] = useState<GpsCar[]>([])
+  const [from, setFrom] = useState(() => format(subDays(parseISO(todayISO()), 6), 'yyyy-MM-dd'))
+  const [to, setTo] = useState(todayISO())
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [failedCars, setFailedCars] = useState<string[]>([])
+
+  useEffect(() => { fetchGpsCars().then(setCars).catch(() => {}) }, [])
+
+  const factory: LatLng | null = useMemo(
+    () => (companyInfo.factoryLat || companyInfo.factoryLng)
+      ? { lat: companyInfo.factoryLat, lng: companyInfo.factoryLng } : null,
+    [companyInfo.factoryLat, companyInfo.factoryLng])
+
+  const setPreset = (days: number) => {
+    setFrom(format(subDays(parseISO(todayISO()), days - 1), 'yyyy-MM-dd'))
+    setTo(todayISO())
+  }
+
+  const run = useCallback(async () => {
+    if (cars.length === 0) return
+    setLoading(true); setErr(null)
+    try {
+      const vts: VehicleTrips[] = []
+      const failed: string[] = []
+      for (const car of cars) {
+        try {
+          const trips = await fetchGpsTrips(car.plate, from, to)
+          vts.push({ carId: car.carId, plate: car.plate, vehicleCode: vehicleByPlate.get(car.plateNorm)?.code ?? null, trips })
+        } catch {
+          failed.push(car.plate) // คันนี้ดึงไม่ได้ (timeout) — คันอื่นยังทำงาน
+        }
+      }
+      setStats(buildDashboardStats(vts, customers, factory, savedPlaces))
+      setFailedCars(failed)
+      setLoaded(true)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'วิเคราะห์ไม่สำเร็จ')
+    } finally {
+      setLoading(false)
+    }
+  }, [cars, from, to, customers, factory, savedPlaces, vehicleByPlate])
+
+  const rangeDays = useMemo(() => {
+    const d = Math.round((parseISO(to).getTime() - parseISO(from).getTime()) / 86400000) + 1
+    return Number.isFinite(d) ? d : 0
+  }, [from, to])
+
+  return (
+    <div className="space-y-4">
+      {/* ตัวเลือกช่วงวันที่ */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-end gap-3 flex-wrap">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">ตั้งแต่</label>
+          <input type="date" value={from} max={to} onChange={e => setFrom(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">ถึง</label>
+          <input type="date" value={to} min={from} max={todayISO()} onChange={e => setTo(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+        </div>
+        <div className="flex gap-1">
+          {([['7 วัน', 7], ['14 วัน', 14], ['30 วัน', 30]] as const).map(([label, d]) => (
+            <button key={d} onClick={() => setPreset(d)}
+              className="px-2.5 py-2 text-xs font-medium rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+              {label}
+            </button>
+          ))}
+        </div>
+        <button onClick={run} disabled={loading || cars.length === 0}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg text-sm font-semibold hover:bg-[#2bb8b8] transition-colors disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />} วิเคราะห์ภาพรวม
+        </button>
+        <p className="text-xs text-slate-400 sm:ml-auto sm:self-center">
+          {rangeDays > 0 && `${rangeDays} วัน`}{rangeDays > 14 ? ' · ช่วงยาวอาจดึงช้า' : ''}
+        </p>
+      </div>
+
+      {err && <ErrorBlock msg={err} onRetry={run} />}
+      {loading && <LoadingBlock />}
+
+      {stats && !loading && (
+        <>
+          {failedCars.length > 0 && (
+            <p className="text-xs text-amber-600">⚠ ดึงข้อมูลบางคันไม่สำเร็จ (อาจ timeout): {failedCars.join(', ')} — ลองลดช่วงวันที่</p>
+          )}
+
+          {/* KPI */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <StatCard icon={Route} label="เที่ยววิ่งรวม" value={`${stats.totals.trips}`} />
+            <StatCard icon={TrendingUp} label="ระยะทางรวม" value={`${stats.totals.km.toFixed(0)} กม.`} />
+            <StatCard icon={Fuel} label="น้ำมันรวม" value={`${stats.totals.fuel.toFixed(1)} ล.`} />
+            <StatCard icon={Gauge} label="อัตราสิ้นเปลือง" value={stats.totals.kmPerLiter > 0 ? `${stats.totals.kmPerLiter.toFixed(1)} กม./ล.` : '—'} />
+            <StatCard icon={Award} label="คะแนนขับขี่เฉลี่ย" value={stats.totals.scoreAvg > 0 ? stats.totals.scoreAvg.toFixed(0) : '—'} />
+            <StatCard icon={Clock} label="ติดเครื่องนิ่งรวม" value={fmtMin(stats.totals.idleMin)} />
+          </div>
+
+          {/* แวะส่วนตัว — ไฮไลต์ */}
+          <div className={cn('rounded-xl border px-4 py-3 flex items-center gap-2 text-sm font-medium',
+            stats.totals.detourVisits > 0 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800')}>
+            {stats.totals.detourVisits > 0
+              ? <><Coffee className="w-4 h-4" /> แวะนอกแผน {stats.totals.detourVisits} ครั้ง · รวม {fmtMin(stats.totals.detourMin)} · เร็วเกิน {stats.totals.overSpeed} ครั้ง · กระชาก {stats.totals.harsh} ครั้ง</>
+              : <><CheckCircle2 className="w-4 h-4" /> ไม่พบการแวะนอกแผน (จุดที่บันทึก) · เร็วเกิน {stats.totals.overSpeed} ครั้ง · กระชาก {stats.totals.harsh} ครั้ง</>}
+          </div>
+
+          {/* แนวโน้มรายวัน */}
+          {stats.byDay.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5"><TrendingUp className="w-4 h-4 text-[#3DD8D8]" /> ระยะทาง + เที่ยววิ่ง รายวัน</h3>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={stats.byDay} margin={{ top: 5, right: 8, left: -16, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="day" tickFormatter={d => d.slice(5)} tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <YAxis yAxisId="km" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <YAxis yAxisId="trips" orientation="right" tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
+                    <Tooltip formatter={(v, n) => n === 'กม.' ? [`${Number(v).toFixed(1)} กม.`, 'ระยะทาง'] : [`${v} เที่ยว`, 'เที่ยววิ่ง']}
+                      labelFormatter={d => `วันที่ ${d}`} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Bar yAxisId="km" dataKey="km" name="กม." fill="#3DD8D8" radius={[4, 4, 0, 0]} />
+                    <Line yAxisId="trips" type="monotone" dataKey="trips" name="เที่ยว" stroke="#1B3A5C" strokeWidth={2} dot={{ r: 3 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* เทียบรายคัน — bar + ตาราง */}
+          {stats.byVehicle.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
+              <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><Car className="w-4 h-4 text-[#3DD8D8]" /> เทียบรายคัน</h3>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.byVehicle} layout="vertical" margin={{ top: 0, right: 12, left: 8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <YAxis type="category" dataKey={(v: { vehicleCode: string | null; plate: string }) => v.vehicleCode ? `คัน ${v.vehicleCode}` : v.plate}
+                      tick={{ fontSize: 11, fill: '#475569' }} width={64} />
+                    <Tooltip formatter={(v) => [`${Number(v).toFixed(0)} กม.`, 'ระยะทาง']} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Bar dataKey="km" radius={[0, 4, 4, 0]}>
+                      {stats.byVehicle.map((v, i) => <Cell key={i} fill={i === 0 ? '#1B3A5C' : '#3DD8D8'} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 text-xs">
+                      <th className="px-3 py-2 text-left font-medium">คัน</th>
+                      <th className="px-3 py-2 text-right font-medium">เที่ยว</th>
+                      <th className="px-3 py-2 text-right font-medium">ระยะทาง</th>
+                      <th className="px-3 py-2 text-right font-medium">กม./ล.</th>
+                      <th className="px-3 py-2 text-right font-medium">คะแนน</th>
+                      <th className="px-3 py-2 text-right font-medium" title="เร็วเกิน / กระชาก">เร็วเกิน/กระชาก</th>
+                      <th className="px-3 py-2 text-right font-medium">นิ่ง</th>
+                      <th className="px-3 py-2 text-right font-medium">แวะ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {stats.byVehicle.map(v => (
+                      <tr key={v.carId} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-700">
+                          {v.vehicleCode ? <span className="text-xs font-bold bg-[#1B3A5C] text-white px-1.5 py-0.5 rounded mr-1.5">คัน {v.vehicleCode}</span> : null}
+                          <span className="text-xs text-slate-400">{v.plate}</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-600">{v.trips}</td>
+                        <td className="px-3 py-2 text-right text-slate-700">{v.km.toFixed(0)} กม.</td>
+                        <td className="px-3 py-2 text-right text-slate-500">{v.kmPerLiter > 0 ? v.kmPerLiter.toFixed(1) : '—'}</td>
+                        <td className={cn('px-3 py-2 text-right font-semibold',
+                          v.scoreAvg === 0 ? 'text-slate-300' : v.scoreAvg >= 90 ? 'text-emerald-600' : v.scoreAvg >= 70 ? 'text-amber-600' : 'text-rose-600')}>
+                          {v.scoreAvg > 0 ? v.scoreAvg.toFixed(0) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right text-slate-500">{v.overSpeed}/{v.harsh}</td>
+                        <td className="px-3 py-2 text-right text-slate-500">{v.idleMin > 0 ? fmtMin(v.idleMin) : '—'}</td>
+                        <td className={cn('px-3 py-2 text-right font-medium', v.detourVisits > 0 ? 'text-amber-700' : 'text-slate-300')}>
+                          {v.detourVisits > 0 ? `${v.detourVisits} (${fmtMin(v.detourMin)})` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* จุดแวะส่วนตัว */}
+          {stats.detours.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5"><Timer className="w-4 h-4 text-amber-500" /> จุดแวะนอกแผนที่เจอบ่อย</h3>
+              <div className="divide-y divide-slate-100">
+                {stats.detours.map((d, i) => {
+                  const cfg = SAVED_PLACE_CATEGORY_CONFIG[d.category] || SAVED_PLACE_CATEGORY_CONFIG.other
+                  return (
+                    <div key={i} className="flex items-center gap-3 py-2 text-sm">
+                      <span className="text-lg shrink-0" aria-hidden>{cfg.emoji}</span>
+                      <span className="font-medium text-slate-700 flex-1 truncate">{d.name}</span>
+                      <span className="text-xs text-slate-400">{cfg.label}</span>
+                      <span className="text-xs font-medium text-amber-700 shrink-0">{d.visits} ครั้ง · {fmtMin(d.totalMin)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {!loaded && !loading && !err && (
+        <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
+          <BarChart3 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-500">เลือกช่วงวันที่ แล้วกด “วิเคราะห์ภาพรวม”</p>
+        </div>
+      )}
+    </div>
   )
 }
 
