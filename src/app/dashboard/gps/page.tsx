@@ -413,7 +413,16 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
                 </button>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                {/* 438 — table-fixed + colgroup: คอลัมน์ถือความกว้างคงที่ · ปลายทางยาว truncate (เลิกล้นทับระยะทาง) */}
+                <table className="w-full text-sm table-fixed min-w-[720px]">
+                  <colgroup>
+                    <col className="w-[176px]" />{/* เวลา */}
+                    <col />{/* ปลายทาง — ที่เหลือ */}
+                    <col className="w-[92px]" />{/* ระยะทาง */}
+                    <col className="w-[80px]" />{/* น้ำมัน */}
+                    <col className="w-[124px]" />{/* นิ่ง */}
+                    <col className="w-[120px]" />{/* พฤติกรรม */}
+                  </colgroup>
                   <thead>
                     <tr className="bg-slate-50 text-slate-500 text-xs">
                       <th className="px-3 py-2.5 text-left font-medium">เวลา</th>
@@ -442,25 +451,25 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
                                 </span>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 max-w-[280px]">
+                            <td className="px-3 py-2.5">
                               {shuffle ? (
-                                <span className="inline-flex items-center gap-1 text-slate-500">
-                                  <ParkingCircle className="w-3.5 h-3.5 text-slate-400" />
-                                  ขยับรถ{dest?.type === 'factory' ? 'ที่โรงงาน' : ''}
+                                <span className="flex items-center gap-1 text-slate-500 min-w-0">
+                                  <ParkingCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">ขยับรถ{dest?.type === 'factory' ? 'ที่โรงงาน' : ''}</span>
                                 </span>
                               ) : dest?.type === 'customer' ? (
-                                <span className="inline-flex items-center gap-1.5 font-medium text-[#1B3A5C]">
-                                  <Building2 className="w-3.5 h-3.5 text-[#3DD8D8]" />
-                                  {dest.customer!.shortName || dest.customer!.name}
+                                <span className="flex items-center gap-1.5 font-medium text-[#1B3A5C] min-w-0">
+                                  <Building2 className="w-3.5 h-3.5 text-[#3DD8D8] shrink-0" />
+                                  <span className="truncate" title={dest.customer!.name}>{dest.customer!.shortName || dest.customer!.name}</span>
                                 </span>
                               ) : dest?.type === 'factory' ? (
-                                <span className="inline-flex items-center gap-1.5 text-slate-600">
-                                  <Factory className="w-3.5 h-3.5 text-slate-400" /> กลับโรงงาน
+                                <span className="flex items-center gap-1.5 text-slate-600 min-w-0">
+                                  <Factory className="w-3.5 h-3.5 text-slate-400 shrink-0" /> <span className="truncate">กลับโรงงาน</span>
                                 </span>
                               ) : dest?.type === 'saved' ? (
                                 <SavedPlaceTag place={dest.savedPlace!} />
                               ) : (
-                                <span className="inline-flex items-center gap-1.5 min-w-0">
+                                <span className="flex items-center gap-1.5 min-w-0">
                                   <span className="text-slate-600 truncate" title={t.endAddress}>{t.endAddress || '—'}</span>
                                   {(t.endLat !== 0 || t.endLng !== 0) && (
                                     <button onClick={() => setCoordTarget({ lat: t.endLat, lng: t.endLng, address: t.endAddress })}
