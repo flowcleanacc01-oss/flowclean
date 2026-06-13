@@ -22,6 +22,7 @@ import {
 import { buildTripStops } from '@/lib/dispatch'
 import { matchPlace, engineOffGaps, isShuffleTrip, type LatLng, type PlaceMatch } from '@/lib/geo'
 import { buildDashboardStats, type DashboardStats, type VehicleTrips } from '@/lib/gps-dashboard'
+import { connStatus, CONN_LEVEL_ORDER, type ConnLevel } from '@/lib/gps-connection'
 import type { RouteTrack } from '@/components/RouteMap'
 import { isScheduledDay } from '@/lib/schedule-audit'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
@@ -38,7 +39,7 @@ import {
   ExternalLink, Route, TrendingUp, Fuel, AlertCircle, Loader2, Car, CircleDot, Clock,
   ClipboardCheck, CheckCircle2, AlertTriangle, Info, Wand2,
   Factory, ParkingCircle, Building2, Award, Search, Plus, Pencil, Trash2, Coffee,
-  BarChart3, Timer, Map as MapIcon,
+  BarChart3, Timer, Map as MapIcon, WifiOff,
 } from 'lucide-react'
 
 // 432.2.1 — แผนที่ Leaflet โหลดเฉพาะตอนเปิด (lazy · ssr:false เพราะ leaflet อ้าง window)
@@ -49,6 +50,14 @@ const RouteMap = dynamic(() => import('@/components/RouteMap'), {
 
 // สีเส้นทางต่อเที่ยว (วน) — ต่างกันชัดเพื่อแยกเที่ยวบนแผนที่
 const ROUTE_COLORS = ['#1B3A5C', '#dc2626', '#7c3aed', '#0891b2', '#ea580c', '#16a34a', '#db2777', '#ca8a04']
+
+// 433 — UI ของสถานะการเชื่อมต่อ GPS (label/สี ต่อระดับ)
+const CONN_CONFIG: Record<ConnLevel, { label: string; pill: string; card: string }> = {
+  online:     { label: 'ออนไลน์',         pill: 'bg-emerald-100 text-emerald-700', card: 'border-slate-200' },
+  recent:     { label: 'เพิ่งขาดสัญญาณ',   pill: 'bg-amber-100 text-amber-700',     card: 'border-amber-200' },
+  suspicious: { label: 'ขาดสัญญาณ ⚠',     pill: 'bg-rose-100 text-rose-700',       card: 'border-rose-300 ring-1 ring-rose-200' },
+  long:       { label: 'ออฟไลน์',          pill: 'bg-slate-100 text-slate-500',     card: 'border-slate-200' },
+}
 
 // ชื่อจุดจาก PlaceMatch → string (ลูกค้า/โรงงาน/จุดบันทึก) · fallback = address
 function placeNameOf(m: PlaceMatch | null, fallback: string): string {
@@ -175,6 +184,13 @@ function RealtimeTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> 
   if (loading && positions.length === 0) return <LoadingBlock />
   if (err && positions.length === 0) return <ErrorBlock msg={err} onRetry={load} />
 
+  // 433 — ประเมินสถานะเชื่อมต่อ + เรียงคันน่าสงสัยขึ้นก่อน
+  const now = Date.now()
+  const enriched = positions
+    .map(p => ({ p, conn: connStatus(p, now), v: vehicleByPlate.get(p.plateNorm) }))
+    .sort((a, b) => CONN_LEVEL_ORDER[a.conn.level] - CONN_LEVEL_ORDER[b.conn.level])
+  const suspicious = enriched.filter(e => e.conn.level === 'suspicious')
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -187,11 +203,26 @@ function RealtimeTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> 
 
       {err && <p className="text-xs text-amber-600">⚠ {err}</p>}
 
+      {/* 433 — แจ้งเตือน GPS ขาดการเชื่อมต่อระหว่างวัน (อาจถูกถอด/ปิดอุปกรณ์) */}
+      {suspicious.length > 0 && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 flex items-start gap-2.5">
+          <WifiOff className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-semibold text-rose-800">
+              {suspicious.length} คัน ขาดการเชื่อมต่อ GPS ระหว่างวัน — ควรตรวจสอบ (อาจถูกถอด/ปิดอุปกรณ์)
+            </p>
+            <p className="text-rose-700 mt-0.5">
+              {suspicious.map(e => `${e.v ? `คัน ${e.v.code}` : e.p.plate} (เห็นล่าสุด ${ago(e.conn.lastSeen)})`).join(' · ')}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {positions.map(p => {
-          const v = vehicleByPlate.get(p.plateNorm)
+        {enriched.map(({ p, conn, v }) => {
+          const cfg = CONN_CONFIG[conn.level]
           return (
-            <div key={p.carId} className="bg-white rounded-xl border border-slate-200 p-4">
+            <div key={p.carId} className={cn('bg-white rounded-xl border p-4', cfg.card)}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -200,11 +231,17 @@ function RealtimeTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> 
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">พิกัด {ago(p.gpsTime)}</p>
                 </div>
-                <span className={cn('text-[11px] font-medium px-2 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0',
-                  p.online ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500')}>
-                  <CircleDot className="w-3 h-3" />{p.online ? 'ออนไลน์' : 'ออฟไลน์'}
+                <span className={cn('text-[11px] font-medium px-2 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0', cfg.pill)}>
+                  {conn.online ? <CircleDot className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}{cfg.label}
                 </span>
               </div>
+
+              {/* 433 — รายละเอียดการขาดสัญญาณ */}
+              {!conn.online && (
+                <p className={cn('text-xs mt-2', conn.level === 'suspicious' ? 'text-rose-600 font-medium' : 'text-slate-400')}>
+                  ขาดการเชื่อมต่อ {conn.offlineMin > 0 ? fmtMin(conn.offlineMin) : '—'} · เห็นล่าสุด {ago(conn.lastSeen)}
+                </p>
+              )}
 
               <div className="grid grid-cols-2 gap-2 mt-3 text-sm">
                 <div className="flex items-center gap-1.5 text-slate-600">
