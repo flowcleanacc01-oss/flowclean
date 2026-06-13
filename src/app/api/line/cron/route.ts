@@ -11,17 +11,20 @@ import { pushLineText, getAlertedKeys, saveAlertedKeys, lineConfigured } from '@
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-function authorized(req: NextRequest): boolean {
+// แยกสาเหตุ unauthorized เพื่อ debug (ไม่เผย secret)
+function authCheck(req: NextRequest): { ok: boolean; reason?: string } {
   const secret = process.env.CRON_SECRET
-  if (!secret) return false
+  if (!secret) return { ok: false, reason: 'ยังไม่ได้ตั้ง CRON_SECRET บนเซิร์ฟเวอร์ — เพิ่มใน Vercel env แล้ว Redeploy' }
   const key = req.nextUrl.searchParams.get('key')
   const bearer = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
-  return key === secret || bearer === secret
+  if (key === secret || bearer === secret) return { ok: true }
+  return { ok: false, reason: 'key ไม่ตรงกับ CRON_SECRET — เช็คว่าเหมือนเป๊ะ + ไม่มีเว้นวรรค/อักขระพิเศษ (+ & # เว้นวรรค)' }
 }
 
 export async function GET(req: NextRequest) {
-  if (!authorized(req)) {
-    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
+  const auth = authCheck(req)
+  if (!auth.ok) {
+    return NextResponse.json({ ok: false, error: 'unauthorized', hint: auth.reason }, { status: 401 })
   }
   if (!lineConfigured()) {
     return NextResponse.json({ ok: false, error: 'LINE ยังไม่ตั้งค่า' }, { status: 503 })
