@@ -34,11 +34,22 @@ export interface DayAgg {
   fuel: number
 }
 
+// 440 — แต่ละครั้งที่แวะ (วัน/เวลา/รถ/นาที) — ใช้แสดงรายละเอียด + ลิงก์ไปเที่ยววิ่งวันนั้น
+export interface DetourOccurrence {
+  date: string          // yyyy-mm-dd
+  time: string          // HH:MM (เวลาเริ่มจอด)
+  carId: string
+  plate: string
+  vehicleCode: string | null
+  minutes: number
+}
+
 export interface DetourAgg {
   name: string
   category: SavedPlace['category']
   visits: number
   totalMin: number
+  occurrences: DetourOccurrence[] // 440 — รายครั้ง (เรียงวัน/เวลา)
 }
 
 // 435 — สรุปต่อคนขับ (จับตา "ติดเครื่องนิ่ง" ต่อคน) · attribute ผ่าน driverResolver(carId, day)
@@ -166,9 +177,13 @@ export function buildDashboardStats(
       vDetourVisits += 1
       vDetourMin += gap.minutes
       const key = m.savedPlace.id
-      const da = detourMap.get(key) || { name: m.savedPlace.name, category: m.savedPlace.category, visits: 0, totalMin: 0 }
+      const da = detourMap.get(key) || { name: m.savedPlace.name, category: m.savedPlace.category, visits: 0, totalMin: 0, occurrences: [] }
       da.visits += 1
       da.totalMin += gap.minutes
+      da.occurrences.push({ // 440 — บันทึกรายครั้ง
+        date: dayOf(gap.fromTime), time: (gap.fromTime || '').slice(11, 16),
+        carId: v.carId, plate: v.plate, vehicleCode: v.vehicleCode, minutes: gap.minutes,
+      })
       detourMap.set(key, da)
       if (driverResolver) addToDriver(driverResolver(v.carId, dayOf(gap.fromTime)), { detourVisits: 1, detourMin: gap.minutes })
     }
@@ -218,7 +233,9 @@ export function buildDashboardStats(
     totals,
     byVehicle: byVehicle.sort((a, b) => b.km - a.km),
     byDay: [...byDayMap.values()].sort((a, b) => a.day.localeCompare(b.day)),
-    detours: [...detourMap.values()].sort((a, b) => b.visits - a.visits),
+    detours: [...detourMap.values()]
+      .map(d => ({ ...d, occurrences: d.occurrences.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)) }))
+      .sort((a, b) => b.visits - a.visits),
     byDriver: [...driverMap.values()].sort((a, b) => b.idleMin - a.idleMin), // 435 — idle มาก→น้อย
   }
 }

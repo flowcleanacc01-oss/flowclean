@@ -52,6 +52,10 @@ describe('buildDashboardStats', () => {
     expect(s.totals.detourVisits).toBe(1)
     expect(s.totals.detourMin).toBe(20)
     expect(s.detours[0].name).toBe('ก๋วยเตี๋ยวไก่')
+    // 440 — รายละเอียดต่อครั้ง (วัน/เวลา/รถ/นาที)
+    expect(s.detours[0].occurrences).toEqual([
+      { date: '2026-06-10', time: '09:00', carId: 'A', plate: 'C 1', vehicleCode: 'A', minutes: 20 },
+    ])
   })
 
   it('435 — byDriver: attribute idle ต่อคนขับ (ผ่าน driverResolver) เรียง idle มาก→น้อย', () => {

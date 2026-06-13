@@ -18,6 +18,14 @@ export interface RouteTrack {
   passed?: { type: string; name: string }[] // 435 — จุดที่รู้จักที่เส้นทางผ่าน (legend ใช้ · map ไม่ใช้)
 }
 
+// 439 — ทิศทาง a→b เป็นองศา (0=เหนือ, ตามเข็ม) สำหรับหมุนลูกศร · planar approx พอสำหรับระยะสั้นในเมือง
+function bearingDeg(a: [number, number], b: [number, number]): number {
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLng = (b[1] - a[1]) * Math.cos(toRad((a[0] + b[0]) / 2))
+  const dLat = b[0] - a[0]
+  return (Math.atan2(dLng, dLat) * 180) / Math.PI
+}
+
 export default function RouteMap({ tracks }: { tracks: RouteTrack[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -35,6 +43,18 @@ export default function RouteMap({ tracks }: { tracks: RouteTrack[] }) {
       if (latlngs.length > 0) {
         L.polyline(latlngs, { color: t.color, weight: 4, opacity: 0.85 }).addTo(map)
         bounds.push(...latlngs)
+        // 439 — ลูกศรทิศทางเป็นระยะ (ทุก step จุด) หมุนตามทิศวิ่ง · เห็นวิ่งไปทางไหน/วนกลับ
+        const step = Math.min(40, Math.max(5, Math.round(latlngs.length / 10)))
+        for (let k = step; k < latlngs.length; k += step) {
+          L.marker(latlngs[k], {
+            interactive: false, keyboard: false,
+            icon: L.divIcon({
+              className: '',
+              html: `<div style="color:${t.color};transform:rotate(${bearingDeg(latlngs[k - 1], latlngs[k])}deg);font-size:15px;line-height:1;text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 2px #fff">▲</div>`,
+              iconSize: [16, 16], iconAnchor: [8, 8],
+            }),
+          }).addTo(map)
+        }
         const start = latlngs[0]
         const end = latlngs[latlngs.length - 1]
         // หมุดเริ่ม (เขียว) — เฉพาะเที่ยวแรก เพื่อไม่รก

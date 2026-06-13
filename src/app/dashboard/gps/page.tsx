@@ -4,7 +4,7 @@
 //   แท็บ "ตำแหน่งสด" (realtime จาก V2X) + "เที่ยววิ่ง" (trip history) · เชื่อมทะเบียนกับฟลีต
 //   ดึงผ่าน /api/gps (server proxy) · ไม่ฝัง map (ใช้ลิงก์ Google Maps) เลี่ยง map API key
 
-import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { subDays, parseISO, format } from 'date-fns'
@@ -39,7 +39,7 @@ import {
   ExternalLink, Route, TrendingUp, Fuel, AlertCircle, Loader2, Car, CircleDot, Clock,
   ClipboardCheck, CheckCircle2, AlertTriangle, Info, Wand2,
   Factory, ParkingCircle, Building2, Award, Search, Plus, Pencil, Trash2, Coffee,
-  BarChart3, Timer, Map as MapIcon, WifiOff,
+  BarChart3, Timer, Map as MapIcon, WifiOff, ChevronDown,
 } from 'lucide-react'
 
 // 432.2.1 — แผนที่ Leaflet โหลดเฉพาะตอนเปิด (lazy · ssr:false เพราะ leaflet อ้าง window)
@@ -105,9 +105,18 @@ function fmtDurationShort(min: number): string {
   return min < 60 ? `${min} นาที` : `${(min / 60).toFixed(2)} ชม.`
 }
 
+// 440 — yyyy-mm-dd → "อา 7/6" (วันไทย + วัน/เดือน) · สร้าง date จาก parts กัน TZ off-by-one
+const TH_WEEKDAY = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
+function fmtThaiDate(iso: string): string {
+  const [y, m, dd] = (iso || '').split('-').map(Number)
+  if (!y || !m || !dd) return iso
+  return `${TH_WEEKDAY[new Date(y, m - 1, dd).getDay()]} ${dd}/${m}`
+}
+
 export default function GpsPage() {
   const { currentUser, vehicles } = useStore()
   const [tab, setTab] = useState<'realtime' | 'trips' | 'dashboard' | 'audit' | 'places'>('realtime')
+  const [tripsInit, setTripsInit] = useState<{ carId: string; date: string } | null>(null) // 440 — เปิดเที่ยววิ่งของวัน/รถที่คลิกจาก dashboard
 
   // plateNorm → vehicle (แสดง code A/B/C ของฟลีต)
   const vehicleByPlate = useMemo(() => {
@@ -146,8 +155,9 @@ export default function GpsPage() {
       </div>
 
       {tab === 'realtime' ? <RealtimeTab vehicleByPlate={vehicleByPlate} />
-        : tab === 'trips' ? <TripsTab vehicleByPlate={vehicleByPlate} />
-        : tab === 'dashboard' ? <DashboardTab vehicleByPlate={vehicleByPlate} />
+        : tab === 'trips' ? <TripsTab vehicleByPlate={vehicleByPlate} init={tripsInit} />
+        : tab === 'dashboard' ? <DashboardTab vehicleByPlate={vehicleByPlate}
+            onOpenTrip={(carId, date) => { setTripsInit({ carId, date }); setTab('trips') }} />
         : tab === 'audit' ? <AuditTab />
         : <PlacesTab />}
     </div>
@@ -292,11 +302,13 @@ function RealtimeTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> 
 
 // ───────────────────────── เที่ยววิ่ง ─────────────────────────
 
-function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) {
+function TripsTab({ vehicleByPlate, init }: { vehicleByPlate: Map<string, Vehicle>; init?: { carId: string; date: string } | null }) {
   const { customers, companyInfo, savedPlaces } = useStore()
   const [cars, setCars] = useState<GpsCar[]>([])
   const [carId, setCarId] = useState('')
   const [date, setDate] = useState(todayISO())
+  const [autoLoad, setAutoLoad] = useState(false)     // 440 — สั่งโหลดอัตโนมัติหลังตั้งรถ/วันจาก init
+  const appliedInitRef = useRef<typeof init>(null)    // กัน apply init ซ้ำ (identity-based)
   const [trips, setTrips] = useState<GpsTrip[]>([])
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -328,6 +340,17 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
       setLoading(false)
     }
   }, [selectedPlate, date])
+
+  // 440 — มาจากการคลิกจุดแวะใน dashboard → ตั้งรถ+วัน แล้วโหลด (รอ cars พร้อมก่อน)
+  useEffect(() => {
+    if (!init || init === appliedInitRef.current || cars.length === 0) return
+    appliedInitRef.current = init
+    if (!cars.some(c => c.carId === init.carId)) return // รถไม่อยู่ในรายการ — ตั้งวันอย่างเดียวก็ยังโหลดไม่ได้
+    setCarId(init.carId); setDate(init.date); setAutoLoad(true)
+  }, [init, cars])
+  useEffect(() => {
+    if (autoLoad && selectedPlate) { setAutoLoad(false); load() }
+  }, [autoLoad, selectedPlate, load])
 
   // 427 — timeline เก่า→ใหม่ + ช่วงดับเครื่องจอดระหว่างเที่ยว + จับคู่สถานที่
   const factory: LatLng | null = useMemo(
@@ -807,9 +830,10 @@ function SetPlaceModal({
 //   สรุปเที่ยววิ่งหลายคัน/หลายวัน → KPI + แนวโน้มรายวัน + เทียบรายคัน + จุดแวะส่วนตัว
 //   ดึง trip ต่อคันแบบ best-effort (V2X ช้ากับช่วงยาว → ต่อคัน try/catch, คันที่ fail ไม่ล้มทั้งหมด)
 
-function DashboardTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) {
+function DashboardTab({ vehicleByPlate, onOpenTrip }: { vehicleByPlate: Map<string, Vehicle>; onOpenTrip?: (carId: string, date: string) => void }) {
   const { customers, companyInfo, savedPlaces, dailyTrips, crew } = useStore()
   const [cars, setCars] = useState<GpsCar[]>([])
+  const [openDetour, setOpenDetour] = useState<number | null>(null) // 440 — แถวจุดแวะที่กางดูรายละเอียด
   const [from, setFrom] = useState(() => format(subDays(parseISO(todayISO()), 6), 'yyyy-MM-dd'))
   const [to, setTo] = useState(todayISO())
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -1012,16 +1036,39 @@ function DashboardTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle>
           {/* จุดแวะส่วนตัว */}
           {stats.detours.length > 0 && (
             <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5"><Timer className="w-4 h-4 text-amber-500" /> จุดแวะนอกแผนที่เจอบ่อย</h3>
+              <h3 className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5"><Timer className="w-4 h-4 text-amber-500" /> จุดแวะนอกแผนที่เจอบ่อย</h3>
+              <p className="text-[11px] text-slate-400 mb-2">คลิกจุดแวะเพื่อดูว่าแวะวันไหนบ้าง · คลิกแต่ละครั้ง → เปิดเที่ยววิ่งของวันนั้น</p>
               <div className="divide-y divide-slate-100">
                 {stats.detours.map((d, i) => {
                   const cfg = SAVED_PLACE_CATEGORY_CONFIG[d.category] || SAVED_PLACE_CATEGORY_CONFIG.other
+                  const open = openDetour === i
                   return (
-                    <div key={i} className="flex items-center gap-3 py-2 text-sm">
-                      <span className="text-lg shrink-0" aria-hidden>{cfg.emoji}</span>
-                      <span className="font-medium text-slate-700 flex-1 truncate">{d.name}</span>
-                      <span className="text-xs text-slate-400">{cfg.label}</span>
-                      <span className="text-xs font-medium text-amber-700 shrink-0">{d.visits} ครั้ง · {fmtMin(d.totalMin)}</span>
+                    <div key={i} className="py-1">
+                      {/* 440 — หัวข้อจุดแวะ คลิกกางดูรายครั้ง */}
+                      <button type="button" onClick={() => setOpenDetour(open ? null : i)}
+                        className="w-full flex items-center gap-3 py-1.5 text-sm text-left hover:bg-slate-50 rounded-lg px-1 -mx-1 transition-colors">
+                        <span className="text-lg shrink-0" aria-hidden>{cfg.emoji}</span>
+                        <span className="font-medium text-slate-700 flex-1 truncate">{d.name}</span>
+                        <span className="text-xs text-slate-400 shrink-0">{cfg.label}</span>
+                        <span className="text-xs font-medium text-amber-700 shrink-0">{d.visits} ครั้ง · {fmtMin(d.totalMin)}</span>
+                        <ChevronDown className={cn('w-4 h-4 text-slate-400 shrink-0 transition-transform', open && 'rotate-180')} />
+                      </button>
+                      {/* 440 — รายครั้ง (วัน/เวลา/รถ/นาที) · คลิก = เปิดเที่ยววิ่งวันนั้น */}
+                      {open && (
+                        <div className="ml-9 mb-1 border-l-2 border-amber-100 pl-3 space-y-0.5">
+                          {d.occurrences.map((o, j) => (
+                            <button key={j} type="button"
+                              onClick={() => onOpenTrip?.(o.carId, o.date)}
+                              disabled={!onOpenTrip}
+                              className="w-full flex items-center gap-2 text-xs text-slate-500 py-1 text-left rounded hover:bg-[#3DD8D8]/10 hover:text-[#1B3A5C] disabled:hover:bg-transparent group transition-colors">
+                              <span className="font-medium text-slate-600">{fmtThaiDate(o.date)} {o.time}</span>
+                              <span className="text-slate-400">· {o.vehicleCode ? `คัน ${o.vehicleCode}` : o.plate}</span>
+                              <span className="text-amber-600">· {fmtMin(o.minutes)}</span>
+                              {onOpenTrip && <span className="ml-auto text-[#3DD8D8] opacity-0 group-hover:opacity-100 transition-opacity">เปิดเที่ยววิ่ง →</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
