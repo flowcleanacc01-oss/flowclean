@@ -30,6 +30,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'LINE ยังไม่ตั้งค่า' }, { status: 503 })
   }
 
+  // โหมดทดสอบ: ?test=1 → push ข้อความตัวอย่างเข้ากลุ่ม (ยืนยัน end-to-end · ไม่เช็คเงื่อนไข)
+  if (req.nextUrl.searchParams.get('test') === '1') {
+    const r = await pushLineText(['🔔 ทดสอบแจ้งเตือน FlowClean — เชื่อมต่อพร้อมแล้ว ✅\nเมื่อมี GPS ขาดสัญญาณ / เอกสารรถใกล้หมด / ถึงรอบเซอร์วิส จะเด้งมาที่นี่อัตโนมัติ'])
+    return NextResponse.json({ ok: r.sent, test: true, reason: r.reason })
+  }
+
   // ดึงข้อมูล (best-effort — GPS fail ไม่ทำให้ doc/PM ล่ม)
   const [positions, vehicles] = await Promise.all([
     getRealtimePositions().catch(() => []),
