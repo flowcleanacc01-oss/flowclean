@@ -799,7 +799,7 @@ function SetPlaceModal({
 //   ดึง trip ต่อคันแบบ best-effort (V2X ช้ากับช่วงยาว → ต่อคัน try/catch, คันที่ fail ไม่ล้มทั้งหมด)
 
 function DashboardTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) {
-  const { customers, companyInfo, savedPlaces } = useStore()
+  const { customers, companyInfo, savedPlaces, dailyTrips, crew } = useStore()
   const [cars, setCars] = useState<GpsCar[]>([])
   const [from, setFrom] = useState(() => format(subDays(parseISO(todayISO()), 6), 'yyyy-MM-dd'))
   const [to, setTo] = useState(todayISO())
@@ -835,7 +835,19 @@ function DashboardTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle>
           failed.push(car.plate) // คันนี้ดึงไม่ได้ (timeout) — คันอื่นยังทำงาน
         }
       }
-      setStats(buildDashboardStats(vts, customers, factory, savedPlaces))
+      // 435 — resolver (carId, day) → คนขับ ผ่าน dailyTrips (กระดานจ่ายงาน) · รถ→vehicleId→driverId→ชื่อ crew
+      const crewName = new Map(crew.map(c => [c.id, c.name]))
+      const carToVehicleId = new Map<string, string>()
+      for (const car of cars) { const veh = vehicleByPlate.get(car.plateNorm); if (veh) carToVehicleId.set(car.carId, veh.id) }
+      const driverResolver = (carId: string, day: string) => {
+        const vid = carToVehicleId.get(carId)
+        if (!vid) return { id: '', name: 'ไม่ระบุคนขับ' }
+        const drivers = [...new Set(dailyTrips.filter(t => t.vehicleId === vid && t.date === day && t.driverId).map(t => t.driverId))]
+        if (drivers.length === 0) return { id: '', name: 'ไม่ระบุคนขับ' }
+        if (drivers.length > 1) return { id: 'multi', name: 'หลายคน (แยกไม่ได้)' }
+        return { id: drivers[0], name: crewName.get(drivers[0]) || 'คนขับ' }
+      }
+      setStats(buildDashboardStats(vts, customers, factory, savedPlaces, driverResolver))
       setFailedCars(failed)
       setLoaded(true)
     } catch (e) {
@@ -843,7 +855,7 @@ function DashboardTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle>
     } finally {
       setLoading(false)
     }
-  }, [cars, from, to, customers, factory, savedPlaces, vehicleByPlate])
+  }, [cars, from, to, customers, factory, savedPlaces, vehicleByPlate, dailyTrips, crew])
 
   const rangeDays = useMemo(() => {
     const d = Math.round((parseISO(to).getTime() - parseISO(from).getTime()) / 86400000) + 1
@@ -1007,6 +1019,62 @@ function DashboardTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle>
               </div>
             </div>
           )}
+
+          {/* 435 — อันดับคนขับ: ติดเครื่องนิ่ง (idle) เรียงมาก→น้อย */}
+          {stats.byDriver.length > 0 && (() => {
+            const hasNamed = stats.byDriver.some(d => d.driverId && d.driverId !== 'multi')
+            return (
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
+                <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-rose-500" /> อันดับคนขับ — ติดเครื่องนิ่ง (idle)
+                </h3>
+                {!hasNamed ? (
+                  <p className="text-xs text-amber-600">⚠ ยังผูกคนขับกับรถไม่ได้ — สร้างใบงานในกระดานจ่ายงาน (ระบุคนขับต่อรอบ) ก่อน แล้ว idle จะแยกรายคนได้</p>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-50 text-slate-500 text-xs">
+                            <th className="px-3 py-2 text-left font-medium">คนขับ</th>
+                            <th className="px-3 py-2 text-right font-medium">เที่ยว</th>
+                            <th className="px-3 py-2 text-right font-medium">ระยะทาง</th>
+                            <th className="px-3 py-2 text-right font-medium" title="เวลาขับ (ล้อหมุน) / ติดเครื่องนิ่ง (ล้อไม่หมุน)">ขับ / นิ่ง</th>
+                            <th className="px-3 py-2 text-right font-medium">เร็วเกิน/กระชาก</th>
+                            <th className="px-3 py-2 text-right font-medium">แวะ</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {stats.byDriver.map((d, i) => {
+                            const unknown = !d.driverId || d.driverId === 'multi'
+                            return (
+                              <tr key={d.driverId || `u${i}`} className="hover:bg-slate-50">
+                                <td className={cn('px-3 py-2 whitespace-nowrap font-medium', unknown ? 'text-slate-400' : 'text-slate-700')}>
+                                  {i === 0 && !unknown && d.idleMin > 0 && <span className="text-rose-500 mr-1" title="ติดเครื่องนิ่งมากสุด">🔴</span>}{d.name}
+                                </td>
+                                <td className="px-3 py-2 text-right text-slate-600">{d.trips}</td>
+                                <td className="px-3 py-2 text-right text-slate-700">{d.km.toFixed(0)} กม.</td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">
+                                  <span className="text-slate-500">{fmtMin(d.drivingMin)}</span>
+                                  <span className="text-slate-300"> / </span>
+                                  <span className={cn(d.idleMin >= 60 ? 'text-rose-600 font-semibold' : d.idleMin > 0 ? 'text-amber-600' : 'text-slate-400')}>{d.idleMin > 0 ? fmtMin(d.idleMin) : '—'}</span>
+                                </td>
+                                <td className="px-3 py-2 text-right text-slate-500">{d.overSpeed}/{d.harsh}</td>
+                                <td className={cn('px-3 py-2 text-right font-medium', d.detourVisits > 0 ? 'text-amber-700' : 'text-slate-300')}>
+                                  {d.detourVisits > 0 ? `${d.detourVisits} (${fmtMin(d.detourMin)})` : '—'}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-2">นิ่ง = ติดเครื่องแต่ล้อไม่หมุน · ผูกคนขับจากใบงานกระดานจ่ายงาน (วัน+รถ → คนขับ) · “หลายคน/ไม่ระบุ” = ใบงานไม่ครบวันนั้น</p>
+                  </>
+                )}
+              </div>
+            )
+          })()}
         </>
       )}
 

@@ -41,6 +41,23 @@ export interface DetourAgg {
   totalMin: number
 }
 
+// 435 — สรุปต่อคนขับ (จับตา "ติดเครื่องนิ่ง" ต่อคน) · attribute ผ่าน driverResolver(carId, day)
+export interface DriverAgg {
+  driverId: string    // '' = ไม่ระบุคนขับ · 'multi' = วันนั้นรถมีหลายคนขับ (แยกไม่ได้)
+  name: string
+  trips: number
+  km: number
+  drivingMin: number
+  idleMin: number
+  overSpeed: number
+  harsh: number
+  detourVisits: number
+  detourMin: number
+}
+
+/** map (carId, day) → คนขับ · คืน {id:'', name:'ไม่ระบุคนขับ'} ถ้าไม่มีใบงาน, {id:'multi',...} ถ้าหลายคน */
+export type DriverResolver = (carId: string, day: string) => { id: string; name: string }
+
 export interface DashboardTotals {
   trips: number
   km: number
@@ -60,6 +77,7 @@ export interface DashboardStats {
   byVehicle: VehicleAgg[]
   byDay: DayAgg[]
   detours: DetourAgg[]
+  byDriver: DriverAgg[] // 435 — เรียง idle มาก→น้อย (ว่างถ้าไม่ส่ง driverResolver)
 }
 
 /** "2026-06-10 16:23:00" → "2026-06-10" */
@@ -83,11 +101,26 @@ export function buildDashboardStats(
   customers: Customer[],
   factory: LatLng | null,
   savedPlaces: SavedPlace[],
+  driverResolver?: DriverResolver, // 435 — ถ้าส่ง = สร้าง byDriver
 ): DashboardStats {
   const detourPlaces = savedPlaces.filter(p => SAVED_DETOUR_CATS.has(p.category))
   const byDayMap = new Map<string, DayAgg>()
   const detourMap = new Map<string, DetourAgg>()
+  const driverMap = new Map<string, DriverAgg>()
   const byVehicle: VehicleAgg[] = []
+
+  // 435 — accumulate metric ของวันหนึ่งให้คนขับ (สร้าง agg ถ้ายังไม่มี)
+  const addToDriver = (drv: { id: string; name: string }, patch: Partial<DriverAgg>) => {
+    const a = driverMap.get(drv.id) || {
+      driverId: drv.id, name: drv.name, trips: 0, km: 0, drivingMin: 0, idleMin: 0,
+      overSpeed: 0, harsh: 0, detourVisits: 0, detourMin: 0,
+    }
+    a.trips += patch.trips || 0; a.km += patch.km || 0
+    a.drivingMin += patch.drivingMin || 0; a.idleMin += patch.idleMin || 0
+    a.overSpeed += patch.overSpeed || 0; a.harsh += patch.harsh || 0
+    a.detourVisits += patch.detourVisits || 0; a.detourMin += patch.detourMin || 0
+    driverMap.set(drv.id, a)
+  }
 
   for (const v of vehicles) {
     const sorted = [...v.trips].sort((a, b) => a.startTime.localeCompare(b.startTime))
@@ -95,8 +128,10 @@ export function buildDashboardStats(
     const scored = sorted.filter(t => t.score > 0)
     const km = sorted.reduce((s, t) => s + t.distanceKm, 0)
     const fuel = sorted.reduce((s, t) => s + t.fuelLiters, 0)
+    const gaps = engineOffGaps(sorted)
 
-    // รายวัน (รวมทุกคัน)
+    // รายวัน (รวมทุกคัน) + 435: attribute ต่อคนขับต่อวัน
+    const dayTripsMap = new Map<string, GpsTrip[]>()
     for (const t of sorted) {
       const d = dayOf(t.startTime)
       if (!d) continue
@@ -105,11 +140,25 @@ export function buildDashboardStats(
       cur.fuel += t.fuelLiters
       if (!isShuffleTrip(t)) cur.trips += 1
       byDayMap.set(d, cur)
+      if (!dayTripsMap.has(d)) dayTripsMap.set(d, [])
+      dayTripsMap.get(d)!.push(t)
+    }
+    if (driverResolver) {
+      for (const [day, dts] of dayTripsMap) {
+        addToDriver(driverResolver(v.carId, day), {
+          trips: dts.filter(t => !isShuffleTrip(t)).length,
+          km: dts.reduce((s, t) => s + t.distanceKm, 0),
+          drivingMin: dts.reduce((s, t) => s + t.drivingMin, 0),
+          idleMin: dts.reduce((s, t) => s + t.idleMin, 0),
+          overSpeed: dts.reduce((s, t) => s + t.overSpeedCount, 0),
+          harsh: dts.reduce((s, t) => s + t.rapidAccelCount + t.rapidDecelCount, 0),
+        })
+      }
     }
 
     // จุดแวะ (detour) — จาก engine-off gap ที่ตรง SavedPlace แวะส่วนตัว
     let vDetourVisits = 0, vDetourMin = 0
-    for (const gap of engineOffGaps(sorted)) {
+    for (const gap of gaps) {
       if (gap.minutes > MAX_DETOUR_GAP_MIN) continue
       // เฉพาะจุดที่ไม่ใช่ลูกค้า/โรงงาน — match กับ detourPlaces เท่านั้น
       const m = matchPlace(gap.lat, gap.lng, customers, factory, detourPlaces)
@@ -121,6 +170,7 @@ export function buildDashboardStats(
       da.visits += 1
       da.totalMin += gap.minutes
       detourMap.set(key, da)
+      if (driverResolver) addToDriver(driverResolver(v.carId, dayOf(gap.fromTime)), { detourVisits: 1, detourMin: gap.minutes })
     }
 
     byVehicle.push({
@@ -169,5 +219,6 @@ export function buildDashboardStats(
     byVehicle: byVehicle.sort((a, b) => b.km - a.km),
     byDay: [...byDayMap.values()].sort((a, b) => a.day.localeCompare(b.day)),
     detours: [...detourMap.values()].sort((a, b) => b.visits - a.visits),
+    byDriver: [...driverMap.values()].sort((a, b) => b.idleMin - a.idleMin), // 435 — idle มาก→น้อย
   }
 }

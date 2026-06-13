@@ -54,6 +54,29 @@ describe('buildDashboardStats', () => {
     expect(s.detours[0].name).toBe('ก๋วยเตี๋ยวไก่')
   })
 
+  it('435 — byDriver: attribute idle ต่อคนขับ (ผ่าน driverResolver) เรียง idle มาก→น้อย', () => {
+    const v: VehicleTrips[] = [{
+      carId: 'A', plate: 'C 1', vehicleCode: 'A', trips: [
+        trip({ startTime: '2026-06-10 08:00:00', endTime: '2026-06-10 09:00:00', idleMin: 30 }),
+        trip({ startTime: '2026-06-10 10:00:00', endTime: '2026-06-10 11:00:00', idleMin: 20 }),
+        trip({ startTime: '2026-06-11 08:00:00', endTime: '2026-06-11 09:00:00', idleMin: 10 }),
+      ],
+    }]
+    // 06-10 = สมชาย, 06-11 = สมหญิง
+    const resolver = (_car: string, day: string) =>
+      day === '2026-06-11' ? { id: 'd2', name: 'สมหญิง' } : { id: 'd1', name: 'สมชาย' }
+    const s = buildDashboardStats(v, [], null, [], resolver)
+    expect(s.byDriver.map(d => d.name)).toEqual(['สมชาย', 'สมหญิง']) // idle 50 > 10
+    expect(s.byDriver[0].idleMin).toBe(50)
+    expect(s.byDriver[0].trips).toBe(2)
+    expect(s.byDriver[1].idleMin).toBe(10)
+  })
+
+  it('435 — ไม่ส่ง driverResolver → byDriver ว่าง', () => {
+    const v: VehicleTrips[] = [{ carId: 'A', plate: 'C 1', vehicleCode: 'A', trips: [trip({})] }]
+    expect(buildDashboardStats(v, [], null, []).byDriver).toEqual([])
+  })
+
   it('จุดแวะ: gap > 120 นาที (จอดค้าง) → ไม่นับ · gap ที่ลูกค้า → ไม่นับ', () => {
     const cust = { id: 'c1', name: 'V', shortName: 'V', isActive: true, gpsLat: 13.75, gpsLng: 100.50 } as Customer
     const longGap: VehicleTrips[] = [{
