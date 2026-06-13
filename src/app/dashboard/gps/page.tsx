@@ -157,10 +157,17 @@ export default function GpsPage() {
 // ───────────────────────── ตำแหน่งสด ─────────────────────────
 
 function RealtimeTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) {
+  const { customers, companyInfo, savedPlaces } = useStore()
   const [positions, setPositions] = useState<GpsPosition[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [updatedLabel, setUpdatedLabel] = useState('')
+
+  // 433.1 — โรงงาน (จุดจอดประจำ) สำหรับจับคู่จุดที่ขาดสัญญาณ
+  const factory: LatLng | null = useMemo(
+    () => (companyInfo.factoryLat || companyInfo.factoryLng)
+      ? { lat: companyInfo.factoryLat, lng: companyInfo.factoryLng } : null,
+    [companyInfo.factoryLat, companyInfo.factoryLng])
 
   const load = useCallback(async () => {
     setErr(null)
@@ -184,10 +191,15 @@ function RealtimeTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> 
   if (loading && positions.length === 0) return <LoadingBlock />
   if (err && positions.length === 0) return <ErrorBlock msg={err} onRetry={load} />
 
-  // 433 — ประเมินสถานะเชื่อมต่อ + เรียงคันน่าสงสัยขึ้นก่อน
+  // 433 — ประเมินสถานะเชื่อมต่อ + จับคู่จุดที่ขาดสัญญาณกับสถานที่ที่รู้จัก + เรียงน่าสงสัยขึ้นก่อน
   const now = Date.now()
   const enriched = positions
-    .map(p => ({ p, conn: connStatus(p, now), v: vehicleByPlate.get(p.plateNorm) }))
+    .map(p => {
+      const conn = connStatus(p, now)
+      // จุดที่ขาด = ตำแหน่งสุดท้ายก่อนเงียบ → จับคู่ลูกค้า/จุดบันทึก/โรงงาน (433.1)
+      const place = conn.online ? null : matchPlace(p.lat, p.lng, customers, factory, savedPlaces)
+      return { p, conn, v: vehicleByPlate.get(p.plateNorm), place }
+    })
     .sort((a, b) => CONN_LEVEL_ORDER[a.conn.level] - CONN_LEVEL_ORDER[b.conn.level])
   const suspicious = enriched.filter(e => e.conn.level === 'suspicious')
 
@@ -212,15 +224,18 @@ function RealtimeTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> 
               {suspicious.length} คัน ขาดการเชื่อมต่อ GPS ระหว่างวัน — ควรตรวจสอบ (อาจถูกถอด/ปิดอุปกรณ์)
             </p>
             <p className="text-rose-700 mt-0.5">
-              {suspicious.map(e => `${e.v ? `คัน ${e.v.code}` : e.p.plate} (เห็นล่าสุด ${ago(e.conn.lastSeen)})`).join(' · ')}
+              {suspicious.map(e =>
+                `${e.v ? `คัน ${e.v.code}` : e.p.plate} — ขาดที่ ${e.place ? placeNameOf(e.place, '') : 'นอกจุดที่รู้จัก'} (${ago(e.conn.lastSeen)})`
+              ).join(' · ')}
             </p>
           </div>
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {enriched.map(({ p, conn, v }) => {
+        {enriched.map(({ p, conn, v, place }) => {
           const cfg = CONN_CONFIG[conn.level]
+          const knownPlace = !!place // ขาดที่จุดที่รู้จัก (โรงงาน/ลูกค้า/จุดบันทึก) = มักจอดปกติ
           return (
             <div key={p.carId} className={cn('bg-white rounded-xl border p-4', cfg.card)}>
               <div className="flex items-start justify-between gap-2">
@@ -236,11 +251,22 @@ function RealtimeTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> 
                 </span>
               </div>
 
-              {/* 433 — รายละเอียดการขาดสัญญาณ */}
+              {/* 433/433.1 — รายละเอียดการขาดสัญญาณ + จุดที่ขาด (วิเคราะห์ อับสัญญาณ vs ถูกถอด) */}
               {!conn.online && (
-                <p className={cn('text-xs mt-2', conn.level === 'suspicious' ? 'text-rose-600 font-medium' : 'text-slate-400')}>
-                  ขาดการเชื่อมต่อ {conn.offlineMin > 0 ? fmtMin(conn.offlineMin) : '—'} · เห็นล่าสุด {ago(conn.lastSeen)}
-                </p>
+                <div className="mt-2 space-y-1">
+                  <p className={cn('text-xs', conn.level === 'suspicious' ? 'text-rose-600 font-medium' : 'text-slate-400')}>
+                    ขาดการเชื่อมต่อ {conn.offlineMin > 0 ? fmtMin(conn.offlineMin) : '—'} · เห็นล่าสุด {ago(conn.lastSeen)}
+                  </p>
+                  <p className="text-xs flex items-start gap-1">
+                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-400" />
+                    <span>
+                      <span className="text-slate-500">จุดที่ขาด: </span>
+                      {knownPlace
+                        ? <span className="text-slate-600 font-medium">{placeNameOf(place, '')} <span className="font-normal text-slate-400">· จุดจอดที่รู้จัก (มักจอดปกติ)</span></span>
+                        : <span className="text-amber-700 font-medium">นอกจุดที่รู้จัก — ควรตรวจสอบ</span>}
+                    </span>
+                  </p>
+                </div>
               )}
 
               <div className="grid grid-cols-2 gap-2 mt-3 text-sm">
@@ -254,7 +280,7 @@ function RealtimeTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> 
 
               <a href={`https://www.google.com/maps?q=${p.lat},${p.lng}`} target="_blank" rel="noopener noreferrer"
                 className="mt-3 inline-flex items-center gap-1.5 text-sm text-[#1B3A5C] hover:text-[#3DD8D8] font-medium transition-colors">
-                <MapPin className="w-4 h-4" /> เปิดแผนที่ <ExternalLink className="w-3 h-3" />
+                <MapPin className="w-4 h-4" /> {conn.online ? 'เปิดแผนที่' : 'ดูจุดที่ขาดสัญญาณ'} <ExternalLink className="w-3 h-3" />
               </a>
             </div>
           )
