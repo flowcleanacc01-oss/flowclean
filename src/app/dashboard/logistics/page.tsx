@@ -21,7 +21,7 @@ import RouteSheetPrint, { type RouteStop } from '@/components/RouteSheetPrint'
 import ExportButtons from '@/components/ExportButtons'
 import {
   ChevronLeft, ChevronRight, CalendarDays, Truck, Plus, AlertOctagon,
-  AlertTriangle, CheckCircle2, ArrowRight, Ban, Info, ClipboardCheck, CornerUpRight, CornerDownRight,
+  CheckCircle2, ArrowRight, Ban, Info, ClipboardCheck, CornerUpRight, CornerDownRight,
   ChevronUp, ChevronDown, GripVertical, ListOrdered, X, CalendarX, Trash2,
 } from 'lucide-react'
 
@@ -531,6 +531,8 @@ export default function LogisticsPage() {
                         <CellChip
                           cell={cell}
                           today={today}
+                          shortName={row.customer.shortName || row.customer.name}
+                          roundColor={g.round?.color}
                           draggable={isDraggableStatus(cell.status)}
                           onDragStart={() => onDragStart(row, cell)}
                           onDragEnd={onDragEnd}
@@ -552,13 +554,13 @@ export default function LogisticsPage() {
 
       {/* Legend */}
       <div className="flex items-center flex-wrap gap-x-4 gap-y-1.5 mt-4 text-xs text-slate-500">
-        <LegendDot cls="bg-emerald-500" label="มี SD แล้ว" />
-        <LegendDot cls="bg-amber-400" label="ควรมี — รอสร้าง" />
-        <LegendDot cls="bg-red-500" label="ขาด (เลยกำหนด)" />
-        <LegendDot cls="bg-blue-500" label="รอบเสริม" />
-        <LegendDot cls="bg-orange-500" label="หลายใบในวันเดียว" />
-        <LegendDot cls="bg-purple-400" label="ข้าม / เลื่อน" />
-        <span className="text-slate-400 inline-flex items-center gap-1"><Info className="w-3.5 h-3.5" />ลาก cell ที่มีคิว ไปวางวันอื่น = เลื่อนคิว</span>
+        <LegendSD text="✓SD" cls="text-emerald-700" label="มี SD แล้ว" />
+        <LegendSD text="– SD" cls="text-amber-600" label="ควรมี — รอสร้าง" />
+        <LegendSD text="✕ SD" cls="text-red-600" label="ขาด (เลยกำหนด)" />
+        <LegendSD text="+ SD" cls="text-blue-600" label="รอบเสริม" />
+        <LegendSD text="n SD" cls="text-orange-600" label="หลายใบในวันเดียว" />
+        <LegendSD text="sp SD" cls="text-purple-600" label="ข้าม / เลื่อน" />
+        <span className="text-slate-400 inline-flex items-center gap-1"><Info className="w-3.5 h-3.5" />พื้น chip = สีรอบ · ลาก cell ที่มีคิว ไปวางวันอื่น = เลื่อนคิว</span>
       </div>
 
       {/* 371 — Undo banner (เลิกทำ reschedule ล่าสุด) */}
@@ -779,11 +781,30 @@ export default function LogisticsPage() {
 }
 
 // ── Cell chip ──
+// 436 — สถานะ SD = สัญลักษณ์ + "SD" ตัวเล็ก ต่อท้ายชื่อย่อ (สีตามสถานะเดิม)
+//   ✓SD เขียว=มีแล้ว · – SD เหลือง=รอสร้าง · ✕ SD แดง=ขาด · + SD น้ำเงิน=เสริม · n SD ส้ม=หลายใบ · sp SD ม่วง=ข้าม/เลื่อน
+function sdBadge(cell: LogisticsCell, today: string): { text: string; cls: string } {
+  switch (cell.status) {
+    case 'ok': return { text: '✓SD', cls: 'text-emerald-700' }
+    case 'missing': return cell.date <= today
+      ? { text: '✕ SD', cls: 'text-red-600' }
+      : { text: '– SD', cls: 'text-amber-600' }
+    case 'extra-only':
+    case 'override-extra': return { text: '+ SD', cls: 'text-blue-600' }
+    case 'multiple-regular': return { text: `${cell.regularSDs.length} SD`, cls: 'text-orange-600' }
+    case 'off-schedule': return { text: '~ SD', cls: 'text-slate-500' }
+    case 'skipped': return { text: 'sp SD', cls: 'text-purple-600' }
+    default: return { text: '', cls: '' }
+  }
+}
+
 function CellChip({
-  cell, today, draggable, onDragStart, onDragEnd, onCreate, onView, onDelete,
+  cell, today, shortName, roundColor, draggable, onDragStart, onDragEnd, onCreate, onView, onDelete,
 }: {
   cell: LogisticsCell
   today: string
+  shortName: string              // 436 — ชื่อย่อลูกค้าใน chip
+  roundColor?: string            // 436 — theme สีรอบ
   draggable: boolean
   onDragStart: () => void
   onDragEnd: () => void
@@ -791,72 +812,46 @@ function CellChip({
   onView: (id: string) => void
   onDelete?: () => void          // 378 — ลบ/ยกเลิกคิว (เฉพาะวันคิวจริง)
 }) {
-  const hasRescheduleSkip = cell.overrides.some(o => o.type === 'reschedule_skip')
-  const hasRescheduleAdd = cell.overrides.some(o => o.type === 'reschedule_add')
+  if (cell.status === 'empty') return <span className="text-slate-200 select-none">·</span>
 
-  // resolve visual
-  let label = ''
-  let cls = ''
-  let Icon: typeof CheckCircle2 | null = null
+  const hasRescheduleAdd = cell.overrides.some(o => o.type === 'reschedule_add')
+  const hasRescheduleSkip = cell.overrides.some(o => o.type === 'reschedule_skip')
+
+  // resolve onClick + tooltip ตามสถานะ (ส่วน visual ย้ายไป sdBadge + theme สีรอบ)
   let onClick: (() => void) | undefined
   let title = cell.overrideReason
-
   switch (cell.status) {
-    case 'empty':
-      return <span className="text-slate-200 select-none">·</span>
     case 'ok':
-      label = cell.regularSDs.length > 1 ? `${cell.regularSDs.length} ใบ` : 'SD'
-      cls = 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
-      Icon = CheckCircle2
+    case 'multiple-regular':
       onClick = () => onView(cell.regularSDs[0].id)
       title = cell.regularSDs.map(s => s.noteNumber).join(', ')
       break
-    case 'missing': {
-      const overdue = cell.date <= today
-      label = overdue ? 'ขาด' : 'รอสร้าง'
-      cls = overdue
-        ? 'text-red-700 bg-red-50 border-red-200 hover:bg-red-100'
-        : 'text-amber-700 bg-amber-50 border-amber-200 border-dashed hover:bg-amber-100'
-      Icon = overdue ? AlertOctagon : Plus
+    case 'missing':
       onClick = onCreate
+      title = cell.date <= today ? 'ขาด — รอสร้าง SD' : 'รอสร้าง SD'
       break
-    }
     case 'extra-only':
-      label = 'เสริม'
-      cls = 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100'
-      Icon = Plus
-      onClick = () => onView(cell.extraSDs[0].id)
-      title = cell.extraSDs.map(s => s.noteNumber).join(', ')
-      break
     case 'override-extra': {
       const sd = cell.regularSDs[0] || cell.extraSDs[0]
-      label = 'เสริม'
-      cls = 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100'
-      Icon = Plus
       onClick = sd ? () => onView(sd.id) : undefined
+      title = cell.extraSDs.map(s => s.noteNumber).join(', ') || 'รอบเสริม'
       break
     }
-    case 'multiple-regular':
-      label = `${cell.regularSDs.length} ใบ`
-      cls = 'text-orange-700 bg-orange-50 border-orange-200 hover:bg-orange-100'
-      Icon = AlertTriangle
-      onClick = () => onView(cell.regularSDs[0].id)
-      title = cell.regularSDs.map(s => s.noteNumber).join(', ')
-      break
     case 'off-schedule': {
       const sd = cell.regularSDs[0] || cell.extraSDs[0]
-      label = 'นอกคิว'
-      cls = 'text-slate-600 bg-slate-50 border-slate-200 hover:bg-slate-100'
-      Icon = Truck
       onClick = sd ? () => onView(sd.id) : undefined
+      title = 'นอกคิว'
       break
     }
     case 'skipped':
-      label = hasRescheduleSkip ? 'เลื่อนออก' : 'ข้าม'
-      cls = 'text-purple-600 bg-purple-50 border-purple-200'
-      Icon = Ban
+      title = hasRescheduleSkip ? 'เลื่อนออก' : 'ข้าม'
       break
   }
+
+  const badge = sdBadge(cell, today)
+  // theme สีรอบ (พื้นจางๆ + ขอบ) — color input = #RRGGBB เสมอ → ต่อ alpha hex ได้
+  const tinted = !!roundColor && /^#[0-9a-fA-F]{6}$/.test(roundColor)
+  const tintStyle = tinted ? { backgroundColor: `${roundColor}14`, borderColor: `${roundColor}55` } : undefined
 
   return (
     <span className="relative block w-full group/chip">
@@ -868,15 +863,18 @@ function CellChip({
         onClick={onClick}
         disabled={!onClick && !draggable}
         title={title}
+        style={tintStyle}
         className={cn(
-          'relative w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border text-[12px] font-medium transition-colors',
-          cls,
+          'relative w-full flex items-center justify-center gap-1 px-1.5 py-1 rounded-lg border transition-[filter,background-color]',
+          !tinted && 'bg-slate-50 border-slate-200',
+          cell.status === 'missing' && cell.date > today && 'border-dashed',
+          (onClick || draggable) && 'hover:brightness-95',
           draggable && 'cursor-grab active:cursor-grabbing',
           !onClick && !draggable && 'cursor-default',
         )}
       >
-        {Icon && <Icon className="w-3.5 h-3.5 flex-shrink-0" />}
-        <span className="truncate">{label}</span>
+        <span className="truncate font-semibold text-[11px] text-slate-700">{shortName}</span>
+        <span className={cn('shrink-0 text-[10px] font-bold leading-none', badge.cls)}>{badge.text}</span>
         {hasRescheduleAdd && cell.status !== 'skipped' && (
           <CornerDownRight className="w-3 h-3 text-indigo-500 absolute -top-1 -right-1" aria-label="เลื่อนเข้า" />
         )}
@@ -906,10 +904,10 @@ function SummaryChip({ icon: Icon, label, value, cls }: { icon: typeof CheckCirc
   )
 }
 
-function LegendDot({ cls, label }: { cls: string; label: string }) {
+function LegendSD({ text, cls, label }: { text: string; cls: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className={cn('w-2.5 h-2.5 rounded-full', cls)} />
+      <span className={cn('font-bold text-[11px]', cls)}>{text}</span>
       {label}
     </span>
   )
