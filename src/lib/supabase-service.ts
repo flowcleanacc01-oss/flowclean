@@ -5,7 +5,7 @@ import type {
   CustomerCategoryDef, ProductChecklist, AuditLog, CarryOverAdjustment,
   LegacyDocument, ScheduleOverride, RoutePlan,
   Vehicle, OdometerLog, MaintenanceRecord,
-  Round, Crew, DailyTrip, FuelLog,
+  Round, Crew, DailyTrip, FuelLog, SavedPlace,
 } from '@/types'
 
 // ============================================================
@@ -954,6 +954,23 @@ export async function deleteFuelLogDB(id: string): Promise<void> {
   await dbWrite({ table: 'fuel_logs', operation: 'delete', match: { column: 'id', value: id } })
 }
 
+// ── 432.1 — Saved Places (จุดที่บันทึก ที่ไม่ใช่ลูกค้า) ──
+export async function fetchSavedPlaces(): Promise<SavedPlace[]> {
+  return fetchAllPaginated<SavedPlace>('saved_places', 'created_at')
+}
+
+export async function insertSavedPlace(p: SavedPlace): Promise<void> {
+  await dbWrite({ table: 'saved_places', operation: 'insert', data: toSnakeCase(p as unknown as Record<string, unknown>) })
+}
+
+export async function updateSavedPlaceDB(id: string, updates: Partial<SavedPlace>): Promise<void> {
+  await dbWrite({ table: 'saved_places', operation: 'update', data: toSnakeCase(updates as unknown as Record<string, unknown>), match: { column: 'id', value: id } })
+}
+
+export async function deleteSavedPlaceDB(id: string): Promise<void> {
+  await dbWrite({ table: 'saved_places', operation: 'delete', match: { column: 'id', value: id } })
+}
+
 // ============================================================
 // Default Prices — stored as linen_items.default_price
 // ============================================================
@@ -1031,6 +1048,7 @@ export async function fetchAllData() {
     withRetry(() => fetchCrew(), 'crew').catch(() => [] as Crew[]),
     withRetry(() => fetchDailyTrips(), 'dailyTrips').catch(() => [] as DailyTrip[]),
     withRetry(() => fetchFuelLogs(), 'fuelLogs').catch(() => [] as FuelLog[]),
+    withRetry(() => fetchSavedPlaces(), 'savedPlaces').catch(() => [] as SavedPlace[]),
   ])
 
   const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -1048,7 +1066,7 @@ export async function fetchAllData() {
     taxInvoices, quotations, expenses, users, companyInfo,
     linenItems, checklists, linenCategories, customerCategories,
     carryOverAdjustments, receipts, legacyDocuments, scheduleOverrides, routePlans,
-    vehicles, odometerLogs, maintenanceRecords, rounds, crew, dailyTrips, fuelLogs,
+    vehicles, odometerLogs, maintenanceRecords, rounds, crew, dailyTrips, fuelLogs, savedPlaces,
   ] = [
     val(results[0], [] as Customer[]),
     val(results[1], [] as LinenForm[]),
@@ -1075,6 +1093,7 @@ export async function fetchAllData() {
     val(results[22], [] as Crew[]),
     val(results[23], [] as DailyTrip[]),
     val(results[24], [] as FuelLog[]),
+    val(results[25], [] as SavedPlace[]),
   ]
 
   return {
@@ -1103,6 +1122,7 @@ export async function fetchAllData() {
     crew,
     dailyTrips,
     fuelLogs,
+    savedPlaces,
     _partialFailures,
   }
 }

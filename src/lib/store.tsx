@@ -10,7 +10,7 @@ import type {
   CarryOverAdjustment, CarryOverMode, CarryOverAdjustmentHistory,
   LegacyDocument, ScheduleOverride, RoutePlan,
   Vehicle, OdometerLog, MaintenanceRecord,
-  Round, Crew, DailyTrip, FuelLog,
+  Round, Crew, DailyTrip, FuelLog, SavedPlace,
 } from '@/types'
 import { STANDARD_LINEN_ITEMS, LEGACY_STATUS_MAP, DEFAULT_LINEN_CATEGORIES, DEFAULT_CUSTOMER_CATEGORIES } from '@/types'
 import {
@@ -210,6 +210,12 @@ interface StoreContextType {
   updateFuelLog: (id: string, updates: Partial<FuelLog>) => void
   deleteFuelLog: (id: string) => void
 
+  // 432.1 — Saved Places (จุดที่บันทึก ที่ไม่ใช่ลูกค้า)
+  savedPlaces: SavedPlace[]
+  addSavedPlace: (p: Omit<SavedPlace, 'id' | 'createdBy' | 'createdAt'>) => SavedPlace
+  updateSavedPlace: (id: string, updates: Partial<SavedPlace>) => void
+  deleteSavedPlace: (id: string) => void
+
   // 255: Facet Vocabulary (Wizard 2.0 — admin-editable)
   facetVocab: FacetVocab
   updateFacetVocab: (vocab: FacetVocab) => Promise<void>
@@ -285,6 +291,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [crew, setCrew] = useState<Crew[]>([])
   const [dailyTrips, setDailyTrips] = useState<DailyTrip[]>([]) // B2 — Dispatch Board
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([])       // งานติ๊ด — เติมน้ำมัน
+  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]) // 432.1 — จุดที่บันทึก
   // 255: Facet Vocabulary — start with defaults, replaced after DB load
   const [facetVocab, setFacetVocab] = useState<FacetVocab>(DEFAULT_FACET_VOCAB)
   const [loaded, setLoaded] = useState(false)
@@ -380,6 +387,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setCrew(data.crew || [])
     setDailyTrips(data.dailyTrips || [])
     setFuelLogs(data.fuelLogs || [])
+    setSavedPlaces(data.savedPlaces || [])
 
     // Build defaultPrices from linenItems
     if (data.linenItems.length > 0) {
@@ -1528,6 +1536,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     logAudit('delete', 'fuel_log', id, id)
   }, [logAudit])
 
+  // ---- 432.1: Saved Places (จุดที่บันทึก ที่ไม่ใช่ลูกค้า) ----
+  const addSavedPlace = useCallback((p: Omit<SavedPlace, 'id' | 'createdBy' | 'createdAt'>): SavedPlace => {
+    const newP: SavedPlace = { ...p, id: genId(), createdBy: currentUserRef.current?.id || 'unknown', createdAt: new Date().toISOString() }
+    setSavedPlaces(prev => [newP, ...prev])
+    dbSave(db.insertSavedPlace(newP), () => {
+      setSavedPlaces(prev => prev.filter(x => x.id !== newP.id))
+    })
+    logAudit('create', 'saved_place', newP.id, `${newP.name} (${newP.category})`)
+    return newP
+  }, [logAudit])
+
+  const updateSavedPlace = useCallback((id: string, updates: Partial<SavedPlace>) => {
+    setSavedPlaces(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('update', 'saved_place', id, old?.name || id)
+      return prev.map(x => x.id === id ? { ...x, ...updates } : x)
+    })
+    dbSave(db.updateSavedPlaceDB(id, updates))
+  }, [logAudit])
+
+  const deleteSavedPlace = useCallback((id: string) => {
+    setSavedPlaces(prev => {
+      const old = prev.find(x => x.id === id)
+      logAudit('delete', 'saved_place', id, old?.name || id)
+      return prev.filter(x => x.id !== id)
+    })
+    dbSave(db.deleteSavedPlaceDB(id))
+  }, [logAudit])
+
   // ---- Computed Helpers ----
 
   // 255 Phase 1.b: Facet Vocabulary update / reset
@@ -1721,6 +1758,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       crew, addCrew, updateCrew, deleteCrew,
       dailyTrips, addDailyTrips, updateDailyTrip, deleteDailyTrip,
       fuelLogs, addFuelLog, updateFuelLog, deleteFuelLog,
+      savedPlaces, addSavedPlace, updateSavedPlace, deleteSavedPlace,
       facetVocab, updateFacetVocab, resetFacetVocab,
       getCarryOver, getDiscrepancies,
     }}>

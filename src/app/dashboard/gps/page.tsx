@@ -20,13 +20,17 @@ import { isScheduledDay } from '@/lib/schedule-audit'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { todayISO, cn } from '@/lib/utils'
 import { canViewFleet } from '@/lib/permissions'
-import { dailyTripId, type Customer, type Round, type Vehicle } from '@/types'
+import {
+  dailyTripId, SAVED_PLACE_CATEGORY_CONFIG,
+  type Customer, type Round, type Vehicle, type SavedPlace, type SavedPlaceCategory,
+} from '@/types'
 import Modal from '@/components/Modal'
+import GpsCoordInput from '@/components/GpsCoordInput'
 import {
   Satellite, MapPin, Navigation, RefreshCw, Radio, Gauge,
   ExternalLink, Route, TrendingUp, Fuel, AlertCircle, Loader2, Car, CircleDot, Clock,
   ClipboardCheck, CheckCircle2, AlertTriangle, Info, Wand2,
-  Factory, ParkingCircle, Building2, Award, Search,
+  Factory, ParkingCircle, Building2, Award, Search, Plus, Pencil, Trash2, Coffee,
 } from 'lucide-react'
 
 // "2026-06-10 20:35:16" → "20:35"
@@ -55,9 +59,21 @@ function fmtMin(min: number): string {
   return h > 0 ? `${h} ชม. ${m} นาที` : `${m} นาที`
 }
 
+// 432 — ระยะเวลาเที่ยว (เริ่ม→จบ) เป็นนาที · 0 = คำนวณไม่ได้
+function tripDurationMin(startTime: string, endTime: string): number {
+  const ms = new Date(endTime.replace(' ', 'T')).getTime() - new Date(startTime.replace(' ', 'T')).getTime()
+  return Number.isFinite(ms) && ms > 0 ? Math.round(ms / 60000) : 0
+}
+
+// 432 — ระยะเวลาแบบกระชับสำหรับมอนิเตอร์: <60 นาที → "X นาที", ≥60 → "X.XX ชม."
+function fmtDurationShort(min: number): string {
+  if (min <= 0) return ''
+  return min < 60 ? `${min} นาที` : `${(min / 60).toFixed(2)} ชม.`
+}
+
 export default function GpsPage() {
   const { currentUser, vehicles } = useStore()
-  const [tab, setTab] = useState<'realtime' | 'trips' | 'audit'>('realtime')
+  const [tab, setTab] = useState<'realtime' | 'trips' | 'audit' | 'places'>('realtime')
 
   // plateNorm → vehicle (แสดง code A/B/C ของฟลีต)
   const vehicleByPlate = useMemo(() => {
@@ -86,7 +102,7 @@ export default function GpsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-200">
-        {([['realtime', 'ตำแหน่งสด', Radio], ['trips', 'เที่ยววิ่ง', Route], ['audit', 'เทียบแผน', ClipboardCheck]] as const).map(([k, label, Icon]) => (
+        {([['realtime', 'ตำแหน่งสด', Radio], ['trips', 'เที่ยววิ่ง', Route], ['audit', 'เทียบแผน', ClipboardCheck], ['places', 'สถานที่', MapPin]] as const).map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)}
             className={cn('px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors inline-flex items-center gap-1.5',
               tab === k ? 'border-[#3DD8D8] text-[#1B3A5C]' : 'border-transparent text-slate-400 hover:text-slate-600')}>
@@ -97,7 +113,8 @@ export default function GpsPage() {
 
       {tab === 'realtime' ? <RealtimeTab vehicleByPlate={vehicleByPlate} />
         : tab === 'trips' ? <TripsTab vehicleByPlate={vehicleByPlate} />
-        : <AuditTab />}
+        : tab === 'audit' ? <AuditTab />
+        : <PlacesTab />}
     </div>
   )
 }
@@ -187,7 +204,7 @@ function RealtimeTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> 
 // ───────────────────────── เที่ยววิ่ง ─────────────────────────
 
 function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) {
-  const { customers, companyInfo } = useStore()
+  const { customers, companyInfo, savedPlaces } = useStore()
   const [cars, setCars] = useState<GpsCar[]>([])
   const [carId, setCarId] = useState('')
   const [date, setDate] = useState(todayISO())
@@ -230,8 +247,8 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
   const sorted = useMemo(() => [...trips].sort((a, b) => a.startTime.localeCompare(b.startTime)), [trips])
   const gapAfter = useMemo(() => new Map(engineOffGaps(sorted).map(g => [g.afterIndex, g])), [sorted])
   const placeOf = useCallback(
-    (lat: number, lng: number) => matchPlace(lat, lng, customers, factory),
-    [customers, factory])
+    (lat: number, lng: number) => matchPlace(lat, lng, customers, factory, savedPlaces),
+    [customers, factory, savedPlaces])
 
   const summary = useMemo(() => {
     const real = sorted.filter(t => !isShuffleTrip(t))
@@ -315,11 +332,17 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
                       const shuffle = isShuffleTrip(t)
                       const gap = gapAfter.get(i)
                       const gapPlace = gap ? placeOf(gap.lat, gap.lng) : null
+                      const durMin = tripDurationMin(t.startTime, t.endTime) // 432 — ระยะเวลาเที่ยว
                       return (
                         <Fragment key={t.tripId || i}>
                           <tr className="hover:bg-slate-50">
                             <td className="px-3 py-2.5 whitespace-nowrap text-slate-700 font-medium">
                               {hhmm(t.startTime)} → {hhmm(t.endTime)}
+                              {durMin > 0 && (
+                                <span className="ml-1.5 text-xs font-normal text-slate-400" title="ระยะเวลาเที่ยวนี้ (เริ่ม→จบ)">
+                                  ({fmtDurationShort(durMin)})
+                                </span>
+                              )}
                             </td>
                             <td className="px-3 py-2.5 max-w-[280px]">
                               {shuffle ? (
@@ -336,12 +359,14 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
                                 <span className="inline-flex items-center gap-1.5 text-slate-600">
                                   <Factory className="w-3.5 h-3.5 text-slate-400" /> กลับโรงงาน
                                 </span>
+                              ) : dest?.type === 'saved' ? (
+                                <SavedPlaceTag place={dest.savedPlace!} />
                               ) : (
                                 <span className="inline-flex items-center gap-1.5 min-w-0">
                                   <span className="text-slate-600 truncate" title={t.endAddress}>{t.endAddress || '—'}</span>
                                   {(t.endLat !== 0 || t.endLng !== 0) && (
                                     <button onClick={() => setCoordTarget({ lat: t.endLat, lng: t.endLng, address: t.endAddress })}
-                                      title="จุดนี้คือลูกค้ารายไหน? — บันทึกเป็นพิกัดลูกค้า (ครั้งต่อไปขึ้นชื่อเอง)"
+                                      title="จุดนี้คืออะไร? — บันทึกเป็นพิกัดลูกค้า หรือสถานที่อื่น (ครั้งต่อไปขึ้นชื่อเอง)"
                                       className="shrink-0 text-slate-300 hover:text-[#1B3A5C]">
                                       <MapPin className="w-3.5 h-3.5" />
                                     </button>
@@ -388,12 +413,14 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
                                     </span>
                                   ) : gapPlace?.type === 'factory' ? (
                                     <span className="inline-flex items-center gap-1"><Factory className="w-3 h-3" />ที่โรงงาน</span>
+                                  ) : gapPlace?.type === 'saved' ? (
+                                    <SavedPlaceTag place={gapPlace.savedPlace!} />
                                   ) : (
                                     <>
                                       <span className="truncate max-w-[300px]" title={gap.address}>{gap.address || '—'}</span>
                                       {(gap.lat !== 0 || gap.lng !== 0) && (
                                         <button onClick={() => setCoordTarget({ lat: gap.lat, lng: gap.lng, address: gap.address })}
-                                          title="จุดนี้คือลูกค้ารายไหน? — บันทึกเป็นพิกัดลูกค้า"
+                                          title="จุดนี้คืออะไร? — บันทึกเป็นพิกัดลูกค้า หรือสถานที่อื่น"
                                           className="shrink-0 text-slate-300 hover:text-[#1B3A5C]">
                                           <MapPin className="w-3.5 h-3.5" />
                                         </button>
@@ -423,23 +450,41 @@ function TripsTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) 
       )}
 
       {coordTarget && (
-        <SetCustomerCoordModal point={coordTarget} date={date} onClose={() => setCoordTarget(null)} />
+        <SetPlaceModal point={coordTarget} date={date} onClose={() => setCoordTarget(null)} />
       )}
     </div>
   )
 }
 
-// 427 — "เดาพิกัดจากจุดจอดซ้ำ" ฉบับใช้งานจริง: ระบบเสนอจุดจอด → ติ๊ดยืนยันว่าเป็นลูกค้ารายไหน
-//   บันทึกครั้งเดียว ทุกเที่ยวที่จบจุดนี้ (รัศมี 150ม.) ขึ้นชื่อลูกค้าอัตโนมัติตลอด
-function SetCustomerCoordModal({
+// 432.1 — ป้ายจุดที่บันทึก (ร้านอาหาร/ปั๊ม ฯลฯ) · detour = ไฮไลต์เตือน "แวะ"
+function SavedPlaceTag({ place }: { place: SavedPlace }) {
+  const cfg = SAVED_PLACE_CATEGORY_CONFIG[place.category] || SAVED_PLACE_CATEGORY_CONFIG.other
+  return (
+    <span className={cn('inline-flex items-center gap-1 font-medium', cfg.detour ? 'text-amber-700' : 'text-slate-600')}
+      title={cfg.detour ? `${cfg.label} — จุดแวะนอกแผน${place.note ? ` · ${place.note}` : ''}` : cfg.label}>
+      <span aria-hidden>{cfg.emoji}</span>
+      <span className="truncate max-w-[200px]">{place.name}</span>
+      {cfg.detour && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">แวะ</span>}
+    </span>
+  )
+}
+
+// 427/432.1 — จุดจอดนี้คืออะไร? 2 โหมด:
+//   • ลูกค้า   — บันทึกเป็นพิกัดลูกค้า (เที่ยวที่จบใกล้จุดนี้ขึ้นชื่อลูกค้าอัตโนมัติ — รัศมี 150ม.)
+//   • สถานที่อื่น — บันทึกเป็นจุด POI (ร้านอาหาร/ปั๊ม/จุดแวะ) → จับคู่จุดจอดอัตโนมัติ + เห็นพฤติกรรมแวะ
+function SetPlaceModal({
   point, date, onClose,
 }: {
   point: { lat: number; lng: number; address: string }
   date: string
   onClose: () => void
 }) {
-  const { customers, updateCustomer } = useStore()
+  const { customers, updateCustomer, addSavedPlace } = useStore()
+  const [mode, setMode] = useState<'customer' | 'saved'>('customer')
   const [search, setSearch] = useState('')
+  // โหมดสถานที่อื่น
+  const [placeName, setPlaceName] = useState('')
+  const [placeCat, setPlaceCat] = useState<SavedPlaceCategory>('food')
 
   const candidates = useMemo(() => {
     const due = (c: Customer) => isScheduledDay(date, c)
@@ -451,14 +496,21 @@ function SetCustomerCoordModal({
       .slice(0, 60)
   }, [customers, search, date])
 
-  const save = (c: Customer) => {
+  const saveCustomer = (c: Customer) => {
     if ((c.gpsLat || c.gpsLng) && !confirm(`${c.shortName || c.name} มีพิกัดอยู่แล้ว — แทนที่ด้วยจุดนี้?`)) return
     updateCustomer(c.id, { gpsLat: point.lat, gpsLng: point.lng })
     onClose()
   }
 
+  const savePlace = () => {
+    const name = placeName.trim()
+    if (!name) return
+    addSavedPlace({ name, category: placeCat, lat: point.lat, lng: point.lng, note: point.address || '' })
+    onClose()
+  }
+
   return (
-    <Modal open onClose={onClose} title="จุดนี้คือลูกค้ารายไหน?" size="md" closeLabel="cancel">
+    <Modal open onClose={onClose} title="จุดจอดนี้คืออะไร?" size="md" closeLabel="cancel">
       <div className="space-y-3">
         <div className="text-sm text-slate-600 bg-slate-50 rounded-lg p-3">
           <p className="truncate" title={point.address}>📍 {point.address || `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`}</p>
@@ -467,28 +519,78 @@ function SetCustomerCoordModal({
             <ExternalLink className="w-3 h-3" /> เปิดดูใน Google Maps
           </a>
         </div>
-        <p className="text-xs text-slate-400">เลือกลูกค้าเพื่อบันทึกจุดนี้เป็นพิกัดประจำ — เที่ยวต่อๆ ไปที่จบใกล้จุดนี้จะขึ้นชื่อลูกค้าอัตโนมัติ (ลูกค้าที่ถึงคิววันนี้อยู่บนสุด)</p>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3DD8D8]" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาลูกค้า..." autoFocus
-            className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
-        </div>
-        <ul className="divide-y divide-slate-100 max-h-72 overflow-auto">
-          {candidates.length === 0 ? (
-            <li className="text-center text-sm text-slate-400 py-6">ไม่พบลูกค้า</li>
-          ) : candidates.map(c => (
-            <li key={c.id} className="flex items-center gap-2 py-2 text-sm">
-              <span className="font-medium text-slate-700 w-28 truncate">{c.shortName || c.name}</span>
-              <span className="flex-1 text-xs text-slate-400 truncate">{c.name}</span>
-              {isScheduledDay(date, c) && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#3DD8D8]/15 text-[#1B3A5C] shrink-0">ถึงคิววันนี้</span>}
-              {(c.gpsLat || c.gpsLng) ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0">มีพิกัดแล้ว</span> : null}
-              <button onClick={() => save(c)}
-                className="px-2.5 py-1 rounded-lg text-xs font-medium bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors shrink-0">
-                ใช้จุดนี้
-              </button>
-            </li>
+
+        {/* เลือกโหมด */}
+        <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden w-full">
+          {([['customer', 'ลูกค้า'], ['saved', 'สถานที่อื่น (ร้านอาหาร/ปั๊ม)']] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setMode(k)}
+              className={cn('flex-1 px-3 py-2 text-sm font-medium transition-colors',
+                mode === k ? 'bg-[#1B3A5C] text-white' : 'bg-white text-slate-500 hover:bg-slate-50')}>
+              {label}
+            </button>
           ))}
-        </ul>
+        </div>
+
+        {mode === 'customer' ? (
+          <>
+            <p className="text-xs text-slate-400">เลือกลูกค้าเพื่อบันทึกจุดนี้เป็นพิกัดประจำ — เที่ยวต่อๆ ไปที่จบใกล้จุดนี้จะขึ้นชื่อลูกค้าอัตโนมัติ (ลูกค้าที่ถึงคิววันนี้อยู่บนสุด)</p>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3DD8D8]" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาลูกค้า..." autoFocus
+                className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+            </div>
+            <ul className="divide-y divide-slate-100 max-h-72 overflow-auto">
+              {candidates.length === 0 ? (
+                <li className="text-center text-sm text-slate-400 py-6">ไม่พบลูกค้า</li>
+              ) : candidates.map(c => (
+                <li key={c.id} className="flex items-center gap-2 py-2 text-sm">
+                  <span className="font-medium text-slate-700 w-28 truncate">{c.shortName || c.name}</span>
+                  <span className="flex-1 text-xs text-slate-400 truncate">{c.name}</span>
+                  {isScheduledDay(date, c) && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#3DD8D8]/15 text-[#1B3A5C] shrink-0">ถึงคิววันนี้</span>}
+                  {(c.gpsLat || c.gpsLng) ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0">มีพิกัดแล้ว</span> : null}
+                  <button onClick={() => saveCustomer(c)}
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors shrink-0">
+                    ใช้จุดนี้
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-slate-400">บันทึกจุดนี้เป็นสถานที่ (ไม่ใช่ลูกค้า) — เที่ยว/จุดจอดต่อๆ ไปที่ใกล้จุดนี้จะขึ้นชื่อนี้อัตโนมัติ จุดแวะส่วนตัวจะถูกไฮไลต์เตือน</p>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">ชื่อสถานที่</label>
+              <input value={placeName} onChange={e => setPlaceName(e.target.value)} placeholder="เช่น ร้านก๋วยเตี๋ยวไก่" autoFocus
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">ประเภท</label>
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(SAVED_PLACE_CATEGORY_CONFIG) as SavedPlaceCategory[]).map(k => {
+                  const cfg = SAVED_PLACE_CATEGORY_CONFIG[k]
+                  return (
+                    <button key={k} onClick={() => setPlaceCat(k)}
+                      className={cn('px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors inline-flex items-center gap-1',
+                        placeCat === k ? 'border-[#3DD8D8] bg-[#3DD8D8]/10 text-[#1B3A5C]' : 'border-slate-200 text-slate-500 hover:bg-slate-50')}>
+                      <span aria-hidden>{cfg.emoji}</span>{cfg.label}
+                    </button>
+                  )
+                })}
+              </div>
+              {SAVED_PLACE_CATEGORY_CONFIG[placeCat].detour && (
+                <p className="text-[11px] text-amber-600 mt-1.5">⚠ ประเภทนี้นับเป็น “แวะส่วนตัว” — จะถูกไฮไลต์เตือนในเที่ยววิ่ง</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+              <button onClick={savePlace} disabled={!placeName.trim()}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] disabled:opacity-40 transition-colors">
+                บันทึกสถานที่
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </Modal>
   )
@@ -876,6 +978,147 @@ function FlagRow({ flag }: { flag: AuditFlag }) {
       <Icon className="w-3.5 h-3.5 shrink-0 mt-0.5" />
       <span>{flag.message}</span>
     </div>
+  )
+}
+
+// ───────────────────────── สถานที่บันทึก (432.1) ─────────────────────────
+//   จัดการจุดที่ไม่ใช่ลูกค้า (ร้านอาหาร/ปั๊ม/จุดพัก/ธุระส่วนตัว) — เพิ่ม/แก้/ลบ
+//   จุดเหล่านี้ใช้จับคู่จุดจอด GPS ในแท็บ "เที่ยววิ่ง" อัตโนมัติ
+function PlacesTab() {
+  const { savedPlaces, deleteSavedPlace } = useStore()
+  const [editing, setEditing] = useState<SavedPlace | null>(null)
+  const [adding, setAdding] = useState(false)
+
+  const sorted = useMemo(
+    () => [...savedPlaces].sort((a, b) => a.name.localeCompare(b.name, 'th')),
+    [savedPlaces])
+
+  const remove = (p: SavedPlace) => {
+    if (confirm(`ลบสถานที่ “${p.name}”?\n(เที่ยววิ่งจะไม่ขึ้นชื่อนี้อีก)`)) deleteSavedPlace(p.id)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-slate-500">
+          จุดที่บันทึกไว้ (ไม่ใช่ลูกค้า) — ใช้จับคู่จุดจอดในเที่ยววิ่งให้อ่านง่ายขึ้น · ประเภท
+          <span className="text-amber-700 font-medium"> ร้านอาหาร/จุดพัก/ธุระส่วนตัว</span> = ไฮไลต์ว่าแวะนอกแผน
+        </p>
+        <button onClick={() => setAdding(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#3DD8D8] text-[#1B3A5C] rounded-lg text-sm font-semibold hover:bg-[#2bb8b8] transition-colors shrink-0">
+          <Plus className="w-4 h-4" /> เพิ่มสถานที่
+        </button>
+      </div>
+
+      {sorted.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
+          <Coffee className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-500">ยังไม่มีสถานที่ที่บันทึก</p>
+          <p className="text-xs text-slate-400 mt-1">กด “เพิ่มสถานที่” หรือกดหมุด 📍 ที่จุดจอดในแท็บเที่ยววิ่ง แล้วเลือก “สถานที่อื่น”</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
+          {sorted.map(p => {
+            const cfg = SAVED_PLACE_CATEGORY_CONFIG[p.category] || SAVED_PLACE_CATEGORY_CONFIG.other
+            return (
+              <div key={p.id} className="flex items-center gap-3 px-4 py-3">
+                <span className="text-xl shrink-0" aria-hidden>{cfg.emoji}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-800 truncate">{p.name}</span>
+                    <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full shrink-0',
+                      cfg.detour ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500')}>{cfg.label}</span>
+                  </div>
+                  {p.note && <p className="text-xs text-slate-400 truncate mt-0.5">{p.note}</p>}
+                </div>
+                <a href={`https://www.google.com/maps?q=${p.lat},${p.lng}`} target="_blank" rel="noopener noreferrer"
+                  className="text-slate-400 hover:text-[#1B3A5C] shrink-0" title={`${p.lat.toFixed(5)}, ${p.lng.toFixed(5)} — เปิด Google Maps`}>
+                  <MapPin className="w-4 h-4" />
+                </a>
+                <button onClick={() => setEditing(p)} className="text-slate-400 hover:text-[#1B3A5C] shrink-0" title="แก้ไข">
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button onClick={() => remove(p)} className="text-slate-400 hover:text-rose-500 shrink-0" title="ลบ">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {(adding || editing) && (
+        <PlaceFormModal place={editing} onClose={() => { setAdding(false); setEditing(null) }} />
+      )}
+    </div>
+  )
+}
+
+// 432.1 — ฟอร์มเพิ่ม/แก้สถานที่ (กรอกพิกัดเอง: วางลิงก์ Google Maps หรือพิกัดดิบ)
+function PlaceFormModal({ place, onClose }: { place: SavedPlace | null; onClose: () => void }) {
+  const { addSavedPlace, updateSavedPlace } = useStore()
+  const [name, setName] = useState(place?.name || '')
+  const [category, setCategory] = useState<SavedPlaceCategory>(place?.category || 'food')
+  const [lat, setLat] = useState(place?.lat || 0)
+  const [lng, setLng] = useState(place?.lng || 0)
+  const [note, setNote] = useState(place?.note || '')
+
+  const canSave = !!name.trim() && (lat !== 0 || lng !== 0)
+
+  const save = () => {
+    if (!canSave) return
+    if (place) {
+      updateSavedPlace(place.id, { name: name.trim(), category, lat, lng, note: note.trim() })
+    } else {
+      addSavedPlace({ name: name.trim(), category, lat, lng, note: note.trim() })
+    }
+    onClose()
+  }
+
+  return (
+    <Modal open onClose={onClose} title={place ? 'แก้ไขสถานที่' : 'เพิ่มสถานที่'} size="md" closeLabel="cancel">
+      <div className="space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">ชื่อสถานที่</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="เช่น ร้านก๋วยเตี๋ยวไก่" autoFocus
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1.5">ประเภท</label>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(SAVED_PLACE_CATEGORY_CONFIG) as SavedPlaceCategory[]).map(k => {
+              const cfg = SAVED_PLACE_CATEGORY_CONFIG[k]
+              return (
+                <button key={k} onClick={() => setCategory(k)}
+                  className={cn('px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors inline-flex items-center gap-1',
+                    category === k ? 'border-[#3DD8D8] bg-[#3DD8D8]/10 text-[#1B3A5C]' : 'border-slate-200 text-slate-500 hover:bg-slate-50')}>
+                  <span aria-hidden>{cfg.emoji}</span>{cfg.label}
+                </button>
+              )
+            })}
+          </div>
+          {SAVED_PLACE_CATEGORY_CONFIG[category].detour && (
+            <p className="text-[11px] text-amber-600 mt-1.5">⚠ ประเภทนี้นับเป็น “แวะส่วนตัว” — จะถูกไฮไลต์เตือนในเที่ยววิ่ง</p>
+          )}
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">พิกัด</label>
+          <GpsCoordInput lat={lat} lng={lng} onChange={(la, ln) => { setLat(la); setLng(ln) }} />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">หมายเหตุ (ไม่บังคับ)</label>
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น คนขับชอบแวะตอนเช้า"
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">ยกเลิก</button>
+          <button onClick={save} disabled={!canSave}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] disabled:opacity-40 transition-colors">
+            {place ? 'บันทึก' : 'เพิ่มสถานที่'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

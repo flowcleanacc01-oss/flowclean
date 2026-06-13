@@ -1,12 +1,14 @@
 // 427 — พิกัด GPS: parse ลิงก์ Google Maps · ระยะ haversine · จับคู่จุดกับลูกค้า/โรงงาน · ช่วงดับเครื่องจอด
 //   pure ทั้งไฟล์ (testable · ใช้ได้ทั้ง client/server)
-import type { Customer } from '@/types'
+import type { Customer, SavedPlace } from '@/types'
 import type { GpsTrip } from './v2x-types'
 
 /** รัศมีจับคู่ลูกค้า (เมตร) — จุดจบเที่ยวห่างพิกัดลูกค้าไม่เกินนี้ = จุดส่งลูกค้ารายนั้น */
 export const PLACE_MATCH_RADIUS_M = 150
 /** โรงงานพื้นที่ใหญ่กว่า (ลานจอด/หลายประตู) → รัศมีกว้างขึ้น */
 export const FACTORY_MATCH_RADIUS_M = 250
+/** จุดที่บันทึก (ร้านอาหาร/ปั๊ม ฯลฯ) — จุดเดี่ยว แคบกว่าลูกค้าเล็กน้อย กันชนกับลูกค้าข้างเคียง (432.1) */
+export const SAVED_PLACE_MATCH_RADIUS_M = 120
 
 export interface LatLng {
   lat: number
@@ -52,17 +54,20 @@ export function haversineM(lat1: number, lng1: number, lat2: number, lng2: numbe
 }
 
 export interface PlaceMatch {
-  type: 'customer' | 'factory'
+  type: 'customer' | 'factory' | 'saved'
   customer?: Customer
+  savedPlace?: SavedPlace // 432.1 — จุดที่บันทึก (ร้านอาหาร/ปั๊ม ฯลฯ)
   distanceM: number
 }
 
-/** จับคู่พิกัดกับสถานที่ที่รู้จัก — ลูกค้าที่ใกล้สุดในรัศมีชนะ · ไม่เจอลูกค้าค่อยเช็คโรงงาน */
+/** จับคู่พิกัดกับสถานที่ที่รู้จัก — ลำดับความสำคัญ: ลูกค้า → จุดที่บันทึก → โรงงาน
+ *  ลูกค้า/จุดบันทึกที่ใกล้สุดในรัศมีชนะ · ลูกค้ามาก่อนเสมอ (จุดส่งของจริงสำคัญกว่าจุดแวะ) */
 export function matchPlace(
   lat: number,
   lng: number,
   customers: Customer[],
   factory: LatLng | null,
+  savedPlaces: SavedPlace[] = [],
 ): PlaceMatch | null {
   if (!lat && !lng) return null
   let best: PlaceMatch | null = null
@@ -73,7 +78,17 @@ export function matchPlace(
       best = { type: 'customer', customer: c, distanceM: d }
     }
   }
-  if (!best && factory && (factory.lat || factory.lng)) {
+  if (best) return best // ลูกค้าชนะก่อน — ไม่ทับด้วยจุดแวะ/โรงงาน
+  // ไม่เจอลูกค้า → จุดที่บันทึก (ใกล้สุดในรัศมีชนะ)
+  for (const p of savedPlaces) {
+    if (!p.lat && !p.lng) continue
+    const d = haversineM(lat, lng, p.lat, p.lng)
+    if (d <= SAVED_PLACE_MATCH_RADIUS_M && (!best || d < best.distanceM)) {
+      best = { type: 'saved', savedPlace: p, distanceM: d }
+    }
+  }
+  if (best) return best
+  if (factory && (factory.lat || factory.lng)) {
     const d = haversineM(lat, lng, factory.lat, factory.lng)
     if (d <= FACTORY_MATCH_RADIUS_M) best = { type: 'factory', distanceM: d }
   }

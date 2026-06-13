@@ -2,7 +2,10 @@
 import { describe, it, expect } from 'vitest'
 import { parseLatLng, haversineM, matchPlace, engineOffGaps, isShuffleTrip } from '@/lib/geo'
 import type { GpsTrip } from '@/lib/v2x-types'
-import type { Customer } from '@/types'
+import type { Customer, SavedPlace } from '@/types'
+
+const place = (over: Partial<SavedPlace>): SavedPlace =>
+  ({ id: 'p1', name: 'ร้านก๋วยเตี๋ยวไก่', category: 'food', lat: 13.7556, lng: 100.4768, note: '', createdBy: '', createdAt: '', ...over })
 
 const trip = (over: Partial<GpsTrip>): GpsTrip =>
   ({ tripId: 't1', plate: 'C 4ฒฆ-8053', plateNorm: '4ฒฆ-8053', vin: '', startAddress: '', endAddress: 'addr',
@@ -67,6 +70,29 @@ describe('haversineM / matchPlace', () => {
   it('ลูกค้าไม่มีพิกัด (0,0) → ข้าม · จุด 0,0 → null', () => {
     expect(matchPlace(13.75, 100.47, [cust({ gpsLat: 0, gpsLng: 0 })], null)).toBeNull()
     expect(matchPlace(0, 0, [cust({})], null)).toBeNull()
+  })
+
+  // 432.1 — จับคู่จุดที่บันทึก (ร้านอาหาร/ปั๊ม ฯลฯ)
+  it('ไม่เจอลูกค้า → match จุดที่บันทึก', () => {
+    const m = matchPlace(13.7565, 100.4768, [], null, [place({})]) // ~100ม.
+    expect(m?.type).toBe('saved')
+    expect(m?.savedPlace?.name).toBe('ร้านก๋วยเตี๋ยวไก่')
+  })
+
+  it('ลูกค้าชนะจุดที่บันทึก เสมอ (จุดส่งของจริงสำคัญกว่าจุดแวะ)', () => {
+    // ลูกค้า + จุดบันทึก พิกัดเดียวกัน → ต้องเลือกลูกค้า
+    const m = matchPlace(13.7556, 100.4768, [cust({})], null, [place({})])
+    expect(m?.type).toBe('customer')
+  })
+
+  it('จุดที่บันทึกชนะโรงงาน (ลำดับ ลูกค้า → บันทึก → โรงงาน)', () => {
+    const m = matchPlace(13.7560, 100.4768, [], { lat: 13.7560, lng: 100.4768 }, [place({})])
+    expect(m?.type).toBe('saved')
+  })
+
+  it('จุดที่บันทึกเกินรัศมี 120ม. → ไม่ match', () => {
+    // ~150ม. เหนือจุด → นอกรัศมี saved (120ม.)
+    expect(matchPlace(13.75695, 100.4768, [], null, [place({})])).toBeNull()
   })
 })
 

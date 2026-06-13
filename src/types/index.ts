@@ -836,6 +836,33 @@ export interface FuelLog {
 }
 
 // ============================================================
+// 432.1 — Saved Places (จุดที่บันทึก ที่ "ไม่ใช่ลูกค้า")
+// ============================================================
+// ร้านอาหาร/ปั๊ม/จุดพัก/ธุระส่วนตัว — จับคู่จุดจอด GPS ที่ไม่ตรงลูกค้า
+//   → อ่านพฤติกรรมคนขับง่ายขึ้น ("จากโรงแรม V → ร้านก๋วยเตี๋ยวไก่ แวะ 20 นาที")
+// detour=true (food/rest/personal) = "แวะส่วนตัว" → ไฮไลต์เตือน · fuel/other = ปกติ
+export type SavedPlaceCategory = 'food' | 'rest' | 'personal' | 'fuel' | 'other'
+
+export const SAVED_PLACE_CATEGORY_CONFIG: Record<SavedPlaceCategory, { label: string; emoji: string; detour: boolean }> = {
+  food:     { label: 'ร้านอาหาร',   emoji: '🍜', detour: true },
+  rest:     { label: 'จุดพัก/กาแฟ', emoji: '☕', detour: true },
+  personal: { label: 'ธุระส่วนตัว', emoji: '🏠', detour: true },
+  fuel:     { label: 'ปั๊มน้ำมัน',   emoji: '⛽', detour: false },
+  other:    { label: 'อื่นๆ',       emoji: '📍', detour: false },
+}
+
+export interface SavedPlace {
+  id: string
+  name: string
+  category: SavedPlaceCategory
+  lat: number
+  lng: number
+  note: string
+  createdBy: string
+  createdAt: string
+}
+
+// ============================================================
 // 423 Phase B2 — Dispatch Board (ใบงานรอบประจำวัน / Daily Trip)
 // ============================================================
 // TripStop มาจากไหน:
@@ -939,6 +966,7 @@ export type AuditEntityType =
   | 'round' | 'crew' // 423 Phase B — รอบเดินรถ + คนขับ/เด็กรถ
   | 'daily_trip' // 423 Phase B2 — ใบงานรอบประจำวัน (Dispatch)
   | 'fuel_log' // 423 — บันทึกการเติมน้ำมัน
+  | 'saved_place' // 432.1 — จุดที่บันทึก (ไม่ใช่ลูกค้า)
 
 export interface AuditLog {
   id: string
