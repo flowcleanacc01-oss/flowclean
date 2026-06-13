@@ -1,0 +1,59 @@
+// /api/line/cron — เช็คเงื่อนไข → push แจ้งเตือนเข้ากลุ่ม LINE (Phase A chunk 2)
+//   3 เช็ค: GPS ขาดสัญญาณ (433) · เอกสารรถใกล้หมด · ถึงรอบเซอร์วิส (PM) · กันเตือนซ้ำด้วย state
+//   auth: ?key=<CRON_SECRET> หรือ header Authorization: Bearer <CRON_SECRET> (Vercel Cron ส่งให้อัตโนมัติ)
+//   ตั้งเวลา: Vercel Cron (vercel.json) วันละครั้ง + external cron (cron-job.org) ทุก ~30 นาที สำหรับ GPS realtime
+import { NextRequest, NextResponse } from 'next/server'
+import { getRealtimePositions } from '@/lib/v2x-client'
+import { fetchVehicles } from '@/lib/supabase-service'
+import { buildGpsAlerts, buildDocAlerts, buildPmAlerts, pruneAlertKeys, type LineAlert } from '@/lib/line-alerts'
+import { pushLineText, getAlertedKeys, saveAlertedKeys, lineConfigured } from '@/lib/line'
+
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
+function authorized(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET
+  if (!secret) return false
+  const key = req.nextUrl.searchParams.get('key')
+  const bearer = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+  return key === secret || bearer === secret
+}
+
+export async function GET(req: NextRequest) {
+  if (!authorized(req)) {
+    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
+  }
+  if (!lineConfigured()) {
+    return NextResponse.json({ ok: false, error: 'LINE ยังไม่ตั้งค่า' }, { status: 503 })
+  }
+
+  // ดึงข้อมูล (best-effort — GPS fail ไม่ทำให้ doc/PM ล่ม)
+  const [positions, vehicles] = await Promise.all([
+    getRealtimePositions().catch(() => []),
+    fetchVehicles().catch(() => []),
+  ])
+
+  const nowMs = Date.now()
+  const todayTH = new Date(nowMs + 7 * 3600 * 1000).toISOString().slice(0, 10) // วันที่ไทย (UTC+7)
+
+  const alerts: LineAlert[] = [
+    ...buildGpsAlerts(positions, vehicles, nowMs, todayTH),
+    ...buildDocAlerts(vehicles, todayTH),
+    ...buildPmAlerts(vehicles),
+  ]
+
+  // กันเตือนซ้ำ — เตือนเฉพาะ key ที่ยังไม่เคยเตือน
+  const alerted = new Set(await getAlertedKeys())
+  const fresh = alerts.filter(a => !alerted.has(a.key))
+
+  if (fresh.length === 0) {
+    return NextResponse.json({ ok: true, checked: alerts.length, sent: 0 })
+  }
+
+  const result = await pushLineText(fresh.map(a => a.text))
+  if (result.sent) {
+    fresh.forEach(a => alerted.add(a.key))
+    await saveAlertedKeys(pruneAlertKeys([...alerted], todayTH))
+  }
+  return NextResponse.json({ ok: true, checked: alerts.length, sent: result.sent ? fresh.length : 0, reason: result.reason })
+}

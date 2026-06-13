@@ -59,13 +59,32 @@ export async function pushLineText(lines: string[]): Promise<{ sent: boolean; re
   if (!lineConfigured()) return { sent: false, reason: 'ยังไม่ตั้ง access token' }
   const target = await getLineTarget()
   if (!target) return { sent: false, reason: 'ยังไม่มี target (เพิ่ม bot เข้ากลุ่มก่อน)' }
-  const messages = lines.filter(Boolean).slice(0, 5).map(text => ({ type: 'text', text }))
-  if (messages.length === 0) return { sent: false, reason: 'ไม่มีข้อความ' }
-  await linePost(PUSH_URL, { to: target, messages })
+  const clean = lines.filter(Boolean)
+  if (clean.length === 0) return { sent: false, reason: 'ไม่มีข้อความ' }
+  for (let i = 0; i < clean.length; i += 5) { // LINE จำกัด ≤5 ก้อน/push → ส่งเป็นชุด
+    await linePost(PUSH_URL, { to: target, messages: clean.slice(i, i + 5).map(text => ({ type: 'text', text })) })
+  }
   return { sent: true }
 }
 
 /** ตอบกลับ event (ใช้ใน webhook ตอน bot ถูกเพิ่ม — ยืนยันการเชื่อมต่อ) */
 export async function replyLineText(replyToken: string, text: string): Promise<void> {
   await linePost(REPLY_URL, { replyToken, messages: [{ type: 'text', text }] })
+}
+
+// ── dedup state (กันเตือนซ้ำ) — เก็บ key ที่เคยเตือนใน app_settings.line_alert_state ──
+const ALERT_STATE_KEY = 'line_alert_state'
+
+export async function getAlertedKeys(): Promise<string[]> {
+  const { data } = await supabaseAdmin.from('app_settings').select('value').eq('key', ALERT_STATE_KEY).maybeSingle()
+  const v = data?.value as { keys?: string[] } | string[] | null
+  if (Array.isArray(v)) return v
+  return Array.isArray(v?.keys) ? v.keys! : []
+}
+
+export async function saveAlertedKeys(keys: string[]): Promise<void> {
+  await supabaseAdmin.from('app_settings').upsert(
+    { key: ALERT_STATE_KEY, value: { keys }, updated_at: new Date().toISOString(), updated_by: 'line-cron' },
+    { onConflict: 'key' },
+  )
 }
