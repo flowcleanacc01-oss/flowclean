@@ -9,6 +9,7 @@ import { highlightText } from '@/lib/highlight'
 import { matchesThaiQuery, matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { LINEN_FORM_STATUS_CONFIG, NEXT_LINEN_STATUS, PREV_LINEN_STATUS, ALL_LINEN_STATUSES, PROCESS_STATUSES, DEPARTMENT_CONFIG, type LinenFormStatus, type LinenFormRow } from '@/types'
 import LFAiInputModal from '@/components/LFAiInputModal'
+import LFTabletEntry from '@/components/LFTabletEntry'
 import LFBatchScanModal from '@/components/LFBatchScanModal'
 import BlankFormModal from '@/components/BlankFormModal'
 import PackChecklistModal from '@/components/PackChecklistModal'
@@ -83,6 +84,7 @@ export default function LinenFormsPage() {
   // 358 — LF Input by AI
   const [showAiInput, setShowAiInput] = useState(false)
   const [showAiInputDetail, setShowAiInputDetail] = useState(false)
+  const [showTablet, setShowTablet] = useState(false) // 437 — กรอกแบบแท็บเล็ต
   const [showBatch, setShowBatch] = useState(false)
   const [showBlankForm, setShowBlankForm] = useState(false)  // 366.1 — Form Generator (ฟอร์มเปล่าล้อ QT)
   const [showChecklist, setShowChecklist] = useState(false)
@@ -1058,6 +1060,26 @@ export default function LinenFormsPage() {
         items={aiItemsDetail}
         onAccept={handleAiAcceptDetail}
       />
+      {/* 437 — กรอกแบบแท็บเล็ต (detail · ปุ่ม −/+ ไม่ต่อ API) */}
+      {detailForm && detailCustomer && (
+        <LFTabletEntry
+          open={showTablet}
+          onClose={() => setShowTablet(false)}
+          customer={detailCustomer}
+          rows={detailForm.rows}
+          onChange={(rows) => updateLinenForm(detailForm.id, { rows })}
+          catalog={linenCatalog}
+          qtItems={getLinkedQT(detailCustomer.name, detailForm.customerId)?.items}
+          excludedCodes={detailForm.excludedCodes}
+          headerLabel={`ลูกค้า: ${detailCustomer.shortName || detailCustomer.name}  |  วันที่: ${formatDate(detailForm.date)}`}
+          columns={
+            detailForm.status === 'received' ? ['col2', 'col3', 'col5']
+            : detailForm.status === 'washing' ? ['col2', 'col3', 'col5', 'col6']
+            : detailForm.status === 'delivered' ? ['col4']
+            : ['col2', 'col3']
+          }
+        />
+      )}
       {/* 368 — Batch Scan Wizard */}
       <LFBatchScanModal
         open={showBatch}
@@ -1542,6 +1564,20 @@ export default function LinenFormsPage() {
                     📷 กรอกด้วย AI
                   </button>
                 )}
+                {/* 437 — กรอกแบบแท็บเล็ต (ปุ่ม −/+ ใหญ่ · ไม่ต่อ API) — เฉพาะสถานะที่กรอกจำนวนได้ + ลูกค้าไม่ใช่กลุ่มรวมไซส์ */}
+                {['draft', 'received', 'washing', 'delivered'].includes(detailForm.status) && (() => {
+                  const aggregate = (detailCustomer?.aggregateSizeGroups?.length ?? 0) > 0
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setShowTablet(true)}
+                      disabled={aggregate}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#1B3A5C]/10 text-[#1B3A5C] border border-[#1B3A5C]/30 rounded-lg hover:bg-[#1B3A5C]/15 transition-colors disabled:opacity-40"
+                      title={aggregate ? 'ลูกค้านี้มีกลุ่มรวมไซส์ — ใช้ตารางปกติ (โหมดแท็บเล็ตยังไม่รองรับกลุ่มรวมไซส์)' : 'กรอกจำนวนแบบปุ่ม −/+ ใหญ่ ไม่ต้องสแกน ไม่ต้องตรวจ'}>
+                      📱 โหมดแท็บเล็ต
+                    </button>
+                  )
+                })()}
                 {['washing', 'packed', 'delivered', 'confirmed'].includes(detailForm.status) && (
                   <button
                     type="button"
