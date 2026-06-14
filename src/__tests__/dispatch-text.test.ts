@@ -11,12 +11,15 @@ const cust = (over: Partial<Customer>): Customer =>
   ({ id: 'c1', customerCode: 'HT0001', shortName: 'Q50', name: 'Q50', roundId: 'r1', routeSequence: 1,
     isActive: true, scheduleType: 'weekly', ...over } as Customer)
 
-describe('customerMarker — มาร์กเกอร์จาก schedule', () => {
-  it('ทุกวัน → (วัน)', () => expect(customerMarker(cust({ scheduleType: 'daily' }))).toBe('(วัน)'))
+describe('customerMarker — มาร์กเกอร์จาก schedule (445 กติกา)', () => {
+  it('ทุกวัน → * (24)', () => expect(customerMarker(cust({ scheduleType: 'daily' }))).toBe('* (24)'))
   it('ทุก 2 วัน (48ชม.) → (48)', () => expect(customerMarker(cust({ scheduleType: 'every_n_days', scheduleEveryNDays: 2 }))).toBe('(48)'))
   it('ทุก 3 วัน → (72)', () => expect(customerMarker(cust({ scheduleType: 'every_n_days', scheduleEveryNDays: 3 }))).toBe('(72)'))
-  it('weekly/อื่นๆ → * (24)', () => {
-    expect(customerMarker(cust({ scheduleType: 'weekly' }))).toBe('* (24)')
+  it('รายสัปดาห์/2สัปดาห์ → * (วัน)', () => {
+    expect(customerMarker(cust({ scheduleType: 'weekly' }))).toBe('* (วัน)')
+    expect(customerMarker(cust({ scheduleType: 'biweekly' }))).toBe('* (วัน)')
+  })
+  it('ไม่ตั้งคิว/อื่นๆ → * (24)', () => {
     expect(customerMarker(cust({ scheduleType: 'none' }))).toBe('* (24)')
     expect(customerMarker(cust({ scheduleType: undefined }))).toBe('* (24)')
   })
@@ -63,9 +66,9 @@ describe('buildDispatchText', () => {
 
   it('สมาชิกเรียงตามลำดับวิ่ง + มาร์กเกอร์ + ตัด inactive', () => {
     const akaraBlock = txt.slice(txt.indexOf('รอบ AKARA'), txt.indexOf('รอบ NIGHT'))
-    expect(akaraBlock.indexOf('- Q50 * (24)')).toBeLessThan(akaraBlock.indexOf('- TP * (24)')) // seq 1 ก่อน 2
+    expect(akaraBlock.indexOf('- Q50 * (วัน)')).toBeLessThan(akaraBlock.indexOf('- TP * (วัน)')) // weekly · seq 1 ก่อน 2
     expect(akaraBlock).not.toContain('OFF') // inactive ถูกตัด
-    expect(txt).toContain('- SU (วัน)') // daily
+    expect(txt).toContain('- SU * (24)') // daily
   })
 
   it('รอบที่ไม่มีลูกค้า (EMPTY) → ไม่แสดง', () => {

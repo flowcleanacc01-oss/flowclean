@@ -1,6 +1,6 @@
 // 445 — สร้างข้อความแผนคิวรับ-ส่ง (work-night) สำหรับ copy ส่งไลน์ให้ทีม
 //   pure (เทสได้) · จัดกลุ่มตามรอบ เรียงตาม "นาฬิกาคืนงาน" (รอบเช้ามืด/เช้า = วันถัดไป) · สมาชิกทุกคนในรอบ
-//   มาร์กเกอร์ดึงจาก schedule: ทุกวัน→(วัน) · ทุก N วัน→(N×24) · อื่นๆ→* (24)
+//   มาร์กเกอร์ดึงจาก schedule (445 กติกา): ทุกวัน→* (24) · ทุก N วัน→(N×24) · รายสัปดาห์/2สัปดาห์→* (วัน) · อื่นๆ→* (24)
 import type { Round, Customer } from '@/types'
 
 const THAI_DAY = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์']
@@ -15,13 +15,14 @@ function shortBE(year: number): string {
   return String((year + 543) % 100).padStart(2, '0')
 }
 
-/** มาร์กเกอร์ท้ายชื่อจาก schedule ของลูกค้า */
+/** มาร์กเกอร์ท้ายชื่อจาก schedule ของลูกค้า (445 กติกา)
+ *  ทุก N วัน→(N×24) เช่น ทุก 2 วัน→(48) · รายสัปดาห์/2สัปดาห์→* (วัน) · ทุกวัน+อื่นๆ→* (24) */
 export function customerMarker(c: Customer): string {
-  if (c.scheduleType === 'daily') return '(วัน)'
   if (c.scheduleType === 'every_n_days' && c.scheduleEveryNDays && c.scheduleEveryNDays > 0) {
     return `(${c.scheduleEveryNDays * 24})`
   }
-  return '* (24)'
+  if (c.scheduleType === 'weekly' || c.scheduleType === 'biweekly') return '* (วัน)'
+  return '* (24)' // daily + none + undefined (ค่าเริ่มต้น)
 }
 
 /** hue 0–360 จาก hex (#rrggbb) · null ถ้า parse ไม่ได้ */
@@ -77,7 +78,7 @@ function timeDisp(startTime: string): string {
 }
 
 export interface DispatchTextOptions {
-  /** true = ใส่มาร์กเกอร์ * (24)/(วัน)/(48) จาก schedule · false = โค้ดลูกค้าล้วน */
+  /** true = ใส่มาร์กเกอร์ * (24)/(48)/* (วัน) จาก schedule · false = โค้ดลูกค้าล้วน */
   withMarkers?: boolean
 }
 
