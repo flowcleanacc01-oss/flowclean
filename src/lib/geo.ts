@@ -103,6 +103,7 @@ export interface PassedPlace {
   type: 'customer' | 'factory' | 'saved'
   name: string
   key: string
+  customerId?: string // 447 — ลูกค้าที่ผ่าน → เช็คว่าเป็นคิวงานในรอบ/วันนั้นไหม (ไฮไลต์แดง)
 }
 
 export function passedPlaces(
@@ -121,7 +122,7 @@ export function passedPlaces(
     if (key === lastKey) continue // ยังอยู่จุดเดิม → ไม่ซ้ำ
     const name = m.type === 'customer' ? (m.customer!.shortName || m.customer!.name)
       : m.type === 'saved' ? m.savedPlace!.name : 'โรงงาน'
-    seq.push({ type: m.type, name, key })
+    seq.push({ type: m.type, name, key, customerId: m.type === 'customer' ? m.customer!.id : undefined })
     lastKey = key
   }
   return seq

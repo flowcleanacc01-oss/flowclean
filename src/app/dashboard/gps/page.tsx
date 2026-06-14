@@ -19,7 +19,7 @@ import {
   ResponsiveContainer, ComposedChart, Bar, Line, BarChart, XAxis, YAxis,
   Tooltip, CartesianGrid, Cell,
 } from 'recharts'
-import { buildTripStops } from '@/lib/dispatch'
+import { buildTripStops, effectiveRoundId } from '@/lib/dispatch'
 import { matchPlace, engineOffGaps, isShuffleTrip, passedPlaces, type LatLng, type PlaceMatch } from '@/lib/geo'
 import { buildDashboardStats, type DashboardStats, type VehicleTrips } from '@/lib/gps-dashboard'
 import { connStatus, CONN_LEVEL_ORDER, type ConnLevel } from '@/lib/gps-connection'
@@ -592,7 +592,7 @@ function TripsTab({ vehicleByPlate, init }: { vehicleByPlate: Map<string, Vehicl
       )}
 
       {showMap && (
-        <RouteMapModal trips={sorted} placeOf={placeOf}
+        <RouteMapModal trips={sorted} placeOf={placeOf} date={date} vehicle={selectedVehicle}
           title={`เส้นทาง ${selectedVehicle ? `คัน ${selectedVehicle.code} · ` : ''}${date}`}
           onClose={() => setShowMap(false)} />
       )}
@@ -603,14 +603,35 @@ function TripsTab({ vehicleByPlate, init }: { vehicleByPlate: Map<string, Vehicl
 // 432.2.1 — แผนที่เส้นทางทั้งวัน: ดึง track ต่อเที่ยว (best-effort) → วาดทุกเที่ยวซ้อนกัน
 //   เห็นภาพว่าคนขับออกนอกเส้นทาง / วนซ้ำ / แวะนอกแผน ไหม
 function RouteMapModal({
-  trips, placeOf, title, onClose,
+  trips, placeOf, date, vehicle, title, onClose,
 }: {
   trips: GpsTrip[]
   placeOf: (lat: number, lng: number) => PlaceMatch | null
+  date: string
+  vehicle?: Vehicle
   title: string
   onClose: () => void
 }) {
-  const { customers, companyInfo, savedPlaces } = useStore()
+  const { customers, companyInfo, savedPlaces, dailyTrips, rounds } = useStore()
+
+  // 447 — คิวงานของรถคันนี้ในวัน+รอบนั้น (ไฮไลต์จุดที่ผ่านเป็นชื่อย่อสีแดง)
+  //   1) กระดานจ่ายงานจริง (daily_trips) ของรถวันนั้น → stops = คิวจริง (รอบที่รถวิ่ง)
+  //   2) fallback: รอบ default ของรถ + ลูกค้าที่ถึงคิววันนั้น · ไม่รู้รอบ → ทุกลูกค้าถึงคิววันนั้น (day-level)
+  const queueCustomerIds = useMemo(() => {
+    const ids = new Set<string>()
+    if (!vehicle) return ids
+    const vTrips = dailyTrips.filter(t => t.date === date && t.vehicleId === vehicle.id)
+    if (vTrips.length > 0) {
+      for (const t of vTrips) for (const s of t.stops) ids.add(s.customerId)
+      return ids
+    }
+    const vRoundIds = new Set(rounds.filter(r => r.defaultVehicleId === vehicle.id).map(r => r.id))
+    for (const c of customers) {
+      if (!isScheduledDay(date, c)) continue
+      if (vRoundIds.size === 0 || vRoundIds.has(effectiveRoundId(c, date))) ids.add(c.id)
+    }
+    return ids
+  }, [dailyTrips, rounds, customers, date, vehicle])
   const [tracks, setTracks] = useState<RouteTrack[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -633,8 +654,12 @@ function RouteMapModal({
         results.forEach((r, i) => {
           if (r.status !== 'fulfilled' || r.value.points.length === 0) return
           const t = realTrips[i]
+          // 447 — ใส่ระยะทาง + ระยะเวลาในป้ายเที่ยว (อ่านง่าย วิเคราะห์ต่อได้)
+          const durMin = tripDurationMin(t.startTime, t.endTime)
+          const kmTxt = t.distanceKm > 0 ? `(${t.distanceKm.toFixed(2)} กม.) ` : ''
+          const durTxt = durMin > 0 ? ` (${fmtMin(durMin)})` : ''
           out.push({
-            label: `เที่ยว ${i + 1} · ${hhmm(t.startTime)}→${hhmm(t.endTime)}`,
+            label: `เที่ยว ${i + 1} · ${kmTxt}${hhmm(t.startTime)}→${hhmm(t.endTime)}${durTxt}`,
             color: ROUTE_COLORS[i % ROUTE_COLORS.length],
             points: r.value.points,
             dangers: r.value.dangers,
@@ -706,15 +731,25 @@ function RouteMapModal({
                 <div className="min-w-0">
                   <span className={cn('font-medium', selectedTrip === i ? 'text-[#1B3A5C]' : 'text-slate-600')}>{t.label}</span>
                   {t.passed && t.passed.length > 1 ? (
-                    <span className="text-slate-500"> · ผ่าน {t.passed.length} จุด: {t.passed.map(p => p.name).join(' → ')}</span>
+                    <span className="text-slate-500"> · ผ่าน {t.passed.length} จุด: {t.passed.map((p, j) => {
+                      const isQueue = !!p.customerId && queueCustomerIds.has(p.customerId)
+                      return (
+                        <Fragment key={j}>
+                          {j > 0 && ' → '}
+                          <span className={cn(isQueue && 'text-red-600 font-semibold')}
+                            title={isQueue ? 'ลูกค้าคิวงานในรอบนี้' : undefined}>{p.name}</span>
+                        </Fragment>
+                      )
+                    })}</span>
                   ) : (
                     <span className="text-slate-400"> → จบ: {t.endName}</span>
                   )}
                 </div>
               </button>
             ))}
-            <div className="flex items-center gap-3 pt-1 text-slate-400">
+            <div className="flex items-center gap-x-3 gap-y-1 pt-1 text-slate-400 flex-wrap">
               <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#dc2626]" /> จุดขับขี่เสี่ยง</span>
+              <span className="inline-flex items-center gap-1"><span className="font-semibold text-red-600">ชื่อแดง</span> = ลูกค้าคิวงานในรอบนี้</span>
               <span>· “ผ่าน” = เส้นทางเข้าใกล้จุดที่บันทึกพิกัดไว้ (บอกลำดับ ไม่บอกเวลาจอด)</span>
             </div>
           </div>

@@ -21,7 +21,7 @@ export interface RouteTrack {
   dangers: GpsDangerPoint[]
   startName?: string
   endName?: string
-  passed?: { type: string; name: string }[] // 435 — จุดที่รู้จักที่เส้นทางผ่าน (legend ใช้ · map ไม่ใช้)
+  passed?: { type: string; name: string; customerId?: string }[] // 435/447 — จุดที่ผ่าน (+ customerId เช็คคิวงาน) · legend ใช้ · map ไม่ใช้
   startMs?: number    // 443.1 — เวลาเริ่มเที่ยว (epoch ms) สำหรับนาฬิกา playback
   endMs?: number      // 443.1 — เวลาจบเที่ยว
 }
