@@ -8,7 +8,7 @@ import type {
   V2xEnvelope, V2xCar, V2xPosition, V2xTravelTrip, V2xTripStat, V2xTrackResponse,
   GpsCar, GpsPosition, GpsTrip, GpsDailyKm, GpsTrack, GpsTrackPoint, GpsDangerPoint,
 } from './v2x-types'
-import { normalizePlate } from './v2x-types'
+import { normalizePlate, parseV2xTimeMs } from './v2x-types'
 
 /** ยังไม่ได้ตั้ง env (→ 503) */
 export class V2xConfigError extends Error {
@@ -147,7 +147,8 @@ function toGpsTrip(t: V2xTravelTrip): GpsTrip {
   const distanceKm = num(t.mileage)
   const drivingMin = num(t.drivingtime)
   // ติดเครื่องนิ่ง = เวลาเที่ยวทั้งหมด - เวลาล้อหมุนจริง (จับ "จอดไม่ดับเครื่อง" — เคสติ๊ด)
-  const durMs = new Date(endTime.replace(' ', 'T')).getTime() - new Date(startTime.replace(' ', 'T')).getTime()
+  // 446 — server (Vercel UTC) ต้อง parse แบบ +07:00 ให้สม่ำเสมอ (ผลต่างไม่เพี้ยนอยู่แล้ว แต่กันเผลอ copy pattern ผิดที่)
+  const durMs = parseV2xTimeMs(endTime) - parseV2xTimeMs(startTime)
   const idleMin = Number.isFinite(durMs) && durMs > 0 ? Math.max(0, Math.round(durMs / 60000 - drivingMin)) : 0
   const fuelLiters = num(t.fuelConsumption)
   return {

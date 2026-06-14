@@ -705,6 +705,7 @@ export interface Vehicle {
   // PM (บำรุงเชิงป้องกัน ตามระยะไมล์)
   currentOdometer: number
   odometerAnchorDate: string    // 428 — วันที่ของ currentOdometer (yyyy-mm-dd · '' = ไม่รู้) → ฐานคำนวณไมล์จาก GPS
+  odometerAnchorTime: string    // 446 — เวลาที่อ่าน currentOdometer (HH:MM · '' = ไม่รู้) → วัน anchor นับเฉพาะระยะหลังเวลานี้
   serviceIntervalKm: number     // ระยะเช็ค (default 8000)
   nextServiceOdometer: number   // 0 = ยังไม่ตั้ง
   isActive: boolean
@@ -717,6 +718,7 @@ export interface OdometerLog {
   id: string
   vehicleId: string
   date: string
+  recordedTime: string          // 446 — เวลาที่ถ่าย/อ่านไมล์ (HH:MM · '' = ไม่ระบุ) → ใช้ตั้ง anchor เวลาให้รถ
   odometer: number
   fuelLevel: string             // หมายเหตุน้ำมัน (จากหน้าปัด)
   photoPath: string             // path ใน Supabase Storage ('' = ไม่มีรูป)

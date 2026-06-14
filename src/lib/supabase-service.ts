@@ -185,6 +185,8 @@ const FIELD_MAP: Record<string, string> = {
   inspectionExpiry: 'inspection_expiry',
   currentOdometer: 'current_odometer',
   odometerAnchorDate: 'odometer_anchor_date',
+  odometerAnchorTime: 'odometer_anchor_time', // 446 — เวลาของ anchor (vehicles)
+  recordedTime: 'recorded_time',              // 446 — เวลาที่อ่านไมล์ (odometer_logs)
   serviceIntervalKm: 'service_interval_km',
   nextServiceOdometer: 'next_service_odometer',
   vehicleId: 'vehicle_id',

@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { subDays, parseISO, format } from 'date-fns'
 import { useStore } from '@/lib/store'
 import { fetchGpsCars, fetchGpsRealtime, fetchGpsTrips, fetchGpsTrack } from '@/lib/gps-service'
-import { normalizePlate, type GpsCar, type GpsPosition, type GpsTrip } from '@/lib/v2x-types'
+import { normalizePlate, parseV2xTimeMs, type GpsCar, type GpsPosition, type GpsTrip } from '@/lib/v2x-types'
 import {
   buildRoundAudit, buildVehicleAudit, guessVehiclesForRound, medianDailyKm, hhmmOf,
   type RoundAudit, type VehicleAudit, type AuditFlag,
@@ -73,18 +73,19 @@ function hhmm(s: string): string {
   return m ? `${m[1]}:${m[2]}` : '—'
 }
 
-// 443.1 — "yyyy-mm-dd HH:MM:SS.x" → epoch ms (local) สำหรับนาฬิกา playback · NaN→undefined
+// 443.1 — "yyyy-mm-dd HH:MM:SS.x" → epoch ms สำหรับนาฬิกา playback · NaN→undefined
+// 446 — V2X = เวลาไทย → parseV2xTimeMs ผูก +07:00 (ไม่พึ่ง TZ ของ runtime · ตรงกับ fix 444)
 function tripMs(s: string): number | undefined {
   if (!s) return undefined
-  const t = new Date(s.replace(' ', 'T').replace(/\.\d+$/, '')).getTime()
-  return Number.isFinite(t) ? t : undefined
+  const t = parseV2xTimeMs(s)
+  return Number.isNaN(t) ? undefined : t
 }
 
-// relative ago จาก "yyyy-mm-dd HH:MM:SS" (local)
+// relative ago จาก "yyyy-mm-dd HH:MM:SS" (446 — เทียบ Date.now() ต้อง parse แบบ TZ-explicit ไม่งั้นเพี้ยน 7 ชม.)
 function ago(s: string): string {
   if (!s) return ''
-  const t = new Date(s.replace(' ', 'T')).getTime()
-  if (!Number.isFinite(t)) return ''
+  const t = parseV2xTimeMs(s)
+  if (Number.isNaN(t)) return ''
   const min = Math.floor((Date.now() - t) / 60000)
   if (min < 1) return 'เมื่อสักครู่'
   if (min < 60) return `${min} นาทีที่แล้ว`
@@ -100,9 +101,9 @@ function fmtMin(min: number): string {
   return h > 0 ? `${h} ชม. ${m} นาที` : `${m} นาที`
 }
 
-// 432 — ระยะเวลาเที่ยว (เริ่ม→จบ) เป็นนาที · 0 = คำนวณไม่ได้
+// 432 — ระยะเวลาเที่ยว (เริ่ม→จบ) เป็นนาที · 0 = คำนวณไม่ได้ (446 — parse TZ-explicit ให้สม่ำเสมอทั้งไฟล์)
 function tripDurationMin(startTime: string, endTime: string): number {
-  const ms = new Date(endTime.replace(' ', 'T')).getTime() - new Date(startTime.replace(' ', 'T')).getTime()
+  const ms = parseV2xTimeMs(endTime) - parseV2xTimeMs(startTime)
   return Number.isFinite(ms) && ms > 0 ? Math.round(ms / 60000) : 0
 }
 

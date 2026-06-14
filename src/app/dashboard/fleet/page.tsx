@@ -5,14 +5,14 @@
 //   + บันทึกเลขไมล์ (อัปโหลดรูปหน้าปัด) + ประวัติงานซ่อม (ผูก Expense)
 
 import { useState, useEffect, useMemo } from 'react'
-import { differenceInDays, parseISO } from 'date-fns'
+import { differenceInDays, parseISO, format } from 'date-fns'
 import { useStore } from '@/lib/store'
 import { canViewFleet } from '@/lib/permissions'
 import { cn, formatDate, formatNumber, sanitizeNumber, todayISO } from '@/lib/utils'
 import { blockNumberArrowKeys } from '@/lib/modal-nav'
 import { fuelEfficiencyMap, isEfficiencyAbnormal, pendingReimbursements } from '@/lib/fuel'
-import { deriveAnchorDate, estimateOdometer, anchorAgeDays, ANCHOR_MAX_AGE_DAYS, type OdometerEstimate } from '@/lib/odometer'
-import { fetchGpsDailyMileage } from '@/lib/gps-service'
+import { deriveAnchor, estimateOdometer, anchorDayKmAfter, anchorAgeDays, ANCHOR_MAX_AGE_DAYS, type OdometerEstimate } from '@/lib/odometer'
+import { fetchGpsDailyMileage, fetchGpsCars, fetchGpsTrips } from '@/lib/gps-service'
 import { normalizePlate } from '@/lib/v2x-types'
 import { COMPLIANCE_STATUS_CONFIG, MAINTENANCE_TYPES, FUEL_TYPES, FUEL_PAID_BY_CONFIG } from '@/types'
 import type { Vehicle, ComplianceStatus, FuelPaidBy } from '@/types'
@@ -55,7 +55,7 @@ const BLANK_VEHICLE: Omit<Vehicle, 'id' | 'createdAt'> = {
   code: '', licensePlate: '', brand: 'Toyota Hilux Revo Standard Cab + ตู้ทึบ', usageType: 'พาณิชย์',
   registeredDate: '', insuranceCompany: '', insuranceClass: 'ชั้น 1', insuranceExpiry: '',
   actExpiry: '', taxExpiry: '', inspectionExpiry: '',
-  currentOdometer: 0, odometerAnchorDate: '', serviceIntervalKm: 8000, nextServiceOdometer: 0, isActive: true, note: '',
+  currentOdometer: 0, odometerAnchorDate: '', odometerAnchorTime: '', serviceIntervalKm: 8000, nextServiceOdometer: 0, isActive: true, note: '',
 }
 
 export default function FleetPage() {
@@ -207,7 +207,11 @@ export default function FleetPage() {
           onClose={() => setShowForm(false)}
           onSubmit={(data) => {
             // 428 — กรอกไมล์ใหม่ในฟอร์ม = ตั้งฐานวันคำนวณ GPS ใหม่ (anchor = วันนี้)
-            if (data.currentOdometer !== (editingVehicle?.currentOdometer ?? 0)) data.odometerAnchorDate = todayISO()
+            // 446 — ตั้งเวลา anchor = ตอนนี้ (กรอกเดี๋ยวนี้ → วันนี้นับเฉพาะระยะหลังจากนี้)
+            if (data.currentOdometer !== (editingVehicle?.currentOdometer ?? 0)) {
+              data.odometerAnchorDate = todayISO()
+              data.odometerAnchorTime = format(new Date(), 'HH:mm')
+            }
             if (editingVehicle) updateVehicle(editingVehicle.id, data)
             else addVehicle(data)
             setShowForm(false)
@@ -235,6 +239,7 @@ export default function FleetPage() {
 interface GpsOdoRow {
   v: Vehicle
   anchorDate: string // '' = ไม่รู้วันฐาน
+  anchorTime: string // 446 — เวลาที่กรอกไมล์ ('' = ไม่รู้ → ข้ามวัน anchor ทั้งวัน)
   age: number // วันตั้งแต่ anchor (Infinity ถ้าไม่รู้)
   matched: boolean // ทะเบียนเจอใน GPS ไหม
   est: OdometerEstimate
@@ -254,19 +259,36 @@ function GpsOdometerModal({ onClose }: { onClose: () => void }) {
         const prep = [...vehicles].filter(v => v.isActive)
           .sort((a, b) => a.code.localeCompare(b.code, 'th'))
           .map(v => {
-            const anchorDate = deriveAnchorDate(v, odometerLogs, fuelLogs, maintenanceRecords)
-            return { v, anchorDate, age: anchorAgeDays(anchorDate, today) }
+            const anchor = deriveAnchor(v, odometerLogs, fuelLogs, maintenanceRecords)
+            return { v, anchorDate: anchor.date, anchorTime: anchor.time, age: anchorAgeDays(anchor.date, today) }
           })
         const eligible = prep.filter(p => p.anchorDate && p.age >= 0 && p.age <= ANCHOR_MAX_AGE_DAYS)
         // ดึงรอบเดียวครอบทุกคัน: from = anchor เก่าสุดในกลุ่มที่คำนวณได้ (ไม่มีใครคำนวณได้ → ไม่ต้องยิง)
         const from = eligible.map(p => p.anchorDate).sort()[0]
         const daily = from ? await fetchGpsDailyMileage(from, today) : []
         if (cancelled) return
+        // 446 — วัน anchor ที่ "รู้เวลา": ดึงเที่ยวของวันนั้นมาบวกระยะ "หลังเวลาที่กรอกไมล์" (ไม่ข้ามข้อมูลวันเดียวกัน)
+        const anchorDayKm = new Map<string, number>() // vehicleId → กม. วัน anchor หลังเวลา
+        const timed = eligible.filter(p => p.anchorTime)
+        if (timed.length > 0) {
+          const cars = await fetchGpsCars().catch(() => [])
+          if (cancelled) return
+          const plateToV2x = new Map(cars.map(c => [c.plateNorm, c.plate]))
+          await Promise.all(timed.map(async p => {
+            const v2xPlate = plateToV2x.get(normalizePlate(p.v.licensePlate))
+            if (!v2xPlate) return
+            try {
+              const trips = await fetchGpsTrips(v2xPlate, p.anchorDate)
+              anchorDayKm.set(p.v.id, anchorDayKmAfter(trips, p.anchorDate, p.anchorTime))
+            } catch { /* ดึงเที่ยววัน anchor ไม่ได้ → ข้ามวัน anchor แบบเดิม (ไม่ล้มทั้งก้อน) */ }
+          }))
+          if (cancelled) return
+        }
         const gpsPlates = new Set(daily.map(d => d.plateNorm))
         const result: GpsOdoRow[] = prep.map(p => ({
           ...p,
-          matched: gpsPlates.has(normalizePlate(p.v.licensePlate)),
-          est: estimateOdometer(p.v, p.anchorDate, daily, today),
+          matched: gpsPlates.has(normalizePlate(p.v.licensePlate)) || (anchorDayKm.get(p.v.id) || 0) > 0,
+          est: estimateOdometer(p.v, p.anchorDate, daily, today, anchorDayKm.get(p.v.id) || 0),
         }))
         setRows(result)
         // default ติ๊กเฉพาะคันที่คำนวณได้ + GPS มีระยะวิ่งจริง
@@ -292,9 +314,11 @@ function GpsOdometerModal({ onClose }: { onClose: () => void }) {
 
   const save = () => {
     if (!rows) return
+    // 446 — ค่าประมาณคิดถึง "ตอนนี้" แล้ว → ตั้ง anchor = วันนี้ เวลาตอนนี้ (กันนับระยะวันนี้ซ้ำรอบถัดไป)
+    const now = format(new Date(), 'HH:mm')
     for (const r of rows) {
       if (!checked.has(r.v.id)) continue
-      updateVehicle(r.v.id, { currentOdometer: r.est.estimate, odometerAnchorDate: today })
+      updateVehicle(r.v.id, { currentOdometer: r.est.estimate, odometerAnchorDate: today, odometerAnchorTime: now })
     }
     onClose()
   }
@@ -310,8 +334,12 @@ function GpsOdometerModal({ onClose }: { onClose: () => void }) {
   /** คำนวณได้แต่ระยะ = 0 → อธิบายว่าทำไม (กันเข้าใจผิดว่าระบบพัง) · null = มีระยะแล้ว */
   const zeroHint = (r: GpsOdoRow): string | null => {
     if (blockReason(r) || r.est.gpsKm > 0) return null
-    if (r.anchorDate === today) return 'กรอกไมล์วันนี้ — ระบบนับเฉพาะระยะ "หลังวันที่กรอก" จะเริ่มเห็นพรุ่งนี้'
-    return `ยังไม่มีระยะวิ่งใหม่จาก GPS หลังวันที่กรอก (${formatDate(r.anchorDate)})`
+    if (r.anchorDate === today) {
+      return r.anchorTime
+        ? `กรอกไมล์วันนี้ ${r.anchorTime} น. — ยังไม่มีระยะวิ่งใหม่หลังเวลานี้`
+        : 'กรอกไมล์วันนี้ — ระบบนับเฉพาะระยะ "หลังวันที่กรอก" จะเริ่มเห็นพรุ่งนี้'
+    }
+    return `ยังไม่มีระยะวิ่งใหม่จาก GPS หลังที่กรอก (${formatDate(r.anchorDate)}${r.anchorTime ? ` ${r.anchorTime} น.` : ''})`
   }
 
   return (
@@ -364,7 +392,7 @@ function GpsOdometerModal({ onClose }: { onClose: () => void }) {
                       </td>
                       <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-600">
                         {formatNumber(r.v.currentOdometer)}
-                        {r.anchorDate && <span className="block text-[10px] text-slate-400">ณ {formatDate(r.anchorDate)}</span>}
+                        {r.anchorDate && <span className="block text-[10px] text-slate-400">ณ {formatDate(r.anchorDate)}{r.anchorTime ? ` ${r.anchorTime} น.` : ''}</span>}
                       </td>
                       <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-600">
                         {blocked ? '—' : <>
@@ -623,6 +651,7 @@ function VehicleFormModal({ vehicle, onClose, onSubmit }: {
 function OdometerModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () => void }) {
   const { odometerLogs, addOdometerLog, deleteOdometerLog } = useStore()
   const [date, setDate] = useState(todayISO())
+  const [recordedTime, setRecordedTime] = useState(() => format(new Date(), 'HH:mm')) // 446 — เวลาที่ถ่าย/อ่านไมล์
   const [odometer, setOdometer] = useState(0)
   const [fuelLevel, setFuelLevel] = useState('')
   const [note, setNote] = useState('')
@@ -642,7 +671,7 @@ function OdometerModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () => 
       try { photoPath = await uploadFleetPhoto(file, vehicle.id) }
       catch { alert('อัปโหลดรูปไม่สำเร็จ — บันทึกข้อมูลไมล์ต่อไป (ไม่มีรูป)') }
     }
-    addOdometerLog({ vehicleId: vehicle.id, date, odometer, fuelLevel, photoPath, note })
+    addOdometerLog({ vehicleId: vehicle.id, date, recordedTime, odometer, fuelLevel, photoPath, note })
     setSaving(false)
     onClose()
   }
@@ -650,16 +679,23 @@ function OdometerModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () => 
   return (
     <Modal open onClose={onClose} title={`บันทึกเลขไมล์ — คัน ${vehicle.code}`} size="md" closeLabel="cancel">
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div>
             <label className={labelCls}>วันที่</label>
             <input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>เวลาที่อ่าน</label>
+            <input type="time" className={inputCls} value={recordedTime} onChange={e => setRecordedTime(e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>เลขไมล์ (กม.) *</label>
             <input type="number" className={inputCls} value={odometer || ''} onChange={e => setOdometer(sanitizeNumber(e.target.value))} onKeyDown={blockNumberArrowKeys} onFocus={e => e.currentTarget.select()} placeholder={formatNumber(vehicle.currentOdometer)} />
           </div>
         </div>
+        <p className="text-[11px] text-slate-400 -mt-2">
+          ⏱️ เวลาที่อ่านไมล์สำคัญ — ถ้าถ่ายตอนเช้าก่อนออกรถ ระบบจะนับระยะที่วิ่ง “หลังเวลานี้” ของวันเดียวกันให้ครบ ไม่ข้ามทั้งวัน
+        </p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>น้ำมัน (จากหน้าปัด)</label>
@@ -693,7 +729,7 @@ function OdometerModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () => 
             <ul className="divide-y divide-slate-100 max-h-52 overflow-auto">
               {logs.map(o => (
                 <li key={o.id} className="py-2 flex items-center gap-2 text-sm">
-                  <span className="text-slate-400 w-20 shrink-0">{formatDate(o.date)}</span>
+                  <span className="text-slate-400 w-24 shrink-0">{formatDate(o.date)}{o.recordedTime ? ` ${o.recordedTime}` : ''}</span>
                   <span className="font-semibold text-slate-700">{formatNumber(o.odometer)} กม.</span>
                   {o.fuelLevel && <span className="text-xs text-slate-400">· {o.fuelLevel}</span>}
                   <span className="flex-1" />
@@ -747,7 +783,8 @@ function MaintenanceModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () 
     addMaintenanceRecord({ vehicleId: vehicle.id, date, odometer, type, description, cost, expenseId, nextDueOdometer: nextDue })
     // sync เข้า vehicle: ไมล์ที่ทำ (ถ้า > ปัจจุบัน) + ระยะเช็คถัดไป (ถ้ากรอก)
     const patch: Partial<Vehicle> = {}
-    if (odometer > vehicle.currentOdometer) { patch.currentOdometer = odometer; patch.odometerAnchorDate = date }
+    // 446 — งานซ่อมไม่ระบุเวลาอ่านไมล์ → anchorTime='' (ข้ามวันที่ทำแบบ conservative · ไม่ทิ้งเวลาเก่าที่ผิด)
+    if (odometer > vehicle.currentOdometer) { patch.currentOdometer = odometer; patch.odometerAnchorDate = date; patch.odometerAnchorTime = '' }
     if (nextDue > 0) patch.nextServiceOdometer = nextDue
     if (Object.keys(patch).length > 0) updateVehicle(vehicle.id, patch)
     // reset form

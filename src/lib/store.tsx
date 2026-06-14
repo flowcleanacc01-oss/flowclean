@@ -1384,10 +1384,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setOdometerLogs(prev => prev.filter(x => x.id !== newO.id))
     })
     // sync เลขไมล์ปัจจุบันเข้า vehicle ถ้าไมล์ใหม่ > เดิม (อ่านจาก ref กัน closure-stale) — เงียบ ไม่ log ซ้ำ
+    // 446 — ตั้งเวลา anchor จากเวลาที่ถ่ายไมล์ด้วย (วัน anchor จะนับเฉพาะระยะหลังเวลานี้)
     const veh = vehiclesRef.current.find(x => x.id === o.vehicleId)
     if (veh && o.odometer > veh.currentOdometer) {
-      setVehicles(prev => prev.map(x => x.id === o.vehicleId ? { ...x, currentOdometer: o.odometer, odometerAnchorDate: o.date } : x))
-      dbSave(db.updateVehicleDB(o.vehicleId, { currentOdometer: o.odometer, odometerAnchorDate: o.date }))
+      const patch = { currentOdometer: o.odometer, odometerAnchorDate: o.date, odometerAnchorTime: o.recordedTime || '' }
+      setVehicles(prev => prev.map(x => x.id === o.vehicleId ? { ...x, ...patch } : x))
+      dbSave(db.updateVehicleDB(o.vehicleId, patch))
     }
     logAudit('update', 'vehicle', o.vehicleId, `บันทึกไมล์ ${o.odometer.toLocaleString()} km`)
     return newO
@@ -1516,10 +1518,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setFuelLogs(prev => prev.filter(x => x.id !== newF.id))
     })
     // sync เลขไมล์เข้า vehicle ถ้าไมล์ตอนเติม > เดิม (อ่าน ref กัน closure-stale) — เงียบ ไม่ log ซ้ำ
+    // 446 — เติมน้ำมันไม่รู้เวลาแน่ชัด → anchorTime='' (ข้ามวันที่เติมแบบ conservative · ไม่ทิ้งเวลาเก่าที่ผิด)
     const veh = vehiclesRef.current.find(x => x.id === f.vehicleId)
     if (veh && f.odometer > veh.currentOdometer) {
-      setVehicles(prev => prev.map(x => x.id === f.vehicleId ? { ...x, currentOdometer: f.odometer, odometerAnchorDate: f.date } : x))
-      dbSave(db.updateVehicleDB(f.vehicleId, { currentOdometer: f.odometer, odometerAnchorDate: f.date }))
+      const patch = { currentOdometer: f.odometer, odometerAnchorDate: f.date, odometerAnchorTime: '' }
+      setVehicles(prev => prev.map(x => x.id === f.vehicleId ? { ...x, ...patch } : x))
+      dbSave(db.updateVehicleDB(f.vehicleId, patch))
     }
     logAudit('create', 'fuel_log', newF.id, `เติมน้ำมัน ${f.liters} ลิตร ${f.amount.toLocaleString()} บาท`)
     return newF
