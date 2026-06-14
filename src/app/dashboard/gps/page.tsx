@@ -447,18 +447,18 @@ function TripsTab({ vehicleByPlate, init }: { vehicleByPlate: Map<string, Vehicl
                 {/* 438 — table-fixed + colgroup: คอลัมน์ถือความกว้างคงที่ · ปลายทางยาว truncate (เลิกล้นทับระยะทาง) */}
                 <table className="w-full text-sm table-fixed min-w-[720px]">
                   <colgroup>
+                    <col className="w-[92px]" />{/* 448 — ระยะทาง (ย้ายมาซ้ายสุด) */}
                     <col className="w-[176px]" />{/* เวลา */}
                     <col />{/* ปลายทาง — ที่เหลือ */}
-                    <col className="w-[92px]" />{/* ระยะทาง */}
                     <col className="w-[80px]" />{/* น้ำมัน */}
                     <col className="w-[124px]" />{/* นิ่ง */}
                     <col className="w-[120px]" />{/* พฤติกรรม */}
                   </colgroup>
                   <thead>
                     <tr className="bg-slate-50 text-slate-500 text-xs">
+                      <th className="px-3 py-2.5 text-right font-medium">ระยะทาง</th>
                       <th className="px-3 py-2.5 text-left font-medium">เวลา</th>
                       <th className="px-3 py-2.5 text-left font-medium">ปลายทาง</th>
-                      <th className="px-3 py-2.5 text-right font-medium">ระยะทาง</th>
                       <th className="px-3 py-2.5 text-right font-medium">น้ำมัน</th>
                       <th className="px-3 py-2.5 text-right font-medium" title="ติดเครื่องแต่ล้อไม่หมุน (จอดไม่ดับเครื่อง)">นิ่ง</th>
                       <th className="px-3 py-2.5 text-left font-medium">พฤติกรรม</th>
@@ -474,6 +474,7 @@ function TripsTab({ vehicleByPlate, init }: { vehicleByPlate: Map<string, Vehicl
                       return (
                         <Fragment key={t.tripId || i}>
                           <tr className="hover:bg-slate-50">
+                            <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-700">{t.distanceKm.toFixed(2)} กม.</td>
                             <td className="px-3 py-2.5 whitespace-nowrap text-slate-700 font-medium">
                               {hhmm(t.startTime)} → {hhmm(t.endTime)}
                               {durMin > 0 && (
@@ -512,7 +513,6 @@ function TripsTab({ vehicleByPlate, init }: { vehicleByPlate: Map<string, Vehicl
                                 </span>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-700">{t.distanceKm.toFixed(2)} กม.</td>
                             <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-500">{t.fuelLiters.toFixed(2)} ล.</td>
                             <td className="px-3 py-2.5 text-right whitespace-nowrap">
                               {t.idleMin >= 15 ? (
