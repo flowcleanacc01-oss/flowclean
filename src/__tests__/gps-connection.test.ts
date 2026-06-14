@@ -7,8 +7,8 @@ const pos = (over: Partial<GpsPosition>): GpsPosition =>
   ({ carId: 'c', plate: 'C 1', plateNorm: '1', lat: 13.7, lng: 100.5, speed: 0, rpm: 0, direction: 0,
     voltage: 13, online: false, driving: false, gpsTime: '', lastActiveTime: '', ...over })
 
-// now = 2026-06-13 12:30
-const NOW = new Date('2026-06-13T12:30:00').getTime()
+// now = 2026-06-13 12:30 (เวลาไทย) · ผูก +07:00 ให้ test ไม่ขึ้นกับ TZ ของเครื่อง/CI
+const NOW = new Date('2026-06-13T12:30:00+07:00').getTime()
 
 describe('connStatus — สถานะเชื่อมต่อ GPS', () => {
   it('online → level online', () => {
@@ -39,6 +39,14 @@ describe('connStatus — สถานะเชื่อมต่อ GPS', () => 
     const s = connStatus(pos({ online: false, lastActiveTime: '' }), NOW)
     expect(s.offlineMin).toBe(0)
     expect(s.level).toBe('recent')
+  })
+
+  it('444 — lastActiveTime เวลาไทย + nowMs เป็น UTC (เคสรันบน Vercel) → offlineMin ถูก ไม่เพี้ยน 7 ชม.', () => {
+    // เคสจริงที่ ติ๊ด เจอ: เห็นล่าสุด ไทย 23:25:47 (= UTC 16:25:47) · now = UTC 17:00:47 → ขาดจริง 35 นาที
+    const nowUtc = Date.UTC(2026, 5, 13, 17, 0, 47) // TZ-independent
+    const s = connStatus(pos({ online: false, lastActiveTime: '2026-06-13 23:25:47' }), nowUtc)
+    expect(s.offlineMin).toBe(35)
+    expect(s.level).toBe('suspicious')
   })
 })
 

@@ -5,6 +5,7 @@ import type { GpsPosition } from './v2x-types'
 import { normalizePlate } from './v2x-types'
 import type { Vehicle } from '@/types'
 import { connStatus } from './gps-connection'
+import { haversineM, FACTORY_MATCH_RADIUS_M, type LatLng } from './geo'
 
 export interface LineAlert { key: string; text: string }
 
@@ -33,13 +34,17 @@ function daysUntil(iso: string, today: string): number | null {
 
 const carName = (v: Vehicle | undefined, fallback: string) => (v ? `คัน ${v.code}` : fallback)
 
-/** 🚨 GPS ขาดสัญญาณระหว่างวัน (suspicious) — เตือนครั้งเดียวต่อคันต่อวัน */
-export function buildGpsAlerts(positions: GpsPosition[], vehicles: Vehicle[], nowMs: number, todayTH: string): LineAlert[] {
+/** 🚨 GPS ขาดสัญญาณระหว่างวัน (suspicious) — เตือนครั้งเดียวต่อคันต่อวัน
+ *  444.1 — ข้ามรถที่ตำแหน่งล่าสุดอยู่ที่ "โรงงาน" (เข้า factory station = จอดปกติ ไม่ต้องเตือน) */
+export function buildGpsAlerts(positions: GpsPosition[], vehicles: Vehicle[], nowMs: number, todayTH: string, factory: LatLng | null = null): LineAlert[] {
   const byPlate = new Map(vehicles.map(v => [normalizePlate(v.licensePlate), v]))
   const out: LineAlert[] = []
   for (const p of positions) {
     const c = connStatus(p, nowMs)
     if (c.level !== 'suspicious') continue // เฉพาะ "ขาดระหว่างวัน" (ไม่เตือนจอดค้างคืน)
+    // 444.1 — จอดที่โรงงาน (ในรัศมี factory) = ปกติ ข้ามการเตือน
+    if (factory && (factory.lat || factory.lng) && (p.lat || p.lng) &&
+        haversineM(p.lat, p.lng, factory.lat, factory.lng) <= FACTORY_MATCH_RADIUS_M) continue
     const v = byPlate.get(p.plateNorm)
     out.push({
       key: `gps-offline:${p.plateNorm}:${todayTH}`,

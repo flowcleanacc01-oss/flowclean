@@ -4,7 +4,7 @@
 //   ตั้งเวลา: Vercel Cron (vercel.json) วันละครั้ง + external cron (cron-job.org) ทุก ~30 นาที สำหรับ GPS realtime
 import { NextRequest, NextResponse } from 'next/server'
 import { getRealtimePositions } from '@/lib/v2x-client'
-import { fetchVehicles } from '@/lib/supabase-service'
+import { fetchVehicles, fetchCompanyInfo } from '@/lib/supabase-service'
 import { buildGpsAlerts, buildDocAlerts, buildPmAlerts, pruneAlertKeys, type LineAlert } from '@/lib/line-alerts'
 import { pushLineText, getAlertedKeys, saveAlertedKeys, lineConfigured } from '@/lib/line'
 
@@ -37,16 +37,20 @@ export async function GET(req: NextRequest) {
   }
 
   // ดึงข้อมูล (best-effort — GPS fail ไม่ทำให้ doc/PM ล่ม)
-  const [positions, vehicles] = await Promise.all([
+  const [positions, vehicles, company] = await Promise.all([
     getRealtimePositions().catch(() => []),
     fetchVehicles().catch(() => []),
+    fetchCompanyInfo().catch(() => null),
   ])
 
   const nowMs = Date.now()
   const todayTH = new Date(nowMs + 7 * 3600 * 1000).toISOString().slice(0, 10) // วันที่ไทย (UTC+7)
+  // 444.1 — พิกัดโรงงาน → ข้ามเตือน GPS ของรถที่จอดในโรงงาน (เข้า factory station = ปกติ)
+  const factory = company && (company.factoryLat || company.factoryLng)
+    ? { lat: company.factoryLat, lng: company.factoryLng } : null
 
   const alerts: LineAlert[] = [
-    ...buildGpsAlerts(positions, vehicles, nowMs, todayTH),
+    ...buildGpsAlerts(positions, vehicles, nowMs, todayTH, factory),
     ...buildDocAlerts(vehicles, todayTH),
     ...buildPmAlerts(vehicles),
   ]

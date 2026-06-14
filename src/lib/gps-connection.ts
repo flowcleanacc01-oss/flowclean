@@ -2,7 +2,7 @@
 //   pure (testable) · ใช้ online + lastActiveTime จาก GpsPosition (/map/all/gps)
 //   หลักการ: อุปกรณ์ฮาร์ดไวร์ที่ถูกถอด → ไม่มีไฟ → online=0 + lastActiveTime หยุดเดิน
 //   ⚠️ "ขาดสัญญาณ" = ควรตรวจสอบ ไม่ใช่ข้อสรุปว่า "ถูกถอด" (อาจจอดดับเครื่อง/อับสัญญาณ) — ให้คนตัดสิน
-import type { GpsPosition } from './v2x-types'
+import { type GpsPosition, parseV2xTimeMs } from './v2x-types'
 
 export type ConnLevel =
   | 'online'      // กำลังเชื่อมต่อ
@@ -26,7 +26,7 @@ export interface ConnStatus {
 export function connStatus(pos: GpsPosition, nowMs: number): ConnStatus {
   const lastSeen = pos.lastActiveTime || pos.gpsTime || ''
   if (pos.online) return { online: true, offlineMin: 0, level: 'online', lastSeen }
-  const t = new Date(lastSeen.replace(' ', 'T')).getTime()
+  const t = parseV2xTimeMs(lastSeen) // 444 — V2X = เวลาไทย (UTC+7) · parse แบบ TZ-explicit กันเพี้ยนบน Vercel(UTC)
   const offlineMin = Number.isFinite(t) ? Math.max(0, Math.round((nowMs - t) / 60000)) : 0
   let level: ConnLevel
   if (offlineMin < SUSPICIOUS_MIN) level = 'recent'

@@ -229,6 +229,17 @@ export interface GpsDailyKm {
 // ──────────────────────────── helpers ────────────────────────────
 
 /**
+ * 444 — V2X คืนเวลาเป็น **เวลาไทย (UTC+7) เสมอ** (verified probe 2026-06-14: gpsTime ของรถ online
+ *   ตรงกับ Thai-now ไม่ใช่ UTC). String "YYYY-MM-DD HH:MM:SS[.x]" ไม่มี timezone → `new Date()` จะ
+ *   parse เป็นเวลา **ของ runtime** (เครื่อง dev = ไทย ถูก, แต่ Vercel = UTC → เพี้ยน 7 ชม.!).
+ *   ฟังก์ชันนี้ผูก +07:00 ชัดเจน → epoch ms ถูกต้องไม่ว่ารันที่ไหน · NaN ถ้า parse ไม่ได้
+ */
+export function parseV2xTimeMs(s: string): number {
+  if (!s) return NaN
+  return Date.parse(s.replace(' ', 'T').replace(/\.\d+$/, '') + '+07:00')
+}
+
+/**
  * normalize ทะเบียนสำหรับ match V2X ↔ FlowClean (pure — ใช้ได้ทั้ง client/server)
  *   V2X "C 4ฒฆ-8053" → "4ฒฆ-8053" · FlowClean "4ฒฆ-8053" → "4ฒฆ-8053"
  *   ตัดช่องว่าง + prefix อักษรอังกฤษนำหน้า (A/B/C/D) · ตัวอักษรไทยในทะเบียนคงไว้

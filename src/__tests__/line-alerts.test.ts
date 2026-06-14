@@ -14,7 +14,7 @@ const pos = (over: Partial<GpsPosition>): GpsPosition =>
     direction: 0, voltage: 13, online: false, driving: false, gpsTime: '', lastActiveTime: '', ...over })
 
 const TODAY = '2026-06-13'
-const NOW = new Date('2026-06-13T12:00:00').getTime()
+const NOW = new Date('2026-06-13T12:00:00+07:00').getTime() // เวลาไทย (TZ-explicit)
 
 describe('buildDocAlerts', () => {
   it('ใกล้หมด ≤30 วัน → เตือน · >30 → ไม่ · เลยกำหนด ≤7 วัน → เตือน · >7 → ไม่', () => {
@@ -48,6 +48,18 @@ describe('buildGpsAlerts', () => {
     expect(offline[0].key).toBe('gps-offline:4ฒฆ-8053:2026-06-13')
     expect(offline[0].text).toContain('GPS ขาดสัญญาณ')
     expect(buildGpsAlerts([pos({ online: true })], [veh({})], NOW, TODAY)).toHaveLength(0)
+  })
+
+  it('444.1 — รถขาดสัญญาณแต่จอดที่โรงงาน (ในรัศมี) → ไม่เตือน', () => {
+    const factory = { lat: 13.7, lng: 100.5 }
+    // จอดตรงโรงงานเป๊ะ → ข้าม
+    const atFactory = buildGpsAlerts([pos({ online: false, lastActiveTime: '2026-06-13 10:30:00', lat: 13.7, lng: 100.5 })], [veh({})], NOW, TODAY, factory)
+    expect(atFactory).toHaveLength(0)
+    // จอดไกลโรงงาน (คนละพิกัด) → ยังเตือน
+    const away = buildGpsAlerts([pos({ online: false, lastActiveTime: '2026-06-13 10:30:00', lat: 13.8, lng: 100.6 })], [veh({})], NOW, TODAY, factory)
+    expect(away).toHaveLength(1)
+    // ไม่รู้พิกัดโรงงาน (null) → เตือนตามปกติ (ไม่ข้าม)
+    expect(buildGpsAlerts([pos({ online: false, lastActiveTime: '2026-06-13 10:30:00', lat: 13.7, lng: 100.5 })], [veh({})], NOW, TODAY, null)).toHaveLength(1)
   })
 })
 
