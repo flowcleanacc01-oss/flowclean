@@ -23,7 +23,9 @@ import {
   ChevronLeft, ChevronRight, CalendarDays, Truck, Plus, AlertOctagon,
   CheckCircle2, ArrowRight, Ban, Info, ClipboardCheck, CornerUpRight, CornerDownRight,
   ChevronUp, ChevronDown, GripVertical, ListOrdered, X, CalendarX, Trash2,
+  MessageSquareText, Copy, Check,
 } from 'lucide-react'
+import { buildDispatchText } from '@/lib/dispatch-text'
 
 const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 function fmtShort(iso: string): string {
@@ -97,6 +99,8 @@ export default function LogisticsPage() {
     [customers, deliveryNotes, scheduleOverrides, anchor, today],
   )
 
+  // 445 — modal ส่งออกข้อความแผนคิว
+  const [showExport, setShowExport] = useState(false)
   // day-detail (route ordering) state
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const listDragIdx = useRef<number | null>(null)
@@ -363,13 +367,24 @@ export default function LogisticsPage() {
             แผนรับ-ส่งผ้ารายสัปดาห์ — ลาก cell ข้ามวันเพื่อเลื่อนคิว · คลิกเพื่อสร้าง/ดูใบส่งของ
           </p>
         </div>
-        <Link
-          href="/dashboard/reports?tab=scheduleaudit"
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-[#1B3A5C] border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-        >
-          <ClipboardCheck className="w-4 h-4" />
-          ตรวจสอบคิว (Audit)
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* 445 — ส่งออกแผนคิวเป็นข้อความ (copy ส่งไลน์ให้ทีม) */}
+          <button
+            type="button"
+            onClick={() => setShowExport(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#1B3A5C] bg-[#3DD8D8]/15 border border-[#3DD8D8] rounded-lg hover:bg-[#3DD8D8]/25 transition-colors"
+          >
+            <MessageSquareText className="w-4 h-4" />
+            ส่งออกข้อความ (ไลน์)
+          </button>
+          <Link
+            href="/dashboard/reports?tab=scheduleaudit"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-[#1B3A5C] border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            <ClipboardCheck className="w-4 h-4" />
+            ตรวจสอบคิว (Audit)
+          </Link>
+        </div>
       </div>
 
       {/* Week navigator */}
@@ -776,7 +791,86 @@ export default function LogisticsPage() {
           </div>
         )}
       </Modal>
+
+      {/* 445 — ส่งออกข้อความแผนคิว (copy ส่งไลน์) */}
+      {showExport && (
+        <DispatchTextModal
+          rounds={rounds}
+          customers={customers}
+          defaultDate={selectedDay || today}
+          onClose={() => setShowExport(false)}
+        />
+      )}
     </div>
+  )
+}
+
+// 445 — Modal: เลือก "คืนวัน" → สร้างข้อความแผนคิว (รวมรอบข้ามคืน) → คัดลอกส่งไลน์
+function DispatchTextModal({
+  rounds, customers, defaultDate, onClose,
+}: {
+  rounds: Round[]
+  customers: Customer[]
+  defaultDate: string
+  onClose: () => void
+}) {
+  const [date, setDate] = useState(defaultDate)
+  const [withMarkers, setWithMarkers] = useState(true)
+  const [copied, setCopied] = useState(false)
+
+  const text = useMemo(
+    () => buildDispatchText(date, rounds, customers, { withMarkers }),
+    [date, rounds, customers, withMarkers],
+  )
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      // clipboard ถูกบล็อก → ผู้ใช้เลือก-คัดลอกเองจาก textarea ได้
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="ส่งออกข้อความแผนคิว (ส่งไลน์)" size="lg" closeLabel="close">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-sm text-slate-600 inline-flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-[#3DD8D8]" />
+            คืนวัน
+            <input
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]"
+            />
+          </label>
+          <label className="text-sm text-slate-600 inline-flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={withMarkers} onChange={e => setWithMarkers(e.target.checked)} className="rounded accent-[#1B3A5C]" />
+            ใส่มาร์กเกอร์ <span className="text-slate-400">(วัน)/(48)/* (24)</span>
+          </label>
+          <button
+            type="button"
+            onClick={copy}
+            className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-[#1B3A5C] text-white hover:bg-[#122740] transition-colors"
+          >
+            {copied ? <><Check className="w-4 h-4" /> คัดลอกแล้ว</> : <><Copy className="w-4 h-4" /> คัดลอกข้อความ</>}
+          </button>
+        </div>
+        <textarea
+          readOnly
+          value={text}
+          onFocus={e => e.currentTarget.select()}
+          className="w-full h-[58vh] font-mono text-[13px] leading-relaxed p-3 border border-slate-200 rounded-lg bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#3DD8D8] resize-none"
+        />
+        <p className="text-xs text-slate-400">
+          รวมรอบข้ามคืน (บ่าย/ค่ำของวันที่เลือก → เช้ามืด/เช้าวันถัดไป) · สมาชิกทุกคนในรอบ เรียงตามลำดับวิ่ง ·
+          มาร์กเกอร์มาจาก schedule ลูกค้า (ทุกวัน→วัน · ทุก N วัน→N×24 · อื่นๆ→* 24) · แก้/เว้นบรรทัดเพิ่มได้หลังคัดลอก
+        </p>
+      </div>
+    </Modal>
   )
 }
 
