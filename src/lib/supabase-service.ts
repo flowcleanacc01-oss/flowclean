@@ -203,6 +203,7 @@ const FIELD_MAP: Record<string, string> = {
   pickupWindowStart: 'pickup_window_start',
   pickupWindowEnd: 'pickup_window_end',
   capacityTarget: 'capacity_target',  // 423 B-1
+  textColor: 'text_color',            // 442 — สีตัวอักษร round badge
   ownerGroup: 'owner_group',          // 423 B-2 (skip-queue exception)
   roundDayOverrides: 'round_day_overrides', // 429 — ข้อยกเว้นรอบรายวัน {weekday: roundId}
   gpsLat: 'gps_lat',                  // 427 — พิกัดลูกค้า

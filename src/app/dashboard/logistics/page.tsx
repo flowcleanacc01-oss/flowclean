@@ -12,7 +12,7 @@ import {
   buildLogisticsWeek, getWeekStart, addDays, parseLocalDate, isDraggableStatus,
   type LogisticsCell, type LogisticsRow,
 } from '@/lib/logistics-week'
-import { todayISO, genId, cn, formatExportFilename } from '@/lib/utils'
+import { todayISO, genId, cn, formatExportFilename, roundTextColor } from '@/lib/utils'
 import { WEEKDAY_SHORT, SCHEDULE_TYPE_CONFIG, type DeliveryNote, type ScheduleOverride, type Customer, type Round } from '@/types'
 import { effectiveRoundId } from '@/lib/dispatch'
 import { canViewSD } from '@/lib/permissions'
@@ -474,8 +474,8 @@ export default function LogisticsPage() {
                   <tr>
                     <td colSpan={8} className="border-b border-slate-200 bg-slate-50/90 p-0">
                       <div className="sticky left-0 inline-flex items-center gap-2 px-3 py-1.5">
-                        <span className="px-1.5 py-0.5 rounded text-[11px] font-bold text-white shrink-0"
-                          style={{ backgroundColor: g.round?.color || '#94a3b8' }}>
+                        <span className="px-1.5 py-0.5 rounded text-[11px] font-bold shrink-0"
+                          style={{ backgroundColor: g.round?.color || '#94a3b8', color: roundTextColor(g.round?.textColor) }}>
                           {g.round?.code || '—'}
                         </span>
                         <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">{g.round?.name || 'ไม่ระบุรอบ'}</span>
@@ -703,8 +703,8 @@ export default function LogisticsPage() {
                 {dayGroups.map((g, gi) => (
                   <div key={g.round?.id || 'no-round'}>
                     <div className="flex items-center gap-2 mb-1.5">
-                      <span className="px-1.5 py-0.5 rounded text-[11px] font-bold text-white shrink-0"
-                        style={{ backgroundColor: g.round?.color || '#94a3b8' }}>
+                      <span className="px-1.5 py-0.5 rounded text-[11px] font-bold shrink-0"
+                        style={{ backgroundColor: g.round?.color || '#94a3b8', color: roundTextColor(g.round?.textColor) }}>
                         {g.round?.code || '—'}
                       </span>
                       <span className="text-xs font-semibold text-slate-600">{g.round?.name || 'ไม่ระบุรอบ'}</span>
@@ -733,8 +733,8 @@ export default function LogisticsPage() {
                             )}
                           >
                             <GripVertical className="w-4 h-4 text-slate-300 cursor-grab flex-shrink-0" />
-                            <span className="w-6 h-6 flex items-center justify-center rounded-full text-white text-xs font-bold flex-shrink-0"
-                              style={{ backgroundColor: g.round?.color || '#1B3A5C' }}>{si + 1}</span>
+                            <span className="w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold flex-shrink-0"
+                              style={{ backgroundColor: g.round?.color || '#1B3A5C', color: roundTextColor(g.round?.textColor) }}>{si + 1}</span>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-[#1B3A5C] truncate">{s.row.customer.shortName || s.row.customer.name}</div>
                               <div className="text-xs text-slate-400 truncate">
@@ -865,7 +865,7 @@ function CellChip({
         title={title}
         style={tintStyle}
         className={cn(
-          'relative w-full flex items-center justify-center gap-1 px-1.5 py-1 rounded-lg border transition-[filter,background-color]',
+          'relative w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-lg border transition-[filter,background-color]',
           !tinted && 'bg-slate-50 border-slate-200',
           cell.status === 'missing' && cell.date > today && 'border-dashed',
           (onClick || draggable) && 'hover:brightness-95',
@@ -873,8 +873,8 @@ function CellChip({
           !onClick && !draggable && 'cursor-default',
         )}
       >
-        <span className="truncate font-semibold text-[11px] text-slate-700">{shortName}</span>
-        <span className={cn('shrink-0 text-[10px] font-bold leading-none', badge.cls)}>{badge.text}</span>
+        <span className="truncate font-bold text-[13px] leading-tight text-slate-800">{shortName}</span>
+        <span className={cn('shrink-0 text-[11px] font-bold leading-none', badge.cls)}>{badge.text}</span>
         {hasRescheduleAdd && cell.status !== 'skipped' && (
           <CornerDownRight className="w-3 h-3 text-indigo-500 absolute -top-1 -right-1" aria-label="เลื่อนเข้า" />
         )}

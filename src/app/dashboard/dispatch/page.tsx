@@ -9,7 +9,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { canManageDispatch } from '@/lib/permissions'
-import { cn } from '@/lib/utils'
+import { cn, roundTextColor } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { toLocalISO, parseLocalDate, addDays } from '@/lib/logistics-week'
@@ -165,7 +165,7 @@ export default function DispatchPage() {
               return (
                 <div key={round.id} className="rounded-lg border border-slate-100 p-2.5">
                   <div className="flex items-center gap-1.5 text-xs">
-                    <span className="px-1.5 py-0.5 rounded font-bold text-white text-[10px]" style={{ backgroundColor: round.color }}>{round.code}</span>
+                    <span className="px-1.5 py-0.5 rounded font-bold text-[10px]" style={{ backgroundColor: round.color, color: roundTextColor(round.textColor) }}>{round.code}</span>
                     <span className="font-semibold text-slate-700">{load}</span>
                     {target > 0 && <span className="text-slate-400">/ {target}</span>}
                     {status !== 'none' && <span className={cn('ml-auto font-medium', cfg.text)}>{cfg.label}</span>}
@@ -225,7 +225,7 @@ export default function DispatchPage() {
             }
             return (
               <div key={round.id} className="bg-white rounded-xl border border-dashed border-slate-300 p-5 flex items-center gap-3">
-                <span className="px-2.5 py-1 rounded-lg text-sm font-bold text-white shrink-0" style={{ backgroundColor: round.color }}>{round.code}</span>
+                <span className="px-2.5 py-1 rounded-lg text-sm font-bold shrink-0 border border-black/5" style={{ backgroundColor: round.color, color: roundTextColor(round.textColor) }}>{round.code}</span>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-700 truncate">{round.name}</p>
                   <p className="text-xs text-slate-400">ยังไม่สร้างใบงานวันนี้</p>
@@ -333,7 +333,7 @@ function DispatchCard({
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       {/* header */}
       <div className="flex items-center gap-3 p-4 border-b border-slate-100" style={{ borderLeft: `4px solid ${round.color}` }}>
-        <span className="px-2.5 py-1 rounded-lg text-sm font-bold text-white shrink-0" style={{ backgroundColor: round.color }}>{round.code}</span>
+        <span className="px-2.5 py-1 rounded-lg text-sm font-bold shrink-0 border border-black/5" style={{ backgroundColor: round.color, color: roundTextColor(round.textColor) }}>{round.code}</span>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-slate-800 truncate">{round.name}</p>
           <span className="inline-flex items-center gap-1 text-xs text-slate-500"><Clock className="w-3 h-3" />{round.startTime || '—'}–{round.endTime || '—'}</span>

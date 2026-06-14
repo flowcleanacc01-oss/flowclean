@@ -7,7 +7,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { canManageRounds } from '@/lib/permissions'
-import { cn } from '@/lib/utils'
+import { cn, roundTextColor } from '@/lib/utils'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import type { Round, Crew, CrewRole, CrewStatus, Customer } from '@/types'
 import { CREW_ROLE_LABELS, CREW_STATUS_CONFIG } from '@/types'
@@ -153,7 +153,7 @@ function RoundsTab() {
           <div key={r.id} className={cn('bg-white rounded-xl border overflow-hidden', r.isActive ? 'border-slate-200' : 'border-slate-200 opacity-70')}>
             {/* header */}
             <div className="flex items-center gap-3 p-4 cursor-pointer hover:bg-slate-50/50" onClick={() => setExpandedId(expanded ? null : r.id)}>
-              <span className="px-2.5 py-1 rounded-lg text-sm font-bold text-white shrink-0" style={{ backgroundColor: r.color }}>{r.code}</span>
+              <span className="px-2.5 py-1 rounded-lg text-sm font-bold shrink-0 border border-black/5" style={{ backgroundColor: r.color, color: roundTextColor(r.textColor) }}>{r.code}</span>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-slate-800 truncate">{r.name}{!r.isActive && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-normal">พัก</span>}</p>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500 mt-0.5">
@@ -326,7 +326,7 @@ function DayOverrideModal({ customer, onClose }: { customer: Customer; onClose: 
 const BLANK_ROUND: Omit<Round, 'id' | 'createdAt'> = {
   code: '', name: '', startTime: '', endTime: '',
   defaultVehicleId: '', defaultDriverId: '', defaultHelperId: '',
-  color: '#0ea5e9', sortOrder: 0, isActive: true, capacityTarget: 0, note: '',
+  color: '#0ea5e9', textColor: '#ffffff', sortOrder: 0, isActive: true, capacityTarget: 0, note: '',
 }
 
 function RoundFormModal({ round, onClose }: { round: Round | null; onClose: () => void }) {
@@ -363,7 +363,7 @@ function RoundFormModal({ round, onClose }: { round: Round | null; onClose: () =
             <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="รอบ V" />
           </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
             <label className={labelCls}>เวลาออก</label>
             <input type="time" className={inputCls} value={form.startTime} onChange={e => set('startTime', e.target.value)} />
@@ -373,13 +373,34 @@ function RoundFormModal({ round, onClose }: { round: Round | null; onClose: () =
             <input type="time" className={inputCls} value={form.endTime} onChange={e => set('endTime', e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>สี</label>
-            <input type="color" value={form.color} onChange={e => set('color', e.target.value)} className="w-full h-[38px] border border-slate-200 rounded-lg cursor-pointer" />
-          </div>
-          <div>
             <label className={labelCls}>ลำดับแสดง</label>
             <input type="number" className={inputCls} value={form.sortOrder || ''} onChange={e => set('sortOrder', Number(e.target.value) || 0)} />
           </div>
+        </div>
+        {/* 442 — สี badge: พื้น + ตัวอักษร + ตัวอย่างสด (เผื่อพื้นสีอ่อน/ขาว เช่น SWD) */}
+        <div>
+          <label className={labelCls}>สีป้ายรอบ (พื้น + ตัวอักษร)</label>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex items-center gap-2">
+              <input type="color" value={form.color} onChange={e => set('color', e.target.value)} aria-label="สีพื้น" className="w-10 h-9 border border-slate-200 rounded-lg cursor-pointer" />
+              <span className="text-xs text-slate-500">พื้น</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="color" value={form.textColor || '#ffffff'} onChange={e => set('textColor', e.target.value)} aria-label="สีตัวอักษร" className="w-10 h-9 border border-slate-200 rounded-lg cursor-pointer" />
+              <span className="text-xs text-slate-500">ตัวอักษร</span>
+              {/* ปุ่มลัด ขาว/ดำ */}
+              <div className="flex gap-1">
+                <button type="button" onClick={() => set('textColor', '#ffffff')} className={cn('px-2 py-1 rounded text-[11px] border', (form.textColor || '#ffffff').toLowerCase() === '#ffffff' ? 'border-[#3DD8D8] bg-[#3DD8D8]/10 text-[#1B3A5C] font-semibold' : 'border-slate-200 text-slate-500 hover:bg-slate-50')}>ขาว</button>
+                <button type="button" onClick={() => set('textColor', '#1e293b')} className={cn('px-2 py-1 rounded text-[11px] border', (form.textColor || '').toLowerCase() === '#1e293b' ? 'border-[#3DD8D8] bg-[#3DD8D8]/10 text-[#1B3A5C] font-semibold' : 'border-slate-200 text-slate-500 hover:bg-slate-50')}>เข้ม</button>
+              </div>
+            </div>
+            {/* ตัวอย่างสด */}
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-[11px] text-slate-400">ตัวอย่าง</span>
+              <span className="px-2.5 py-1 rounded-lg text-sm font-bold border border-slate-200 shrink-0" style={{ backgroundColor: form.color, color: form.textColor || '#ffffff' }}>{form.code.trim() || 'รอบ'}</span>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-1">พื้นสีอ่อน/ขาว → เลือกตัวอักษรเป็นสีเข้มเพื่อให้อ่านได้</p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="col-span-2 sm:col-span-1">

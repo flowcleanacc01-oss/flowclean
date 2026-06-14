@@ -141,6 +141,11 @@ export function formatBranch(branch: string): string {
   return branch
 }
 
+/** 442 — สีตัวอักษรบน round badge · ไม่ตั้ง = ขาว (พฤติกรรมเดิม) */
+export function roundTextColor(textColor?: string | null): string {
+  return textColor || '#ffffff'
+}
+
 export function sanitizeNumber(value: string | number, max = 9_999_999): number {
   const n = typeof value === 'string' ? parseFloat(value) : value
   if (!Number.isFinite(n) || n < 0) return 0

@@ -1346,7 +1346,7 @@ function AuditTab() {
                 <div key={a.roundId} className="bg-white rounded-xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: a.roundColor }}>{a.roundCode}</span>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ backgroundColor: a.roundColor, color: a.roundTextColor }}>{a.roundCode}</span>
                       <span className="text-xs text-slate-400">{a.roundStart}-{a.roundEnd}</span>
                     </div>
                     {a.vehicleCode

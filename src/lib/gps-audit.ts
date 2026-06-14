@@ -24,6 +24,7 @@ export interface RoundAudit {
   roundId: string
   roundCode: string
   roundColor: string
+  roundTextColor: string // 442 — สีตัวอักษร badge (resolve แล้ว · default ขาว)
   roundStart: string // HH:MM
   roundEnd: string
   vehicleCode: string | null // null = ไม่มีรถผูกรอบ
@@ -112,6 +113,7 @@ export function buildRoundAudit(
     roundId: round.id,
     roundCode: round.code,
     roundColor: round.color,
+    roundTextColor: round.textColor || '#ffffff',
     roundStart: round.startTime,
     roundEnd: round.endTime,
     vehicleCode,

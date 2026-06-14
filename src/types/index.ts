@@ -764,7 +764,8 @@ export interface Round {
   defaultVehicleId: string      // รถประจำรอบ ('' = ไม่ระบุ)
   defaultDriverId: string       // คนขับประจำ
   defaultHelperId: string       // เด็กรถประจำ
-  color: string                 // hex สำหรับ badge/ปฏิทิน
+  color: string                 // hex สำหรับ badge/ปฏิทิน (สีพื้น)
+  textColor?: string | null     // 442 — สีตัวอักษรบน badge (ไม่ตั้ง = ขาว) · เผื่อพื้นสีอ่อน/ขาว
   sortOrder: number
   isActive: boolean             // SZH = false (พักชั่วคราว)
   capacityTarget: number        // 423 B-1 — ความจุเป้าหมาย (กระสอบ/ถุง) · 0 = ไม่ตั้ง · เทียบ load ใน Dispatch
