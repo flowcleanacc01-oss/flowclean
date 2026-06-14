@@ -204,6 +204,7 @@ export interface GpsTrackPoint {
   lat: number
   lng: number
   speed: number // 0 = ไม่มีข้อมูล (route-rectified จะไม่มี speed)
+  time?: string | null // 443.1 — เวลาจริงของจุด (V2X track ปัจจุบันคืน null ทุกจุด · เผื่อ endpoint อนาคต)
 }
 export interface GpsDangerPoint {
   lat: number

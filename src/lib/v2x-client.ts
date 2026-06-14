@@ -219,7 +219,8 @@ export async function getTripTrack(id: string): Promise<GpsTrack> {
     ? raw.rectify
     : (raw?.routeRectify?.rectify || [])
   const points: GpsTrackPoint[] = src
-    .map(p => ({ lat: num(p.lat), lng: num(p.lng), speed: num(p.speed) }))
+    // 443.1 — เก็บ travelTime เป็น time ด้วย (ปัจจุบัน track คืน null ทุกจุด → playback ใช้ช่วงเวลาเที่ยวเฉลี่ย · ถ้าวันใดมีค่าจริง playback อัปเกรดเป็น speed จริงทันที)
+    .map(p => ({ lat: num(p.lat), lng: num(p.lng), speed: num(p.speed), time: p.travelTime ? cleanTime(p.travelTime) : null }))
     .filter(p => p.lat !== 0 || p.lng !== 0)
   const dangers: GpsDangerPoint[] = (raw?.dangerPoints || [])
     .map(d => ({ lat: num(d.lat), lng: num(d.lng), time: cleanTime(d.time), type: num(d.type) }))

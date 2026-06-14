@@ -73,6 +73,13 @@ function hhmm(s: string): string {
   return m ? `${m[1]}:${m[2]}` : '—'
 }
 
+// 443.1 — "yyyy-mm-dd HH:MM:SS.x" → epoch ms (local) สำหรับนาฬิกา playback · NaN→undefined
+function tripMs(s: string): number | undefined {
+  if (!s) return undefined
+  const t = new Date(s.replace(' ', 'T').replace(/\.\d+$/, '')).getTime()
+  return Number.isFinite(t) ? t : undefined
+}
+
 // relative ago จาก "yyyy-mm-dd HH:MM:SS" (local)
 function ago(s: string): string {
   if (!s) return ''
@@ -606,6 +613,7 @@ function RouteMapModal({
   const [tracks, setTracks] = useState<RouteTrack[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
+  const [selectedTrip, setSelectedTrip] = useState<number | null>(null) // 443 — null = ทั้งหมด (ภาพรวม) · index = เฉพาะเที่ยวนั้น
 
   const factory: LatLng | null = useMemo(
     () => (companyInfo.factoryLat || companyInfo.factoryLng)
@@ -633,9 +641,13 @@ function RouteMapModal({
             endName: placeNameOf(placeOf(t.endLat, t.endLng), t.endAddress),
             // 435 — จุดที่รู้จักที่เส้นทางผ่าน (break down เที่ยวยาวที่ไม่ดับเครื่อง)
             passed: passedPlaces(r.value.points, customers, factory, savedPlaces),
+            // 443.1 — ช่วงเวลาเที่ยว (epoch ms) สำหรับนาฬิกา playback
+            startMs: tripMs(t.startTime),
+            endMs: tripMs(t.endTime),
           })
         })
         setTracks(out)
+        setSelectedTrip(null) // 443 — เริ่มที่ภาพรวมเสมอเมื่อโหลดเส้นทางใหม่
         if (out.length === 0) setErr('ระบบ GPS ไม่มีข้อมูลเส้นทางของเที่ยวเหล่านี้')
         setLoading(false)
       })
@@ -646,6 +658,27 @@ function RouteMapModal({
   return (
     <Modal open onClose={onClose} title={title} size="wide" closeLabel="close">
       <div className="space-y-3">
+        {/* 443 — เลือกแสดง: ทั้งหมด (ภาพรวม) หรือเฉพาะเที่ยว (อ่านง่าย + เล่นย้อนได้) */}
+        {tracks && tracks.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-slate-400 mr-0.5">แสดง:</span>
+            <button type="button" onClick={() => setSelectedTrip(null)}
+              className={cn('px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors',
+                selectedTrip === null ? 'bg-[#1B3A5C] text-white border-[#1B3A5C]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}>
+              ทั้งหมด ({tracks.length} เที่ยว)
+            </button>
+            {tracks.map((t, i) => (
+              <button key={i} type="button" onClick={() => setSelectedTrip(i)}
+                className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors',
+                  selectedTrip === i ? 'text-white border-transparent' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}
+                style={selectedTrip === i ? { backgroundColor: t.color } : undefined}>
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
+                เที่ยว {i + 1}
+              </button>
+            ))}
+            {selectedTrip !== null && <span className="text-[11px] text-slate-400 ml-1">▶ กดปุ่มเล่นใต้แผนที่เพื่อดูเส้นทางย้อนหลัง</span>}
+          </div>
+        )}
         <div className="h-[68vh] rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
           {loading ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400">
@@ -656,24 +689,28 @@ function RouteMapModal({
               <MapIcon className="w-10 h-10 mb-2 text-slate-300" /><p className="text-sm">{err}</p>
             </div>
           ) : (
-            <RouteMap tracks={tracks || []} />
+            <RouteMap tracks={tracks || []} selectedIndex={selectedTrip} />
           )}
         </div>
         {/* legend + 435 break down จุดที่ผ่าน (เห็นว่าเที่ยวยาวที่ไม่ดับเครื่อง เข้าจุดไหนบ้าง) */}
         {tracks && tracks.length > 0 && (
-          <div className="space-y-1.5 text-xs">
+          <div className="space-y-1 text-xs">
             {tracks.map((t, i) => (
-              <div key={i} className="flex items-start gap-1.5">
+              <button key={i} type="button"
+                onClick={() => setSelectedTrip(selectedTrip === i ? null : i)}
+                title={selectedTrip === i ? 'กดอีกครั้งเพื่อดูทั้งหมด' : 'กดเพื่อดูเฉพาะเที่ยวนี้ + เล่นย้อน'}
+                className={cn('w-full flex items-start gap-1.5 text-left rounded-lg px-1.5 py-1 -mx-1.5 transition-colors',
+                  selectedTrip === i ? 'bg-slate-100' : 'hover:bg-slate-50')}>
                 <span className="w-4 h-1 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: t.color }} />
                 <div className="min-w-0">
-                  <span className="text-slate-600 font-medium">{t.label}</span>
+                  <span className={cn('font-medium', selectedTrip === i ? 'text-[#1B3A5C]' : 'text-slate-600')}>{t.label}</span>
                   {t.passed && t.passed.length > 1 ? (
                     <span className="text-slate-500"> · ผ่าน {t.passed.length} จุด: {t.passed.map(p => p.name).join(' → ')}</span>
                   ) : (
                     <span className="text-slate-400"> → จบ: {t.endName}</span>
                   )}
                 </div>
-              </div>
+              </button>
             ))}
             <div className="flex items-center gap-3 pt-1 text-slate-400">
               <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#dc2626]" /> จุดขับขี่เสี่ยง</span>
