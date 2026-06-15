@@ -24,6 +24,8 @@ export interface RouteTrack {
   passed?: { type: string; name: string; customerId?: string }[] // 435/447 — จุดที่ผ่าน (+ customerId เช็คคิวงาน) · legend ใช้ · map ไม่ใช้
   startMs?: number    // 443.1 — เวลาเริ่มเที่ยว (epoch ms) สำหรับนาฬิกา playback
   endMs?: number      // 443.1 — เวลาจบเที่ยว
+  noRoute?: boolean   // 450 — เที่ยวนี้ไม่มีจุดเส้นทาง (V2X ไม่มี track หรือดึงไม่สำเร็จ) · chip/legend ใช้ · map ข้าม
+  failed?: boolean    // 450 — ดึงไม่สำเร็จหลัง retry (≠ เที่ยวสั้นที่ V2X ไม่มี track) → เสนอ "โหลดใหม่"
 }
 
 // 439 — ทิศทาง a→b เป็นองศา (0=เหนือ, ตามเข็ม) สำหรับหมุนลูกศร · planar approx พอสำหรับระยะสั้นในเมือง

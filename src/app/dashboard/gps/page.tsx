@@ -9,7 +9,7 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { subDays, parseISO, format } from 'date-fns'
 import { useStore } from '@/lib/store'
-import { fetchGpsCars, fetchGpsRealtime, fetchGpsTrips, fetchGpsTrack } from '@/lib/gps-service'
+import { fetchGpsCars, fetchGpsRealtime, fetchGpsTrips, fetchGpsTracksBatch } from '@/lib/gps-service'
 import { normalizePlate, parseV2xTimeMs, type GpsCar, type GpsPosition, type GpsTrip } from '@/lib/v2x-types'
 import {
   buildRoundAudit, buildVehicleAudit, guessVehiclesForRound, medianDailyKm, hhmmOf,
@@ -638,6 +638,7 @@ function RouteMapModal({
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [selectedTrip, setSelectedTrip] = useState<number | null>(null) // 443 — null = ทั้งหมด (ภาพรวม) · index = เฉพาะเที่ยวนั้น
+  const [reloadKey, setReloadKey] = useState(0) // 450 — กด "โหลดเที่ยวที่ขาด" → re-fetch เที่ยวที่ดึงไม่สำเร็จ
 
   const factory: LatLng | null = useMemo(
     () => (companyInfo.factoryLat || companyInfo.factoryLng)
@@ -649,39 +650,52 @@ function RouteMapModal({
     let cancelled = false
     if (realTrips.length === 0) { setTracks([]); setLoading(false); return }
     setLoading(true); setErr(null)
-    Promise.allSettled(realTrips.map(t => fetchGpsTrack(t.tripId)))
+    // 450 — ดึงทุกเที่ยวแบบจำกัด concurrency + retry → ครบ + นิ่ง (ไม่ทิ้งเที่ยวที่ timeout)
+    //   map 1:1 กับ realTrips: เที่ยวที่ดึงไม่ได้/ไม่มี track ก็คงไว้ (points: []) เลขเที่ยวไม่กระโดด
+    fetchGpsTracksBatch(realTrips.map(t => t.tripId))
       .then(results => {
         if (cancelled) return
-        const out: RouteTrack[] = []
-        results.forEach((r, i) => {
-          if (r.status !== 'fulfilled' || r.value.points.length === 0) return
-          const t = realTrips[i]
+        const out: RouteTrack[] = realTrips.map((t, i) => {
+          const track = results[i]
+          const points = track?.points ?? []
           // 447 — ใส่ระยะทาง + ระยะเวลาในป้ายเที่ยว (อ่านง่าย วิเคราะห์ต่อได้)
           const durMin = tripDurationMin(t.startTime, t.endTime)
           const kmTxt = t.distanceKm > 0 ? `(${t.distanceKm.toFixed(2)} กม.) ` : ''
           const durTxt = durMin > 0 ? ` (${fmtMin(durMin)})` : ''
-          out.push({
+          return {
             label: `เที่ยว ${i + 1} · ${kmTxt}${hhmm(t.startTime)}→${hhmm(t.endTime)}${durTxt}`,
             color: ROUTE_COLORS[i % ROUTE_COLORS.length],
-            points: r.value.points,
-            dangers: r.value.dangers,
+            points,
+            dangers: track?.dangers ?? [],
             startName: placeNameOf(placeOf(t.startLat, t.startLng), t.startAddress),
             endName: placeNameOf(placeOf(t.endLat, t.endLng), t.endAddress),
             // 435 — จุดที่รู้จักที่เส้นทางผ่าน (break down เที่ยวยาวที่ไม่ดับเครื่อง)
-            passed: passedPlaces(r.value.points, customers, factory, savedPlaces),
+            passed: points.length > 0 ? passedPlaces(points, customers, factory, savedPlaces) : [],
             // 443.1 — ช่วงเวลาเที่ยว (epoch ms) สำหรับนาฬิกา playback
             startMs: tripMs(t.startTime),
             endMs: tripMs(t.endTime),
-          })
+            // 450 — แยก "เที่ยวสั้นไม่มี track" (track ว่าง) ออกจาก "ดึงไม่สำเร็จ" (track null → retry ได้)
+            noRoute: points.length === 0,
+            failed: track === null,
+          }
         })
         setTracks(out)
         setSelectedTrip(null) // 443 — เริ่มที่ภาพรวมเสมอเมื่อโหลดเส้นทางใหม่
-        if (out.length === 0) setErr('ระบบ GPS ไม่มีข้อมูลเส้นทางของเที่ยวเหล่านี้')
+        const withRoute = out.filter(o => !o.noRoute).length
+        if (withRoute === 0) {
+          setErr(out.every(o => o.failed)
+            ? 'ดึงเส้นทางจาก GPS ไม่สำเร็จ — กดโหลดใหม่อีกครั้ง'
+            : 'ระบบ GPS ไม่มีข้อมูลเส้นทางของเที่ยวเหล่านี้')
+        }
         setLoading(false)
       })
       .catch(e => { if (!cancelled) { setErr(e instanceof Error ? e.message : 'ดึงเส้นทางไม่สำเร็จ'); setLoading(false) } })
     return () => { cancelled = true }
-  }, [realTrips, placeOf, customers, factory, savedPlaces])
+  }, [realTrips, placeOf, customers, factory, savedPlaces, reloadKey])
+
+  // 450 — สรุปจำนวนเที่ยวที่มีเส้นทาง / ที่ดึงไม่สำเร็จ (โชว์ใน chip + ปุ่มโหลดใหม่)
+  const routeCount = tracks ? tracks.filter(t => !t.noRoute).length : 0
+  const failedCount = tracks ? tracks.filter(t => t.failed).length : 0
 
   return (
     <Modal open onClose={onClose} title={title} size="wide" closeLabel="close">
@@ -693,18 +707,27 @@ function RouteMapModal({
             <button type="button" onClick={() => setSelectedTrip(null)}
               className={cn('px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors',
                 selectedTrip === null ? 'bg-[#1B3A5C] text-white border-[#1B3A5C]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}>
-              ทั้งหมด ({tracks.length} เที่ยว)
+              ทั้งหมด ({tracks.length} เที่ยว{routeCount < tracks.length ? ` · มีเส้นทาง ${routeCount}` : ''})
             </button>
             {tracks.map((t, i) => (
               <button key={i} type="button" onClick={() => setSelectedTrip(i)}
+                title={t.noRoute ? (t.failed ? 'ดึงเส้นทางไม่สำเร็จ — กด “โหลดเที่ยวที่ขาด”' : 'เที่ยวนี้ไม่มีเส้นทางจาก GPS') : undefined}
                 className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors',
-                  selectedTrip === i ? 'text-white border-transparent' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}
+                  selectedTrip === i ? 'text-white border-transparent'
+                    : t.noRoute ? 'bg-white text-slate-300 border-slate-100 hover:bg-slate-50'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}
                 style={selectedTrip === i ? { backgroundColor: t.color } : undefined}>
-                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
-                เที่ยว {i + 1}
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.noRoute ? '#cbd5e1' : t.color }} />
+                เที่ยว {i + 1}{t.failed ? ' ⚠' : ''}
               </button>
             ))}
-            {selectedTrip !== null && <span className="text-[11px] text-slate-400 ml-1">▶ กดปุ่มเล่นใต้แผนที่เพื่อดูเส้นทางย้อนหลัง</span>}
+            {failedCount > 0 && (
+              <button type="button" onClick={() => setReloadKey(k => k + 1)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
+                ↻ โหลดเที่ยวที่ขาด ({failedCount})
+              </button>
+            )}
+            {selectedTrip !== null && !tracks[selectedTrip]?.noRoute && <span className="text-[11px] text-slate-400 ml-1">▶ กดปุ่มเล่นใต้แผนที่เพื่อดูเส้นทางย้อนหลัง</span>}
           </div>
         )}
         <div className="h-[68vh] rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
@@ -713,8 +736,22 @@ function RouteMapModal({
               <Loader2 className="w-7 h-7 animate-spin mb-2" /><p className="text-sm">กำลังดึงเส้นทางจาก GPS…</p>
             </div>
           ) : err ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400">
-              <MapIcon className="w-10 h-10 mb-2 text-slate-300" /><p className="text-sm">{err}</p>
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2">
+              <MapIcon className="w-10 h-10 text-slate-300" /><p className="text-sm">{err}</p>
+              {failedCount > 0 && (
+                <button type="button" onClick={() => setReloadKey(k => k + 1)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1B3A5C] text-white hover:bg-[#122740]">↻ ลองโหลดใหม่</button>
+              )}
+            </div>
+          ) : selectedTrip !== null && tracks?.[selectedTrip]?.noRoute ? (
+            // 450 — เลือกเที่ยวที่ไม่มีเส้นทาง → บอกชัด (ไม่ใช่แผนที่ว่างงงๆ)
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2">
+              <MapIcon className="w-10 h-10 text-slate-300" />
+              <p className="text-sm">เที่ยว {selectedTrip + 1} {tracks[selectedTrip].failed ? 'ดึงเส้นทางไม่สำเร็จ' : 'ไม่มีเส้นทางจาก GPS'}</p>
+              {tracks[selectedTrip].failed && (
+                <button type="button" onClick={() => setReloadKey(k => k + 1)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1B3A5C] text-white hover:bg-[#122740]">↻ ลองโหลดใหม่</button>
+              )}
             </div>
           ) : (
             <RouteMap tracks={tracks || []} selectedIndex={selectedTrip} />
@@ -729,10 +766,14 @@ function RouteMapModal({
                 title={selectedTrip === i ? 'กดอีกครั้งเพื่อดูทั้งหมด' : 'กดเพื่อดูเฉพาะเที่ยวนี้ + เล่นย้อน'}
                 className={cn('w-full flex items-start gap-1.5 text-left rounded-lg px-1.5 py-1 -mx-1.5 transition-colors',
                   selectedTrip === i ? 'bg-slate-100' : 'hover:bg-slate-50')}>
-                <span className="w-4 h-1 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: t.color }} />
+                <span className="w-4 h-1 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: t.noRoute ? '#cbd5e1' : t.color }} />
                 <div className="min-w-0">
-                  <span className={cn('font-medium', selectedTrip === i ? 'text-[#1B3A5C]' : 'text-slate-600')}>{t.label}</span>
-                  {t.passed && t.passed.length > 1 ? (
+                  <span className={cn('font-medium', t.noRoute ? 'text-slate-400' : selectedTrip === i ? 'text-[#1B3A5C]' : 'text-slate-600')}>{t.label}</span>
+                  {t.noRoute ? (
+                    <span className={cn('text-xs', t.failed ? 'text-amber-600' : 'text-slate-400')}>
+                      {' · '}{t.failed ? 'ดึงเส้นทางไม่สำเร็จ — กด “โหลดเที่ยวที่ขาด”' : 'ไม่มีเส้นทางจาก GPS'}
+                    </span>
+                  ) : t.passed && t.passed.length > 1 ? (
                     <span className="text-slate-500"> · ผ่าน {t.passed.length} จุด: {t.passed.map((p, j) => {
                       const isQueue = !!p.customerId && queueCustomerIds.has(p.customerId)
                       return (
