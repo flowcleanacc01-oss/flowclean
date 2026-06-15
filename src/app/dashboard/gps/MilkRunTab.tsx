@@ -8,6 +8,7 @@ import { fetchGpsCars, fetchGpsTrips } from '@/lib/gps-service'
 import { fetchGpsVisits, fetchGpsLegs, saveReconstructedDay } from '@/lib/supabase-service'
 import { reconstructVisitsLegs, type RoundWindow } from '@/lib/visit-reconstruct'
 import { customerStats, legStats, arrivalVsWindow, minToHHMM, type Dist } from '@/lib/visit-stats'
+import { detectAnomalies, driverScores, routeOpportunities } from '@/lib/visit-anomaly'
 import { normalizePlate } from '@/lib/v2x-types'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import type { LatLng } from '@/lib/geo'
@@ -122,10 +123,8 @@ export default function MilkRunTab() {
     return { visits: visits.length, legs: legs.length, customers: custs.size, vehicles: vehs.size, minDate: ds[0] || '', maxDate: ds[ds.length - 1] || '' }
   }, [visits, legs])
 
-  void crew // (Phase 3 — แสดงชื่อคนขับ)
-
-  // ── Phase 2: สถิติ baseline ──
-  const [statView, setStatView] = useState<'customer' | 'leg'>('customer')
+  // ── Phase 2/3: สถิติ baseline + วิเคราะห์ ──
+  const [statView, setStatView] = useState<'customer' | 'leg' | 'driver' | 'insight'>('customer')
   const [statSearch, setStatSearch] = useState('')
   const custById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers])
   const custStats = useMemo(() => (visits ? customerStats(visits) : []), [visits])
@@ -148,6 +147,12 @@ export default function MilkRunTab() {
     if (!statSearch.trim()) return lgStats
     return lgStats.filter(s => matchesThaiQueryAnyField([custName(s.fromCustomerId), custName(s.toCustomerId), s.fromName, s.toName], statSearch))
   }, [lgStats, statSearch, custName])
+
+  // ── Phase 3: anomaly + เทียบคนขับ + หา route ──
+  const drvScores = useMemo(() => (visits && legs ? driverScores(visits, legs) : []), [visits, legs])
+  const anomalies = useMemo(() => (visits && legs ? detectAnomalies(visits, legs) : []), [visits, legs])
+  const routeOpps = useMemo(() => (legs ? routeOpportunities(legs) : []), [legs])
+  const drvName = useCallback((id: string) => crew.find(c => c.id === id)?.name || (id ? `คนขับ ${id.slice(0, 4)}` : 'ไม่ระบุ'), [crew])
 
   return (
     <div className="space-y-5">
@@ -230,20 +235,23 @@ export default function MilkRunTab() {
       {!loading && (custStats.length > 0 || lgStats.length > 0) && (
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex gap-1">
-              {([['customer', 'ตามลูกค้า'], ['leg', 'ช่วงเดินทาง A→B']] as const).map(([k, label]) => (
+            <div className="flex gap-1 flex-wrap">
+              {([['customer', 'ตามลูกค้า'], ['leg', 'ช่วงเดินทาง A→B'], ['driver', 'เทียบคนขับ'], ['insight', 'ข้อค้นพบ']] as const).map(([k, label]) => (
                 <button key={k} onClick={() => setStatView(k)}
-                  className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
+                  className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors inline-flex items-center gap-1',
                     statView === k ? 'bg-[#1B3A5C] text-white border-[#1B3A5C]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}>
                   {label}
+                  {k === 'insight' && anomalies.length > 0 && <span className={cn('px-1 rounded-full text-[10px]', statView === k ? 'bg-white/25' : 'bg-rose-100 text-rose-700')}>{anomalies.length}</span>}
                 </button>
               ))}
             </div>
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <input value={statSearch} onChange={e => setStatSearch(e.target.value)} placeholder="ค้นหาลูกค้า"
-                className="border border-slate-200 rounded-lg pl-8 pr-2.5 py-1.5 text-sm w-44" />
-            </div>
+            {(statView === 'customer' || statView === 'leg') && (
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input value={statSearch} onChange={e => setStatSearch(e.target.value)} placeholder="ค้นหาลูกค้า"
+                  className="border border-slate-200 rounded-lg pl-8 pr-2.5 py-1.5 text-sm w-44" />
+              </div>
+            )}
           </div>
 
           {statView === 'customer' ? (
@@ -283,7 +291,7 @@ export default function MilkRunTab() {
               </table>
               {filteredCustStats.length === 0 && <p className="text-center text-slate-400 text-sm py-6">ไม่พบลูกค้าที่ค้นหา</p>}
             </div>
-          ) : (
+          ) : statView === 'leg' ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[640px]">
                 <thead>
@@ -309,10 +317,99 @@ export default function MilkRunTab() {
               </table>
               {filteredLegStats.length === 0 && <p className="text-center text-slate-400 text-sm py-6">ไม่พบช่วงเดินทางที่ค้นหา</p>}
             </div>
+          ) : statView === 'driver' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 text-xs">
+                    <th className="px-3 py-2 text-left font-medium">คนขับ</th>
+                    <th className="px-3 py-2 text-right font-medium" title="คะแนนขับขี่จาก V2X (median)">คะแนนขับขี่</th>
+                    <th className="px-3 py-2 text-right font-medium">เที่ยว</th>
+                    <th className="px-3 py-2 text-right font-medium" title="เวลาเดินทางต่อ leg (median)">เวลาเดินทาง</th>
+                    <th className="px-3 py-2 text-right font-medium" title="เวลาที่ลูกค้า (median)">dwell</th>
+                    <th className="px-3 py-2 text-right font-medium">กม./ล.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {drvScores.map((s, i) => (
+                    <tr key={s.driverId} className="hover:bg-slate-50">
+                      <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">
+                        {i === 0 && drvScores.length > 1 && <span className="mr-1" title="คะแนนขับขี่สูงสุด">🏆</span>}{drvName(s.driverId)}
+                      </td>
+                      <td className={cn('px-3 py-2 text-right font-semibold', s.drivingScore >= 90 ? 'text-emerald-600' : s.drivingScore >= 70 ? 'text-amber-600' : s.drivingScore > 0 ? 'text-rose-600' : 'text-slate-300')}>
+                        {s.drivingScore > 0 ? s.drivingScore.toFixed(0) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-500">{s.legs}</td>
+                      <td className="px-3 py-2 text-right text-slate-600">{s.travelMedian > 0 ? `${Math.round(s.travelMedian)} น.` : '—'}</td>
+                      <td className="px-3 py-2 text-right text-slate-600">{s.dwellMedian > 0 ? `${Math.round(s.dwellMedian)} น.` : '—'}</td>
+                      <td className="px-3 py-2 text-right text-slate-500">{s.kmPerL > 0 ? s.kmPerL.toFixed(1) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {drvScores.length === 0 && <p className="text-center text-slate-400 text-sm py-6">ยังไม่มีข้อมูลคนขับ — ใบงาน (กระดานจ่ายงาน) ช่วยระบุคนขับให้แต่ละเที่ยว</p>}
+            </div>
+          ) : (
+            // insight: ข้อค้นพบ (anomaly + โอกาสประหยัดเวลา)
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> ผิดปกติ — นาน/ช้ากว่าปกติ ({anomalies.length})</h4>
+                {anomalies.length === 0 ? (
+                  <p className="text-xs text-slate-400">ไม่พบความผิดปกติ — ทุกอย่างอยู่ในช่วงปกติ 👍</p>
+                ) : (
+                  <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg max-h-72 overflow-auto">
+                    {anomalies.slice(0, 50).map((a, i) => (
+                      <li key={i} className="px-3 py-2 text-sm flex items-center gap-2 flex-wrap">
+                        <span className="text-slate-400 w-16 shrink-0 text-xs">{a.date.slice(5)}</span>
+                        <span className="font-medium text-slate-700">
+                          {a.kind === 'dwell' ? `จอดที่ ${custName(a.customerId)}` : `${custName(a.fromCustomerId)} → ${custName(a.toCustomerId)}`}
+                        </span>
+                        <span className="text-rose-600 font-semibold">{Math.round(a.value)} น.</span>
+                        <span className="text-slate-400 text-xs">(ปกติ ~{Math.round(a.median)} น.)</span>
+                        {a.driverId && <span className="text-slate-400 text-xs ml-auto">{drvName(a.driverId)}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5"><Route className="w-3.5 h-3.5 text-[#3DD8D8]" /> โอกาสประหยัดเวลา — เคยทำได้เร็วกว่า ({routeOpps.length})</h4>
+                {routeOpps.length === 0 ? (
+                  <p className="text-xs text-slate-400">ยังไม่พบช่วงที่แปรปรวนชัดเจน (ต้องมีข้อมูลพอ)</p>
+                ) : (
+                  <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                    <table className="w-full text-sm min-w-[560px]">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-500 text-xs">
+                          <th className="px-3 py-2 text-left font-medium">ช่วงเดินทาง</th>
+                          <th className="px-3 py-2 text-right font-medium">เที่ยว</th>
+                          <th className="px-3 py-2 text-right font-medium">ปกติ</th>
+                          <th className="px-3 py-2 text-right font-medium">เคยทำได้</th>
+                          <th className="px-3 py-2 text-right font-medium" title="ประหยัดได้ต่อเที่ยว × จำนวนเที่ยว">ประหยัดได้</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {routeOpps.slice(0, 30).map(s => (
+                          <tr key={`${s.fromCustomerId}>${s.toCustomerId}`} className="hover:bg-slate-50">
+                            <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{custName(s.fromCustomerId)} <span className="text-slate-300">→</span> {custName(s.toCustomerId)}</td>
+                            <td className="px-3 py-2 text-right text-slate-500">{s.trips}</td>
+                            <td className="px-3 py-2 text-right text-slate-600">{Math.round(s.median)} น.</td>
+                            <td className="px-3 py-2 text-right text-emerald-600 font-medium">{Math.round(s.fast)} น.</td>
+                            <td className="px-3 py-2 text-right text-[#1B3A5C] font-semibold">~{Math.round(s.savingTotal)} น.</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
-          <p className="text-[11px] text-slate-400">
-            ค่ากลาง (median) = เวลาส่วนมาก · วงเล็บ = ช่วงปกติ (25–75%) · ตัดค่าผิดปกติออกแล้ว
-          </p>
+          {(statView === 'customer' || statView === 'leg') && (
+            <p className="text-[11px] text-slate-400">
+              ค่ากลาง (median) = เวลาส่วนมาก · วงเล็บ = ช่วงปกติ (25–75%) · ตัดค่าผิดปกติออกแล้ว
+            </p>
+          )}
         </div>
       )}
     </div>
