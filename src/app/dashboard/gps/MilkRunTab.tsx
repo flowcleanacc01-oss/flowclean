@@ -7,14 +7,48 @@ import { useStore } from '@/lib/store'
 import { fetchGpsCars, fetchGpsTrips } from '@/lib/gps-service'
 import { fetchGpsVisits, fetchGpsLegs, saveReconstructedDay } from '@/lib/supabase-service'
 import { reconstructVisitsLegs, type RoundWindow } from '@/lib/visit-reconstruct'
-import { customerStats, legStats, arrivalVsWindow, minToHHMM, type Dist } from '@/lib/visit-stats'
-import { detectAnomalies, driverScores, routeOpportunities } from '@/lib/visit-anomaly'
+import { customerStats, legStats, arrivalVsWindow, minToHHMM, type Dist, type CustomerStat, type LegStat } from '@/lib/visit-stats'
+import { detectAnomalies, driverScores, routeOpportunities, type Anomaly, type DriverScore, type RouteOpportunity } from '@/lib/visit-anomaly'
 import { normalizePlate } from '@/lib/v2x-types'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
+import { exportCSV } from '@/lib/export'
 import type { LatLng } from '@/lib/geo'
 import { cn, todayISO } from '@/lib/utils'
 import type { GpsVisit, GpsLeg, Vehicle } from '@/types'
-import { Database, Loader2, Play, X, RefreshCw, AlertTriangle, CheckCircle2, Truck, Clock, Route, Search } from 'lucide-react'
+import { Database, Loader2, Play, X, RefreshCw, AlertTriangle, CheckCircle2, Truck, Clock, Route, Search, FileSpreadsheet } from 'lucide-react'
+
+// 451 — เรียงทุกคอลัมน์ + export CSV (theme เดียวกับรายงานอื่น: SortHeader ลูกศร ↑↓ สี accent + exportCSV BOM)
+type SortDir = 'asc' | 'desc'
+
+/** เรียง rows ตาม getter · ค่าว่าง (NaN/'') จมท้ายเสมอไม่ว่า asc/desc · string เทียบแบบไทย */
+function sortRows<T>(rows: T[], get: (x: T) => number | string, dir: SortDir): T[] {
+  return [...rows].sort((a, b) => {
+    const va = get(a), vb = get(b)
+    const ea = va === '' || (typeof va === 'number' && Number.isNaN(va))
+    const eb = vb === '' || (typeof vb === 'number' && Number.isNaN(vb))
+    if (ea && eb) return 0
+    if (ea) return 1
+    if (eb) return -1
+    const cmp = typeof va === 'number' && typeof vb === 'number'
+      ? va - vb
+      : String(va).localeCompare(String(vb), 'th')
+    return dir === 'asc' ? cmp : -cmp
+  })
+}
+
+/** state เรียงคอลัมน์ — กดคอลัมน์เดิม=สลับทิศ · คอลัมน์ใหม่=เริ่ม desc */
+function useSort<C extends string>(initialCol: C, initialDir: SortDir = 'desc') {
+  const [col, setCol] = useState<C>(initialCol)
+  const [dir, setDir] = useState<SortDir>(initialDir)
+  const onSort = useCallback((c: C) => {
+    if (c === col) setDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setCol(c); setDir('desc') }
+  }, [col])
+  return { col, dir, onSort }
+}
+
+const PLAN_LABEL = { after: 'สายกว่ากำหนด', before: 'ถึงก่อนกำหนด', in: 'ตรงเวลา' } as const
+const PLAN_RANK = { after: 3, before: 2, in: 1 } as const
 
 /** ไล่วันแบบ TZ-safe (string math · Date.UTC) — from..to รวมปลาย */
 function enumerateDays(from: string, to: string): string[] {
@@ -154,6 +188,140 @@ export default function MilkRunTab() {
   const routeOpps = useMemo(() => (legs ? routeOpportunities(legs) : []), [legs])
   const drvName = useCallback((id: string) => crew.find(c => c.id === id)?.name || (id ? `คนขับ ${id.slice(0, 4)}` : 'ไม่ระบุ'), [crew])
 
+  // ── 451: เรียงทุกคอลัมน์ + export CSV ──
+  const planOf = useCallback((s: CustomerStat) => {
+    const c = custById.get(s.customerId)
+    return c ? arrivalVsWindow(s.arrive.median, s.arrive.n, c.pickupWindowStart || '', c.pickupWindowEnd || '') : null
+  }, [custById])
+  const maxDrivingScore = useMemo(() => drvScores.reduce((m, s) => Math.max(m, s.drivingScore), 0), [drvScores])
+  const anomalyPlace = useCallback((a: Anomaly) => a.kind === 'dwell'
+    ? custName(a.customerId)
+    : `${custName(a.fromCustomerId)} → ${custName(a.toCustomerId)}`, [custName])
+  const anomalyKind = (a: Anomaly) => (a.kind === 'dwell' ? 'จอดที่ลูกค้า' : 'เดินทาง')
+
+  type CustCol = 'name' | 'visits' | 'arrive' | 'dwell' | 'depart' | 'plan'
+  type LegCol = 'pair' | 'trips' | 'travel' | 'km' | 'fuel'
+  type DrvCol = 'name' | 'score' | 'legs' | 'travel' | 'dwell' | 'kmL'
+  type AnoCol = 'date' | 'kind' | 'place' | 'value' | 'median' | 'diff' | 'driver'
+  type OppCol = 'pair' | 'trips' | 'median' | 'fast' | 'saving'
+  const custSort = useSort<CustCol>('visits')
+  const legSort = useSort<LegCol>('trips')
+  const drvSort = useSort<DrvCol>('score')
+  const anoSort = useSort<AnoCol>('value')
+  const oppSort = useSort<OppCol>('saving')
+
+  const sortedCustStats = useMemo(() => sortRows(filteredCustStats, (s: CustomerStat) => {
+    switch (custSort.col) {
+      case 'name': return custName(s.customerId)
+      case 'visits': return s.visits
+      case 'arrive': return s.arrive.n > 0 ? s.arrive.median : NaN
+      case 'dwell': return s.dwell.n > 0 ? s.dwell.median : NaN
+      case 'depart': return s.depart.n > 0 ? s.depart.median : NaN
+      case 'plan': { const p = planOf(s); return p ? PLAN_RANK[p] : NaN }
+      default: return ''
+    }
+  }, custSort.dir), [filteredCustStats, custSort.col, custSort.dir, custName, planOf])
+
+  const sortedLegStats = useMemo(() => sortRows(filteredLegStats, (s: LegStat) => {
+    switch (legSort.col) {
+      case 'pair': return `${custName(s.fromCustomerId)} → ${custName(s.toCustomerId)}`
+      case 'trips': return s.trips
+      case 'travel': return s.travel.n > 0 ? s.travel.median : NaN
+      case 'km': return s.km.n > 0 ? s.km.median : NaN
+      case 'fuel': return s.fuel.median > 0 ? s.fuel.median : NaN
+      default: return ''
+    }
+  }, legSort.dir), [filteredLegStats, legSort.col, legSort.dir, custName])
+
+  const sortedDrvScores = useMemo(() => sortRows(drvScores, (s: DriverScore) => {
+    switch (drvSort.col) {
+      case 'name': return drvName(s.driverId)
+      case 'score': return s.drivingScore > 0 ? s.drivingScore : NaN
+      case 'legs': return s.legs
+      case 'travel': return s.travelMedian > 0 ? s.travelMedian : NaN
+      case 'dwell': return s.dwellMedian > 0 ? s.dwellMedian : NaN
+      case 'kmL': return s.kmPerL > 0 ? s.kmPerL : NaN
+      default: return ''
+    }
+  }, drvSort.dir), [drvScores, drvSort.col, drvSort.dir, drvName])
+
+  const sortedAnomalies = useMemo(() => sortRows(anomalies, (a: Anomaly) => {
+    switch (anoSort.col) {
+      case 'date': return a.date
+      case 'kind': return anomalyKind(a)
+      case 'place': return anomalyPlace(a)
+      case 'value': return a.value
+      case 'median': return a.median
+      case 'diff': return a.value - a.median
+      case 'driver': return drvName(a.driverId)
+      default: return ''
+    }
+  }, anoSort.dir), [anomalies, anoSort.col, anoSort.dir, anomalyPlace, drvName])
+
+  const sortedOpps = useMemo(() => sortRows(routeOpps, (s: RouteOpportunity) => {
+    switch (oppSort.col) {
+      case 'pair': return `${custName(s.fromCustomerId)} → ${custName(s.toCustomerId)}`
+      case 'trips': return s.trips
+      case 'median': return s.median
+      case 'fast': return s.fast
+      case 'saving': return s.savingTotal
+      default: return ''
+    }
+  }, oppSort.dir), [routeOpps, oppSort.col, oppSort.dir, custName])
+
+  const exportRange = `${from}_${to}`
+  const exportCust = () => {
+    if (sortedCustStats.length === 0) return
+    const headers = ['ลูกค้า', 'ครั้ง', 'เวลาถึง (ปกติ)', 'ใช้เวลา dwell (น.)', 'เวลาออก', 'เทียบแผน']
+    exportCSV(headers, sortedCustStats.map(s => {
+      const p = planOf(s)
+      return [custName(s.customerId), String(s.visits),
+        s.arrive.n > 0 ? minToHHMM(s.arrive.median) : '',
+        s.dwell.n > 0 ? String(Math.round(s.dwell.median)) : '',
+        s.depart.n > 0 ? minToHHMM(s.depart.median) : '',
+        p ? PLAN_LABEL[p] : '']
+    }), `สถิติหน้างาน_ตามลูกค้า_${exportRange}`)
+  }
+  const exportLeg = () => {
+    if (sortedLegStats.length === 0) return
+    const headers = ['ช่วงเดินทาง', 'ครั้ง', 'เวลาเดินทาง (น.)', 'ระยะ (กม.)', 'น้ำมัน (ล.)']
+    exportCSV(headers, sortedLegStats.map(s => [
+      `${custName(s.fromCustomerId)} → ${custName(s.toCustomerId)}`, String(s.trips),
+      s.travel.n > 0 ? String(Math.round(s.travel.median)) : '',
+      s.km.n > 0 ? s.km.median.toFixed(1) : '',
+      s.fuel.median > 0 ? s.fuel.median.toFixed(2) : '']),
+      `สถิติหน้างาน_ช่วงเดินทาง_${exportRange}`)
+  }
+  const exportDriver = () => {
+    if (sortedDrvScores.length === 0) return
+    const headers = ['คนขับ', 'คะแนนขับขี่', 'เที่ยว', 'เวลาเดินทาง (น.)', 'dwell (น.)', 'กม./ล.']
+    exportCSV(headers, sortedDrvScores.map(s => [
+      drvName(s.driverId),
+      s.drivingScore > 0 ? s.drivingScore.toFixed(0) : '',
+      String(s.legs),
+      s.travelMedian > 0 ? String(Math.round(s.travelMedian)) : '',
+      s.dwellMedian > 0 ? String(Math.round(s.dwellMedian)) : '',
+      s.kmPerL > 0 ? s.kmPerL.toFixed(1) : '']),
+      `สถิติหน้างาน_เทียบคนขับ_${exportRange}`)
+  }
+  const exportAnomalies = () => {
+    if (sortedAnomalies.length === 0) return
+    const headers = ['วันที่', 'ประเภท', 'จุด/ช่วง', 'จริง (น.)', 'ปกติ (น.)', 'ส่วนต่าง (น.)', 'คนขับ']
+    exportCSV(headers, sortedAnomalies.map(a => [
+      a.date, anomalyKind(a), anomalyPlace(a),
+      String(Math.round(a.value)), String(Math.round(a.median)),
+      String(Math.round(a.value - a.median)), a.driverId ? drvName(a.driverId) : '']),
+      `สถิติหน้างาน_ผิดปกติ_${exportRange}`)
+  }
+  const exportOpps = () => {
+    if (sortedOpps.length === 0) return
+    const headers = ['ช่วงเดินทาง', 'เที่ยว', 'ปกติ (น.)', 'เคยทำได้ (น.)', 'ประหยัดได้ (น.)']
+    exportCSV(headers, sortedOpps.map(s => [
+      `${custName(s.fromCustomerId)} → ${custName(s.toCustomerId)}`, String(s.trips),
+      String(Math.round(s.median)), String(Math.round(s.fast)), String(Math.round(s.savingTotal))]),
+      `สถิติหน้างาน_โอกาสประหยัด_${exportRange}`)
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -245,13 +413,23 @@ export default function MilkRunTab() {
                 </button>
               ))}
             </div>
-            {(statView === 'customer' || statView === 'leg') && (
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input value={statSearch} onChange={e => setStatSearch(e.target.value)} placeholder="ค้นหาลูกค้า"
-                  className="border border-slate-200 rounded-lg pl-8 pr-2.5 py-1.5 text-sm w-44" />
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {(statView === 'customer' || statView === 'leg') && (
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input value={statSearch} onChange={e => setStatSearch(e.target.value)} placeholder="ค้นหาลูกค้า"
+                    className="border border-slate-200 rounded-lg pl-8 pr-2.5 py-1.5 text-sm w-44" />
+                </div>
+              )}
+              {/* 451 — Export CSV (insight มี 2 ชุดข้อมูล → ปุ่มแยกในแต่ละส่วน) */}
+              {statView !== 'insight' && (
+                <button onClick={statView === 'customer' ? exportCust : statView === 'leg' ? exportLeg : exportDriver}
+                  disabled={(statView === 'customer' ? sortedCustStats : statView === 'leg' ? sortedLegStats : sortedDrvScores).length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
+                  <FileSpreadsheet className="w-3.5 h-3.5" /> Export CSV
+                </button>
+              )}
+            </div>
           </div>
 
           {statView === 'customer' ? (
@@ -259,18 +437,17 @@ export default function MilkRunTab() {
               <table className="w-full text-sm min-w-[680px]">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-xs">
-                    <th className="px-3 py-2 text-left font-medium">ลูกค้า</th>
-                    <th className="px-3 py-2 text-right font-medium">ครั้ง</th>
-                    <th className="px-3 py-2 text-right font-medium">เวลาถึง (ปกติ)</th>
-                    <th className="px-3 py-2 text-right font-medium">ใช้เวลา (dwell)</th>
-                    <th className="px-3 py-2 text-right font-medium">เวลาออก</th>
-                    <th className="px-3 py-2 text-center font-medium">เทียบแผน</th>
+                    <SortHeader col="name" label="ลูกค้า" active={custSort.col === 'name'} dir={custSort.dir} onSort={custSort.onSort} className="text-left" />
+                    <SortHeader col="visits" label="ครั้ง" active={custSort.col === 'visits'} dir={custSort.dir} onSort={custSort.onSort} />
+                    <SortHeader col="arrive" label="เวลาถึง (ปกติ)" active={custSort.col === 'arrive'} dir={custSort.dir} onSort={custSort.onSort} />
+                    <SortHeader col="dwell" label="ใช้เวลา (dwell)" active={custSort.col === 'dwell'} dir={custSort.dir} onSort={custSort.onSort} />
+                    <SortHeader col="depart" label="เวลาออก" active={custSort.col === 'depart'} dir={custSort.dir} onSort={custSort.onSort} />
+                    <SortHeader col="plan" label="เทียบแผน" active={custSort.col === 'plan'} dir={custSort.dir} onSort={custSort.onSort} className="text-center" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredCustStats.map(s => {
-                    const c = custById.get(s.customerId)
-                    const cmp = c ? arrivalVsWindow(s.arrive.median, s.arrive.n, c.pickupWindowStart || '', c.pickupWindowEnd || '') : null
+                  {sortedCustStats.map(s => {
+                    const cmp = planOf(s)
                     return (
                       <tr key={s.customerId} className="hover:bg-slate-50">
                         <td className="px-3 py-2 font-medium text-slate-700">{custName(s.customerId)}</td>
@@ -289,22 +466,22 @@ export default function MilkRunTab() {
                   })}
                 </tbody>
               </table>
-              {filteredCustStats.length === 0 && <p className="text-center text-slate-400 text-sm py-6">ไม่พบลูกค้าที่ค้นหา</p>}
+              {sortedCustStats.length === 0 && <p className="text-center text-slate-400 text-sm py-6">ไม่พบลูกค้าที่ค้นหา</p>}
             </div>
           ) : statView === 'leg' ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-xs">
-                    <th className="px-3 py-2 text-left font-medium">ช่วงเดินทาง</th>
-                    <th className="px-3 py-2 text-right font-medium">ครั้ง</th>
-                    <th className="px-3 py-2 text-right font-medium">เวลาเดินทาง (ปกติ)</th>
-                    <th className="px-3 py-2 text-right font-medium">ระยะ (กม.)</th>
-                    <th className="px-3 py-2 text-right font-medium">น้ำมัน (ล.)</th>
+                    <SortHeader col="pair" label="ช่วงเดินทาง" active={legSort.col === 'pair'} dir={legSort.dir} onSort={legSort.onSort} className="text-left" />
+                    <SortHeader col="trips" label="ครั้ง" active={legSort.col === 'trips'} dir={legSort.dir} onSort={legSort.onSort} />
+                    <SortHeader col="travel" label="เวลาเดินทาง (ปกติ)" active={legSort.col === 'travel'} dir={legSort.dir} onSort={legSort.onSort} />
+                    <SortHeader col="km" label="ระยะ (กม.)" active={legSort.col === 'km'} dir={legSort.dir} onSort={legSort.onSort} />
+                    <SortHeader col="fuel" label="น้ำมัน (ล.)" active={legSort.col === 'fuel'} dir={legSort.dir} onSort={legSort.onSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredLegStats.map(s => (
+                  {sortedLegStats.map(s => (
                     <tr key={`${s.fromCustomerId}>${s.toCustomerId}`} className="hover:bg-slate-50">
                       <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{custName(s.fromCustomerId)} <span className="text-slate-300">→</span> {custName(s.toCustomerId)}</td>
                       <td className="px-3 py-2 text-right text-slate-500">{s.trips}</td>
@@ -315,26 +492,26 @@ export default function MilkRunTab() {
                   ))}
                 </tbody>
               </table>
-              {filteredLegStats.length === 0 && <p className="text-center text-slate-400 text-sm py-6">ไม่พบช่วงเดินทางที่ค้นหา</p>}
+              {sortedLegStats.length === 0 && <p className="text-center text-slate-400 text-sm py-6">ไม่พบช่วงเดินทางที่ค้นหา</p>}
             </div>
           ) : statView === 'driver' ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-xs">
-                    <th className="px-3 py-2 text-left font-medium">คนขับ</th>
-                    <th className="px-3 py-2 text-right font-medium" title="คะแนนขับขี่จาก V2X (median)">คะแนนขับขี่</th>
-                    <th className="px-3 py-2 text-right font-medium">เที่ยว</th>
-                    <th className="px-3 py-2 text-right font-medium" title="เวลาเดินทางต่อ leg (median)">เวลาเดินทาง</th>
-                    <th className="px-3 py-2 text-right font-medium" title="เวลาที่ลูกค้า (median)">dwell</th>
-                    <th className="px-3 py-2 text-right font-medium">กม./ล.</th>
+                    <SortHeader col="name" label="คนขับ" active={drvSort.col === 'name'} dir={drvSort.dir} onSort={drvSort.onSort} className="text-left" />
+                    <SortHeader col="score" label="คะแนนขับขี่" active={drvSort.col === 'score'} dir={drvSort.dir} onSort={drvSort.onSort} title="คะแนนขับขี่จาก V2X (median)" />
+                    <SortHeader col="legs" label="เที่ยว" active={drvSort.col === 'legs'} dir={drvSort.dir} onSort={drvSort.onSort} />
+                    <SortHeader col="travel" label="เวลาเดินทาง" active={drvSort.col === 'travel'} dir={drvSort.dir} onSort={drvSort.onSort} title="เวลาเดินทางต่อ leg (median)" />
+                    <SortHeader col="dwell" label="dwell" active={drvSort.col === 'dwell'} dir={drvSort.dir} onSort={drvSort.onSort} title="เวลาที่ลูกค้า (median)" />
+                    <SortHeader col="kmL" label="กม./ล." active={drvSort.col === 'kmL'} dir={drvSort.dir} onSort={drvSort.onSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {drvScores.map((s, i) => (
+                  {sortedDrvScores.map(s => (
                     <tr key={s.driverId} className="hover:bg-slate-50">
                       <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">
-                        {i === 0 && drvScores.length > 1 && <span className="mr-1" title="คะแนนขับขี่สูงสุด">🏆</span>}{drvName(s.driverId)}
+                        {s.drivingScore === maxDrivingScore && maxDrivingScore > 0 && drvScores.length > 1 && <span className="mr-1" title="คะแนนขับขี่สูงสุด">🏆</span>}{drvName(s.driverId)}
                       </td>
                       <td className={cn('px-3 py-2 text-right font-semibold', s.drivingScore >= 90 ? 'text-emerald-600' : s.drivingScore >= 70 ? 'text-amber-600' : s.drivingScore > 0 ? 'text-rose-600' : 'text-slate-300')}>
                         {s.drivingScore > 0 ? s.drivingScore.toFixed(0) : '—'}
@@ -350,46 +527,77 @@ export default function MilkRunTab() {
               {drvScores.length === 0 && <p className="text-center text-slate-400 text-sm py-6">ยังไม่มีข้อมูลคนขับ — ใบงาน (กระดานจ่ายงาน) ช่วยระบุคนขับให้แต่ละเที่ยว</p>}
             </div>
           ) : (
-            // insight: ข้อค้นพบ (anomaly + โอกาสประหยัดเวลา)
+            // insight: ข้อค้นพบ (anomaly + โอกาสประหยัดเวลา) — 451: ตารางเรียงได้ + export ทั้ง 2 ชุด
             <div className="space-y-4">
               <div>
-                <h4 className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> ผิดปกติ — นาน/ช้ากว่าปกติ ({anomalies.length})</h4>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <h4 className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> ผิดปกติ — นาน/ช้ากว่าปกติ ({anomalies.length})</h4>
+                  {sortedAnomalies.length > 0 && (
+                    <button onClick={exportAnomalies}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs hover:bg-slate-200 whitespace-nowrap">
+                      <FileSpreadsheet className="w-3.5 h-3.5" /> Export CSV
+                    </button>
+                  )}
+                </div>
                 {anomalies.length === 0 ? (
                   <p className="text-xs text-slate-400">ไม่พบความผิดปกติ — ทุกอย่างอยู่ในช่วงปกติ 👍</p>
                 ) : (
-                  <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg max-h-72 overflow-auto">
-                    {anomalies.slice(0, 50).map((a, i) => (
-                      <li key={i} className="px-3 py-2 text-sm flex items-center gap-2 flex-wrap">
-                        <span className="text-slate-400 w-16 shrink-0 text-xs">{a.date.slice(5)}</span>
-                        <span className="font-medium text-slate-700">
-                          {a.kind === 'dwell' ? `จอดที่ ${custName(a.customerId)}` : `${custName(a.fromCustomerId)} → ${custName(a.toCustomerId)}`}
-                        </span>
-                        <span className="text-rose-600 font-semibold">{Math.round(a.value)} น.</span>
-                        <span className="text-slate-400 text-xs">(ปกติ ~{Math.round(a.median)} น.)</span>
-                        {a.driverId && <span className="text-slate-400 text-xs ml-auto">{drvName(a.driverId)}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div>
-                <h4 className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5"><Route className="w-3.5 h-3.5 text-[#3DD8D8]" /> โอกาสประหยัดเวลา — เคยทำได้เร็วกว่า ({routeOpps.length})</h4>
-                {routeOpps.length === 0 ? (
-                  <p className="text-xs text-slate-400">ยังไม่พบช่วงที่แปรปรวนชัดเจน (ต้องมีข้อมูลพอ)</p>
-                ) : (
-                  <div className="overflow-x-auto border border-slate-100 rounded-lg">
-                    <table className="w-full text-sm min-w-[560px]">
-                      <thead>
+                  <div className="border border-slate-100 rounded-lg max-h-72 overflow-auto">
+                    <table className="w-full text-sm min-w-[620px]">
+                      <thead className="sticky top-0 z-10">
                         <tr className="bg-slate-50 text-slate-500 text-xs">
-                          <th className="px-3 py-2 text-left font-medium">ช่วงเดินทาง</th>
-                          <th className="px-3 py-2 text-right font-medium">เที่ยว</th>
-                          <th className="px-3 py-2 text-right font-medium">ปกติ</th>
-                          <th className="px-3 py-2 text-right font-medium">เคยทำได้</th>
-                          <th className="px-3 py-2 text-right font-medium" title="ประหยัดได้ต่อเที่ยว × จำนวนเที่ยว">ประหยัดได้</th>
+                          <SortHeader col="date" label="วันที่" active={anoSort.col === 'date'} dir={anoSort.dir} onSort={anoSort.onSort} className="text-left" />
+                          <SortHeader col="kind" label="ประเภท" active={anoSort.col === 'kind'} dir={anoSort.dir} onSort={anoSort.onSort} className="text-left" />
+                          <SortHeader col="place" label="จุด/ช่วง" active={anoSort.col === 'place'} dir={anoSort.dir} onSort={anoSort.onSort} className="text-left" />
+                          <SortHeader col="value" label="จริง" active={anoSort.col === 'value'} dir={anoSort.dir} onSort={anoSort.onSort} />
+                          <SortHeader col="median" label="ปกติ" active={anoSort.col === 'median'} dir={anoSort.dir} onSort={anoSort.onSort} />
+                          <SortHeader col="diff" label="ส่วนต่าง" active={anoSort.col === 'diff'} dir={anoSort.dir} onSort={anoSort.onSort} title="ช้ากว่าปกติเท่าไร" />
+                          <SortHeader col="driver" label="คนขับ" active={anoSort.col === 'driver'} dir={anoSort.dir} onSort={anoSort.onSort} className="text-left" />
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {routeOpps.slice(0, 30).map(s => (
+                        {sortedAnomalies.map((a, i) => (
+                          <tr key={i} className="hover:bg-slate-50">
+                            <td className="px-3 py-2 text-slate-500 text-xs whitespace-nowrap">{a.date.slice(5)}</td>
+                            <td className="px-3 py-2 text-slate-500 whitespace-nowrap">{anomalyKind(a)}</td>
+                            <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{anomalyPlace(a)}</td>
+                            <td className="px-3 py-2 text-right text-rose-600 font-semibold whitespace-nowrap">{Math.round(a.value)} น.</td>
+                            <td className="px-3 py-2 text-right text-slate-500 whitespace-nowrap">{Math.round(a.median)} น.</td>
+                            <td className="px-3 py-2 text-right text-rose-500 font-medium whitespace-nowrap">+{Math.round(a.value - a.median)} น.</td>
+                            <td className="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">{a.driverId ? drvName(a.driverId) : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <h4 className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Route className="w-3.5 h-3.5 text-[#3DD8D8]" /> โอกาสประหยัดเวลา — เคยทำได้เร็วกว่า ({routeOpps.length})</h4>
+                  {sortedOpps.length > 0 && (
+                    <button onClick={exportOpps}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs hover:bg-slate-200 whitespace-nowrap">
+                      <FileSpreadsheet className="w-3.5 h-3.5" /> Export CSV
+                    </button>
+                  )}
+                </div>
+                {routeOpps.length === 0 ? (
+                  <p className="text-xs text-slate-400">ยังไม่พบช่วงที่แปรปรวนชัดเจน (ต้องมีข้อมูลพอ)</p>
+                ) : (
+                  <div className="border border-slate-100 rounded-lg max-h-72 overflow-auto">
+                    <table className="w-full text-sm min-w-[560px]">
+                      <thead className="sticky top-0 z-10">
+                        <tr className="bg-slate-50 text-slate-500 text-xs">
+                          <SortHeader col="pair" label="ช่วงเดินทาง" active={oppSort.col === 'pair'} dir={oppSort.dir} onSort={oppSort.onSort} className="text-left" />
+                          <SortHeader col="trips" label="เที่ยว" active={oppSort.col === 'trips'} dir={oppSort.dir} onSort={oppSort.onSort} />
+                          <SortHeader col="median" label="ปกติ" active={oppSort.col === 'median'} dir={oppSort.dir} onSort={oppSort.onSort} />
+                          <SortHeader col="fast" label="เคยทำได้" active={oppSort.col === 'fast'} dir={oppSort.dir} onSort={oppSort.onSort} />
+                          <SortHeader col="saving" label="ประหยัดได้" active={oppSort.col === 'saving'} dir={oppSort.dir} onSort={oppSort.onSort} title="ประหยัดได้ต่อเที่ยว × จำนวนเที่ยว" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {sortedOpps.map(s => (
                           <tr key={`${s.fromCustomerId}>${s.toCustomerId}`} className="hover:bg-slate-50">
                             <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{custName(s.fromCustomerId)} <span className="text-slate-300">→</span> {custName(s.toCustomerId)}</td>
                             <td className="px-3 py-2 text-right text-slate-500">{s.trips}</td>
@@ -425,6 +633,22 @@ function TimeDist({ d, kind }: { d: Dist; kind: 'time' | 'dur' }) {
       <span className="font-semibold text-slate-700">{fmt(d.median)}{kind === 'dur' && ' น.'}</span>
       {(d.p25 !== d.p75) && <span className="text-[11px] text-slate-400"> ({fmt(d.p25)}–{fmt(d.p75)})</span>}
     </span>
+  )
+}
+
+/** 451 — หัวคอลัมน์เรียงได้ (theme เดียวกับ AggregateModeAudit ฯลฯ) · alignment มาจาก className */
+function SortHeader<C extends string>({ col, label, active, dir, onSort, className, title }: {
+  col: C; label: string; active: boolean; dir: SortDir; onSort: (c: C) => void; className?: string; title?: string
+}) {
+  return (
+    <th title={title}
+      className={cn('px-3 py-2 font-medium cursor-pointer select-none hover:bg-slate-100 whitespace-nowrap', className || 'text-right')}
+      onClick={() => onSort(col)}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active && <span className="text-[#3DD8D8]">{dir === 'asc' ? '↑' : '↓'}</span>}
+      </span>
+    </th>
   )
 }
 
