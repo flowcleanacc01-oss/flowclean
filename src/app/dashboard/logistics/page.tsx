@@ -23,12 +23,13 @@ import {
   ChevronLeft, ChevronRight, CalendarDays, Truck, Plus, AlertOctagon,
   CheckCircle2, ArrowRight, Ban, Info, ClipboardCheck, CornerUpRight, CornerDownRight,
   ChevronUp, ChevronDown, GripVertical, ListOrdered, X, CalendarX, Trash2,
-  MessageSquareText, Copy, Check, Search, CalendarClock,
+  MessageSquareText, Copy, Check, Search, CalendarClock, Settings2,
 } from 'lucide-react'
 import { buildDispatchText } from '@/lib/dispatch-text'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { planRange, buildCustomerPlan, buildCustomerPlanText, thaiRangeLabel } from '@/lib/customer-plan'
 import CustomerPlanPrint from '@/components/CustomerPlanPrint'
+import ScheduleSetupModal from '@/components/ScheduleSetupModal'
 
 const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 function fmtShort(iso: string): string {
@@ -79,6 +80,16 @@ interface PendingDelete {
 // 431 — ป้ายวันสั้น (weekday 0-6) สำหรับ chip ข้อยกเว้นรอบรายวัน (429)
 const DAY_LABELS = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.']
 
+// 454.1 — ป้าย schedule + วันเฉพาะ (weekly/biweekly) เช่น "รายสัปดาห์ (จ พฤ ส)"
+function scheduleLabelWithDays(c: Customer): string {
+  const base = SCHEDULE_TYPE_CONFIG[c.scheduleType || 'none']?.label || ''
+  if ((c.scheduleType === 'weekly' || c.scheduleType === 'biweekly') && c.scheduleDays && c.scheduleDays.length > 0) {
+    const days = [...c.scheduleDays].sort((a, b) => a - b).map(d => WEEKDAY_SHORT[d]).join(' ')
+    return `${base} (${days})`
+  }
+  return base
+}
+
 export default function LogisticsPage() {
   const { currentUser, customers, deliveryNotes, scheduleOverrides, updateDeliveryNote, addScheduleOverride, deleteScheduleOverride, updateCustomer, routePlans, setRouteOrder, companyInfo, rounds } = useStore()
   const router = useRouter()
@@ -106,6 +117,8 @@ export default function LogisticsPage() {
   const [showExport, setShowExport] = useState(false)
   // 453 — modal แผนคิวเฉพาะลูกค้า (ส่งให้ลูกค้ารู้คิวล่วงหน้า)
   const [showCustomerPlan, setShowCustomerPlan] = useState(false)
+  // 454.1 — เปิด modal ตั้งค่าตารางคิวจากชิปป้าย schedule ใน Col ลูกค้า
+  const [scheduleCustomer, setScheduleCustomer] = useState<Customer | null>(null)
   // day-detail (route ordering) state
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const listDragIdx = useRef<number | null>(null)
@@ -522,9 +535,13 @@ export default function LogisticsPage() {
                       {row.customer.shortName || row.customer.name}
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className="text-[10px] text-slate-400" title={SCHEDULE_TYPE_CONFIG[row.customer.scheduleType!]?.description}>
-                        {SCHEDULE_TYPE_CONFIG[row.customer.scheduleType!]?.label}
-                      </span>
+                      {/* 454.1 — ป้าย schedule + วันเฉพาะ · คลิกเปิดตั้งค่าตารางคิว (ลูกค้าแจ้งปรับวัน) */}
+                      <button type="button" onClick={() => setScheduleCustomer(row.customer)}
+                        className="text-[10px] text-slate-400 hover:text-[#1B3A5C] hover:underline inline-flex items-center gap-0.5 transition-colors"
+                        title="คลิกเพื่อตั้งค่าตารางคิวส่งผ้า (เช่น ลูกค้าแจ้งปรับวัน)">
+                        {scheduleLabelWithDays(row.customer)}
+                        <Settings2 className="w-2.5 h-2.5 opacity-0 group-hover:opacity-60 transition-opacity" />
+                      </button>
                       {/* 429 — ข้อยกเว้นรอบรายวัน เช่น "ส.→V" */}
                       {Object.entries(row.customer.roundDayOverrides || {})
                         .filter(([, rid]) => rid && rid !== row.customer.roundId)
@@ -826,6 +843,11 @@ export default function LogisticsPage() {
           today={today}
           onClose={() => setShowCustomerPlan(false)}
         />
+      )}
+
+      {/* 454.1 — ตั้งค่าตารางคิวส่งผ้า (เปิดจากป้าย schedule ใน Col ลูกค้า) */}
+      {scheduleCustomer && (
+        <ScheduleSetupModal open onClose={() => setScheduleCustomer(null)} customer={scheduleCustomer} />
       )}
     </div>
   )
