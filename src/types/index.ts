@@ -224,6 +224,9 @@ export interface Customer {
   scheduleEndDate?: string
   scheduleEndCount?: number
   scheduleNote?: string
+  // 454.2 — ป้ายเตือนขนส่งสั้นๆ แสดงในชิปปฏิทินขนส่ง (เช่น "ส่ง" / "รับมาซักวันสุดท้าย")
+  //   ต่างจาก scheduleNote (ยาว) — สำหรับลูกค้าที่ไม่มี pattern แน่นอน ต้องสั่งงานเฉพาะกิจ
+  dispatchNote?: string
   // 317 Phase 1 — Aggregate Size Groups (per-customer opt-in)
   // ลูกค้า opt-in รายตัวว่า size group ไหน "นับรวมไซส์" บ้าง
   // groupKey ตรงกับ LinenItemDef.sizeGroup

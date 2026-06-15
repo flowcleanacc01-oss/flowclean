@@ -578,6 +578,7 @@ export default function LogisticsPage() {
                           cell={cell}
                           today={today}
                           shortName={row.customer.shortName || row.customer.name}
+                          dispatchNote={row.customer.dispatchNote}
                           roundColor={g.round?.color}
                           draggable={isDraggableStatus(cell.status)}
                           onDragStart={() => onDragStart(row, cell)}
@@ -1058,11 +1059,12 @@ function sdBadge(cell: LogisticsCell, today: string): { text: string; cls: strin
 }
 
 function CellChip({
-  cell, today, shortName, roundColor, draggable, onDragStart, onDragEnd, onCreate, onView, onDelete,
+  cell, today, shortName, dispatchNote, roundColor, draggable, onDragStart, onDragEnd, onCreate, onView, onDelete,
 }: {
   cell: LogisticsCell
   today: string
   shortName: string              // 436 — ชื่อย่อลูกค้าใน chip
+  dispatchNote?: string          // 454.2 — ป้ายเตือนขนส่ง เช่น "(รับมาซักวันสุดท้าย)"
   roundColor?: string            // 436 — theme สีรอบ
   draggable: boolean
   onDragStart: () => void
@@ -1121,7 +1123,7 @@ function CellChip({
         onDragEnd={onDragEnd}
         onClick={onClick}
         disabled={!onClick && !draggable}
-        title={title}
+        title={dispatchNote ? `${dispatchNote}${title ? ' · ' + title : ''}` : title}
         style={tintStyle}
         className={cn(
           'relative w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-lg border transition-[filter,background-color]',
@@ -1132,7 +1134,10 @@ function CellChip({
           !onClick && !draggable && 'cursor-default',
         )}
       >
-        <span className="truncate font-bold text-[13px] leading-tight text-slate-800">{shortName}</span>
+        <span className="truncate font-bold text-[13px] leading-tight text-slate-800">
+          {shortName}
+          {dispatchNote && <span className="font-semibold text-[11px] text-amber-700"> ({dispatchNote})</span>}
+        </span>
         <span className={cn('shrink-0 text-[11px] font-bold leading-none', badge.cls)}>{badge.text}</span>
         {hasRescheduleAdd && cell.status !== 'skipped' && (
           <CornerDownRight className="w-3 h-3 text-indigo-500 absolute -top-1 -right-1" aria-label="เลื่อนเข้า" />

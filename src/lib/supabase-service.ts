@@ -77,6 +77,7 @@ const FIELD_MAP: Record<string, string> = {
   scheduleDays: 'schedule_days',                  // 311
   scheduleStartDate: 'schedule_start_date',       // 311
   scheduleNote: 'schedule_note',                  // 311
+  dispatchNote: 'dispatch_note',                  // 454.2 — ป้ายเตือนขนส่งในชิป
   scheduleEveryNDays: 'schedule_every_n_days',    // 311 P2.1
   scheduleBiweeklyAnchorWeek: 'schedule_biweekly_anchor_week', // 311 P2.1
   scheduleEndDate: 'schedule_end_date',           // 377

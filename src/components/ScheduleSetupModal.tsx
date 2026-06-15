@@ -27,6 +27,7 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
     customer.scheduleStartDate || new Date().toISOString().slice(0, 10)
   )
   const [scheduleNote, setScheduleNote] = useState<string>(customer.scheduleNote || '')
+  const [dispatchNote, setDispatchNote] = useState<string>(customer.dispatchNote || '') // 454.2
   // P2.4 — additional fields for new schedule types
   const [scheduleEveryNDays, setScheduleEveryNDays] = useState<number>(customer.scheduleEveryNDays || 2)
   const [scheduleBiweeklyAnchorWeek, setScheduleBiweeklyAnchorWeek] = useState<0 | 1>(customer.scheduleBiweeklyAnchorWeek ?? 0)
@@ -96,6 +97,7 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
       scheduleEndDate: endDate,
       scheduleEndCount: endCount,
       scheduleNote,
+      dispatchNote: dispatchNote.trim(), // 454.2
     })
     onClose()
   }
@@ -364,6 +366,25 @@ export default function ScheduleSetupModal({ open, onClose, customer }: Props) {
             )}
           </div>
         )}
+
+        {/* 454.2 — ป้ายเตือนขนส่ง (แสดงในชิปปฏิทินขนส่ง) */}
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">
+            ป้ายเตือนขนส่ง <span className="text-xs font-normal text-slate-400">(แสดงในชิปปฏิทินขนส่ง — สั้นๆ)</span>
+          </label>
+          <input
+            value={dispatchNote}
+            onChange={e => setDispatchNote(e.target.value)}
+            maxLength={30}
+            placeholder="เช่น ส่ง / รับ / รับมาซักวันสุดท้าย / ส่งกลับอย่างเดียว"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-[#3DD8D8] focus:ring-2 focus:ring-[#3DD8D8]/30"
+          />
+          {dispatchNote.trim() && (
+            <p className="text-xs text-slate-400 mt-1">
+              จะแสดงในชิปเป็น <span className="font-semibold text-slate-600">{customer.shortName || customer.name} ({dispatchNote.trim()})</span>
+            </p>
+          )}
+        </div>
 
         {/* หมายเหตุ */}
         <div>
