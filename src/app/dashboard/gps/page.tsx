@@ -26,6 +26,7 @@ import { connStatus, CONN_LEVEL_ORDER, type ConnLevel } from '@/lib/gps-connecti
 import type { RouteTrack } from '@/components/RouteMap'
 import { isScheduledDay } from '@/lib/schedule-audit'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
+import { tripsToStops, clusterUnknownStops, type RawStop } from '@/lib/unknown-places'
 import { todayISO, cn } from '@/lib/utils'
 import { canViewFleet } from '@/lib/permissions'
 import {
@@ -169,7 +170,7 @@ export default function GpsPage() {
             onOpenTrip={(carId, date) => { setTripsInit({ carId, date }); setTab('trips') }} />
         : tab === 'audit' ? <AuditTab />
         : tab === 'analytics' ? <MilkRunTab />
-        : <PlacesTab />}
+        : <PlacesTab vehicleByPlate={vehicleByPlate} />}
     </div>
   )
 }
@@ -1648,8 +1649,8 @@ function FlagRow({ flag }: { flag: AuditFlag }) {
 // ───────────────────────── สถานที่บันทึก (432.1) ─────────────────────────
 //   จัดการจุดที่ไม่ใช่ลูกค้า (ร้านอาหาร/ปั๊ม/จุดพัก/ธุระส่วนตัว) — เพิ่ม/แก้/ลบ
 //   จุดเหล่านี้ใช้จับคู่จุดจอด GPS ในแท็บ "เที่ยววิ่ง" อัตโนมัติ
-function PlacesTab() {
-  const { savedPlaces, deleteSavedPlace } = useStore()
+function PlacesTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) {
+  const { savedPlaces, deleteSavedPlace, customers, companyInfo } = useStore()
   const [editing, setEditing] = useState<SavedPlace | null>(null)
   const [adding, setAdding] = useState(false)
 
@@ -1661,8 +1662,143 @@ function PlacesTab() {
     if (confirm(`ลบสถานที่ “${p.name}”?\n(เที่ยววิ่งจะไม่ขึ้นชื่อนี้อีก)`)) deleteSavedPlace(p.id)
   }
 
+  // ── 452: ค้นหาจุดที่ยังไม่รู้จัก (สแกนรถทุกคันในช่วง → จุดจอดที่ยังไม่ match → ระบุทีเดียว) ──
+  const [cars, setCars] = useState<GpsCar[]>([])
+  const [scanFrom, setScanFrom] = useState(() => format(subDays(parseISO(todayISO()), 13), 'yyyy-MM-dd'))
+  const [scanTo, setScanTo] = useState(todayISO())
+  const [scanning, setScanning] = useState(false)
+  const [scanned, setScanned] = useState(false)
+  const [scanErr, setScanErr] = useState<string | null>(null)
+  const [scanProgress, setScanProgress] = useState({ done: 0, total: 0 })
+  const [failedCars, setFailedCars] = useState<string[]>([])
+  const [rawStops, setRawStops] = useState<RawStop[]>([])
+  const [scanSearch, setScanSearch] = useState('')
+  const [identify, setIdentify] = useState<{ lat: number; lng: number; address: string; date: string } | null>(null)
+
+  useEffect(() => { fetchGpsCars().then(setCars).catch(() => {}) }, [])
+
+  const factory: LatLng | null = useMemo(
+    () => (companyInfo.factoryLat || companyInfo.factoryLng) ? { lat: companyInfo.factoryLat, lng: companyInfo.factoryLng } : null,
+    [companyInfo.factoryLat, companyInfo.factoryLng])
+
+  const runScan = useCallback(async () => {
+    if (cars.length === 0) return
+    setScanning(true); setScanErr(null); setScanProgress({ done: 0, total: cars.length })
+    try {
+      const stops: RawStop[] = []
+      const failed: string[] = []
+      let done = 0
+      for (const car of cars) {
+        const code = vehicleByPlate.get(car.plateNorm)?.code ?? null
+        try {
+          const trips = await fetchGpsTrips(car.plate, scanFrom, scanTo)
+          stops.push(...tripsToStops(trips, code))
+        } catch { failed.push(code || car.plate) }
+        done++; setScanProgress({ done, total: cars.length })
+      }
+      setRawStops(stops); setFailedCars(failed); setScanned(true)
+    } catch (e) {
+      setScanErr(e instanceof Error ? e.message : 'สแกนไม่สำเร็จ')
+    } finally { setScanning(false) }
+  }, [cars, scanFrom, scanTo, vehicleByPlate])
+
+  // จุดที่ยังไม่รู้จัก — recompute เมื่อ customers/savedPlaces เปลี่ยน (ระบุแล้ว = หายจากรายการอัตโนมัติ)
+  const clusters = useMemo(
+    () => clusterUnknownStops(rawStops, customers, factory, savedPlaces),
+    [rawStops, customers, factory, savedPlaces])
+  const filteredClusters = useMemo(() => {
+    if (!scanSearch.trim()) return clusters
+    return clusters.filter(c => matchesThaiQueryAnyField([c.address, c.vehicleCodes.join(' '), `${c.lat},${c.lng}`], scanSearch))
+  }, [clusters, scanSearch])
+  const totalStops = rawStops.length
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* 452 — ค้นหาจุดที่ยังไม่รู้จัก */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+            <Search className="w-4 h-4 text-[#3DD8D8]" /> ค้นหาจุดที่ยังไม่รู้จัก (จาก GPS)
+          </h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            รวมจุดจอดของรถ<span className="font-medium text-slate-500">ทุกคันทุกวัน</span>ที่ยังไม่ได้ระบุชื่อ มาไว้ที่เดียว — ระบุครั้งเดียวใช้ได้ทุกคัน ไม่ต้องไล่ดูทีละคันทีละวัน
+          </p>
+        </div>
+        <div className="flex items-end gap-3 flex-wrap">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">ตั้งแต่</label>
+            <input type="date" value={scanFrom} max={scanTo} onChange={e => setScanFrom(e.target.value)} disabled={scanning}
+              className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">ถึง</label>
+            <input type="date" value={scanTo} min={scanFrom} max={todayISO()} onChange={e => setScanTo(e.target.value)} disabled={scanning}
+              className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm" />
+          </div>
+          <button onClick={runScan} disabled={scanning || cars.length === 0}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-[#1B3A5C] text-white hover:bg-[#122740] transition-colors inline-flex items-center gap-1.5 disabled:opacity-50">
+            {scanning ? <><Loader2 className="w-4 h-4 animate-spin" /> กำลังสแกน {scanProgress.done}/{scanProgress.total}</> : <><Search className="w-4 h-4" /> สแกนหาจุด</>}
+          </button>
+        </div>
+
+        {scanErr && <p className="text-xs text-rose-600">{scanErr}</p>}
+        {failedCars.length > 0 && !scanning && (
+          <p className="text-xs text-amber-600">⚠ บางคันดึงไม่สำเร็จ (อาจ timeout): {failedCars.join(', ')} — ลองลดช่วงวันที่</p>
+        )}
+
+        {scanned && (
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-sm text-slate-600">
+                {clusters.length > 0
+                  ? <>พบ <span className="font-semibold text-[#1B3A5C]">{clusters.length}</span> จุดที่ยังไม่รู้จัก <span className="text-slate-400">(จาก {totalStops.toLocaleString()} การจอด)</span></>
+                  : <>ไม่พบจุดที่ยังไม่รู้จัก — ทุกจุดจอดมีชื่อแล้ว 👍 <span className="text-slate-400">(ตรวจ {totalStops.toLocaleString()} การจอด)</span></>}
+              </p>
+              {clusters.length > 0 && (
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input value={scanSearch} onChange={e => setScanSearch(e.target.value)} placeholder="ค้นหาที่อยู่ / รถ"
+                    className="border border-slate-200 rounded-lg pl-8 pr-2.5 py-1.5 text-sm w-52" />
+                </div>
+              )}
+            </div>
+
+            {filteredClusters.length > 0 && (
+              <div className="border border-slate-100 rounded-lg divide-y divide-slate-100 max-h-[28rem] overflow-auto">
+                {filteredClusters.map((c, i) => (
+                  <div key={`${c.lat},${c.lng},${i}`} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50">
+                    <span className="shrink-0 w-7 h-7 rounded-full bg-amber-50 text-amber-600 text-xs font-bold flex items-center justify-center" title="จอดกี่ครั้ง">{c.count}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-700 truncate" title={c.address || `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`}>
+                        {c.address || `📍 ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`}
+                      </p>
+                      <p className="text-[11px] text-slate-400 truncate">
+                        จอด {c.count} ครั้ง
+                        {c.dwellMedian > 0 && ` · นานเฉลี่ย ${c.dwellMedian} น.`}
+                        {c.vehicleCodes.length > 0 && ` · รถ ${c.vehicleCodes.join(', ')}`}
+                        {c.firstDate && ` · ${c.firstDate.slice(5)}${c.lastDate !== c.firstDate ? `–${c.lastDate.slice(5)}` : ''}`}
+                      </p>
+                    </div>
+                    <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noopener noreferrer"
+                      className="text-slate-400 hover:text-[#1B3A5C] shrink-0" title="เปิด Google Maps">
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                    <button onClick={() => setIdentify({ lat: c.lat, lng: c.lng, address: c.address, date: c.lastDate || todayISO() })}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors shrink-0 inline-flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5" /> ระบุ
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {clusters.length > 0 && filteredClusters.length === 0 && (
+              <p className="text-center text-slate-400 text-sm py-4">ไม่พบจุดที่ตรงกับ “{scanSearch}”</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* รายการสถานที่ที่บันทึกไว้ */}
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-slate-500">
           จุดที่บันทึกไว้ (ไม่ใช่ลูกค้า) — ใช้จับคู่จุดจอดในเที่ยววิ่งให้อ่านง่ายขึ้น · ประเภท
@@ -1713,6 +1849,11 @@ function PlacesTab() {
 
       {(adding || editing) && (
         <PlaceFormModal place={editing} onClose={() => { setAdding(false); setEditing(null) }} />
+      )}
+      {/* 452 — ระบุจุดที่ยังไม่รู้จัก (reuse SetPlaceModal · บันทึกแล้ว clusters recompute = จุดหายเอง) */}
+      {identify && (
+        <SetPlaceModal point={{ lat: identify.lat, lng: identify.lng, address: identify.address }}
+          date={identify.date} onClose={() => setIdentify(null)} />
       )}
     </div>
   )
