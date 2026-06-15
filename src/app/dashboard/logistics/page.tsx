@@ -13,7 +13,7 @@ import {
   type LogisticsCell, type LogisticsRow,
 } from '@/lib/logistics-week'
 import { todayISO, genId, cn, formatExportFilename, roundTextColor } from '@/lib/utils'
-import { WEEKDAY_SHORT, SCHEDULE_TYPE_CONFIG, type DeliveryNote, type ScheduleOverride, type Customer, type Round } from '@/types'
+import { WEEKDAY_SHORT, SCHEDULE_TYPE_CONFIG, type DeliveryNote, type ScheduleOverride, type Customer, type Round, type CompanyInfo } from '@/types'
 import { effectiveRoundId } from '@/lib/dispatch'
 import { canViewSD } from '@/lib/permissions'
 import Modal from '@/components/Modal'
@@ -23,9 +23,12 @@ import {
   ChevronLeft, ChevronRight, CalendarDays, Truck, Plus, AlertOctagon,
   CheckCircle2, ArrowRight, Ban, Info, ClipboardCheck, CornerUpRight, CornerDownRight,
   ChevronUp, ChevronDown, GripVertical, ListOrdered, X, CalendarX, Trash2,
-  MessageSquareText, Copy, Check,
+  MessageSquareText, Copy, Check, Search, CalendarClock,
 } from 'lucide-react'
 import { buildDispatchText } from '@/lib/dispatch-text'
+import { matchesThaiQueryAnyField } from '@/lib/thai-search'
+import { planRange, buildCustomerPlan, buildCustomerPlanText, thaiRangeLabel } from '@/lib/customer-plan'
+import CustomerPlanPrint from '@/components/CustomerPlanPrint'
 
 const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 function fmtShort(iso: string): string {
@@ -101,6 +104,8 @@ export default function LogisticsPage() {
 
   // 445 — modal ส่งออกข้อความแผนคิว
   const [showExport, setShowExport] = useState(false)
+  // 453 — modal แผนคิวเฉพาะลูกค้า (ส่งให้ลูกค้ารู้คิวล่วงหน้า)
+  const [showCustomerPlan, setShowCustomerPlan] = useState(false)
   // day-detail (route ordering) state
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const listDragIdx = useRef<number | null>(null)
@@ -368,6 +373,15 @@ export default function LogisticsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* 453 — แผนคิวเฉพาะลูกค้า (ส่งให้ลูกค้ารู้คิวล่วงหน้า) */}
+          <button
+            type="button"
+            onClick={() => setShowCustomerPlan(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-[#1B3A5C] rounded-lg hover:bg-[#122740] transition-colors"
+          >
+            <CalendarClock className="w-4 h-4" />
+            แผนคิวลูกค้า
+          </button>
           {/* 445 — ส่งออกแผนคิวเป็นข้อความ (copy ส่งไลน์ให้ทีม) */}
           <button
             type="button"
@@ -801,6 +815,18 @@ export default function LogisticsPage() {
           onClose={() => setShowExport(false)}
         />
       )}
+
+      {/* 453 — แผนคิวเฉพาะลูกค้า */}
+      {showCustomerPlan && (
+        <CustomerPlanModal
+          customers={customers}
+          rounds={rounds}
+          overrides={scheduleOverrides}
+          company={companyInfo}
+          today={today}
+          onClose={() => setShowCustomerPlan(false)}
+        />
+      )}
     </div>
   )
 }
@@ -869,6 +895,123 @@ function DispatchTextModal({
           รวมรอบข้ามคืน (บ่าย/ค่ำของวันที่เลือก → เช้ามืด/เช้าวันถัดไป) · สมาชิกทุกคนในรอบ เรียงตามลำดับวิ่ง ·
           มาร์กเกอร์มาจาก schedule ลูกค้า (ทุกวัน→วัน · ทุก N วัน→N×24 · อื่นๆ→* 24) · แก้/เว้นบรรทัดเพิ่มได้หลังคัดลอก
         </p>
+      </div>
+    </Modal>
+  )
+}
+
+// 453 — Modal: เลือกลูกค้า + กรอบ 1/2/3 เดือน → แผนคิว (พิมพ์ PDF / คัดลอกส่งไลน์ให้ลูกค้า)
+function CustomerPlanModal({
+  customers, rounds, overrides, company, today, onClose,
+}: {
+  customers: Customer[]
+  rounds: Round[]
+  overrides: ScheduleOverride[]
+  company: CompanyInfo
+  today: string
+  onClose: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const [customerId, setCustomerId] = useState('')
+  const [months, setMonths] = useState<1 | 2 | 3>(2)
+  const [copied, setCopied] = useState(false)
+
+  const candidates = useMemo(() => customers
+    .filter(c => c.isActive)
+    .filter(c => !search || matchesThaiQueryAnyField([c.shortName, c.name, c.customerCode], search))
+    .sort((a, b) => (a.shortName || a.name).localeCompare(b.shortName || b.name, 'th'))
+    .slice(0, 80), [customers, search])
+
+  const selected = useMemo(() => customers.find(c => c.id === customerId) || null, [customers, customerId])
+  const range = useMemo(() => planRange(today, months), [today, months])
+  const rangeLabel = useMemo(() => thaiRangeLabel(range.start, range.end), [range])
+  const days = useMemo(
+    () => (selected ? buildCustomerPlan(selected, range.start, range.end, overrides, rounds) : []),
+    [selected, range, overrides, rounds])
+  const hasSchedule = !!selected && !!selected.scheduleType && selected.scheduleType !== 'none'
+
+  const copy = async () => {
+    if (!selected) return
+    const txt = buildCustomerPlanText(selected.shortName || selected.name, days, company.name, rangeLabel)
+    try { await navigator.clipboard.writeText(txt); setCopied(true); setTimeout(() => setCopied(false), 1800) } catch { /* clipboard อาจถูกบล็อก */ }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="แผนคิวลูกค้า (ส่งให้ลูกค้า)" size="xl" closeLabel="close" className="print-target">
+      <div className="space-y-4">
+        {/* ── ตัวเลือก (ไม่พิมพ์) ── */}
+        <div className="no-print space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">เลือกลูกค้า</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3DD8D8]" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาลูกค้า..."
+                className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5 max-h-32 overflow-auto">
+              {candidates.length === 0 ? (
+                <span className="text-xs text-slate-400 px-1 py-1">ไม่พบลูกค้า</span>
+              ) : candidates.map(c => {
+                const active = c.id === customerId
+                const noSchedule = !c.scheduleType || c.scheduleType === 'none'
+                return (
+                  <button key={c.id} onClick={() => setCustomerId(c.id)}
+                    className={cn('px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors inline-flex items-center gap-1',
+                      active ? 'bg-[#1B3A5C] text-white border-[#1B3A5C]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}>
+                    {c.shortName || c.name}
+                    {noSchedule && <span className={cn('text-[10px]', active ? 'text-white/60' : 'text-amber-500')}>·ไม่ตั้งคิว</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">กรอบเวลาที่จะแสดง</label>
+              <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
+                {([[1, '1 เดือน'], [2, '2 เดือน'], [3, '3 เดือน']] as const).map(([m, label]) => (
+                  <button key={m} onClick={() => setMonths(m)}
+                    className={cn('px-3 py-2 text-sm font-medium transition-colors', months === m ? 'bg-[#3DD8D8] text-[#1B3A5C]' : 'bg-white text-slate-500 hover:bg-slate-50')}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 pb-2">
+              {months === 1 ? 'เดือนนี้' : months === 2 ? 'เดือนนี้ + เดือนหน้า' : 'เดือนนี้ + อีก 2 เดือน'} · <span className="font-medium text-slate-600">{rangeLabel}</span>
+            </p>
+            {selected && hasSchedule && (
+              <div className="ml-auto flex items-center gap-2">
+                <button onClick={copy}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#1B3A5C] bg-[#3DD8D8]/15 border border-[#3DD8D8] rounded-lg hover:bg-[#3DD8D8]/25 transition-colors">
+                  {copied ? <><Check className="w-4 h-4" /> คัดลอกแล้ว</> : <><Copy className="w-4 h-4" /> คัดลอกข้อความ (ไลน์)</>}
+                </button>
+                <ExportButtons targetId="print-customer-plan" filename={formatExportFilename(`แผนคิว-${selected.shortName || selected.name}`)} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── ตัวอย่าง / ใบพิมพ์ ── */}
+        {!selected ? (
+          <div className="no-print text-center py-12 text-slate-400 text-sm">เลือกลูกค้าเพื่อสร้างแผนคิว</div>
+        ) : !hasSchedule ? (
+          <div className="no-print text-center py-12 text-amber-600 text-sm">
+            “{selected.shortName || selected.name}” ยังไม่ได้ตั้งตารางคิว — ตั้งคิวที่หน้า <span className="font-medium">ลูกค้า</span> ก่อน
+          </div>
+        ) : (
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <CustomerPlanPrint
+              company={company}
+              customerName={selected.shortName || selected.name}
+              address={selected.address || ''}
+              phone={selected.contactPhone || ''}
+              rangeLabel={rangeLabel}
+              days={days}
+            />
+          </div>
+        )}
       </div>
     </Modal>
   )
