@@ -7,11 +7,13 @@ import { useStore } from '@/lib/store'
 import { fetchGpsCars, fetchGpsTrips } from '@/lib/gps-service'
 import { fetchGpsVisits, fetchGpsLegs, saveReconstructedDay } from '@/lib/supabase-service'
 import { reconstructVisitsLegs, type RoundWindow } from '@/lib/visit-reconstruct'
+import { customerStats, legStats, arrivalVsWindow, minToHHMM, type Dist } from '@/lib/visit-stats'
 import { normalizePlate } from '@/lib/v2x-types'
+import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import type { LatLng } from '@/lib/geo'
 import { cn, todayISO } from '@/lib/utils'
 import type { GpsVisit, GpsLeg, Vehicle } from '@/types'
-import { Database, Loader2, Play, X, RefreshCw, AlertTriangle, CheckCircle2, Truck, Clock, Route } from 'lucide-react'
+import { Database, Loader2, Play, X, RefreshCw, AlertTriangle, CheckCircle2, Truck, Clock, Route, Search } from 'lucide-react'
 
 /** ไล่วันแบบ TZ-safe (string math · Date.UTC) — from..to รวมปลาย */
 function enumerateDays(from: string, to: string): string[] {
@@ -122,6 +124,31 @@ export default function MilkRunTab() {
 
   void crew // (Phase 3 — แสดงชื่อคนขับ)
 
+  // ── Phase 2: สถิติ baseline ──
+  const [statView, setStatView] = useState<'customer' | 'leg'>('customer')
+  const [statSearch, setStatSearch] = useState('')
+  const custById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers])
+  const custStats = useMemo(() => (visits ? customerStats(visits) : []), [visits])
+  const lgStats = useMemo(() => (legs ? legStats(legs) : []), [legs])
+
+  const custName = useCallback((id: string) => {
+    const c = custById.get(id)
+    return c ? (c.shortName || c.name) : id
+  }, [custById])
+
+  const filteredCustStats = useMemo(() => {
+    if (!statSearch.trim()) return custStats
+    return custStats.filter(s => {
+      const c = custById.get(s.customerId)
+      return matchesThaiQueryAnyField([c?.shortName, c?.name, c?.customerCode, s.customerId], statSearch)
+    })
+  }, [custStats, statSearch, custById])
+
+  const filteredLegStats = useMemo(() => {
+    if (!statSearch.trim()) return lgStats
+    return lgStats.filter(s => matchesThaiQueryAnyField([custName(s.fromCustomerId), custName(s.toCustomerId), s.fromName, s.toName], statSearch))
+  }, [lgStats, statSearch, custName])
+
   return (
     <div className="space-y-5">
       <div>
@@ -198,7 +225,109 @@ export default function MilkRunTab() {
           </div>
         )}
       </div>
+
+      {/* ── Phase 2: สถิติ baseline ── */}
+      {!loading && (custStats.length > 0 || lgStats.length > 0) && (
+        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex gap-1">
+              {([['customer', 'ตามลูกค้า'], ['leg', 'ช่วงเดินทาง A→B']] as const).map(([k, label]) => (
+                <button key={k} onClick={() => setStatView(k)}
+                  className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
+                    statView === k ? 'bg-[#1B3A5C] text-white border-[#1B3A5C]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input value={statSearch} onChange={e => setStatSearch(e.target.value)} placeholder="ค้นหาลูกค้า"
+                className="border border-slate-200 rounded-lg pl-8 pr-2.5 py-1.5 text-sm w-44" />
+            </div>
+          </div>
+
+          {statView === 'customer' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[680px]">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 text-xs">
+                    <th className="px-3 py-2 text-left font-medium">ลูกค้า</th>
+                    <th className="px-3 py-2 text-right font-medium">ครั้ง</th>
+                    <th className="px-3 py-2 text-right font-medium">เวลาถึง (ปกติ)</th>
+                    <th className="px-3 py-2 text-right font-medium">ใช้เวลา (dwell)</th>
+                    <th className="px-3 py-2 text-right font-medium">เวลาออก</th>
+                    <th className="px-3 py-2 text-center font-medium">เทียบแผน</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredCustStats.map(s => {
+                    const c = custById.get(s.customerId)
+                    const cmp = c ? arrivalVsWindow(s.arrive.median, s.arrive.n, c.pickupWindowStart || '', c.pickupWindowEnd || '') : null
+                    return (
+                      <tr key={s.customerId} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 font-medium text-slate-700">{custName(s.customerId)}</td>
+                        <td className="px-3 py-2 text-right text-slate-500">{s.visits}</td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap"><TimeDist d={s.arrive} kind="time" /></td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap"><TimeDist d={s.dwell} kind="dur" /></td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap text-slate-600">{s.depart.n > 0 ? minToHHMM(s.depart.median) : '—'}</td>
+                        <td className="px-3 py-2 text-center">
+                          {cmp === 'in' && <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700">ตรงเวลา</span>}
+                          {cmp === 'after' && <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700">สายกว่ากำหนด</span>}
+                          {cmp === 'before' && <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-700">ถึงก่อนกำหนด</span>}
+                          {cmp === null && <span className="text-slate-300 text-[11px]">—</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              {filteredCustStats.length === 0 && <p className="text-center text-slate-400 text-sm py-6">ไม่พบลูกค้าที่ค้นหา</p>}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 text-xs">
+                    <th className="px-3 py-2 text-left font-medium">ช่วงเดินทาง</th>
+                    <th className="px-3 py-2 text-right font-medium">ครั้ง</th>
+                    <th className="px-3 py-2 text-right font-medium">เวลาเดินทาง (ปกติ)</th>
+                    <th className="px-3 py-2 text-right font-medium">ระยะ (กม.)</th>
+                    <th className="px-3 py-2 text-right font-medium">น้ำมัน (ล.)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredLegStats.map(s => (
+                    <tr key={`${s.fromCustomerId}>${s.toCustomerId}`} className="hover:bg-slate-50">
+                      <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{custName(s.fromCustomerId)} <span className="text-slate-300">→</span> {custName(s.toCustomerId)}</td>
+                      <td className="px-3 py-2 text-right text-slate-500">{s.trips}</td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap"><TimeDist d={s.travel} kind="dur" /></td>
+                      <td className="px-3 py-2 text-right text-slate-600">{s.km.median.toFixed(1)}</td>
+                      <td className="px-3 py-2 text-right text-slate-500">{s.fuel.median > 0 ? s.fuel.median.toFixed(2) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredLegStats.length === 0 && <p className="text-center text-slate-400 text-sm py-6">ไม่พบช่วงเดินทางที่ค้นหา</p>}
+            </div>
+          )}
+          <p className="text-[11px] text-slate-400">
+            ค่ากลาง (median) = เวลาส่วนมาก · วงเล็บ = ช่วงปกติ (25–75%) · ตัดค่าผิดปกติออกแล้ว
+          </p>
+        </div>
+      )}
     </div>
+  )
+}
+
+/** แสดงการกระจาย: median เด่น + ช่วง p25–p75 ในวงเล็บ · kind=time (HH:MM) | dur (นาที) */
+function TimeDist({ d, kind }: { d: Dist; kind: 'time' | 'dur' }) {
+  if (d.n === 0) return <span className="text-slate-300">—</span>
+  const fmt = (m: number) => (kind === 'time' ? minToHHMM(m) : `${Math.round(m)}`)
+  return (
+    <span>
+      <span className="font-semibold text-slate-700">{fmt(d.median)}{kind === 'dur' && ' น.'}</span>
+      {(d.p25 !== d.p75) && <span className="text-[11px] text-slate-400"> ({fmt(d.p25)}–{fmt(d.p75)})</span>}
+    </span>
   )
 }
 
