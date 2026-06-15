@@ -6,6 +6,7 @@ import type {
   LegacyDocument, ScheduleOverride, RoutePlan,
   Vehicle, OdometerLog, MaintenanceRecord,
   Round, Crew, DailyTrip, FuelLog, SavedPlace,
+  GpsVisit, GpsLeg,
 } from '@/types'
 
 // ============================================================
@@ -20,6 +21,8 @@ async function dbWrite(params: {
   match?: { column: string; value: string | number }
   // 390 C — batch by id list (column=in.(...)) สำหรับ update/delete หลายแถวใน 1 call
   matchIn?: { column: string; values: (string | number)[] }
+  // 449 — multi-column eq (ลบ visit/leg ของ vehicle+date)
+  matchAll?: Record<string, string | number>
   onConflict?: string
 }): Promise<void> {
   // Get session user ID for auth header (must match auth.ts SESSION_KEY)
@@ -187,6 +190,18 @@ const FIELD_MAP: Record<string, string> = {
   odometerAnchorDate: 'odometer_anchor_date',
   odometerAnchorTime: 'odometer_anchor_time', // 446 — เวลาของ anchor (vehicles)
   recordedTime: 'recorded_time',              // 446 — เวลาที่อ่านไมล์ (odometer_logs)
+  // 449 — Milk-Run Analytics (gps_visits / gps_legs)
+  arriveTime: 'arrive_time',
+  departTime: 'depart_time',
+  dwellMin: 'dwell_min',
+  fromKey: 'from_key',
+  fromCustomerId: 'from_customer_id',
+  fromName: 'from_name',
+  toKey: 'to_key',
+  toCustomerId: 'to_customer_id',
+  toName: 'to_name',
+  travelMin: 'travel_min',
+  fuelL: 'fuel_l',
   serviceIntervalKm: 'service_interval_km',
   nextServiceOdometer: 'next_service_odometer',
   vehicleId: 'vehicle_id',
@@ -972,6 +987,24 @@ export async function updateSavedPlaceDB(id: string, updates: Partial<SavedPlace
 
 export async function deleteSavedPlaceDB(id: string): Promise<void> {
   await dbWrite({ table: 'saved_places', operation: 'delete', match: { column: 'id', value: id } })
+}
+
+// ── 449 — Milk-Run Analytics (gps_visits / gps_legs) ──
+export async function fetchGpsVisits(): Promise<GpsVisit[]> {
+  return fetchAllPaginated<GpsVisit>('gps_visits', 'date')
+}
+
+export async function fetchGpsLegs(): Promise<GpsLeg[]> {
+  return fetchAllPaginated<GpsLeg>('gps_legs', 'date')
+}
+
+/** บันทึก reconstruct ของ 1 รถ 1 วัน — ลบของเดิม (vehicle+date) ก่อน insert ใหม่ (idempotent) */
+export async function saveReconstructedDay(vehicleId: string, date: string, visits: GpsVisit[], legs: GpsLeg[]): Promise<void> {
+  // ลบของวัน-คันนั้นก่อน (กันค้างเมื่อ trips เปลี่ยน/น้อยลง) — sequential กัน race
+  await dbWrite({ table: 'gps_visits', operation: 'delete', matchAll: { vehicle_id: vehicleId, date } })
+  await dbWrite({ table: 'gps_legs', operation: 'delete', matchAll: { vehicle_id: vehicleId, date } })
+  if (visits.length > 0) await insertInChunks('gps_visits', visits.map(v => toSnakeCase(v as unknown as Record<string, unknown>)))
+  if (legs.length > 0) await insertInChunks('gps_legs', legs.map(l => toSnakeCase(l as unknown as Record<string, unknown>)))
 }
 
 // ============================================================

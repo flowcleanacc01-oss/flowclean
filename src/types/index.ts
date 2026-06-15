@@ -930,6 +930,49 @@ export function dailyTripId(date: string, roundId: string): string {
 }
 
 // ============================================================
+// 449 — Milk-Run Analytics: visit/leg ที่ reconstruct จาก GPS history (materialize)
+//   trip = leg (เคลื่อนที่ 1 ช่วง) · ช่วงดับเครื่องจอด = dwell ที่ลูกค้า
+//   เก็บลง gps_visits/gps_legs สะสมรายวัน idempotent ต่อ (vehicle, date)
+// ============================================================
+export type VisitConfidence = 'high' | 'low'
+
+/** การจอดที่ลูกค้า 1 ครั้ง (เที่ยวที่จบที่พิกัดลูกค้า = engine-off arrival) */
+export interface GpsVisit {
+  id: string                    // vmt_{date}_{vehicleId}_{seq}
+  date: string                  // yyyy-mm-dd (วันไทย)
+  vehicleId: string             // FlowClean vehicle id (resolve จากทะเบียน)
+  driverId: string              // resolve จากกระดานจ่ายงาน ('' = ไม่ทราบ)
+  roundId: string               // resolve จากหน้าต่างเวลารอบ ('' = ไม่ทราบ)
+  customerId: string
+  arriveTime: string            // "yyyy-mm-dd HH:MM:SS" (เวลาไทย)
+  departTime: string            // '' = ไม่ทราบ (จุดสุดท้ายของวัน)
+  dwellMin: number              // เวลาที่ใช้ที่ลูกค้า (นาที) · 0 = ไม่ทราบ
+  confidence: VisitConfidence   // high = ดับเครื่องจอด · low = ผ่าน/ติดเครื่อง (future)
+  sequence: number              // ลำดับการจอดในวัน
+}
+
+/** การเคลื่อนที่ 1 เที่ยว (leg) ระหว่าง 2 จุด — ใช้สถิติเวลาเดินทาง A→B + หา route */
+export interface GpsLeg {
+  id: string                    // lgt_{date}_{vehicleId}_{seq}
+  date: string
+  vehicleId: string
+  driverId: string
+  roundId: string
+  fromKey: string               // 'factory' | 'c:<id>' | 's:<id>' | 'unknown'
+  fromCustomerId: string        // '' ถ้าไม่ใช่ลูกค้า
+  fromName: string
+  toKey: string
+  toCustomerId: string
+  toName: string
+  departTime: string            // "yyyy-mm-dd HH:MM:SS"
+  arriveTime: string
+  travelMin: number             // เวลาเดินทาง (door-to-door, เริ่ม→จบ)
+  km: number
+  fuelL: number
+  score: number                 // คะแนนขับขี่ V2X (0 = ไม่มี)
+}
+
+// ============================================================
 // App User
 // ============================================================
 // 5 roles (69):

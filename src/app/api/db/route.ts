@@ -22,6 +22,7 @@ const ALLOWED_TABLES = new Set([
   'daily_trips', // 423 Phase B2: dispatch board
   'fuel_logs', // 423 งานติ๊ด: บันทึกการเติมน้ำมัน
   'saved_places', // 432.1: จุดที่บันทึก (ร้านอาหาร/ปั๊ม/จุดแวะ)
+  'gps_visits', 'gps_legs', // 449: Milk-Run Analytics (visit/leg reconstruct)
 ])
 
 interface DbRequest {
@@ -31,6 +32,8 @@ interface DbRequest {
   match?: { column: string; value: string | number }
   // 390 C — batch match by id list (update/delete หลายแถวใน 1 call) → PATCH/DELETE ... col=in.(...)
   matchIn?: { column: string; values: (string | number)[] }
+  // 449 — multi-column eq (เช่น ลบ visit/leg ของ vehicle+date ก่อน backfill ใหม่ idempotent)
+  matchAll?: Record<string, string | number>
   onConflict?: string
 }
 
@@ -43,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: DbRequest = await request.json()
-    const { operation, table, data, match, matchIn, onConflict } = body
+    const { operation, table, data, match, matchIn, matchAll, onConflict } = body
 
     if (!ALLOWED_TABLES.has(table)) {
       return NextResponse.json({ error: `Table "${table}" not allowed` }, { status: 400 })
@@ -76,8 +79,17 @@ export async function POST(request: NextRequest) {
         } else if (matchIn) {
           if (matchIn.values.length === 0) { result = { error: null }; break }
           result = await supabaseAdmin.from(table).delete().in(matchIn.column, matchIn.values)
+        } else if (matchAll) {
+          // 449 — multi-column eq · ต้องมีอย่างน้อย 1 เงื่อนไข (กันลบทั้งตาราง)
+          const entries = Object.entries(matchAll)
+          if (entries.length === 0) {
+            return NextResponse.json({ error: 'matchAll must have at least one condition' }, { status: 400 })
+          }
+          let q = supabaseAdmin.from(table).delete()
+          for (const [col, val] of entries) q = q.eq(col, val)
+          result = await q
         } else {
-          return NextResponse.json({ error: 'match or matchIn required for delete' }, { status: 400 })
+          return NextResponse.json({ error: 'match, matchIn or matchAll required for delete' }, { status: 400 })
         }
         break
       case 'upsert':

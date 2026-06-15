@@ -39,8 +39,9 @@ import {
   ExternalLink, Route, TrendingUp, Fuel, AlertCircle, Loader2, Car, CircleDot, Clock,
   ClipboardCheck, CheckCircle2, AlertTriangle, Info, Wand2,
   Factory, ParkingCircle, Building2, Award, Search, Plus, Pencil, Trash2, Coffee,
-  BarChart3, Timer, Map as MapIcon, WifiOff, ChevronDown,
+  BarChart3, Timer, Map as MapIcon, WifiOff, ChevronDown, Activity,
 } from 'lucide-react'
+import MilkRunTab from './MilkRunTab'
 
 // 432.2.1 — แผนที่ Leaflet โหลดเฉพาะตอนเปิด (lazy · ssr:false เพราะ leaflet อ้าง window)
 const RouteMap = dynamic(() => import('@/components/RouteMap'), {
@@ -123,7 +124,7 @@ function fmtThaiDate(iso: string): string {
 
 export default function GpsPage() {
   const { currentUser, vehicles } = useStore()
-  const [tab, setTab] = useState<'realtime' | 'trips' | 'dashboard' | 'audit' | 'places'>('realtime')
+  const [tab, setTab] = useState<'realtime' | 'trips' | 'dashboard' | 'audit' | 'places' | 'analytics'>('realtime')
   const [tripsInit, setTripsInit] = useState<{ carId: string; date: string } | null>(null) // 440 — เปิดเที่ยววิ่งของวัน/รถที่คลิกจาก dashboard
 
   // plateNorm → vehicle (แสดง code A/B/C ของฟลีต)
@@ -153,7 +154,7 @@ export default function GpsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-200">
-        {([['realtime', 'ตำแหน่งสด', Radio], ['trips', 'เที่ยววิ่ง', Route], ['dashboard', 'ภาพรวม', BarChart3], ['audit', 'เทียบแผน', ClipboardCheck], ['places', 'สถานที่', MapPin]] as const).map(([k, label, Icon]) => (
+        {([['realtime', 'ตำแหน่งสด', Radio], ['trips', 'เที่ยววิ่ง', Route], ['dashboard', 'ภาพรวม', BarChart3], ['audit', 'เทียบแผน', ClipboardCheck], ['places', 'สถานที่', MapPin], ['analytics', 'สถิติหน้างาน', Activity]] as const).map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)}
             className={cn('px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors inline-flex items-center gap-1.5',
               tab === k ? 'border-[#3DD8D8] text-[#1B3A5C]' : 'border-transparent text-slate-400 hover:text-slate-600')}>
@@ -167,6 +168,7 @@ export default function GpsPage() {
         : tab === 'dashboard' ? <DashboardTab vehicleByPlate={vehicleByPlate}
             onOpenTrip={(carId, date) => { setTripsInit({ carId, date }); setTab('trips') }} />
         : tab === 'audit' ? <AuditTab />
+        : tab === 'analytics' ? <MilkRunTab />
         : <PlacesTab />}
     </div>
   )
