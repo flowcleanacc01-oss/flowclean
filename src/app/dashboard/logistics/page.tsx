@@ -5,6 +5,7 @@
 // ลาก cell ข้ามวัน = เลื่อนคิว · คลิก = สร้าง/ดู SD
 
 import { useState, useMemo, useRef, Fragment } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
@@ -91,16 +92,18 @@ function scheduleLabelWithDays(c: Customer): string {
 }
 
 export default function LogisticsPage() {
-  const { currentUser, customers, deliveryNotes, scheduleOverrides, updateDeliveryNote, addScheduleOverride, deleteScheduleOverride, updateCustomer, routePlans, setRouteOrder, companyInfo, rounds } = useStore()
+  const { currentUser, customers, deliveryNotes, scheduleOverrides, updateDeliveryNote, addScheduleOverride, updateScheduleOverride, deleteScheduleOverride, updateCustomer, routePlans, setRouteOrder, companyInfo, rounds } = useStore()
   const router = useRouter()
 
   const today = todayISO()
   const [anchor, setAnchor] = useState(() => getWeekStart(today))
 
   // drag state
-  const dragSourceRef = useRef<{ customerId: string; date: string } | null>(null)
+  // 456 — capture ข้อมูลต้นทาง ณ จุดเริ่มลาก (ให้ drop ข้ามสัปดาห์ได้ แม้ cell ต้นทางหลุดจอ)
+  const dragSourceRef = useRef<{ customerId: string; date: string; regularSDs: DeliveryNote[]; baseScheduled: boolean } | null>(null)
   const [dragOverKey, setDragOverKey] = useState<string | null>(null)
   const [draggingRow, setDraggingRow] = useState<string | null>(null)
+  const weekDragTimer = useRef<number | null>(null) // 456 — auto เปลี่ยนสัปดาห์ตอนลากค้างที่ปุ่ม ◀/▶
 
   // reschedule confirm
   const [pending, setPending] = useState<PendingReschedule | null>(null)
@@ -119,6 +122,8 @@ export default function LogisticsPage() {
   const [showCustomerPlan, setShowCustomerPlan] = useState(false)
   // 454.1 — เปิด modal ตั้งค่าตารางคิวจากชิปป้าย schedule ใน Col ลูกค้า
   const [scheduleCustomer, setScheduleCustomer] = useState<Customer | null>(null)
+  // 455/456.1 — เมนูต่อ chip (เฟือง): หมายเหตุวันนี้ + เลื่อนไปวันที่
+  const [chipAction, setChipAction] = useState<{ row: LogisticsRow; cell: LogisticsCell; rect: DOMRect } | null>(null)
   // day-detail (route ordering) state
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const listDragIdx = useRef<number | null>(null)
@@ -221,14 +226,25 @@ export default function LogisticsPage() {
   const isThisWeek = week.weekStart === getWeekStart(today)
 
   // ── drag handlers ──
+  const cancelWeekAdvance = () => { if (weekDragTimer.current != null) { clearTimeout(weekDragTimer.current); weekDragTimer.current = null } }
+  // 456 — ลากค้างที่ปุ่ม ◀/▶ → เปลี่ยนสัปดาห์ทีละ 1 (ทุก ~0.6 วิ) เพื่อลากคิวข้ามสัปดาห์
+  const armWeekAdvance = (deltaDays: number) => {
+    if (!draggingRow || weekDragTimer.current != null) return
+    weekDragTimer.current = window.setTimeout(() => {
+      weekDragTimer.current = null
+      setAnchor(prev => addDays(prev, deltaDays)) // re-arm เมื่อ dragOver ยิงรอบถัดไป → ไหลต่อเนื่อง
+    }, 600)
+  }
+
   const onDragStart = (row: LogisticsRow, cell: LogisticsCell) => {
-    dragSourceRef.current = { customerId: row.customer.id, date: cell.date }
+    dragSourceRef.current = { customerId: row.customer.id, date: cell.date, regularSDs: cell.regularSDs, baseScheduled: cell.baseScheduled }
     setDraggingRow(row.customer.id)
   }
   const onDragEnd = () => {
     dragSourceRef.current = null
     setDragOverKey(null)
     setDraggingRow(null)
+    cancelWeekAdvance()
   }
   const canDropOn = (row: LogisticsRow, cell: LogisticsCell): boolean => {
     const src = dragSourceRef.current
@@ -237,20 +253,48 @@ export default function LogisticsPage() {
   const onDrop = (row: LogisticsRow, cell: LogisticsCell) => {
     const src = dragSourceRef.current
     if (!src || !canDropOn(row, cell)) { onDragEnd(); return }
-    const srcCell = row.cells.find(c => c.date === src.date)
     onDragEnd()
-    if (!srcCell) return
-    const movingSD = srcCell.regularSDs.length > 0
+    // 456 — ใช้ข้อมูลต้นทางที่ capture ตอนเริ่มลาก (ไม่พึ่ง cell ต้นทางที่อาจหลุดจอเมื่อข้ามสัปดาห์)
+    const movingSD = src.regularSDs.length > 0
     setPending({
       customerId: row.customer.id,
       customerName: row.customer.shortName || row.customer.name,
       fromDate: src.date,
       toDate: cell.date,
-      regularSDs: srcCell.regularSDs,
+      regularSDs: src.regularSDs,
       mode: movingSD ? 'move-sd' : 'move-expectation',
-      fromBaseScheduled: srcCell.baseScheduled,
+      fromBaseScheduled: src.baseScheduled,
     })
     setReason(`เลื่อนคิว ${fmtShort(src.date)} → ${fmtShort(cell.date)}`)
+  }
+
+  // 455 — บันทึก/ล้าง หมายเหตุรายวัน (override type 'note' · ทับ dispatchNote เฉพาะวันนั้น)
+  const saveChipNote = (customerId: string, date: string, text: string) => {
+    const existing = scheduleOverrides.find(o => o.customerId === customerId && o.date === date && o.type === 'note')
+    const t = text.trim()
+    if (!t) { if (existing) deleteScheduleOverride(existing.id); return }
+    if (existing) updateScheduleOverride(existing.id, { reason: t })
+    else addScheduleOverride({ customerId, date, type: 'note', reason: t })
+  }
+  const clearChipNote = (customerId: string, date: string) => {
+    const existing = scheduleOverrides.find(o => o.customerId === customerId && o.date === date && o.type === 'note')
+    if (existing) deleteScheduleOverride(existing.id)
+  }
+
+  // 456.1 — เลื่อนคิวไปวันที่เจาะจง (เลือกจาก date picker · reuse pending/confirmReschedule)
+  const rescheduleChipTo = (row: LogisticsRow, cell: LogisticsCell, toDate: string) => {
+    if (!toDate || toDate === cell.date) return
+    const movingSD = cell.regularSDs.length > 0
+    setPending({
+      customerId: row.customer.id,
+      customerName: row.customer.shortName || row.customer.name,
+      fromDate: cell.date,
+      toDate,
+      regularSDs: cell.regularSDs,
+      mode: movingSD ? 'move-sd' : 'move-expectation',
+      fromBaseScheduled: cell.baseScheduled,
+    })
+    setReason(`เลื่อนคิว ${fmtShort(cell.date)} → ${fmtShort(toDate)}`)
   }
 
   const confirmReschedule = () => {
@@ -420,8 +464,12 @@ export default function LogisticsPage() {
           <button
             type="button"
             onClick={() => setAnchor(addDays(anchor, -7))}
+            onDragOver={e => { if (draggingRow) { e.preventDefault(); armWeekAdvance(-7) } }}
+            onDragLeave={cancelWeekAdvance}
+            onDrop={cancelWeekAdvance}
             aria-label="สัปดาห์ก่อนหน้า"
-            className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+            className={cn('w-9 h-9 flex items-center justify-center rounded-lg border text-slate-600 hover:bg-slate-50 transition-colors',
+              draggingRow ? 'border-[#3DD8D8] bg-[#3DD8D8]/10' : 'border-slate-200')}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -432,8 +480,12 @@ export default function LogisticsPage() {
           <button
             type="button"
             onClick={() => setAnchor(addDays(anchor, 7))}
+            onDragOver={e => { if (draggingRow) { e.preventDefault(); armWeekAdvance(7) } }}
+            onDragLeave={cancelWeekAdvance}
+            onDrop={cancelWeekAdvance}
             aria-label="สัปดาห์ถัดไป"
-            className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+            className={cn('w-9 h-9 flex items-center justify-center rounded-lg border text-slate-600 hover:bg-slate-50 transition-colors',
+              draggingRow ? 'border-[#3DD8D8] bg-[#3DD8D8]/10' : 'border-slate-200')}
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -586,6 +638,7 @@ export default function LogisticsPage() {
                           onCreate={() => goCreate(row.customer.id, cell.date)}
                           onView={goDetail}
                           onDelete={cell.baseScheduled && cell.status !== 'skipped' ? () => askDelete(row, cell) : undefined}
+                          onGear={rect => setChipAction({ row, cell, rect })}
                         />
                       </td>
                     )
@@ -850,7 +903,91 @@ export default function LogisticsPage() {
       {scheduleCustomer && (
         <ScheduleSetupModal open onClose={() => setScheduleCustomer(null)} customer={scheduleCustomer} />
       )}
+
+      {/* 455/456.1 — เมนูต่อ chip (เฟือง): หมายเหตุวันนี้ + เลื่อนไปวันที่ */}
+      {chipAction && (
+        <ChipActionPopover
+          rect={chipAction.rect}
+          customerName={chipAction.row.customer.shortName || chipAction.row.customer.name}
+          date={chipAction.cell.date}
+          currentNote={scheduleOverrides.find(o => o.customerId === chipAction.row.customer.id && o.date === chipAction.cell.date && o.type === 'note')?.reason || ''}
+          defaultNote={chipAction.row.customer.dispatchNote || ''}
+          onSaveNote={text => saveChipNote(chipAction.row.customer.id, chipAction.cell.date, text)}
+          onClearNote={() => clearChipNote(chipAction.row.customer.id, chipAction.cell.date)}
+          onReschedule={toDate => rescheduleChipTo(chipAction.row, chipAction.cell, toDate)}
+          onClose={() => setChipAction(null)}
+        />
+      )}
     </div>
+  )
+}
+
+// 455/456.1 — popover เล็กต่อ chip (portal + fixed · escape overflow ของตาราง)
+function ChipActionPopover({
+  rect, customerName, date, currentNote, defaultNote, onSaveNote, onClearNote, onReschedule, onClose,
+}: {
+  rect: DOMRect
+  customerName: string
+  date: string
+  currentNote: string
+  defaultNote: string
+  onSaveNote: (text: string) => void
+  onClearNote: () => void
+  onReschedule: (toDate: string) => void
+  onClose: () => void
+}) {
+  const [note, setNote] = useState(currentNote)
+  const [toDate, setToDate] = useState('')
+  const W = 252
+  const left = Math.max(8, Math.min(rect.left - W + rect.width + 8, window.innerWidth - W - 8))
+  const top = Math.min(rect.bottom + 6, window.innerHeight - 220)
+
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[59]" onClick={onClose} aria-hidden />
+      <div role="dialog" style={{ position: 'fixed', top, left, width: W }}
+        className="z-[60] bg-white rounded-xl border border-slate-200 shadow-xl p-3 space-y-2.5 text-sm"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-[#1B3A5C] truncate">{customerName} · {fmtShort(date)}</span>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0" aria-label="ปิด"><X className="w-3.5 h-3.5" /></button>
+        </div>
+
+        {/* 455 — หมายเหตุวันนี้ */}
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-slate-500">หมายเหตุวันนี้ (เฉพาะ chip นี้)</label>
+          <input value={note} onChange={e => setNote(e.target.value)} maxLength={30} autoFocus
+            placeholder={defaultNote ? `ค่าเริ่มต้น: ${defaultNote}` : 'เช่น ส่ง / รับ / รับมาซักวันสุดท้าย'}
+            className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => { onSaveNote(note); onClose() }}
+              className="flex-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors">บันทึก</button>
+            {currentNote && (
+              <button onClick={() => { onClearNote(); onClose() }}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">ล้าง</button>
+            )}
+          </div>
+          {defaultNote && <p className="text-[10px] text-slate-400">ไม่ใส่ = ใช้ป้ายรวมของลูกค้า ({defaultNote})</p>}
+        </div>
+
+        <div className="border-t border-slate-100" />
+
+        {/* 456.1 — เลื่อนคิวไปวันที่เจาะจง */}
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-slate-500">เลื่อนคิวไปวันที่</label>
+          <div className="flex items-center gap-1.5">
+            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+              className="flex-1 px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+            <button disabled={!toDate || toDate === date} onClick={() => { onReschedule(toDate); onClose() }}
+              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-[#1B3A5C] text-white hover:bg-[#122740] disabled:opacity-40 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1">
+              <CornerUpRight className="w-3.5 h-3.5" /> เลื่อน
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-400">เลือกวันไหนก็ได้ (ข้ามสัปดาห์/เดือน) — มีหน้ายืนยันก่อนบันทึก</p>
+        </div>
+      </div>
+    </>,
+    document.body,
   )
 }
 
@@ -1059,12 +1196,12 @@ function sdBadge(cell: LogisticsCell, today: string): { text: string; cls: strin
 }
 
 function CellChip({
-  cell, today, shortName, dispatchNote, roundColor, draggable, onDragStart, onDragEnd, onCreate, onView, onDelete,
+  cell, today, shortName, dispatchNote, roundColor, draggable, onDragStart, onDragEnd, onCreate, onView, onDelete, onGear,
 }: {
   cell: LogisticsCell
   today: string
   shortName: string              // 436 — ชื่อย่อลูกค้าใน chip
-  dispatchNote?: string          // 454.2 — ป้ายเตือนขนส่ง เช่น "(รับมาซักวันสุดท้าย)"
+  dispatchNote?: string          // 454.2 — ป้ายเตือนขนส่งรวมของลูกค้า เช่น "(รับมาซักวันสุดท้าย)"
   roundColor?: string            // 436 — theme สีรอบ
   draggable: boolean
   onDragStart: () => void
@@ -1072,11 +1209,15 @@ function CellChip({
   onCreate: () => void
   onView: (id: string) => void
   onDelete?: () => void          // 378 — ลบ/ยกเลิกคิว (เฉพาะวันคิวจริง)
+  onGear?: (rect: DOMRect) => void // 455/456.1 — เมนูต่อ chip (หมายเหตุวันนี้ + เลื่อนไปวันที่)
 }) {
   if (cell.status === 'empty') return <span className="text-slate-200 select-none">·</span>
 
   const hasRescheduleAdd = cell.overrides.some(o => o.type === 'reschedule_add')
   const hasRescheduleSkip = cell.overrides.some(o => o.type === 'reschedule_skip')
+  // 455 — หมายเหตุรายวัน (override type 'note') ทับป้ายรวมของลูกค้า เฉพาะ chip นี้
+  const dayNote = (cell.overrides.find(o => o.type === 'note')?.reason || '').trim()
+  const effNote = dayNote || dispatchNote
 
   // resolve onClick + tooltip ตามสถานะ (ส่วน visual ย้ายไป sdBadge + theme สีรอบ)
   let onClick: (() => void) | undefined
@@ -1123,7 +1264,7 @@ function CellChip({
         onDragEnd={onDragEnd}
         onClick={onClick}
         disabled={!onClick && !draggable}
-        title={dispatchNote ? `${dispatchNote}${title ? ' · ' + title : ''}` : title}
+        title={effNote ? `${effNote}${title ? ' · ' + title : ''}` : title}
         style={tintStyle}
         className={cn(
           'relative w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-lg border transition-[filter,background-color]',
@@ -1136,7 +1277,7 @@ function CellChip({
       >
         <span className="truncate font-bold text-[13px] leading-tight text-slate-800">
           {shortName}
-          {dispatchNote && <span className="font-semibold text-[11px] text-amber-700"> ({dispatchNote})</span>}
+          {effNote && <span className={cn('font-semibold text-[11px]', dayNote ? 'text-indigo-600' : 'text-amber-700')}> ({effNote})</span>}
         </span>
         <span className={cn('shrink-0 text-[11px] font-bold leading-none', badge.cls)}>{badge.text}</span>
         {hasRescheduleAdd && cell.status !== 'skipped' && (
@@ -1153,6 +1294,18 @@ function CellChip({
           className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-white border border-slate-300 text-slate-400 shadow-sm flex items-center justify-center opacity-50 hover:opacity-100 hover:bg-red-50 hover:text-red-600 hover:border-red-300 group-hover/chip:opacity-100 transition-opacity z-10"
         >
           <X className="w-3 h-3" />
+        </button>
+      )}
+      {/* 455/456.1 — ปุ่มเฟือง (มุมขวาล่าง hover) → เมนู หมายเหตุวันนี้ / เลื่อนไปวันที่ */}
+      {onGear && (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onGear(e.currentTarget.getBoundingClientRect()) }}
+          title="หมายเหตุวันนี้ / เลื่อนไปวันที่"
+          aria-label="ตัวเลือกคิววันนี้"
+          className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-300 text-slate-400 shadow-sm flex items-center justify-center opacity-0 hover:bg-[#3DD8D8]/15 hover:text-[#1B3A5C] hover:border-[#3DD8D8] group-hover/chip:opacity-100 transition-opacity z-10"
+        >
+          <Settings2 className="w-3 h-3" />
         </button>
       )}
     </span>

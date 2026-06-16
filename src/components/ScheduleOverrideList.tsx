@@ -17,7 +17,7 @@ import {
   SCHEDULE_OVERRIDE_TYPE_CONFIG,
   type ScheduleOverride, type ScheduleOverrideType,
 } from '@/types'
-import { Plus, CalendarOff, CalendarPlus, ArrowRightLeft, Trash2, Pencil } from 'lucide-react'
+import { Plus, CalendarOff, CalendarPlus, ArrowRightLeft, Trash2, Pencil, StickyNote } from 'lucide-react'
 
 interface Props {
   customerId: string
@@ -28,6 +28,7 @@ const TYPE_ICONS: Record<ScheduleOverrideType, React.ReactNode> = {
   extra: <CalendarPlus className="w-3.5 h-3.5" />,
   reschedule_skip: <ArrowRightLeft className="w-3.5 h-3.5" />,
   reschedule_add: <ArrowRightLeft className="w-3.5 h-3.5" />,
+  note: <StickyNote className="w-3.5 h-3.5" />,
 }
 
 const TYPE_COLOR_CLS: Record<string, string> = {
@@ -35,6 +36,7 @@ const TYPE_COLOR_CLS: Record<string, string> = {
   blue: 'bg-blue-100 text-blue-800 border-blue-200',
   purple: 'bg-purple-100 text-purple-800 border-purple-200',
   indigo: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+  slate: 'bg-slate-100 text-slate-700 border-slate-200',
 }
 
 export default function ScheduleOverrideList({ customerId }: Props) {
