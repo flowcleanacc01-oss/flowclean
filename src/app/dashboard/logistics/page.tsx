@@ -1433,8 +1433,10 @@ function CellChip({
   }
 
   const badge = sdBadge(cell, today)
+  // 463 — เลื่อน/ข้ามคิวแล้ว = ไม่ใช้สีรอบ (ใช้พื้นเทาเอกลักษณ์แทน แม้รอบ SWD ที่พื้นขาว)
+  const isSkipped = cell.status === 'skipped'
   // theme สีรอบ (พื้นจางๆ + ขอบ) — color input = #RRGGBB เสมอ → ต่อ alpha hex ได้
-  const tinted = !!roundColor && /^#[0-9a-fA-F]{6}$/.test(roundColor)
+  const tinted = !isSkipped && !!roundColor && /^#[0-9a-fA-F]{6}$/.test(roundColor)
   const tintStyle = tinted ? { backgroundColor: `${roundColor}14`, borderColor: `${roundColor}55` } : undefined
 
   return (
@@ -1450,9 +1452,10 @@ function CellChip({
         style={tintStyle}
         className={cn(
           'relative w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-lg border transition-[filter,background-color,opacity]',
-          !tinted && 'bg-slate-50 border-slate-200',
+          !tinted && !isSkipped && 'bg-slate-50 border-slate-200',
           cell.status === 'missing' && cell.date > today && 'border-dashed',
-          cell.status === 'skipped' && 'opacity-45',  // 460 — เลื่อน/ข้ามคิวแล้ว = จางลง (priority ต่างกัน)
+          // 460+463 — เลื่อน/ข้ามคิวแล้ว = พื้นเทาเอกลักษณ์ + จางลง (priority ต่างกัน · override สีรอบ)
+          isSkipped && 'bg-slate-200 border-slate-300 opacity-50',
           (onClick || draggable) && 'hover:brightness-95',
           draggable && 'cursor-grab active:cursor-grabbing',
           !onClick && !draggable && 'cursor-default',
