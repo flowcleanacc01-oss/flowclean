@@ -124,6 +124,8 @@ export default function LogisticsPage() {
   const [scheduleCustomer, setScheduleCustomer] = useState<Customer | null>(null)
   // 455/456.1 — เมนูต่อ chip (เฟือง): หมายเหตุวันนี้ + เลื่อนไปวันที่
   const [chipAction, setChipAction] = useState<{ row: LogisticsRow; cell: LogisticsCell; rect: DOMRect } | null>(null)
+  // 460.1 — กรองปฏิทินตามชื่อย่อลูกค้า
+  const [filterQuery, setFilterQuery] = useState('')
   // day-detail (route ordering) state
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const listDragIdx = useRef<number | null>(null)
@@ -191,10 +193,27 @@ export default function LogisticsPage() {
     return offs
   }, [dayGroups])
 
+  // 460.1 — กรองแถวตามชื่อย่อ/ชื่อ/รหัสลูกค้า
+  const visibleRows = useMemo(
+    () => (filterQuery.trim()
+      ? week.rows.filter(r => matchesThaiQueryAnyField([r.customer.shortName, r.customer.name, r.customer.customerCode], filterQuery))
+      : week.rows),
+    [week.rows, filterQuery])
+
+  // 460.1 — ลูกค้า active ที่ "ยังไม่ตั้งคิว" ตรงคำค้น (ไม่อยู่ในปฏิทิน — surface ให้เห็น + กดตั้งคิวได้)
+  const unscheduledMatches = useMemo(() => {
+    if (!filterQuery.trim()) return []
+    return customers
+      .filter(c => c.isActive && (!c.scheduleType || c.scheduleType === 'none'))
+      .filter(c => matchesThaiQueryAnyField([c.shortName, c.name, c.customerCode], filterQuery))
+      .sort((a, b) => (a.shortName || a.name).localeCompare(b.shortName || b.name, 'th'))
+      .slice(0, 12)
+  }, [customers, filterQuery])
+
   // 431 — แถวปฏิทินจัดกลุ่มตามรอบหลัก (ทั้งสัปดาห์ → ใช้รอบหลัก · ข้อยกเว้นรายวันโชว์เป็น chip)
   const groupedRows = useMemo(() => {
     const byRound = new Map<string, LogisticsRow[]>()
-    for (const row of week.rows) {
+    for (const row of visibleRows) {
       const rid = row.customer.roundId && roundById.has(row.customer.roundId) ? row.customer.roundId : ''
       if (!byRound.has(rid)) byRound.set(rid, [])
       byRound.get(rid)!.push(row)
@@ -213,7 +232,7 @@ export default function LogisticsPage() {
       .flatMap(([, rs]) => rs)
     if (rest.length) groups.push({ round: null, rows: rest })
     return groups
-  }, [week, sortedRounds, roundById])
+  }, [visibleRows, sortedRounds, roundById])
 
   if (!canViewSD(currentUser)) {
     return (
@@ -554,6 +573,35 @@ export default function LogisticsPage() {
         </div>
       </div>
 
+      {/* 460.1 — กรองตามชื่อลูกค้า + surface ลูกค้าที่ยังไม่ตั้งคิว */}
+      {week.rows.length > 0 && (
+        <div className="mb-3 flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input value={filterQuery} onChange={e => setFilterQuery(e.target.value)} placeholder="กรองตามชื่อลูกค้า..."
+              className="border border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
+            {filterQuery && (
+              <button type="button" onClick={() => setFilterQuery('')} aria-label="ล้างการกรอง"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"><X className="w-3.5 h-3.5" /></button>
+            )}
+          </div>
+          {filterQuery.trim() && (
+            <span className="text-xs text-slate-400">{groupedRows.reduce((n, g) => n + g.rows.length, 0)} ลูกค้าในปฏิทิน</span>
+          )}
+          {unscheduledMatches.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs text-amber-600 font-medium">ยังไม่ตั้งคิว:</span>
+              {unscheduledMatches.map(c => (
+                <button key={c.id} type="button" onClick={() => setScheduleCustomer(c)} title="คลิกเพื่อตั้งค่าตารางคิว"
+                  className="px-2 py-0.5 rounded-full text-[11px] font-medium border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
+                  {c.shortName || c.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Grid */}
       {week.rows.length === 0 ? (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
@@ -569,6 +617,12 @@ export default function LogisticsPage() {
               </Link>
             </div>
           </div>
+        </div>
+      ) : groupedRows.length === 0 ? (
+        // 460.1 — กรองแล้วไม่พบลูกค้าในปฏิทิน (อาจมีในรายการ "ยังไม่ตั้งคิว" ด้านบน)
+        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-sm">
+          ไม่พบลูกค้าที่ตั้งคิว ตรงกับ “{filterQuery}”
+          {unscheduledMatches.length > 0 && <span className="block mt-1 text-amber-600">— มีลูกค้าที่ “ยังไม่ตั้งคิว” ตรงคำค้น ดูปุ่มด้านบน</span>}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-auto max-h-[calc(100vh-17rem)]">
@@ -991,7 +1045,7 @@ function ChipActionPopover({
   const W = 256
   const inputCls = 'w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]'
 
-  // popup fit (455/456.1) — วางตำแหน่งแบบมาตรฐาน: วัดความสูงจริง → เปิดล่าง ถ้าพื้นที่ล่างไม่พอ flip ขึ้นบน
+  // 459 — popup fit: วางตำแหน่งแบบมาตรฐาน วัดความสูงจริง → เปิดล่าง ถ้าพื้นที่ล่างไม่พอ flip ขึ้นบน
   //   ถ้าทั้งสองด้านไม่พอ (จอเตี้ย) → เลือกด้านที่กว้างกว่า + ให้ scroll ในตัว (ไม่ล้นจอ)
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null)
@@ -1383,9 +1437,10 @@ function CellChip({
         title={effNote ? `${effNote}${title ? ' · ' + title : ''}` : title}
         style={tintStyle}
         className={cn(
-          'relative w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-lg border transition-[filter,background-color]',
+          'relative w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-lg border transition-[filter,background-color,opacity]',
           !tinted && 'bg-slate-50 border-slate-200',
           cell.status === 'missing' && cell.date > today && 'border-dashed',
+          cell.status === 'skipped' && 'opacity-45',  // 460 — เลื่อน/ข้ามคิวแล้ว = จางลง (priority ต่างกัน)
           (onClick || draggable) && 'hover:brightness-95',
           draggable && 'cursor-grab active:cursor-grabbing',
           !onClick && !draggable && 'cursor-default',
