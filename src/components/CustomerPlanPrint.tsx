@@ -79,7 +79,11 @@ export default function CustomerPlanPrint({ company, customerName, address, phon
                     <td className="text-center px-2 py-2.5 border border-slate-300 font-bold text-[#1B3A5C]">{idx + 1}</td>
                     <td className="px-3 py-2.5 border border-slate-300 font-medium">{thaiDateShort(d.date)}</td>
                     <td className="text-center px-3 py-2.5 border border-slate-300">{d.timeStart ? `${d.timeStart}${d.timeEnd ? ` - ${d.timeEnd}` : ''} น.` : '-'}</td>
-                    <td className="text-center px-3 py-2.5 border border-slate-300 text-xs text-amber-700">{d.rescheduledIn ? 'เพิ่มพิเศษ' : ''}</td>
+                    <td className="text-center px-3 py-2.5 border border-slate-300 text-xs">
+                      {d.note && <span className="font-medium text-[#1B3A5C]">{d.note}</span>}
+                      {d.note && d.rescheduledIn && <span className="text-slate-300"> · </span>}
+                      {d.rescheduledIn && <span className="text-amber-700">เพิ่มพิเศษ</span>}
+                    </td>
                   </tr>,
                 )
               })

@@ -53,6 +53,13 @@ describe('buildCustomerPlan (453)', () => {
   it('scheduleType none → ไม่มีคิว', () => {
     expect(buildCustomerPlan(cust({ scheduleType: 'none' }), '2026-06-15', '2026-06-30', [], []).length).toBe(0)
   })
+
+  it('458 — dispatchNote ลูกค้า → ทุกวันมี note · override note ทับเฉพาะวันนั้น', () => {
+    const overrides = [ov({ date: '2026-06-18', type: 'note', reason: 'รับมาซักวันสุดท้าย' })]
+    const days = buildCustomerPlan(cust({ roundId: 'r1', dispatchNote: 'รับ' }), '2026-06-15', '2026-06-18', overrides, [round({})])
+    expect(days.find(d => d.date === '2026-06-15')?.note).toBe('รับ')                  // default dispatchNote
+    expect(days.find(d => d.date === '2026-06-18')?.note).toBe('รับมาซักวันสุดท้าย')    // override ทับ
+  })
 })
 
 describe('buildCustomerPlanText (453)', () => {
@@ -70,6 +77,11 @@ describe('buildCustomerPlanText (453)', () => {
 
   it('ไม่มีคิว → ข้อความบอกชัด', () => {
     expect(buildCustomerPlanText('โรงแรม B', [], 'FlowClean', 'มิ.ย. 2569')).toContain('(ไม่มีคิวในช่วงนี้)')
+  })
+
+  it('458 — note โผล่ในข้อความ', () => {
+    const days = buildCustomerPlan(cust({ roundId: 'r1', dispatchNote: 'รับ' }), '2026-06-15', '2026-06-18', [], [round({})])
+    expect(buildCustomerPlanText('โรงแรม A', days, 'FlowClean', 'มิ.ย. 2569')).toContain('— รับ')
   })
 })
 

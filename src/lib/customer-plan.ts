@@ -47,6 +47,7 @@ export interface PlanDay {
   rescheduledIn: boolean // เพิ่มพิเศษจาก override (extra/reschedule_add วันที่ไม่ใช่คิวปกติ)
   timeStart: string     // HH:MM ('' = ไม่ระบุ)
   timeEnd: string
+  note: string          // 458 — หมายเหตุวันนี้ (override 'note') > ป้ายเตือนขนส่งรวม (dispatchNote) · '' = ไม่มี
 }
 
 /**
@@ -85,11 +86,14 @@ export function buildCustomerPlan(
     if (extra) expected = true
     if (!expected) continue
     const r = roundById.get(effectiveRoundId(customer, date))
+    // 458 — หมายเหตุวันนี้ (override 'note') ทับป้ายเตือนขนส่งรวม (dispatchNote)
+    const dayNote = (ov.find(o => o.type === 'note')?.reason || '').trim()
     out.push({
       date, dow: parseLocalDate(date).getDay(), roundId: r?.id || '',
       rescheduledIn: extra && !base,
       timeStart: customer.pickupWindowStart || r?.startTime || '',
       timeEnd: customer.pickupWindowEnd || r?.endTime || '',
+      note: dayNote || (customer.dispatchNote || '').trim(),
     })
   }
   return out
@@ -112,7 +116,8 @@ export function buildCustomerPlanText(
       const mk = d.date.slice(0, 7)
       if (mk !== curMonth) { curMonth = mk; lines.push('', `📅 ${thaiMonthYear(d.date)}`) }
       const time = d.timeStart ? ` ⏰ ${d.timeStart}${d.timeEnd ? `-${d.timeEnd}` : ''}` : ''
-      lines.push(`• ${thaiDateShort(d.date)}${time}${d.rescheduledIn ? ' (เพิ่มพิเศษ)' : ''}`)
+      const note = d.note ? ` — ${d.note}` : '' // 458
+      lines.push(`• ${thaiDateShort(d.date)}${time}${note}${d.rescheduledIn ? ' (เพิ่มพิเศษ)' : ''}`)
     }
     lines.push('', SEP, `รวม ${days.length} ครั้ง`)
   }
