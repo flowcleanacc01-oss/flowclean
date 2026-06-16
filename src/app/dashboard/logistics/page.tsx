@@ -24,7 +24,7 @@ import {
   ChevronLeft, ChevronRight, CalendarDays, Truck, Plus, AlertOctagon,
   CheckCircle2, ArrowRight, Ban, Info, ClipboardCheck, CornerUpRight, CornerDownRight,
   ChevronUp, ChevronDown, GripVertical, ListOrdered, X, CalendarX, Trash2,
-  MessageSquareText, Copy, Check, Search, CalendarClock, Settings2,
+  MessageSquareText, Copy, Check, Search, CalendarClock, Settings2, RotateCcw,
 } from 'lucide-react'
 import { buildDispatchText } from '@/lib/dispatch-text'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
@@ -295,6 +295,45 @@ export default function LogisticsPage() {
       fromBaseScheduled: cell.baseScheduled,
     })
     setReason(`เลื่อนคิว ${fmtShort(cell.date)} → ${fmtShort(toDate)}`)
+  }
+
+  // 457 — เพิ่มคิวนัดหมายรายครั้ง (extra override) บนวันที่ยังไม่มีคิว · + หมายเหตุได้เลย
+  const addAdHocQueue = (customerId: string, date: string, note: string) => {
+    const deletedOverrides: ScheduleOverride[] = []
+    // กันชน: ถ้ามี skip ค้างวันนั้น = ลบก่อน (เพิ่มคิว = ตรงข้าม skip)
+    const skipOv = scheduleOverrides.find(o => o.customerId === customerId && o.date === date && (o.type === 'skip' || o.type === 'reschedule_skip'))
+    if (skipOv) { deleteScheduleOverride(skipOv.id); deletedOverrides.push(skipOv) }
+    const addedOverrideIds: string[] = []
+    addedOverrideIds.push(addScheduleOverride({ customerId, date, type: 'extra', reason: 'เพิ่มคิวนัดหมาย (รายครั้ง)' }).id)
+    if (note.trim()) addedOverrideIds.push(addScheduleOverride({ customerId, date, type: 'note', reason: note.trim() }).id)
+    const cust = customers.find(c => c.id === customerId)
+    setLastAction({ label: `${cust?.shortName || cust?.name || ''}: เพิ่มคิว ${fmtShort(date)}`, addedOverrideIds, deletedOverrides, movedSDs: [] })
+  }
+
+  // 457 — เอาคิวกลับมา (ลบ skip · ถ้าเป็น reschedule_skip ลบคู่ reschedule_add ด้วย)
+  const restoreQueue = (customerId: string, date: string) => {
+    const skipOvs = scheduleOverrides.filter(o => o.customerId === customerId && o.date === date && (o.type === 'skip' || o.type === 'reschedule_skip'))
+    if (skipOvs.length === 0) return
+    const deletedOverrides: ScheduleOverride[] = []
+    for (const ov of skipOvs) {
+      deleteScheduleOverride(ov.id); deletedOverrides.push(ov)
+      if (ov.type === 'reschedule_skip' && ov.rescheduledLinkId) {
+        const pair = scheduleOverrides.find(p => p.rescheduledLinkId === ov.rescheduledLinkId && p.id !== ov.id && p.type === 'reschedule_add')
+        if (pair) { deleteScheduleOverride(pair.id); deletedOverrides.push(pair) }
+      }
+    }
+    const cust = customers.find(c => c.id === customerId)
+    setLastAction({ label: `${cust?.shortName || cust?.name || ''}: เอาคิวกลับ ${fmtShort(date)}`, addedOverrideIds: [], deletedOverrides, movedSDs: [] })
+  }
+
+  // 457 — ลบคิวเสริมที่เพิ่มเอง (extra/reschedule_add)
+  const removeAdHocQueue = (customerId: string, date: string) => {
+    const ovs = scheduleOverrides.filter(o => o.customerId === customerId && o.date === date && (o.type === 'extra' || o.type === 'reschedule_add'))
+    if (ovs.length === 0) return
+    const deletedOverrides: ScheduleOverride[] = []
+    for (const ov of ovs) { deleteScheduleOverride(ov.id); deletedOverrides.push(ov) }
+    const cust = customers.find(c => c.id === customerId)
+    setLastAction({ label: `${cust?.shortName || cust?.name || ''}: ลบคิวเสริม ${fmtShort(date)}`, addedOverrideIds: [], deletedOverrides, movedSDs: [] })
   }
 
   const confirmReschedule = () => {
@@ -904,17 +943,20 @@ export default function LogisticsPage() {
         <ScheduleSetupModal open onClose={() => setScheduleCustomer(null)} customer={scheduleCustomer} />
       )}
 
-      {/* 455/456.1 — เมนูต่อ chip (เฟือง): หมายเหตุวันนี้ + เลื่อนไปวันที่ */}
+      {/* 455/456.1/457 — เมนูต่อ chip (เฟือง): หมายเหตุ + เลื่อน + เพิ่ม/เอาคืน/ลบคิว */}
       {chipAction && (
         <ChipActionPopover
           rect={chipAction.rect}
+          cell={chipAction.cell}
           customerName={chipAction.row.customer.shortName || chipAction.row.customer.name}
-          date={chipAction.cell.date}
           currentNote={scheduleOverrides.find(o => o.customerId === chipAction.row.customer.id && o.date === chipAction.cell.date && o.type === 'note')?.reason || ''}
           defaultNote={chipAction.row.customer.dispatchNote || ''}
           onSaveNote={text => saveChipNote(chipAction.row.customer.id, chipAction.cell.date, text)}
           onClearNote={() => clearChipNote(chipAction.row.customer.id, chipAction.cell.date)}
           onReschedule={toDate => rescheduleChipTo(chipAction.row, chipAction.cell, toDate)}
+          onAddQueue={note => addAdHocQueue(chipAction.row.customer.id, chipAction.cell.date, note)}
+          onRestore={() => restoreQueue(chipAction.row.customer.id, chipAction.cell.date)}
+          onRemove={() => removeAdHocQueue(chipAction.row.customer.id, chipAction.cell.date)}
           onClose={() => setChipAction(null)}
         />
       )}
@@ -922,25 +964,34 @@ export default function LogisticsPage() {
   )
 }
 
-// 455/456.1 — popover เล็กต่อ chip (portal + fixed · escape overflow ของตาราง)
+// 455/456.1/457 — popover เล็กต่อ chip (portal + fixed · escape overflow ของตาราง) · context-aware
 function ChipActionPopover({
-  rect, customerName, date, currentNote, defaultNote, onSaveNote, onClearNote, onReschedule, onClose,
+  rect, cell, customerName, currentNote, defaultNote, onSaveNote, onClearNote, onReschedule, onAddQueue, onRestore, onRemove, onClose,
 }: {
   rect: DOMRect
+  cell: LogisticsCell
   customerName: string
-  date: string
   currentNote: string
   defaultNote: string
   onSaveNote: (text: string) => void
   onClearNote: () => void
   onReschedule: (toDate: string) => void
+  onAddQueue: (note: string) => void   // 457 — เพิ่มคิวรายครั้ง (cell ว่าง)
+  onRestore: () => void                // 457 — เอาคิวกลับ (skipped)
+  onRemove: () => void                 // 457 — ลบคิวเสริม (ad-hoc)
   onClose: () => void
 }) {
+  const date = cell.date
+  const isEmpty = cell.status === 'empty'
+  const isSkipped = cell.status === 'skipped'
+  // คิวเสริมที่เพิ่มเอง = มี extra/reschedule_add + ไม่ใช่วัน pattern (ลบได้)
+  const isAdHoc = !cell.baseScheduled && !isSkipped && cell.overrides.some(o => o.type === 'extra' || o.type === 'reschedule_add')
   const [note, setNote] = useState(currentNote)
   const [toDate, setToDate] = useState('')
-  const W = 252
+  const W = 256
   const left = Math.max(8, Math.min(rect.left - W + rect.width + 8, window.innerWidth - W - 8))
-  const top = Math.min(rect.bottom + 6, window.innerHeight - 220)
+  const top = Math.min(rect.bottom + 6, window.innerHeight - 260)
+  const inputCls = 'w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]'
 
   return createPortal(
     <>
@@ -953,38 +1004,72 @@ function ChipActionPopover({
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0" aria-label="ปิด"><X className="w-3.5 h-3.5" /></button>
         </div>
 
-        {/* 455 — หมายเหตุวันนี้ */}
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-slate-500">หมายเหตุวันนี้ (เฉพาะ chip นี้)</label>
-          <input value={note} onChange={e => setNote(e.target.value)} maxLength={30} autoFocus
-            placeholder={defaultNote ? `ค่าเริ่มต้น: ${defaultNote}` : 'เช่น ส่ง / รับ / รับมาซักวันสุดท้าย'}
-            className="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
-          <div className="flex items-center gap-1.5">
-            <button onClick={() => { onSaveNote(note); onClose() }}
-              className="flex-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors">บันทึก</button>
-            {currentNote && (
-              <button onClick={() => { onClearNote(); onClose() }}
-                className="px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">ล้าง</button>
-            )}
-          </div>
-          {defaultNote && <p className="text-[10px] text-slate-400">ไม่ใส่ = ใช้ป้ายรวมของลูกค้า ({defaultNote})</p>}
-        </div>
-
-        <div className="border-t border-slate-100" />
-
-        {/* 456.1 — เลื่อนคิวไปวันที่เจาะจง */}
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-slate-500">เลื่อนคิวไปวันที่</label>
-          <div className="flex items-center gap-1.5">
-            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-              className="flex-1 px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
-            <button disabled={!toDate || toDate === date} onClick={() => { onReschedule(toDate); onClose() }}
-              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-[#1B3A5C] text-white hover:bg-[#122740] disabled:opacity-40 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1">
-              <CornerUpRight className="w-3.5 h-3.5" /> เลื่อน
+        {isEmpty ? (
+          /* 457 — เพิ่มคิวนัดหมายรายครั้ง (วันที่ยังไม่มีคิว) */
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-medium text-slate-500">เพิ่มคิวนัดหมายวันนี้ (รายครั้ง)</label>
+            <input value={note} onChange={e => setNote(e.target.value)} maxLength={30} autoFocus
+              placeholder="หมายเหตุ (ถ้ามี) เช่น รับเสริม" className={inputCls} />
+            <button onClick={() => { onAddQueue(note); onClose() }}
+              className="w-full px-2.5 py-2 text-xs font-semibold rounded-lg bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors inline-flex items-center justify-center gap-1">
+              <Plus className="w-3.5 h-3.5" /> เพิ่มคิวนัดหมาย
             </button>
+            <p className="text-[10px] text-slate-400">จะขึ้นเป็นคิว “รอสร้าง SD” ไว้ล่วงหน้า — สร้าง SD จริงภายหลัง</p>
           </div>
-          <p className="text-[10px] text-slate-400">เลือกวันไหนก็ได้ (ข้ามสัปดาห์/เดือน) — มีหน้ายืนยันก่อนบันทึก</p>
-        </div>
+        ) : (
+          <>
+            {/* 457 — เอาคิวกลับมา (chip ที่ถูกข้าม/ยกเลิก) */}
+            {isSkipped && (
+              <button onClick={() => { onRestore(); onClose() }}
+                className="w-full px-2.5 py-2 text-xs font-semibold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors inline-flex items-center justify-center gap-1">
+                <RotateCcw className="w-3.5 h-3.5" /> เอาคิวกลับมา
+              </button>
+            )}
+
+            {/* 455 — หมายเหตุวันนี้ */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-slate-500">หมายเหตุวันนี้ (เฉพาะ chip นี้)</label>
+              <input value={note} onChange={e => setNote(e.target.value)} maxLength={30}
+                placeholder={defaultNote ? `ค่าเริ่มต้น: ${defaultNote}` : 'เช่น ส่ง / รับ'} className={inputCls} />
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => { onSaveNote(note); onClose() }}
+                  className="flex-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors">บันทึก</button>
+                {currentNote && (
+                  <button onClick={() => { onClearNote(); onClose() }}
+                    className="px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">ล้าง</button>
+                )}
+              </div>
+            </div>
+
+            {/* 456.1 — เลื่อนคิวไปวันที่ (เฉพาะคิวที่ยังมีอยู่) */}
+            {!isSkipped && (
+              <>
+                <div className="border-t border-slate-100" />
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-slate-500">เลื่อนคิวไปวันที่</label>
+                  <div className="flex items-center gap-1.5">
+                    <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className={inputCls + ' flex-1'} />
+                    <button disabled={!toDate || toDate === date} onClick={() => { onReschedule(toDate); onClose() }}
+                      className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-[#1B3A5C] text-white hover:bg-[#122740] disabled:opacity-40 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1">
+                      <CornerUpRight className="w-3.5 h-3.5" /> เลื่อน
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* 457 — ลบคิวเสริมที่เพิ่มเอง */}
+            {isAdHoc && (
+              <>
+                <div className="border-t border-slate-100" />
+                <button onClick={() => { onRemove(); onClose() }}
+                  className="w-full px-2.5 py-1.5 text-xs font-medium rounded-lg text-rose-600 hover:bg-rose-50 transition-colors inline-flex items-center justify-center gap-1">
+                  <Trash2 className="w-3.5 h-3.5" /> ลบคิวเสริมนี้
+                </button>
+              </>
+            )}
+          </>
+        )}
       </div>
     </>,
     document.body,
@@ -1211,9 +1296,20 @@ function CellChip({
   onDelete?: () => void          // 378 — ลบ/ยกเลิกคิว (เฉพาะวันคิวจริง)
   onGear?: (rect: DOMRect) => void // 455/456.1 — เมนูต่อ chip (หมายเหตุวันนี้ + เลื่อนไปวันที่)
 }) {
-  if (cell.status === 'empty') return <span className="text-slate-200 select-none">·</span>
+  // 457 — cell ว่าง: hover เจอ "+" → เพิ่มคิวนัดหมายรายครั้ง (เปิด popover add mode)
+  if (cell.status === 'empty') {
+    if (!onGear) return <span className="text-slate-200 select-none">·</span>
+    return (
+      <button type="button" onClick={e => onGear(e.currentTarget.getBoundingClientRect())}
+        title="เพิ่มคิวนัดหมายวันนี้ (รายครั้ง)" aria-label="เพิ่มคิวนัดหมาย"
+        className="group/add w-full h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-[#1B3A5C] hover:bg-[#3DD8D8]/10 transition-colors">
+        <Plus className="w-3.5 h-3.5 opacity-0 group-hover/add:opacity-100 transition-opacity" />
+      </button>
+    )
+  }
 
   const hasRescheduleAdd = cell.overrides.some(o => o.type === 'reschedule_add')
+  const isAdHocExtra = cell.overrides.some(o => o.type === 'extra') && !cell.baseScheduled && cell.status !== 'skipped'
   const hasRescheduleSkip = cell.overrides.some(o => o.type === 'reschedule_skip')
   // 455 — หมายเหตุรายวัน (override type 'note') ทับป้ายรวมของลูกค้า เฉพาะ chip นี้
   const dayNote = (cell.overrides.find(o => o.type === 'note')?.reason || '').trim()
@@ -1282,6 +1378,10 @@ function CellChip({
         <span className={cn('shrink-0 text-[11px] font-bold leading-none', badge.cls)}>{badge.text}</span>
         {hasRescheduleAdd && cell.status !== 'skipped' && (
           <CornerDownRight className="w-3 h-3 text-indigo-500 absolute -top-1 -right-1" aria-label="เลื่อนเข้า" />
+        )}
+        {/* 457 — คิวเสริมที่เพิ่มเอง (ad-hoc) — จุด + เขียว แยกจากคิว pattern */}
+        {isAdHocExtra && !hasRescheduleAdd && (
+          <Plus className="w-3 h-3 text-emerald-600 absolute -top-1 -right-1" aria-label="คิวเสริม (เพิ่มเอง)" />
         )}
       </button>
       {/* 378 — ปุ่มลบ/ยกเลิกคิว (มุมซ้ายบน · subtle, เด่นตอน hover · แตะได้บน tablet) */}
