@@ -234,6 +234,17 @@ export default function LogisticsPage() {
     return groups
   }, [visibleRows, sortedRounds, roundById])
 
+  // 461 — จำนวนคิวต่อวัน (เห็นภาระงานแต่ละวัน) · นับเฉพาะ cell ที่เป็นคิวจริง (ok/รอสร้าง/เสริม · ไม่นับข้าม)
+  const queueCountByDate = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const row of visibleRows) {
+      for (const cell of row.cells) {
+        if (isDraggableStatus(cell.status)) m.set(cell.date, (m.get(cell.date) || 0) + 1)
+      }
+    }
+    return m
+  }, [visibleRows])
+
   if (!canViewSD(currentUser)) {
     return (
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-amber-800">
@@ -648,6 +659,17 @@ export default function LogisticsPage() {
                     >
                       <div className="text-[13px]">{WEEKDAY_SHORT[d.dayOfWeek]}</div>
                       <div className={cn('text-[11px] font-normal', d.isToday ? 'text-[#1B3A5C]' : 'text-slate-400')}>{fmtShort(d.date)}</div>
+                      {/* 461 — จำนวนคิวของวันนั้น (เห็นภาระงานแต่ละวัน) */}
+                      {(() => {
+                        const n = queueCountByDate.get(d.date) || 0
+                        return (
+                          <div className={cn('mt-0.5 mx-auto w-fit px-1.5 py-px rounded-full text-[10px] font-semibold',
+                            n > 0 ? 'bg-[#1B3A5C]/8 text-[#1B3A5C]' : 'text-slate-300')}
+                            title={`${n} คิวในวันนี้`}>
+                            {n} คิว
+                          </div>
+                        )
+                      })()}
                       <ListOrdered className="w-3 h-3 mx-auto mt-0.5 text-slate-300 group-hover/day:text-[#3DD8D8]" />
                     </button>
                   </th>
