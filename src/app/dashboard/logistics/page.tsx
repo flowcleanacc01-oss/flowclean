@@ -719,6 +719,13 @@ export default function LogisticsPage() {
                   {row.cells.map(cell => {
                     const key = `${row.customer.id}|${cell.date}`
                     const isDropTarget = draggingRow === row.customer.id && dragOverKey === key
+                    // 464 — ปุ่ม X ลบคิว: วัน pattern → askDelete (เลือก scope) · คิวเสริม (ad-hoc) → ลบ override ตรงๆ
+                    const isAdHocCell = !cell.baseScheduled && cell.status !== 'skipped' &&
+                      cell.overrides.some(o => o.type === 'extra' || o.type === 'reschedule_add')
+                    const onDeleteCell = cell.status === 'skipped' ? undefined
+                      : cell.baseScheduled ? () => askDelete(row, cell)
+                      : isAdHocCell ? () => removeAdHocQueue(row.customer.id, cell.date)
+                      : undefined
                     return (
                       <td
                         key={cell.date}
@@ -742,7 +749,7 @@ export default function LogisticsPage() {
                           onDragEnd={onDragEnd}
                           onCreate={() => goCreate(row.customer.id, cell.date)}
                           onView={goDetail}
-                          onDelete={cell.baseScheduled && cell.status !== 'skipped' ? () => askDelete(row, cell) : undefined}
+                          onDelete={onDeleteCell}
                           onGear={rect => setChipAction({ row, cell, rect })}
                         />
                       </td>
@@ -1481,7 +1488,7 @@ function CellChip({
           onClick={e => { e.stopPropagation(); onDelete() }}
           title="ยกเลิก / ลบคิว"
           aria-label="ยกเลิก / ลบคิว"
-          className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-white border border-slate-300 text-slate-400 shadow-sm flex items-center justify-center opacity-50 hover:opacity-100 hover:bg-red-50 hover:text-red-600 hover:border-red-300 group-hover/chip:opacity-100 transition-opacity z-10"
+          className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-white border border-slate-300 text-slate-400 shadow-sm flex items-center justify-center opacity-0 hover:bg-red-50 hover:text-red-600 hover:border-red-300 group-hover/chip:opacity-100 transition-opacity z-10"
         >
           <X className="w-3 h-3" />
         </button>
