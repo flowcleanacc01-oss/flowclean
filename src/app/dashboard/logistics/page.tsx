@@ -31,6 +31,7 @@ import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { planRange, buildCustomerPlan, buildCustomerPlanText, thaiRangeLabel } from '@/lib/customer-plan'
 import CustomerPlanPrint from '@/components/CustomerPlanPrint'
 import ScheduleSetupModal from '@/components/ScheduleSetupModal'
+import CustomerPicker from '@/components/CustomerPicker'
 
 const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 function fmtShort(iso: string): string {
@@ -81,6 +82,11 @@ interface PendingDelete {
 // 431 — ป้ายวันสั้น (weekday 0-6) สำหรับ chip ข้อยกเว้นรอบรายวัน (429)
 const DAY_LABELS = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.']
 
+// 462 — ลูกค้าตั้งคิวแล้ว (อยู่ในปฏิทินขนส่ง)
+function hasSchedule(c: Customer): boolean {
+  return !!c.scheduleType && c.scheduleType !== 'none'
+}
+
 // 454.1 — ป้าย schedule + วันเฉพาะ (weekly/biweekly) เช่น "รายสัปดาห์ (จ พฤ ส)"
 function scheduleLabelWithDays(c: Customer): string {
   const base = SCHEDULE_TYPE_CONFIG[c.scheduleType || 'none']?.label || ''
@@ -124,8 +130,8 @@ export default function LogisticsPage() {
   const [scheduleCustomer, setScheduleCustomer] = useState<Customer | null>(null)
   // 455/456.1 — เมนูต่อ chip (เฟือง): หมายเหตุวันนี้ + เลื่อนไปวันที่
   const [chipAction, setChipAction] = useState<{ row: LogisticsRow; cell: LogisticsCell; rect: DOMRect } | null>(null)
-  // 460.1 — กรองปฏิทินตามชื่อย่อลูกค้า
-  const [filterQuery, setFilterQuery] = useState('')
+  // 462.1 — กรองปฏิทินตามลูกค้า (CustomerPicker · '' = ทุกลูกค้า)
+  const [filterCustomerId, setFilterCustomerId] = useState('')
   // day-detail (route ordering) state
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const listDragIdx = useRef<number | null>(null)
@@ -193,22 +199,14 @@ export default function LogisticsPage() {
     return offs
   }, [dayGroups])
 
-  // 460.1 — กรองแถวตามชื่อย่อ/ชื่อ/รหัสลูกค้า
+  // 462.1 — กรองแถวตามลูกค้าที่เลือก (identify ชัด · '' = ทุกลูกค้า)
   const visibleRows = useMemo(
-    () => (filterQuery.trim()
-      ? week.rows.filter(r => matchesThaiQueryAnyField([r.customer.shortName, r.customer.name, r.customer.customerCode], filterQuery))
-      : week.rows),
-    [week.rows, filterQuery])
+    () => (filterCustomerId ? week.rows.filter(r => r.customer.id === filterCustomerId) : week.rows),
+    [week.rows, filterCustomerId])
+  const filterCustomer = useMemo(() => (filterCustomerId ? customers.find(c => c.id === filterCustomerId) : null), [customers, filterCustomerId])
 
-  // 460.1 — ลูกค้า active ที่ "ยังไม่ตั้งคิว" ตรงคำค้น (ไม่อยู่ในปฏิทิน — surface ให้เห็น + กดตั้งคิวได้)
-  const unscheduledMatches = useMemo(() => {
-    if (!filterQuery.trim()) return []
-    return customers
-      .filter(c => c.isActive && (!c.scheduleType || c.scheduleType === 'none'))
-      .filter(c => matchesThaiQueryAnyField([c.shortName, c.name, c.customerCode], filterQuery))
-      .sort((a, b) => (a.shortName || a.name).localeCompare(b.shortName || b.name, 'th'))
-      .slice(0, 12)
-  }, [customers, filterQuery])
+  // 462.1/462.2 — ลูกค้าที่ "ตั้งคิวแล้ว" (อยู่ในปฏิทิน) vs "ยังไม่ตั้งคิว" (ตั้งคิวด่วนได้)
+  const unscheduledCount = useMemo(() => customers.filter(c => c.isActive && !hasSchedule(c)).length, [customers])
 
   // 431 — แถวปฏิทินจัดกลุ่มตามรอบหลัก (ทั้งสัปดาห์ → ใช้รอบหลัก · ข้อยกเว้นรายวันโชว์เป็น chip)
   const groupedRows = useMemo(() => {
@@ -584,30 +582,23 @@ export default function LogisticsPage() {
         </div>
       </div>
 
-      {/* 460.1 — กรองตามชื่อลูกค้า + surface ลูกค้าที่ยังไม่ตั้งคิว */}
+      {/* 462.1 — กรองตามลูกค้า (picker theme เดียวกับ Create LF · identify ชัด) + 462.2 ตั้งคิวลูกค้าใหม่ */}
       {week.rows.length > 0 && (
         <div className="mb-3 flex items-center gap-2 flex-wrap">
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-            <input value={filterQuery} onChange={e => setFilterQuery(e.target.value)} placeholder="กรองตามชื่อลูกค้า..."
-              className="border border-slate-200 rounded-lg pl-8 pr-8 py-1.5 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]" />
-            {filterQuery && (
-              <button type="button" onClick={() => setFilterQuery('')} aria-label="ล้างการกรอง"
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"><X className="w-3.5 h-3.5" /></button>
-            )}
-          </div>
-          {filterQuery.trim() && (
-            <span className="text-xs text-slate-400">{groupedRows.reduce((n, g) => n + g.rows.length, 0)} ลูกค้าในปฏิทิน</span>
+          <span className="text-xs text-slate-400">กรอง:</span>
+          <CustomerPicker value={filterCustomerId} onChange={setFilterCustomerId} allowAll filter={hasSchedule} placeholder="เลือกลูกค้า" />
+          {filterCustomer && (
+            <button type="button" onClick={() => setFilterCustomerId('')}
+              className="text-xs text-slate-500 hover:text-[#1B3A5C] inline-flex items-center gap-1">
+              <X className="w-3 h-3" /> ล้างตัวกรอง
+            </button>
           )}
-          {unscheduledMatches.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs text-amber-600 font-medium">ยังไม่ตั้งคิว:</span>
-              {unscheduledMatches.map(c => (
-                <button key={c.id} type="button" onClick={() => setScheduleCustomer(c)} title="คลิกเพื่อตั้งค่าตารางคิว"
-                  className="px-2 py-0.5 rounded-full text-[11px] font-medium border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
-                  {c.shortName || c.name}
-                </button>
-              ))}
+          {/* 462.2 — ปุ่มตั้งคิวลูกค้าใหม่ (ที่ยังไม่ตั้งคิว) → เปิด ScheduleSetupModal ตั้งได้เลย */}
+          {unscheduledCount > 0 && (
+            <div className="ml-auto">
+              <CustomerPicker value="" allowAll={false} themed={false} filter={c => !hasSchedule(c)}
+                placeholder={`ตั้งคิวลูกค้าใหม่ (${unscheduledCount})`}
+                onChange={id => { const c = customers.find(x => x.id === id); if (c) setScheduleCustomer(c) }} />
             </div>
           )}
         </div>
@@ -630,10 +621,9 @@ export default function LogisticsPage() {
           </div>
         </div>
       ) : groupedRows.length === 0 ? (
-        // 460.1 — กรองแล้วไม่พบลูกค้าในปฏิทิน (อาจมีในรายการ "ยังไม่ตั้งคิว" ด้านบน)
+        // 462.1 — กรองแล้วไม่พบในสัปดาห์นี้ (เช่น ลูกค้าหยุดคิวช่วงนี้)
         <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-sm">
-          ไม่พบลูกค้าที่ตั้งคิว ตรงกับ “{filterQuery}”
-          {unscheduledMatches.length > 0 && <span className="block mt-1 text-amber-600">— มีลูกค้าที่ “ยังไม่ตั้งคิว” ตรงคำค้น ดูปุ่มด้านบน</span>}
+          {filterCustomer ? `“${filterCustomer.shortName || filterCustomer.name}” ไม่มีคิวในสัปดาห์นี้` : 'ไม่พบลูกค้า'}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-auto max-h-[calc(100vh-17rem)]">
