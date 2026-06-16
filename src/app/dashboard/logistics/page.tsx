@@ -638,7 +638,8 @@ export default function LogisticsPage() {
                     key={d.date}
                     className={cn(
                       'sticky top-0 z-20 border-b border-slate-200 px-1 py-1.5 text-center font-semibold min-w-[96px]',
-                      d.isToday ? 'bg-[#3DD8D8]/15 text-[#1B3A5C]' : 'bg-slate-50 text-slate-600',
+                      // 465 — หัวตารางทึบ (กันมองทะลุตอนเลื่อน) · today ใช้สีฟ้าทึบแทน /15 โปร่ง
+                      d.isToday ? 'bg-[#e3f8f8] text-[#1B3A5C]' : 'bg-slate-50 text-slate-600',
                     )}
                   >
                     <button
@@ -669,10 +670,10 @@ export default function LogisticsPage() {
             <tbody>
               {groupedRows.map(g => (
                 <Fragment key={g.round?.id || 'no-round'}>
-                  {/* 431 — แถวหัวกลุ่มรอบ (สีรอบ + เวลา + จำนวนลูกค้า) */}
+                  {/* 431 — แถวหัวกลุ่มรอบ (สีรอบ + เวลา + จำนวนลูกค้า) · 465 ทึบ ไม่มองทะลุ */}
                   <tr>
-                    <td colSpan={8} className="border-b border-slate-200 bg-slate-50/90 p-0">
-                      <div className="sticky left-0 inline-flex items-center gap-2 px-3 py-1.5">
+                    <td colSpan={8} className="border-b border-slate-200 bg-slate-100 p-0">
+                      <div className="sticky left-0 inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100">
                         <span className="px-1.5 py-0.5 rounded text-[11px] font-bold shrink-0"
                           style={{ backgroundColor: g.round?.color || '#94a3b8', color: roundTextColor(g.round?.textColor) }}>
                           {g.round?.code || '—'}
@@ -757,6 +758,25 @@ export default function LogisticsPage() {
                   })}
                 </tr>
                   ))}
+                  {/* 465.1 — สรุปจำนวนคิวของรอบนี้ ต่อวัน (ความหนาแน่นงานต่อรอบต่อวัน) */}
+                  <tr className="bg-slate-50">
+                    <td className="sticky left-0 z-10 bg-slate-50 border-b-2 border-r border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-500">
+                      คิว/วัน
+                    </td>
+                    {week.days.map(d => {
+                      const n = g.rows.reduce((acc, r) => {
+                        const c = r.cells.find(x => x.date === d.date)
+                        return acc + (c && isDraggableStatus(c.status) ? 1 : 0)
+                      }, 0)
+                      return (
+                        <td key={d.date} className={cn('text-center border-b-2 border-slate-200 py-1', d.isToday && 'bg-[#3DD8D8]/[0.06]')}>
+                          {n > 0
+                            ? <span className="text-[11px] font-bold tabular-nums" style={{ color: g.round?.color || '#475569' }}>{n}</span>
+                            : <span className="text-slate-300 text-[11px]">·</span>}
+                        </td>
+                      )
+                    })}
+                  </tr>
                 </Fragment>
               ))}
             </tbody>
