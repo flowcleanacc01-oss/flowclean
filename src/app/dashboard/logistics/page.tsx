@@ -4,7 +4,7 @@
 // แสดงคิวรับ-ส่งผ้ารายสัปดาห์ (ลูกค้า × 7 วัน) จาก schedule + overrides + SD จริง
 // ลาก cell ข้ามวัน = เลื่อนคิว · คลิก = สร้าง/ดู SD
 
-import { useState, useMemo, useRef, Fragment } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -989,15 +989,35 @@ function ChipActionPopover({
   const [note, setNote] = useState(currentNote)
   const [toDate, setToDate] = useState('')
   const W = 256
-  const left = Math.max(8, Math.min(rect.left - W + rect.width + 8, window.innerWidth - W - 8))
-  const top = Math.min(rect.bottom + 6, window.innerHeight - 260)
   const inputCls = 'w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3DD8D8]'
+
+  // popup fit (455/456.1) — วางตำแหน่งแบบมาตรฐาน: วัดความสูงจริง → เปิดล่าง ถ้าพื้นที่ล่างไม่พอ flip ขึ้นบน
+  //   ถ้าทั้งสองด้านไม่พอ (จอเตี้ย) → เลือกด้านที่กว้างกว่า + ให้ scroll ในตัว (ไม่ล้นจอ)
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const h = el.offsetHeight
+    const vw = window.innerWidth, vh = window.innerHeight
+    const M = 8, GAP = 6
+    const left = Math.max(M, Math.min(rect.left - W + rect.width + 8, vw - W - M))
+    const below = vh - rect.bottom - M
+    const above = rect.top - M
+    let top: number, maxHeight: number
+    if (h + GAP <= below) { top = rect.bottom + GAP; maxHeight = below - GAP }          // พอด้านล่าง
+    else if (h + GAP <= above) { top = rect.top - GAP - h; maxHeight = above - GAP }     // flip ขึ้นบน
+    else if (below >= above) { top = rect.bottom + GAP; maxHeight = below - GAP }        // จอเตี้ย: ล่างกว้างกว่า
+    else { maxHeight = above - GAP; top = Math.max(M, rect.top - GAP - maxHeight) }      // จอเตี้ย: บนกว้างกว่า
+    setPos({ top, left, maxHeight: Math.max(140, maxHeight) })
+  }, [rect])
 
   return createPortal(
     <>
       <div className="fixed inset-0 z-[59]" onClick={onClose} aria-hidden />
-      <div role="dialog" style={{ position: 'fixed', top, left, width: W }}
-        className="z-[60] bg-white rounded-xl border border-slate-200 shadow-xl p-3 space-y-2.5 text-sm"
+      <div ref={ref} role="dialog"
+        style={{ position: 'fixed', width: W, top: pos?.top ?? -9999, left: pos?.left ?? -9999, maxHeight: pos?.maxHeight, overflowY: 'auto', visibility: pos ? 'visible' : 'hidden' }}
+        className="z-[60] bg-white rounded-xl border border-slate-200 shadow-xl p-3 space-y-2.5 text-sm overscroll-contain"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-semibold text-[#1B3A5C] truncate">{customerName} · {fmtShort(date)}</span>
