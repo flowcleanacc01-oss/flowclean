@@ -34,11 +34,12 @@ import ScheduleAudit from '@/components/ScheduleAudit'
 import LFRowAudit from '@/components/LFRowAudit'
 import ExecutiveDashboard from '@/components/executive/ExecutiveDashboard'
 import RoundPnLReport from '@/components/RoundPnLReport'
+import CustomerValueReport from '@/components/CustomerValueReport'
 import type { CarryOverMode, CarryOverAdjustment, BillingStatement } from '@/types'
 
-type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'roundpnl' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'sdaudit' | 'wbaudit' | 'driftaudit' | 'lfrowaudit' | 'closing' | 'trustaudit' | 'aggaudit' | 'anchoraudit' | 'scheduleaudit' | 'executive'
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'roundpnl' | 'custvalue' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'sdaudit' | 'wbaudit' | 'driftaudit' | 'lfrowaudit' | 'closing' | 'trustaudit' | 'aggaudit' | 'anchoraudit' | 'scheduleaudit' | 'executive'
 
-const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'roundpnl', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'sdaudit', 'wbaudit', 'driftaudit', 'lfrowaudit', 'closing', 'trustaudit', 'aggaudit', 'anchoraudit', 'scheduleaudit', 'executive'] as const
+const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'roundpnl', 'custvalue', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'sdaudit', 'wbaudit', 'driftaudit', 'lfrowaudit', 'closing', 'trustaudit', 'aggaudit', 'anchoraudit', 'scheduleaudit', 'executive'] as const
 
 export default function ReportsPage() {
   const { currentUser, linenForms, deliveryNotes, billingStatements, expenses, customers, getCustomer, getCarryOver, linenCatalog, companyInfo, quotations, carryOverAdjustments, deleteCarryOverAdjustment } = useStore()
@@ -116,6 +117,7 @@ export default function ReportsPage() {
     { key: 'item', label: 'ตามสินค้า' },
     { key: 'pnl', label: 'กำไร-ขาดทุน' },
     { key: 'roundpnl', label: '💰 กำไรตามรอบ' },
+    { key: 'custvalue', label: '⚖️ ลูกค้าคุ้ม/ไม่คุ้ม' },
     { key: 'aging', label: 'บิลค้างชำระ' },
     { key: 'carryover', label: 'ผ้าค้าง' },
     { key: 'discrepancy', label: 'ความแตกต่างการนับ' },
@@ -849,6 +851,9 @@ export default function ReportsPage() {
 
       {/* 465.3 (D) — กำไรตามรอบ */}
       {tab === 'roundpnl' && <RoundPnLReport month={selMonth} />}
+
+      {/* 465.3 (F) — ลูกค้าคุ้ม/ไม่คุ้ม */}
+      {tab === 'custvalue' && <CustomerValueReport month={selMonth} />}
 
       {/* B1: Aging Report Tab */}
       {tab === 'aging' && (
