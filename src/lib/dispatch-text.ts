@@ -1,7 +1,13 @@
 // 445 — สร้างข้อความแผนคิวรับ-ส่ง (work-night) สำหรับ copy ส่งไลน์ให้ทีม
-//   pure (เทสได้) · จัดกลุ่มตามรอบ เรียงตาม "นาฬิกาคืนงาน" (รอบเช้ามืด/เช้า = วันถัดไป) · สมาชิกทุกคนในรอบ
+//   pure (เทสได้) · จัดกลุ่มตามรอบ เรียงตาม "นาฬิกาคืนงาน" (รอบเช้ามืด/เช้า = วันถัดไป)
+//   466 — แสดงเฉพาะลูกค้าที่ "มีคิวจริงในวันนั้น" (= มี chip · isScheduledDay + override) ไม่ใช่ membership รอบ
+//       · ตัดวันงานที่ 15.30 เสมอ (รอบ ≥15.30 = คืนวันที่เลือก · <15.30 = เช้า/เช้ามืดวันถัดไป)
 //   มาร์กเกอร์ดึงจาก schedule (445 กติกา): ทุกวัน→* (24) · ทุก N วัน→(N×24) · รายสัปดาห์/2สัปดาห์→* (วัน) · อื่นๆ→* (24)
-import type { Round, Customer } from '@/types'
+import type { Round, Customer, ScheduleOverride } from '@/types'
+import { isQueuedOnDate } from './schedule-audit'
+import { effectiveRoundId } from './dispatch'
+
+const PIVOT_MIN = 15 * 60 + 30 // 466 — 15.30 ตัดวันงาน
 
 const THAI_DAY = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์']
 const SEP = '------------------------'
@@ -54,21 +60,27 @@ export function roundHeart(hex?: string | null): string {
   return '🩷'                          // ชมพู/บานเย็น
 }
 
-/** นาฬิกาคืนงาน: รอบที่ออกก่อนเที่ยง = เช้าวันถัดไป → +24 ชม. เพื่อเรียงต่อท้าย */
-function nightKey(startTime: string): number {
-  if (!startTime) return 99 * 60 // ไม่ระบุเวลา → ท้ายสุด
+/** นาทีจากเที่ยงคืนของเวลาออกรอบ · null = ไม่ระบุ */
+function startMin(startTime: string): number | null {
+  if (!startTime) return null
   const [hh, mm] = startTime.split(':').map(Number)
-  const base = (hh || 0) * 60 + (mm || 0)
-  return (hh || 0) < 12 ? base + 24 * 60 : base
+  return (hh || 0) * 60 + (mm || 0)
+}
+function toISO(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function addDays(iso: string, n: number): string {
+  const d = parseISO(iso); d.setDate(d.getDate() + n); return toISO(d)
 }
 
-/** คำนำหน้าหัวรอบ: บ่าย/ค่ำ = คืนวัน{เลือก} · เช้ามืด/เช้า = วันถัดไป */
-function roundDayPrefix(startTime: string, chosenDay: string, nextDay: string): string {
+/** คำนำหน้าหัวรอบ: ≥15.30 = คืนวัน{เลือก} · <15.30 = เช้ามืด/เช้า/บ่ายวันถัดไป */
+function roundDayPrefix(startTime: string, chosenDay: string, nextDay: string, isNextDay: boolean): string {
   if (!startTime) return `รอบวัน${chosenDay}`
+  if (!isNextDay) return `คืนวัน${chosenDay}`
   const hh = Number(startTime.split(':')[0]) || 0
-  if (hh >= 12) return `คืนวัน${chosenDay}`
   if (hh < 6) return `เช้ามืดวัน${nextDay}`
-  return `เช้าวัน${nextDay}`
+  if (hh < 12) return `เช้าวัน${nextDay}`
+  return `บ่ายวัน${nextDay}`
 }
 
 function timeDisp(startTime: string): string {
@@ -82,37 +94,48 @@ export interface DispatchTextOptions {
   withMarkers?: boolean
 }
 
-/** สร้างข้อความแผนคิวของ "คืนวัน X" (รวมรอบข้ามคืนถึงเช้าวันถัดไป) */
+/** สร้างข้อความแผนคิวของ "คืนวัน X" (ตัดวันที่ 15.30 · รวมรอบเช้ามืด/เช้าวันถัดไปก่อน 15.30)
+ *  466 — แสดงเฉพาะลูกค้าที่มีคิวจริงในวันที่รอบนั้นวิ่ง (= มี chip) + อยู่รอบนั้นจริง (effectiveRoundId) */
 export function buildDispatchText(
   nightDate: string,
   rounds: Round[],
   customers: Customer[],
+  overrides: ScheduleOverride[] = [],
   opts: DispatchTextOptions = {},
 ): string {
   const withMarkers = opts.withMarkers !== false
   const d0 = parseISO(nightDate)
   const chosenDay = THAI_DAY[d0.getDay()]
   const nextDay = THAI_DAY[(d0.getDay() + 1) % 7]
+  const dateNext = addDays(nightDate, 1)
   const header = `คืนวัน${chosenDay}ที่ ${d0.getDate()}-${d0.getMonth() + 1}-${shortBE(d0.getFullYear())}`
 
+  // override เฉพาะ 2 วันของคืนนี้ (subset เล็ก → isQueuedOnDate เร็ว)
+  const nightOverrides = overrides.filter(o => o.date === nightDate || o.date === dateNext)
+
+  // แต่ละรอบ → runDate (≥15.30 = วันที่เลือก · <15.30 = วันถัดไป) + key เรียงนาฬิกาคืนงาน
   const ordered = rounds
     .filter(r => r.isActive)
-    .map(r => ({ r, key: nightKey(r.startTime) }))
+    .map(r => {
+      const min = startMin(r.startTime)
+      const isNextDay = min != null && min < PIVOT_MIN
+      return { r, isNextDay, runDate: isNextDay ? dateNext : nightDate, key: min == null ? 99999 : (isNextDay ? min + 1440 : min) }
+    })
     .sort((a, b) => a.key - b.key)
 
   const blocks: string[] = []
-  for (const { r } of ordered) {
+  for (const { r, isNextDay, runDate } of ordered) {
     const members = customers
-      .filter(c => c.isActive && c.roundId === r.id)
+      .filter(c => c.isActive && effectiveRoundId(c, runDate) === r.id && isQueuedOnDate(c, runDate, nightOverrides))
       .sort((a, b) => (a.routeSequence || 0) - (b.routeSequence || 0) || a.shortName.localeCompare(b.shortName, 'th'))
     if (members.length === 0) continue
-    const head = `${roundHeart(r.color)}( ${roundDayPrefix(r.startTime, chosenDay, nextDay)} ${timeDisp(r.startTime)} รอบ ${r.code})`
+    const head = `${roundHeart(r.color)}( ${roundDayPrefix(r.startTime, chosenDay, nextDay, isNextDay)} ${timeDisp(r.startTime)} รอบ ${r.code})`
     const lines = members.map(c => withMarkers ? `- ${c.shortName} ${customerMarker(c)}` : `- ${c.shortName}`)
     blocks.push([head, '', ...lines].join('\n'))
   }
 
   if (blocks.length === 0) {
-    return `${header}\n\n${HEADER_NOTE}\n${SEP}\n(ยังไม่มีลูกค้าผูกรอบ — ผูกลูกค้าเข้ารอบที่หน้า "รอบเดินรถ" ก่อน)`
+    return `${header}\n\n${HEADER_NOTE}\n${SEP}\n(ไม่มีคิวงานในคืนนี้ — เช็คตารางคิวของลูกค้า/รอบ)`
   }
 
   return [header, '', HEADER_NOTE, SEP, blocks.join(`\n${SEP}\n`), SEP].join('\n')

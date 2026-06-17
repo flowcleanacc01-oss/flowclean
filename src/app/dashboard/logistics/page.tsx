@@ -1027,6 +1027,7 @@ export default function LogisticsPage() {
         <DispatchTextModal
           rounds={rounds}
           customers={customers}
+          overrides={scheduleOverrides}
           defaultDate={selectedDay || today}
           onClose={() => setShowExport(false)}
         />
@@ -1299,10 +1300,11 @@ function DensityHeatmapModal({
 
 // 445 — Modal: เลือก "คืนวัน" → สร้างข้อความแผนคิว (รวมรอบข้ามคืน) → คัดลอกส่งไลน์
 function DispatchTextModal({
-  rounds, customers, defaultDate, onClose,
+  rounds, customers, overrides, defaultDate, onClose,
 }: {
   rounds: Round[]
   customers: Customer[]
+  overrides: ScheduleOverride[]   // 466 — กรองด้วยคิวจริง (schedule + override)
   defaultDate: string
   onClose: () => void
 }) {
@@ -1311,8 +1313,8 @@ function DispatchTextModal({
   const [copied, setCopied] = useState(false)
 
   const text = useMemo(
-    () => buildDispatchText(date, rounds, customers, { withMarkers }),
-    [date, rounds, customers, withMarkers],
+    () => buildDispatchText(date, rounds, customers, overrides, { withMarkers }),
+    [date, rounds, customers, overrides, withMarkers],
   )
 
   const copy = async () => {

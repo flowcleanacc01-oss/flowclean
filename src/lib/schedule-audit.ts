@@ -117,6 +117,18 @@ export function isScheduledDay(
   return false
 }
 
+/** 466 — ลูกค้ามีคิวจริงในวันนั้นไหม (= มี chip ในปฏิทิน) = schedule + override (skip ตัด / extra เพิ่ม)
+ *  กติกาเดียวกับ runScheduleAudit/buildCustomerPlan/buildLogisticsWeek (single source) */
+export function isQueuedOnDate(customer: Customer, date: string, allOverrides: ScheduleOverride[]): boolean {
+  let expected = isScheduledDay(date, customer)
+  for (const o of allOverrides) {
+    if (o.customerId !== customer.id || o.date !== date) continue
+    if (o.type === 'skip' || o.type === 'reschedule_skip') expected = false
+    else if (o.type === 'extra' || o.type === 'reschedule_add') expected = true
+  }
+  return expected
+}
+
 /**
  * 377 — หา ISO date ของ occurrence ครั้งที่ n (1-based) นับจาก scheduleStartDate
  * ใช้แปลง "สิ้นสุดหลัง N ครั้ง" → scheduleEndDate ตอนเซฟ
