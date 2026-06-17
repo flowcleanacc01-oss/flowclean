@@ -24,7 +24,7 @@ import {
   ChevronLeft, ChevronRight, CalendarDays, Truck, Plus, AlertOctagon,
   CheckCircle2, ArrowRight, Ban, Info, ClipboardCheck, CornerUpRight, CornerDownRight,
   ChevronUp, ChevronDown, GripVertical, ListOrdered, X, CalendarX, Trash2,
-  MessageSquareText, Copy, Check, Search, CalendarClock, Settings2, RotateCcw,
+  MessageSquareText, Copy, Check, Search, CalendarClock, Settings2, RotateCcw, BarChart3,
 } from 'lucide-react'
 import { buildDispatchText } from '@/lib/dispatch-text'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
@@ -32,6 +32,8 @@ import { planRange, buildCustomerPlan, buildCustomerPlanText, thaiRangeLabel } f
 import CustomerPlanPrint from '@/components/CustomerPlanPrint'
 import ScheduleSetupModal from '@/components/ScheduleSetupModal'
 import CustomerPicker from '@/components/CustomerPicker'
+import { buildDensity } from '@/lib/round-density'
+import type { LogisticsWeek } from '@/lib/logistics-week'
 
 const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 function fmtShort(iso: string): string {
@@ -128,6 +130,8 @@ export default function LogisticsPage() {
   const [showCustomerPlan, setShowCustomerPlan] = useState(false)
   // 454.1 — เปิด modal ตั้งค่าตารางคิวจากชิปป้าย schedule ใน Col ลูกค้า
   const [scheduleCustomer, setScheduleCustomer] = useState<Customer | null>(null)
+  // 465.2 (B) — modal heatmap ความหนาแน่นงาน รอบ×วัน
+  const [showDensity, setShowDensity] = useState(false)
   // 455/456.1 — เมนูต่อ chip (เฟือง): หมายเหตุวันนี้ + เลื่อนไปวันที่
   const [chipAction, setChipAction] = useState<{ row: LogisticsRow; cell: LogisticsCell; rect: DOMRect } | null>(null)
   // 462.1 — กรองปฏิทินตามลูกค้า (CustomerPicker · '' = ทุกลูกค้า)
@@ -497,6 +501,15 @@ export default function LogisticsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* 465.2 — ภาพรวมความหนาแน่นงาน รอบ×วัน */}
+          <button
+            type="button"
+            onClick={() => setShowDensity(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-[#1B3A5C] border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            <BarChart3 className="w-4 h-4" />
+            ความหนาแน่น
+          </button>
           {/* 453 — แผนคิวเฉพาะลูกค้า (ส่งให้ลูกค้ารู้คิวล่วงหน้า) */}
           <button
             type="button"
@@ -1036,6 +1049,11 @@ export default function LogisticsPage() {
         <ScheduleSetupModal open onClose={() => setScheduleCustomer(null)} customer={scheduleCustomer} />
       )}
 
+      {/* 465.2 (B) — heatmap ความหนาแน่นงาน รอบ×วัน */}
+      {showDensity && (
+        <DensityHeatmapModal week={week} rounds={sortedRounds} roundById={roundById} onClose={() => setShowDensity(false)} />
+      )}
+
       {/* 455/456.1/457 — เมนูต่อ chip (เฟือง): หมายเหตุ + เลื่อน + เพิ่ม/เอาคืน/ลบคิว */}
       {chipAction && (
         <ChipActionPopover
@@ -1186,6 +1204,96 @@ function ChipActionPopover({
       </div>
     </>,
     document.body,
+  )
+}
+
+// 465.2 (B) — Modal: heatmap ความหนาแน่นงาน รอบ × วัน (สัปดาห์ที่ดูอยู่)
+function DensityHeatmapModal({
+  week, rounds, roundById, onClose,
+}: {
+  week: LogisticsWeek
+  rounds: Round[]
+  roundById: Map<string, Round>
+  onClose: () => void
+}) {
+  const dens = useMemo(() => {
+    const rowInputs = week.rows.map(r => ({
+      roundId: r.customer.roundId && roundById.has(r.customer.roundId) ? r.customer.roundId : '',
+      cellActive: r.cells.map(c => isDraggableStatus(c.status)),
+    }))
+    return buildDensity(rowInputs, week.days.length, rounds.map(r => r.id))
+  }, [week, rounds, roundById])
+
+  // heat: 0=เทา · น้อย→เขียว · มาก→แดง (hsl 145→0) · ตัวอักษรขาวเมื่อเข้ม
+  const heat = (n: number) => {
+    if (n === 0) return { backgroundColor: '#f8fafc', color: '#cbd5e1' }
+    const r = dens.max > 0 ? n / dens.max : 0
+    return { backgroundColor: `hsl(${Math.round(145 - r * 145)}, 70%, ${Math.round(86 - r * 26)}%)`, color: r > 0.55 ? '#fff' : '#1e293b' }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="ความหนาแน่นงาน — รอบ × วัน" size="wide" closeLabel="close">
+      <div className="space-y-3">
+        <p className="text-xs text-slate-400">
+          สัปดาห์ {fmtShort(week.weekStart)}–{fmtShort(week.weekEnd)} · สีเข้ม/แดง = คิวแน่น · นับเฉพาะคิวจริง (ไม่รวมที่ข้าม/เลื่อนออก)
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse min-w-[640px]">
+            <thead>
+              <tr>
+                <th className="sticky left-0 bg-white z-10 px-2 py-2 text-left text-xs font-medium text-slate-500 border-b border-slate-200">รอบ \ วัน</th>
+                {week.days.map(d => (
+                  <th key={d.date} className={cn('px-1 py-2 text-center text-xs font-semibold border-b border-slate-200 min-w-[60px]', d.isToday ? 'text-[#1B3A5C]' : 'text-slate-500')}>
+                    <div>{WEEKDAY_SHORT[d.dayOfWeek]}</div>
+                    <div className="font-normal text-[10px] text-slate-400">{d.date.slice(8)}</div>
+                  </th>
+                ))}
+                <th className="px-2 py-2 text-center text-xs font-medium text-slate-500 border-b border-slate-200 border-l">รวม</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dens.rounds.length === 0 ? (
+                <tr><td colSpan={week.days.length + 2} className="text-center text-slate-400 text-sm py-8">ไม่มีคิวในสัปดาห์นี้</td></tr>
+              ) : dens.rounds.map(rr => {
+                const round = roundById.get(rr.roundId)
+                return (
+                  <tr key={rr.roundId || 'none'}>
+                    <td className="sticky left-0 bg-white z-10 px-2 py-1.5 whitespace-nowrap border-b border-slate-100">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded text-[11px] font-bold"
+                          style={{ backgroundColor: round?.color || '#94a3b8', color: roundTextColor(round?.textColor) }}>{round?.code || '—'}</span>
+                        <span className="text-xs font-medium text-slate-600">{round?.name || 'ไม่มีรอบ'}</span>
+                        {round && round.capacityTarget > 0 && <span className="text-[10px] text-slate-300">cap {round.capacityTarget}</span>}
+                      </span>
+                    </td>
+                    {rr.perDay.map((n, i) => (
+                      <td key={i} className="text-center border-b border-slate-100 p-0.5">
+                        <div className="rounded py-1.5 text-[12px] font-bold tabular-nums" style={heat(n)} title={`${n} คิว`}>{n || ''}</div>
+                      </td>
+                    ))}
+                    <td className="text-center border-b border-l border-slate-100 px-2 font-bold text-[#1B3A5C] tabular-nums">{rr.total}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            {dens.rounds.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-slate-200">
+                  <td className="sticky left-0 bg-white z-10 px-2 py-2 text-xs font-semibold text-slate-500">รวม/วัน</td>
+                  {dens.perDayTotal.map((n, i) => (
+                    <td key={i} className="text-center py-2 text-[12px] font-bold text-slate-700 tabular-nums">{n || '·'}</td>
+                  ))}
+                  <td className="text-center border-l border-slate-200 px-2 font-bold text-[#1B3A5C] tabular-nums">{dens.grandTotal}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+        <p className="text-[11px] text-slate-400">
+          เลื่อนสัปดาห์ที่ปฏิทิน (◀▶) แล้วเปิดใหม่เพื่อดูสัปดาห์อื่น · ตัวเลข = จำนวนลูกค้า/คิวของรอบนั้นในวันนั้น
+        </p>
+      </div>
+    </Modal>
   )
 }
 
