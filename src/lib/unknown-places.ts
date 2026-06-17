@@ -14,6 +14,7 @@ export interface RawStop {
   address: string          // geocode จาก V2X (ใช้ค้นหา)
   date: string             // yyyy-mm-dd
   vehicleCode: string | null
+  carId: string            // 467 — V2X carId (เปิดเที่ยววิ่งของวัน/คันนั้น)
   time: string             // เวลาจอด (= endTime ของเที่ยว)
   dwellMin: number         // จอดนานกี่นาที (0 = ข้ามวัน/ไม่ทราบ)
 }
@@ -37,7 +38,7 @@ function validCoord(lat: number, lng: number): boolean {
 }
 
 /** เที่ยว → จุดจอด (ปลายแต่ละเที่ยว) · ตัด shuffle (<0.5km) · dwell = ช่วงถึงเที่ยวถัดไปวันเดียวกัน */
-export function tripsToStops(trips: GpsTrip[], vehicleCode: string | null): RawStop[] {
+export function tripsToStops(trips: GpsTrip[], vehicleCode: string | null, carId = ''): RawStop[] {
   const sorted = trips.filter(t => !isShuffleTrip(t)).sort((a, b) => a.startTime.localeCompare(b.startTime))
   const out: RawStop[] = []
   for (let i = 0; i < sorted.length; i++) {
@@ -50,7 +51,7 @@ export function tripsToStops(trips: GpsTrip[], vehicleCode: string | null): RawS
       const ms = parseV2xTimeMs(next.startTime) - parseV2xTimeMs(t.endTime)
       if (Number.isFinite(ms) && ms > 0) dwellMin = Math.round(ms / 60000)
     }
-    out.push({ lat: t.endLat, lng: t.endLng, address: t.endAddress || '', date, vehicleCode, time: t.endTime, dwellMin })
+    out.push({ lat: t.endLat, lng: t.endLng, address: t.endAddress || '', date, vehicleCode, carId, time: t.endTime, dwellMin })
   }
   return out
 }

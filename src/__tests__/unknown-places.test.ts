@@ -14,7 +14,7 @@ const trip = (o: Partial<GpsTrip>): GpsTrip => ({
 })
 const cust = (id: string, lat: number, lng: number): Customer => ({ id, gpsLat: lat, gpsLng: lng } as Customer)
 const stop = (o: Partial<RawStop>): RawStop =>
-  ({ lat: 13.75, lng: 100.50, address: '', date: '2026-05-16', vehicleCode: 'A', time: '08:30', dwellMin: 10, ...o })
+  ({ lat: 13.75, lng: 100.50, address: '', date: '2026-05-16', vehicleCode: 'A', carId: 'car-A', time: '08:30', dwellMin: 10, ...o })
 
 describe('tripsToStops (452)', () => {
   it('ปลายเที่ยว=จุดจอด · ตัด shuffle (<0.5km) · dwell=ถึงเที่ยวถัดไปวันเดียวกัน', () => {

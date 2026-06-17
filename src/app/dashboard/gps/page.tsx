@@ -170,7 +170,8 @@ export default function GpsPage() {
             onOpenTrip={(carId, date) => { setTripsInit({ carId, date }); setTab('trips') }} />
         : tab === 'audit' ? <AuditTab />
         : tab === 'analytics' ? <MilkRunTab />
-        : <PlacesTab vehicleByPlate={vehicleByPlate} />}
+        : <PlacesTab vehicleByPlate={vehicleByPlate}
+            onOpenTrip={(carId, date) => { setTripsInit({ carId, date }); setTab('trips') }} />}
     </div>
   )
 }
@@ -1649,7 +1650,7 @@ function FlagRow({ flag }: { flag: AuditFlag }) {
 // ───────────────────────── สถานที่บันทึก (432.1) ─────────────────────────
 //   จัดการจุดที่ไม่ใช่ลูกค้า (ร้านอาหาร/ปั๊ม/จุดพัก/ธุระส่วนตัว) — เพิ่ม/แก้/ลบ
 //   จุดเหล่านี้ใช้จับคู่จุดจอด GPS ในแท็บ "เที่ยววิ่ง" อัตโนมัติ
-function PlacesTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> }) {
+function PlacesTab({ vehicleByPlate, onOpenTrip }: { vehicleByPlate: Map<string, Vehicle>; onOpenTrip?: (carId: string, date: string) => void }) {
   const { savedPlaces, deleteSavedPlace, customers, companyInfo } = useStore()
   const [editing, setEditing] = useState<SavedPlace | null>(null)
   const [adding, setAdding] = useState(false)
@@ -1674,6 +1675,7 @@ function PlacesTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> })
   const [rawStops, setRawStops] = useState<RawStop[]>([])
   const [scanSearch, setScanSearch] = useState('')
   const [identify, setIdentify] = useState<{ lat: number; lng: number; address: string; date: string } | null>(null)
+  const [openCluster, setOpenCluster] = useState<string | null>(null) // 467 — กางดูรายครั้งที่จอด
 
   useEffect(() => { fetchGpsCars().then(setCars).catch(() => {}) }, [])
 
@@ -1692,7 +1694,7 @@ function PlacesTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> })
         const code = vehicleByPlate.get(car.plateNorm)?.code ?? null
         try {
           const trips = await fetchGpsTrips(car.plate, scanFrom, scanTo)
-          stops.push(...tripsToStops(trips, code))
+          stops.push(...tripsToStops(trips, code, car.carId))
         } catch { failed.push(code || car.plate) }
         done++; setScanProgress({ done, total: cars.length })
       }
@@ -1765,30 +1767,56 @@ function PlacesTab({ vehicleByPlate }: { vehicleByPlate: Map<string, Vehicle> })
 
             {filteredClusters.length > 0 && (
               <div className="border border-slate-100 rounded-lg divide-y divide-slate-100 max-h-[28rem] overflow-auto">
-                {filteredClusters.map((c, i) => (
-                  <div key={`${c.lat},${c.lng},${i}`} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50">
-                    <span className="shrink-0 w-7 h-7 rounded-full bg-amber-50 text-amber-600 text-xs font-bold flex items-center justify-center" title="จอดกี่ครั้ง">{c.count}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-700 truncate" title={c.address || `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`}>
-                        {c.address || `📍 ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`}
-                      </p>
-                      <p className="text-[11px] text-slate-400 truncate">
-                        จอด {c.count} ครั้ง
-                        {c.dwellMedian > 0 && ` · นานเฉลี่ย ${c.dwellMedian} น.`}
-                        {c.vehicleCodes.length > 0 && ` · รถ ${c.vehicleCodes.join(', ')}`}
-                        {c.firstDate && ` · ${c.firstDate.slice(5)}${c.lastDate !== c.firstDate ? `–${c.lastDate.slice(5)}` : ''}`}
-                      </p>
+                {filteredClusters.map((c, i) => {
+                  const ckey = `${c.lat},${c.lng},${i}`
+                  const open = openCluster === ckey
+                  // 467 — เรียงรายครั้งล่าสุดขึ้นก่อน
+                  const occ = [...c.occurrences].sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
+                  return (
+                    <div key={ckey}>
+                      <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50">
+                        <span className="shrink-0 w-7 h-7 rounded-full bg-amber-50 text-amber-600 text-xs font-bold flex items-center justify-center" title="จอดกี่ครั้ง">{c.count}</span>
+                        {/* 467 — คลิกชื่อจุด = กางดูรายครั้งที่จอด */}
+                        <button type="button" onClick={() => setOpenCluster(open ? null : ckey)} className="min-w-0 flex-1 text-left">
+                          <p className="text-sm font-medium text-slate-700 truncate flex items-center gap-1" title={c.address || `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`}>
+                            <ChevronDown className={cn('w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform', open && 'rotate-180')} />
+                            <span className="truncate">{c.address || `📍 ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`}</span>
+                          </p>
+                          <p className="text-[11px] text-slate-400 truncate pl-[18px]">
+                            จอด {c.count} ครั้ง
+                            {c.dwellMedian > 0 && ` · นานเฉลี่ย ${c.dwellMedian} น.`}
+                            {c.vehicleCodes.length > 0 && ` · รถ ${c.vehicleCodes.join(', ')}`}
+                            {c.firstDate && ` · ${c.firstDate.slice(5)}${c.lastDate !== c.firstDate ? `–${c.lastDate.slice(5)}` : ''}`}
+                          </p>
+                        </button>
+                        <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noopener noreferrer"
+                          className="text-slate-400 hover:text-[#1B3A5C] shrink-0" title="เปิด Google Maps">
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                        <button onClick={() => setIdentify({ lat: c.lat, lng: c.lng, address: c.address, date: c.lastDate || todayISO() })}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors shrink-0 inline-flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5" /> ระบุ
+                        </button>
+                      </div>
+                      {/* 467 — รายครั้งที่จอด (วัน/เวลา · คัน · นาที) + เปิดเที่ยววิ่ง */}
+                      {open && (
+                        <div className="ml-10 mb-2 border-l-2 border-amber-100 pl-3 space-y-0.5">
+                          {occ.map((o, j) => (
+                            <button key={j} type="button"
+                              onClick={() => onOpenTrip?.(o.carId, o.date)}
+                              disabled={!onOpenTrip || !o.carId}
+                              className="w-full flex items-center gap-2 text-xs text-slate-500 py-1 text-left rounded hover:bg-[#3DD8D8]/10 hover:text-[#1B3A5C] disabled:hover:bg-transparent group transition-colors">
+                              <span className="font-medium text-slate-600">{fmtThaiDate(o.date)} {hhmm(o.time)}</span>
+                              {o.vehicleCode && <span className="text-slate-400">· คัน {o.vehicleCode}</span>}
+                              {o.dwellMin > 0 && <span className="text-amber-600">· {fmtMin(o.dwellMin)}</span>}
+                              {onOpenTrip && o.carId && <span className="ml-auto text-[#3DD8D8] opacity-0 group-hover:opacity-100 transition-opacity">เปิดเที่ยววิ่ง →</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noopener noreferrer"
-                      className="text-slate-400 hover:text-[#1B3A5C] shrink-0" title="เปิด Google Maps">
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                    <button onClick={() => setIdentify({ lat: c.lat, lng: c.lng, address: c.address, date: c.lastDate || todayISO() })}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors shrink-0 inline-flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5" /> ระบุ
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
             {clusters.length > 0 && filteredClusters.length === 0 && (
