@@ -784,7 +784,8 @@ export default function LogisticsPage() {
                       return (
                         <td key={d.date} className={cn('text-center border-b-2 border-slate-200 py-1', d.isToday && 'bg-[#3DD8D8]/[0.06]')}>
                           {n > 0
-                            ? <span className="text-[11px] font-bold tabular-nums" style={{ color: g.round?.color || '#475569' }}>{n}</span>
+                            ? <span className="inline-block min-w-[20px] text-center px-1.5 py-0.5 rounded text-[11px] font-bold tabular-nums"
+                                style={{ backgroundColor: g.round?.color || '#94a3b8', color: roundTextColor(g.round?.textColor) }}>{n}</span>
                             : <span className="text-slate-300 text-[11px]">·</span>}
                         </td>
                       )
