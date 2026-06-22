@@ -1,6 +1,6 @@
 // 449 P3 — anomaly + เทียบคนขับ + หา route ดีสุด
 import { describe, it, expect } from 'vitest'
-import { detectAnomalies, driverScores, routeOpportunities } from '@/lib/visit-anomaly'
+import { detectAnomalies, driverScores, routeOpportunities, detectRevisits, revisitsByCustomer } from '@/lib/visit-anomaly'
 import type { GpsVisit, GpsLeg } from '@/types'
 
 const visit = (over: Partial<GpsVisit>): GpsVisit =>
@@ -75,5 +75,76 @@ describe('routeOpportunities', () => {
   it('ความแปรปรวนต่ำ → ไม่ใช่โอกาส', () => {
     const stable = [10, 10, 10, 10, 10, 10].map((m, i) => leg({ id: `s${i}`, travelMin: m }))
     expect(routeOpportunities(stable)).toHaveLength(0)
+  })
+})
+
+// 469 — งานซ้ำซ้อน: เข้าซ้ำลูกค้ารายเดิมในเที่ยวเดียว (ยังไม่กลับโรงงาน)
+const T = (hhmm: string) => `2026-06-10 ${hhmm}:00`
+const factoryLeg = leg({ id: 'lf', toKey: 'factory', toCustomerId: '', departTime: T('17:00'), arriveTime: T('17:30') })
+
+describe('detectRevisits — วนกลับเข้าลูกค้ารายเดิม', () => {
+  // A(08:00) → B(08:20) → กลับ A(08:40) ในเที่ยวเดียว (ไม่กลับโรงงาน)
+  const visits: GpsVisit[] = [
+    visit({ id: 'va1', customerId: 'A', arriveTime: T('08:00'), departTime: T('08:10') }),
+    visit({ id: 'vb', customerId: 'B', arriveTime: T('08:20'), departTime: T('08:30') }),
+    visit({ id: 'va2', customerId: 'A', arriveTime: T('08:40'), departTime: T('09:00') }),
+  ]
+  const legs: GpsLeg[] = [
+    leg({ id: 'l1', fromCustomerId: 'A', toKey: 'c:B', toCustomerId: 'B', departTime: T('08:10'), arriveTime: T('08:20'), km: 3 }),
+    leg({ id: 'l2', fromKey: 'c:B', fromCustomerId: 'B', toKey: 'c:A', toCustomerId: 'A', departTime: T('08:30'), arriveTime: T('08:40'), km: 3 }),
+    factoryLeg,
+  ]
+
+  it('จับการวนกลับ A เป็น 1 incident', () => {
+    const r = detectRevisits(visits, legs)
+    expect(r).toHaveLength(1)
+    expect(r[0]).toMatchObject({ customerId: 'A', otherStops: 1, loopKm: 6 })
+    expect(r[0].loopMin).toBe(30)   // 08:10 → 08:40
+  })
+
+  it('กลับโรงงานคั่นระหว่างกลาง → คนละเที่ยว ไม่นับ', () => {
+    const withReturn: GpsLeg[] = [
+      leg({ id: 'l1', fromCustomerId: 'A', toKey: 'factory', toCustomerId: '', departTime: T('08:10'), arriveTime: T('08:20'), km: 5 }),
+      leg({ id: 'l2', fromKey: 'factory', toKey: 'c:A', toCustomerId: 'A', departTime: T('08:30'), arriveTime: T('08:40'), km: 5 }),
+    ]
+    expect(detectRevisits(visits, withReturn)).toHaveLength(0)
+  })
+
+  it('วนสั้น + ไม่แวะเจ้าอื่น (GPS jitter/จอดเดิม) → ไม่นับ', () => {
+    const jitterVisits: GpsVisit[] = [
+      visit({ id: 'j1', customerId: 'A', arriveTime: T('08:00'), departTime: T('08:05') }),
+      visit({ id: 'j2', customerId: 'A', arriveTime: T('08:08'), departTime: T('08:20') }),
+    ]
+    const jitterLegs: GpsLeg[] = [
+      leg({ id: 'jl', fromCustomerId: 'A', toKey: 'c:A', toCustomerId: 'A', departTime: T('08:05'), arriveTime: T('08:08'), km: 0.6 }),
+      factoryLeg,
+    ]
+    expect(detectRevisits(jitterVisits, jitterLegs)).toHaveLength(0)
+  })
+
+  it('ไม่รู้พิกัดโรงงาน (ไม่มี leg แตะ factory) → คืน [] (แยกเที่ยวไม่ได้)', () => {
+    const noFactory = legs.filter(l => l.toKey !== 'factory')
+    expect(detectRevisits(visits, noFactory)).toHaveLength(0)
+  })
+
+  it('แยกตามรถ — รถคนละคันเข้าลูกค้าเดียวกัน = คนละเที่ยว ไม่นับ', () => {
+    const twoVehicles: GpsVisit[] = [
+      visit({ id: 'p1', vehicleId: 'V1', customerId: 'A', arriveTime: T('08:00'), departTime: T('08:10') }),
+      visit({ id: 'p2', vehicleId: 'V2', customerId: 'A', arriveTime: T('08:40'), departTime: T('09:00') }),
+    ]
+    expect(detectRevisits(twoVehicles, legs)).toHaveLength(0)
+  })
+})
+
+describe('revisitsByCustomer', () => {
+  it('รวมจำนวนครั้ง + ระยะวน ต่อลูกค้า เรียงมาก→น้อย', () => {
+    const incidents = [
+      { date: '2026-06-10', vehicleId: 'V1', driverId: 'D1', customerId: 'A', firstArrive: '', revisitArrive: '', otherStops: 1, loopKm: 6, loopMin: 30, loopFuelL: 0.5 },
+      { date: '2026-06-11', vehicleId: 'V1', driverId: 'D1', customerId: 'A', firstArrive: '', revisitArrive: '', otherStops: 2, loopKm: 4, loopMin: 20, loopFuelL: 0.4 },
+      { date: '2026-06-10', vehicleId: 'V1', driverId: 'D1', customerId: 'B', firstArrive: '', revisitArrive: '', otherStops: 1, loopKm: 2, loopMin: 10, loopFuelL: 0.2 },
+    ]
+    const sum = revisitsByCustomer(incidents)
+    expect(sum.map(s => s.customerId)).toEqual(['A', 'B'])
+    expect(sum[0]).toMatchObject({ incidents: 2, loopKmTotal: 10, loopMinTotal: 50, lastDate: '2026-06-11' })
   })
 })

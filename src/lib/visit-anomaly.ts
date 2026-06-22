@@ -4,6 +4,7 @@
 //   - routeOpportunities: leg ที่ "เคยทำได้เร็วกว่า" → โอกาสประหยัดเวลา (ลดความแปรปรวน)
 import type { GpsVisit, GpsLeg } from '@/types'
 import { quantile } from './visit-stats'
+import { parseV2xTimeMs } from './v2x-types'
 
 const MIN_SAMPLE = 5   // กลุ่มต้องมีอย่างน้อยเท่านี้ ถึงตัดสินว่าผิดปกติ
 const IQR_K = 1.5      // ขอบ outlier = q3 + 1.5·IQR
@@ -142,4 +143,101 @@ export function routeOpportunities(legs: GpsLeg[], minTrips = MIN_SAMPLE, minSav
     })
   }
   return out.sort((a, b) => b.savingTotal - a.savingTotal)
+}
+
+// ── 469 — งานซ้ำซ้อน: เข้าซ้ำลูกค้ารายเดิมในเที่ยวเดียว (ยังไม่กลับโรงงาน) ──
+//   เคส: คนขับเข้าลูกค้า A → งานไม่เสร็จ → ไปทำเจ้าอื่น → ต้องวนกลับมา A อีกครั้ง ในเที่ยวเดียวกัน
+//   นิยาม "เที่ยว": กลับถึงโรงงาน = ขึ้นเที่ยวใหม่ · ระหว่าง 2 visit ของลูกค้าเดียวกัน
+//   ถ้าไม่มี leg ไหน "ถึงโรงงาน" (toKey='factory') คั่น = เที่ยวเดียวกัน = วนกลับซ้ำซ้อน
+const MIN_LOOP_KM = 1   // วนกลับสั้นกว่านี้ + ไม่แวะเจ้าอื่นเลย = ถือว่าจอดเดิม/GPS เพี้ยน ไม่ใช่งานซ้ำ
+
+/** นาทีระหว่างสอง datetime ("yyyy-mm-dd HH:MM:SS" เวลาไทย) · 0 ถ้าคำนวณไม่ได้/ติดลบ */
+function elapsedMin(fromTime: string, toTime: string): number {
+  const a = parseV2xTimeMs(fromTime), b = parseV2xTimeMs(toTime)
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0
+  return Math.max(0, Math.round((b - a) / 60000))
+}
+
+export interface RevisitIncident {
+  date: string
+  vehicleId: string
+  driverId: string
+  customerId: string
+  firstArrive: string    // เวลาถึงครั้งแรก (datetime)
+  revisitArrive: string  // เวลาที่วนกลับมาถึงอีกครั้ง (datetime)
+  otherStops: number     // จำนวนจุดที่แวะลูกค้า "เจ้าอื่น" ระหว่างนั้น
+  loopKm: number         // ระยะรวมช่วงวนกลับ (ออกจากลูกค้า → กลับมาถึงอีกครั้ง)
+  loopMin: number        // เวลารวมช่วงวนกลับ (door-to-door)
+  loopFuelL: number      // น้ำมันรวมช่วงวนกลับ
+}
+
+/**
+ * หาเหตุการณ์ "วนกลับเข้าลูกค้ารายเดิมในเที่ยวเดียว" — แต่ละแถว = วนกลับ 1 รอบ (เสียเที่ยวเปล่า 1 รอบ)
+ *   - ต้องมีพิกัดโรงงาน (มี leg แตะ factory อย่างน้อย 1) ถึงจะแยกเที่ยวได้ — ไม่งั้นคืน [] (แยกเที่ยวไม่ได้)
+ *   - กรอง GPS jitter/จอดเดิม: นับเฉพาะที่ "แวะเจ้าอื่น ≥1 จุด" หรือ "วนไกล ≥ MIN_LOOP_KM กม."
+ */
+export function detectRevisits(visits: GpsVisit[], legs: GpsLeg[]): RevisitIncident[] {
+  const factoryKnown = legs.some(l => l.toKey === 'factory' || l.fromKey === 'factory')
+  if (!factoryKnown) return []   // ไม่รู้พิกัดโรงงาน = แยกเที่ยวไม่ได้ → ไม่เดา
+
+  // จัดกลุ่ม leg + visit ตาม (รถ, วัน)
+  const legsByVD = new Map<string, GpsLeg[]>()
+  for (const l of legs) push(legsByVD, `${l.vehicleId}|${l.date}`, l)
+  const visByVD = new Map<string, GpsVisit[]>()
+  for (const v of visits) if (v.customerId) push(visByVD, `${v.vehicleId}|${v.date}`, v)
+
+  const out: RevisitIncident[] = []
+  for (const [vd, vis] of visByVD) {
+    const dayLegs = (legsByVD.get(vd) || []).slice().sort((a, b) => a.departTime.localeCompare(b.departTime))
+    // visit ของลูกค้าแต่ละราย เรียงตามเวลาถึง
+    const byCust = new Map<string, GpsVisit[]>()
+    for (const v of vis) push(byCust, v.customerId, v)
+    for (const [cid, vs] of byCust) {
+      if (vs.length < 2) continue
+      vs.sort((a, b) => a.arriveTime.localeCompare(b.arriveTime))
+      for (let i = 1; i < vs.length; i++) {
+        const prev = vs[i - 1], cur = vs[i]
+        if (!prev.departTime) continue   // ไม่มีเวลาออก (visit สุดท้ายของวัน) — ไม่ควรเกิดในคู่นี้
+        // leg ช่วง "ออกจากลูกค้าครั้งก่อน → กลับมาถึงอีกครั้ง"
+        const windowLegs = dayLegs.filter(l => l.departTime >= prev.departTime && l.departTime < cur.arriveTime)
+        if (windowLegs.some(l => l.toKey === 'factory')) continue   // กลับโรงงานคั่น = คนละเที่ยว
+        const otherStops = windowLegs.filter(l => l.toCustomerId && l.toCustomerId !== cid).length
+        const loopKm = windowLegs.reduce((s, l) => s + l.km, 0)
+        const loopFuelL = windowLegs.reduce((s, l) => s + l.fuelL, 0)
+        if (otherStops < 1 && loopKm < MIN_LOOP_KM) continue   // จอดเดิม/GPS เพี้ยน → ข้าม
+        out.push({
+          date: cur.date, vehicleId: cur.vehicleId,
+          driverId: cur.driverId || prev.driverId, customerId: cid,
+          firstArrive: prev.arriveTime, revisitArrive: cur.arriveTime,
+          otherStops, loopKm, loopFuelL,
+          loopMin: elapsedMin(prev.departTime, cur.arriveTime),
+        })
+      }
+    }
+  }
+  return out.sort((a, b) => b.date.localeCompare(a.date) || b.loopKm - a.loopKm)
+}
+
+export interface RevisitCustomerSummary {
+  customerId: string
+  incidents: number       // จำนวนครั้งที่ต้องวนกลับ
+  loopKmTotal: number
+  loopMinTotal: number
+  otherStopsTotal: number
+  lastDate: string
+}
+
+/** สรุปลูกค้าที่ต้องวนกลับบ่อย (= ลูกค้าปัญหาเรื้อรัง) — เรียงตามจำนวนครั้งมาก→น้อย */
+export function revisitsByCustomer(incidents: RevisitIncident[]): RevisitCustomerSummary[] {
+  const by = new Map<string, RevisitCustomerSummary>()
+  for (const inc of incidents) {
+    let s = by.get(inc.customerId)
+    if (!s) { s = { customerId: inc.customerId, incidents: 0, loopKmTotal: 0, loopMinTotal: 0, otherStopsTotal: 0, lastDate: '' }; by.set(inc.customerId, s) }
+    s.incidents++
+    s.loopKmTotal += inc.loopKm
+    s.loopMinTotal += inc.loopMin
+    s.otherStopsTotal += inc.otherStops
+    if (inc.date > s.lastDate) s.lastDate = inc.date
+  }
+  return [...by.values()].sort((a, b) => b.incidents - a.incidents || b.loopKmTotal - a.loopKmTotal)
 }

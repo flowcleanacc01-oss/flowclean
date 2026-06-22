@@ -8,14 +8,14 @@ import { fetchGpsCars, fetchGpsTrips } from '@/lib/gps-service'
 import { fetchGpsVisits, fetchGpsLegs, saveReconstructedDay } from '@/lib/supabase-service'
 import { reconstructVisitsLegs, type RoundWindow } from '@/lib/visit-reconstruct'
 import { customerStats, legStats, arrivalVsWindow, minToHHMM, type Dist, type CustomerStat, type LegStat } from '@/lib/visit-stats'
-import { detectAnomalies, driverScores, routeOpportunities, type Anomaly, type DriverScore, type RouteOpportunity } from '@/lib/visit-anomaly'
+import { detectAnomalies, driverScores, routeOpportunities, detectRevisits, revisitsByCustomer, type Anomaly, type DriverScore, type RouteOpportunity, type RevisitIncident, type RevisitCustomerSummary } from '@/lib/visit-anomaly'
 import { normalizePlate } from '@/lib/v2x-types'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { exportCSV } from '@/lib/export'
 import type { LatLng } from '@/lib/geo'
 import { cn, todayISO } from '@/lib/utils'
 import type { GpsVisit, GpsLeg, Vehicle } from '@/types'
-import { Database, Loader2, Play, X, RefreshCw, AlertTriangle, CheckCircle2, Truck, Clock, Route, Search, FileSpreadsheet } from 'lucide-react'
+import { Database, Loader2, Play, X, RefreshCw, AlertTriangle, CheckCircle2, Truck, Clock, Route, Search, FileSpreadsheet, Repeat } from 'lucide-react'
 
 // 451 — เรียงทุกคอลัมน์ + export CSV (theme เดียวกับรายงานอื่น: SortHeader ลูกศร ↑↓ สี accent + exportCSV BOM)
 type SortDir = 'asc' | 'desc'
@@ -158,7 +158,7 @@ export default function MilkRunTab() {
   }, [visits, legs])
 
   // ── Phase 2/3: สถิติ baseline + วิเคราะห์ ──
-  const [statView, setStatView] = useState<'customer' | 'leg' | 'driver' | 'insight'>('customer')
+  const [statView, setStatView] = useState<'customer' | 'leg' | 'driver' | 'insight' | 'revisit'>('customer')
   const [statSearch, setStatSearch] = useState('')
   const custById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers])
   const custStats = useMemo(() => (visits ? customerStats(visits) : []), [visits])
@@ -188,6 +188,10 @@ export default function MilkRunTab() {
   const routeOpps = useMemo(() => (legs ? routeOpportunities(legs) : []), [legs])
   const drvName = useCallback((id: string) => crew.find(c => c.id === id)?.name || (id ? `คนขับ ${id.slice(0, 4)}` : 'ไม่ระบุ'), [crew])
 
+  // ── 469: งานซ้ำซ้อน — วนกลับเข้าลูกค้ารายเดิมในเที่ยวเดียว ──
+  const revisits = useMemo(() => (visits && legs ? detectRevisits(visits, legs) : []), [visits, legs])
+  const revisitCust = useMemo(() => revisitsByCustomer(revisits), [revisits])
+
   // ── 451: เรียงทุกคอลัมน์ + export CSV ──
   const planOf = useCallback((s: CustomerStat) => {
     const c = custById.get(s.customerId)
@@ -204,11 +208,15 @@ export default function MilkRunTab() {
   type DrvCol = 'name' | 'score' | 'legs' | 'travel' | 'dwell' | 'kmL'
   type AnoCol = 'date' | 'kind' | 'place' | 'value' | 'median' | 'diff' | 'driver'
   type OppCol = 'pair' | 'trips' | 'median' | 'fast' | 'saving'
+  type RevCol = 'date' | 'cust' | 'driver' | 'first' | 'revisit' | 'stops' | 'km' | 'min'
+  type RevCustCol = 'name' | 'incidents' | 'km' | 'min' | 'date'
   const custSort = useSort<CustCol>('visits')
   const legSort = useSort<LegCol>('trips')
   const drvSort = useSort<DrvCol>('score')
   const anoSort = useSort<AnoCol>('value')
   const oppSort = useSort<OppCol>('saving')
+  const revSort = useSort<RevCol>('date')
+  const revCustSort = useSort<RevCustCol>('incidents')
 
   const sortedCustStats = useMemo(() => sortRows(filteredCustStats, (s: CustomerStat) => {
     switch (custSort.col) {
@@ -269,6 +277,34 @@ export default function MilkRunTab() {
     }
   }, oppSort.dir), [routeOpps, oppSort.col, oppSort.dir, custName])
 
+  const hhmm = (dt: string) => dt.slice(11, 16)   // "yyyy-mm-dd HH:MM:SS" → "HH:MM"
+  const sortedRevisits = useMemo(() => sortRows(revisits, (r: RevisitIncident) => {
+    switch (revSort.col) {
+      case 'date': return r.date
+      case 'cust': return custName(r.customerId)
+      case 'driver': return drvName(r.driverId)
+      case 'first': return r.firstArrive
+      case 'revisit': return r.revisitArrive
+      case 'stops': return r.otherStops
+      case 'km': return r.loopKm
+      case 'min': return r.loopMin
+      default: return ''
+    }
+  }, revSort.dir), [revisits, revSort.col, revSort.dir, custName, drvName])
+
+  const sortedRevisitCust = useMemo(() => sortRows(revisitCust, (s: RevisitCustomerSummary) => {
+    switch (revCustSort.col) {
+      case 'name': return custName(s.customerId)
+      case 'incidents': return s.incidents
+      case 'km': return s.loopKmTotal
+      case 'min': return s.loopMinTotal
+      case 'date': return s.lastDate
+      default: return ''
+    }
+  }, revCustSort.dir), [revisitCust, revCustSort.col, revCustSort.dir, custName])
+
+  const revisitKmTotal = useMemo(() => revisits.reduce((s, r) => s + r.loopKm, 0), [revisits])
+
   const exportRange = `${from}_${to}`
   const exportCust = () => {
     if (sortedCustStats.length === 0) return
@@ -320,6 +356,24 @@ export default function MilkRunTab() {
       `${custName(s.fromCustomerId)} → ${custName(s.toCustomerId)}`, String(s.trips),
       String(Math.round(s.median)), String(Math.round(s.fast)), String(Math.round(s.savingTotal))]),
       `สถิติหน้างาน_โอกาสประหยัด_${exportRange}`)
+  }
+  const exportRevisitCust = () => {
+    if (sortedRevisitCust.length === 0) return
+    const headers = ['ลูกค้า', 'ครั้งที่วนกลับ', 'รวมระยะวน (กม.)', 'รวมเวลาวน (น.)', 'จุดแวะคั่นรวม', 'ครั้งล่าสุด']
+    exportCSV(headers, sortedRevisitCust.map(s => [
+      custName(s.customerId), String(s.incidents),
+      s.loopKmTotal.toFixed(1), String(Math.round(s.loopMinTotal)),
+      String(s.otherStopsTotal), s.lastDate]),
+      `สถิติหน้างาน_งานซ้ำซ้อน_ตามลูกค้า_${exportRange}`)
+  }
+  const exportRevisits = () => {
+    if (sortedRevisits.length === 0) return
+    const headers = ['วันที่', 'ลูกค้า', 'คนขับ', 'เข้าครั้งแรก', 'วนกลับ', 'แวะคั่น (จุด)', 'ระยะวน (กม.)', 'เวลาวน (น.)']
+    exportCSV(headers, sortedRevisits.map(r => [
+      r.date, custName(r.customerId), r.driverId ? drvName(r.driverId) : '',
+      hhmm(r.firstArrive), hhmm(r.revisitArrive), String(r.otherStops),
+      r.loopKm.toFixed(1), String(Math.round(r.loopMin))]),
+      `สถิติหน้างาน_งานซ้ำซ้อน_${exportRange}`)
   }
 
   return (
@@ -404,12 +458,13 @@ export default function MilkRunTab() {
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex gap-1 flex-wrap">
-              {([['customer', 'ตามลูกค้า'], ['leg', 'ช่วงเดินทาง A→B'], ['driver', 'เทียบคนขับ'], ['insight', 'ข้อค้นพบ']] as const).map(([k, label]) => (
+              {([['customer', 'ตามลูกค้า'], ['leg', 'ช่วงเดินทาง A→B'], ['driver', 'เทียบคนขับ'], ['insight', 'ข้อค้นพบ'], ['revisit', 'งานซ้ำซ้อน']] as const).map(([k, label]) => (
                 <button key={k} onClick={() => setStatView(k)}
                   className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors inline-flex items-center gap-1',
                     statView === k ? 'bg-[#1B3A5C] text-white border-[#1B3A5C]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}>
                   {label}
                   {k === 'insight' && anomalies.length > 0 && <span className={cn('px-1 rounded-full text-[10px]', statView === k ? 'bg-white/25' : 'bg-rose-100 text-rose-700')}>{anomalies.length}</span>}
+                  {k === 'revisit' && revisits.length > 0 && <span className={cn('px-1 rounded-full text-[10px]', statView === k ? 'bg-white/25' : 'bg-amber-100 text-amber-700')}>{revisits.length}</span>}
                 </button>
               ))}
             </div>
@@ -421,8 +476,8 @@ export default function MilkRunTab() {
                     className="border border-slate-200 rounded-lg pl-8 pr-2.5 py-1.5 text-sm w-44" />
                 </div>
               )}
-              {/* 451 — Export CSV (insight มี 2 ชุดข้อมูล → ปุ่มแยกในแต่ละส่วน) */}
-              {statView !== 'insight' && (
+              {/* 451 — Export CSV (insight/revisit มี 2 ชุดข้อมูล → ปุ่มแยกในแต่ละส่วน) */}
+              {statView !== 'insight' && statView !== 'revisit' && (
                 <button onClick={statView === 'customer' ? exportCust : statView === 'leg' ? exportLeg : exportDriver}
                   disabled={(statView === 'customer' ? sortedCustStats : statView === 'leg' ? sortedLegStats : sortedDrvScores).length === 0}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
@@ -526,7 +581,7 @@ export default function MilkRunTab() {
               </table>
               {drvScores.length === 0 && <p className="text-center text-slate-400 text-sm py-6">ยังไม่มีข้อมูลคนขับ — ใบงาน (กระดานจ่ายงาน) ช่วยระบุคนขับให้แต่ละเที่ยว</p>}
             </div>
-          ) : (
+          ) : statView === 'insight' ? (
             // insight: ข้อค้นพบ (anomaly + โอกาสประหยัดเวลา) — 451: ตารางเรียงได้ + export ทั้ง 2 ชุด
             <div className="space-y-4">
               <div>
@@ -611,6 +666,100 @@ export default function MilkRunTab() {
                   </div>
                 )}
               </div>
+            </div>
+          ) : (
+            // 469: งานซ้ำซ้อน — วนกลับเข้าลูกค้ารายเดิมในเที่ยวเดียว (ยังไม่กลับโรงงาน)
+            <div className="space-y-4">
+              <p className="text-xs text-slate-500 -mt-1">
+                ลูกค้าที่คนขับต้อง<span className="font-semibold text-amber-700">วนกลับเข้าซ้ำในเที่ยวเดียว</span> (ยังไม่กลับโรงงาน) — มักเกิดจากเข้าครั้งแรกแล้วงานไม่เสร็จ = เสียเที่ยวเปล่า
+              </p>
+              {!factory && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800 flex items-start gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> ยังไม่ได้ตั้งพิกัดโรงงาน (ตั้งค่า → ข้อมูลบริษัท) — แยก “เที่ยว” ไม่ได้ จึงวิเคราะห์งานซ้ำซ้อนไม่ได้
+                </div>
+              )}
+              {revisits.length === 0 ? (
+                factory ? <p className="text-xs text-slate-400">ไม่พบการวนกลับเข้าซ้ำในเที่ยวเดียว 👍</p> : null
+              ) : (
+                <>
+                  {/* สรุปต่อลูกค้า — ลูกค้าปัญหาเรื้อรัง (action view) */}
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <h4 className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                        <Repeat className="w-3.5 h-3.5 text-amber-500" /> ลูกค้าที่ต้องวนกลับบ่อย ({revisitCust.length}) · รวม {revisits.length} ครั้ง · ~{revisitKmTotal.toFixed(0)} กม.
+                      </h4>
+                      <button onClick={exportRevisitCust}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs hover:bg-slate-200 whitespace-nowrap">
+                        <FileSpreadsheet className="w-3.5 h-3.5" /> Export CSV
+                      </button>
+                    </div>
+                    <div className="border border-slate-100 rounded-lg max-h-72 overflow-auto">
+                      <table className="w-full text-sm min-w-[480px]">
+                        <thead className="sticky top-0 z-10">
+                          <tr className="bg-slate-50 text-slate-500 text-xs">
+                            <SortHeader col="name" label="ลูกค้า" active={revCustSort.col === 'name'} dir={revCustSort.dir} onSort={revCustSort.onSort} className="text-left" />
+                            <SortHeader col="incidents" label="ครั้ง" active={revCustSort.col === 'incidents'} dir={revCustSort.dir} onSort={revCustSort.onSort} title="จำนวนครั้งที่ต้องวนกลับ" />
+                            <SortHeader col="km" label="รวมระยะวน" active={revCustSort.col === 'km'} dir={revCustSort.dir} onSort={revCustSort.onSort} />
+                            <SortHeader col="min" label="รวมเวลาวน" active={revCustSort.col === 'min'} dir={revCustSort.dir} onSort={revCustSort.onSort} />
+                            <SortHeader col="date" label="ครั้งล่าสุด" active={revCustSort.col === 'date'} dir={revCustSort.dir} onSort={revCustSort.onSort} className="text-left" />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {sortedRevisitCust.map(s => (
+                            <tr key={s.customerId} className="hover:bg-slate-50">
+                              <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{custName(s.customerId)}</td>
+                              <td className="px-3 py-2 text-right text-amber-700 font-semibold">{s.incidents}</td>
+                              <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{s.loopKmTotal.toFixed(1)} กม.</td>
+                              <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{Math.round(s.loopMinTotal)} น.</td>
+                              <td className="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">{s.lastDate.slice(5)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  {/* รายการรายครั้ง — รายละเอียดแต่ละเหตุการณ์ */}
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <h4 className="text-xs font-semibold text-slate-600 flex items-center gap-1.5"><Route className="w-3.5 h-3.5 text-[#3DD8D8]" /> รายการวนกลับ (รายครั้ง)</h4>
+                      <button onClick={exportRevisits}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs hover:bg-slate-200 whitespace-nowrap">
+                        <FileSpreadsheet className="w-3.5 h-3.5" /> Export CSV
+                      </button>
+                    </div>
+                    <div className="border border-slate-100 rounded-lg max-h-72 overflow-auto">
+                      <table className="w-full text-sm min-w-[720px]">
+                        <thead className="sticky top-0 z-10">
+                          <tr className="bg-slate-50 text-slate-500 text-xs">
+                            <SortHeader col="date" label="วันที่" active={revSort.col === 'date'} dir={revSort.dir} onSort={revSort.onSort} className="text-left" />
+                            <SortHeader col="cust" label="ลูกค้า" active={revSort.col === 'cust'} dir={revSort.dir} onSort={revSort.onSort} className="text-left" />
+                            <SortHeader col="driver" label="คนขับ" active={revSort.col === 'driver'} dir={revSort.dir} onSort={revSort.onSort} className="text-left" />
+                            <SortHeader col="first" label="เข้าครั้งแรก" active={revSort.col === 'first'} dir={revSort.dir} onSort={revSort.onSort} />
+                            <SortHeader col="revisit" label="วนกลับ" active={revSort.col === 'revisit'} dir={revSort.dir} onSort={revSort.onSort} />
+                            <SortHeader col="stops" label="แวะคั่น" active={revSort.col === 'stops'} dir={revSort.dir} onSort={revSort.onSort} title="แวะลูกค้าเจ้าอื่นกี่จุดก่อนวนกลับ" />
+                            <SortHeader col="km" label="ระยะวน" active={revSort.col === 'km'} dir={revSort.dir} onSort={revSort.onSort} title="ระยะช่วงออกจากลูกค้าจนวนกลับมาถึง" />
+                            <SortHeader col="min" label="เวลาวน" active={revSort.col === 'min'} dir={revSort.dir} onSort={revSort.onSort} title="เวลาช่วงออกจากลูกค้าจนวนกลับมาถึง" />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {sortedRevisits.map((r, i) => (
+                            <tr key={i} className="hover:bg-slate-50">
+                              <td className="px-3 py-2 text-slate-500 text-xs whitespace-nowrap">{r.date.slice(5)}</td>
+                              <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{custName(r.customerId)}</td>
+                              <td className="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">{r.driverId ? drvName(r.driverId) : '—'}</td>
+                              <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{hhmm(r.firstArrive)}</td>
+                              <td className="px-3 py-2 text-right text-amber-700 font-medium whitespace-nowrap">{hhmm(r.revisitArrive)}</td>
+                              <td className="px-3 py-2 text-right text-slate-500">{r.otherStops}</td>
+                              <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{r.loopKm.toFixed(1)} กม.</td>
+                              <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{Math.round(r.loopMin)} น.</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
           {(statView === 'customer' || statView === 'leg') && (
