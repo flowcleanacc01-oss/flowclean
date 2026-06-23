@@ -142,7 +142,17 @@ export default function LogisticsPage() {
   const [listDragOver, setListDragOver] = useState<number | null>(null)
 
   // 431 — รอบ active เรียงตาม sortOrder (= เรียงเวลาเริ่มรอบ V→SPA→AKARA→L7→SWD)
-  const sortedRounds = useMemo(() => [...rounds].filter(r => r.isActive).sort((a, b) => a.sortOrder - b.sortOrder), [rounds])
+  // 471 — รวมรอบที่ "ปิดอยู่แต่ยังมีลูกค้าผูก" ด้วย กันลูกค้าหายเข้ากอง "ไม่มีรอบ" เงียบๆ
+  //        (เคส: ปิดรอบ SPA ทั้งที่มีลูกค้า 34 ราย → ทั้งหมดหายจากปฏิทิน)
+  const sortedRounds = useMemo(() => {
+    const boundRounds = new Set<string>()
+    for (const c of customers) {
+      if (!c.isActive) continue
+      if (c.roundId) boundRounds.add(c.roundId)
+      for (const rid of Object.values(c.roundDayOverrides || {})) if (rid) boundRounds.add(rid)
+    }
+    return [...rounds].filter(r => r.isActive || boundRounds.has(r.id)).sort((a, b) => a.sortOrder - b.sortOrder)
+  }, [rounds, customers])
   const roundById = useMemo(() => new Map(rounds.map(r => [r.id, r])), [rounds])
 
   // จุดวิ่งของวันที่เลือก — 431: จัดกลุ่มตามรอบจริงของวันนั้น (429 override-aware)
@@ -692,6 +702,7 @@ export default function LogisticsPage() {
                           {g.round?.code || '—'}
                         </span>
                         <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">{g.round?.name || 'ไม่ระบุรอบ'}</span>
+                        {g.round && !g.round.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium whitespace-nowrap shrink-0" title="รอบนี้ถูกปิดใช้งาน — เปิดที่หน้ารอบเดินรถ ไม่งั้นกระดานจ่ายงานจะไม่สร้างใบงานให้">⚠ ปิดอยู่</span>}
                         <span className="text-[11px] text-slate-400 whitespace-nowrap">
                           {g.round ? `${g.round.startTime || '—'}–${g.round.endTime || '—'} · ` : ''}{g.rows.length} ลูกค้า
                         </span>
@@ -954,6 +965,7 @@ export default function LogisticsPage() {
                         {g.round?.code || '—'}
                       </span>
                       <span className="text-xs font-semibold text-slate-600">{g.round?.name || 'ไม่ระบุรอบ'}</span>
+                      {g.round && !g.round.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium whitespace-nowrap shrink-0" title="รอบนี้ถูกปิดใช้งาน — เปิดที่หน้ารอบเดินรถ ไม่งั้นกระดานจ่ายงานจะไม่สร้างใบงานให้">⚠ ปิดอยู่</span>}
                       <span className="text-[11px] text-slate-400">
                         {g.round ? `${g.round.startTime || '—'}–${g.round.endTime || '—'} · ` : ''}{g.stops.length} จุด
                       </span>

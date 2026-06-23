@@ -155,7 +155,11 @@ function RoundsTab() {
             <div className="flex items-center gap-3 p-4 cursor-pointer hover:bg-slate-50/50" onClick={() => setExpandedId(expanded ? null : r.id)}>
               <span className="px-2.5 py-1 rounded-lg text-sm font-bold shrink-0 border border-black/5" style={{ backgroundColor: r.color, color: roundTextColor(r.textColor) }}>{r.code}</span>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-slate-800 truncate">{r.name}{!r.isActive && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-normal">พัก</span>}</p>
+                <p className="font-semibold text-slate-800 truncate">{r.name}
+                  {/* 471 — ปิดอยู่แต่ยังมีลูกค้า = อันตราย (ลูกค้าหายจากปฏิทิน) เตือนแดง · ปิดเปล่าๆ = badge เทา "พัก" */}
+                  {!r.isActive && (members.length > 0
+                    ? <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium" title="รอบปิดอยู่แต่ยังมีลูกค้าผูก — ลูกค้าจะหายจากปฏิทินขนส่ง/กระดานจ่ายงาน กดแก้ไขเพื่อเปิดรอบ หรือย้ายลูกค้าออก">⚠ ปิดอยู่ · {members.length} รายหายจากปฏิทิน</span>
+                    : <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-normal">พัก</span>)}</p>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500 mt-0.5">
                   <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{r.startTime || '—'}–{r.endTime || '—'}</span>
                   {vehicleLabel(r.defaultVehicleId) && <span className="inline-flex items-center gap-1"><Truck className="w-3 h-3" />{vehicleLabel(r.defaultVehicleId)}</span>}
@@ -330,7 +334,7 @@ const BLANK_ROUND: Omit<Round, 'id' | 'createdAt'> = {
 }
 
 function RoundFormModal({ round, onClose }: { round: Round | null; onClose: () => void }) {
-  const { rounds, vehicles, crew, addRound, updateRound } = useStore()
+  const { rounds, vehicles, crew, customers, addRound, updateRound } = useStore()
   const [form, setForm] = useState<Omit<Round, 'id' | 'createdAt'>>(() => {
     if (!round) return { ...BLANK_ROUND, sortOrder: rounds.length + 1 }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -345,6 +349,11 @@ function RoundFormModal({ round, onClose }: { round: Round | null; onClose: () =
 
   const submit = () => {
     if (!form.code.trim() || !form.name.trim()) { alert('กรุณากรอกชื่อย่อรอบ + ชื่อรอบ'); return }
+    // 471 — กันพลาด: ปิดรอบที่ยังมีลูกค้าผูกอยู่ = ลูกค้าหายจากปฏิทินขนส่ง/กระดานจ่ายงาน → ยืนยันก่อน
+    if (round && !form.isActive && round.isActive) {
+      const memberCount = customers.filter(c => c.isActive && c.roundId === round.id).length
+      if (memberCount > 0 && !confirm(`รอบ ${round.code} ยังมีลูกค้า ${memberCount} ราย\n\nปิดรอบจะทำให้ลูกค้าทั้งหมดหายจากปฏิทินขนส่ง และกระดานจ่ายงานจะไม่สร้างใบงานให้\n\nยืนยันปิดรอบนี้?`)) return
+    }
     if (round) updateRound(round.id, form)
     else addRound(form)
     onClose()
