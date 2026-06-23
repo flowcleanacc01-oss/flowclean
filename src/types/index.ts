@@ -737,6 +737,7 @@ export interface MaintenanceRecord {
   id: string
   vehicleId: string
   date: string
+  recordedTime: string          // 470 — เวลาที่อ่านไมล์ตอนบันทึก (HH:MM · '' = ไม่ระบุ) → ตั้ง anchor เวลาให้รถ (เหมือน OdometerLog 446)
   odometer: number              // ระยะที่ทำ (0 = ไม่ระบุ)
   type: string                  // จาก MAINTENANCE_TYPES
   description: string

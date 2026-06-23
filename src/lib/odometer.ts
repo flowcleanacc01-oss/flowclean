@@ -22,7 +22,7 @@ export interface Anchor {
 /**
  * วัน+เวลาของเลขไมล์ปัจจุบัน (ฐานคำนวณ)
  *   ลำดับ: vehicle.odometerAnchorDate (ตั้งตรงๆ + odometerAnchorTime) → log ล่าสุดที่มี odometer > 0
- *          (บันทึกไมล์ใช้ recordedTime · เติมน้ำมัน/งานซ่อมไม่มีเวลา → time='')
+ *          (บันทึกไมล์/งานซ่อมใช้ recordedTime — 446/470 · เติมน้ำมันไม่ระบุเวลา → time='')
  *   date '' = ไม่รู้ (รถที่กรอกไมล์ก่อนมี 428 และไม่เคยลง log)
  */
 export function deriveAnchor(
@@ -37,7 +37,7 @@ export function deriveAnchor(
   const cands: Anchor[] = []
   for (const l of odometerLogs) if (l.vehicleId === vehicle.id && l.odometer > 0 && l.date) cands.push({ date: l.date, time: l.recordedTime || '' })
   for (const f of fuelLogs) if (f.vehicleId === vehicle.id && f.odometer > 0 && f.date) cands.push({ date: f.date, time: '' })
-  for (const m of maintenanceRecords) if (m.vehicleId === vehicle.id && m.odometer > 0 && m.date) cands.push({ date: m.date, time: '' })
+  for (const m of maintenanceRecords) if (m.vehicleId === vehicle.id && m.odometer > 0 && m.date) cands.push({ date: m.date, time: m.recordedTime || '' })
   if (cands.length === 0) return { date: '', time: '' }
   // วันล่าสุดอยู่ท้าย · วันเดียวกัน เลือกตัวที่ "มีเวลา" (ละเอียดกว่า) ไว้ท้าย
   cands.sort((a, b) => a.date.localeCompare(b.date) || (a.time ? 1 : 0) - (b.time ? 1 : 0))

@@ -16,8 +16,8 @@ const oLog = (vehicleId: string, date: string, odometer: number, recordedTime = 
 const fLog = (vehicleId: string, date: string, odometer: number): FuelLog =>
   ({ id: `f-${date}`, vehicleId, date, odometer, liters: 10, pricePerLiter: 30, amount: 300 } as FuelLog)
 
-const mRec = (vehicleId: string, date: string, odometer: number): MaintenanceRecord =>
-  ({ id: `m-${date}`, vehicleId, date, odometer, type: '', description: '', cost: 0, expenseId: '', nextDueOdometer: 0 } as MaintenanceRecord)
+const mRec = (vehicleId: string, date: string, odometer: number, recordedTime = ''): MaintenanceRecord =>
+  ({ id: `m-${date}`, vehicleId, date, recordedTime, odometer, type: '', description: '', cost: 0, expenseId: '', nextDueOdometer: 0 } as MaintenanceRecord)
 
 const day = (d: string, km: number, plateNorm = '4ฒฆ-8053'): GpsDailyKm =>
   ({ carId: '1', plate: `C ${plateNorm}`, plateNorm: plateNorm.toLowerCase(), day: d, km })
@@ -46,9 +46,19 @@ describe('deriveAnchor', () => {
     expect(a).toEqual({ date: '2026-06-10', time: '06:00' })
   })
 
-  it('fuel/maintenance ล่าสุด → ไม่มีเวลา (time="")', () => {
+  it('fuel ล่าสุด → ไม่มีเวลา (time="")', () => {
     expect(deriveAnchor(veh({}), [], [fLog('veh-c', '2026-06-09', 68900)], []))
       .toEqual({ date: '2026-06-09', time: '' })
+  })
+
+  it('470 — งานซ่อมล่าสุดมีเวลา → ใช้เวลานั้น (time-aware เหมือนบันทึกไมล์ปกติ)', () => {
+    expect(deriveAnchor(veh({}), [], [], [mRec('veh-c', '2026-06-10', 70000, '09:30')]))
+      .toEqual({ date: '2026-06-10', time: '09:30' })
+  })
+
+  it('470 — วันเดียวกัน: งานซ่อมมีเวลา ชนะ fuel ไม่มีเวลา', () => {
+    expect(deriveAnchor(veh({}), [], [fLog('veh-c', '2026-06-10', 70000)], [mRec('veh-c', '2026-06-10', 70000, '08:00')]))
+      .toEqual({ date: '2026-06-10', time: '08:00' })
   })
 
   it('ไม่มีข้อมูลเลย → date/time ว่าง', () => {

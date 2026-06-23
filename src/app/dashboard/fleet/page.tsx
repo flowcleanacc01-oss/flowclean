@@ -757,6 +757,7 @@ function OdometerModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () => 
 function MaintenanceModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () => void }) {
   const { maintenanceRecords, addMaintenanceRecord, deleteMaintenanceRecord, updateVehicle, addExpense } = useStore()
   const [date, setDate] = useState(todayISO())
+  const [recordedTime, setRecordedTime] = useState(() => format(new Date(), 'HH:mm')) // 470 — เวลาที่อ่านไมล์ (time-aware เหมือนบันทึกไมล์ปกติ 446)
   const [type, setType] = useState<string>(MAINTENANCE_TYPES[0])
   const [odometer, setOdometer] = useState(0)
   const [description, setDescription] = useState('')
@@ -780,14 +781,14 @@ function MaintenanceModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () 
       })
       expenseId = exp.id
     }
-    addMaintenanceRecord({ vehicleId: vehicle.id, date, odometer, type, description, cost, expenseId, nextDueOdometer: nextDue })
+    addMaintenanceRecord({ vehicleId: vehicle.id, date, recordedTime, odometer, type, description, cost, expenseId, nextDueOdometer: nextDue })
     // sync เข้า vehicle: ไมล์ที่ทำ (ถ้า > ปัจจุบัน) + ระยะเช็คถัดไป (ถ้ากรอก)
     const patch: Partial<Vehicle> = {}
-    // 446 — งานซ่อมไม่ระบุเวลาอ่านไมล์ → anchorTime='' (ข้ามวันที่ทำแบบ conservative · ไม่ทิ้งเวลาเก่าที่ผิด)
-    if (odometer > vehicle.currentOdometer) { patch.currentOdometer = odometer; patch.odometerAnchorDate = date; patch.odometerAnchorTime = '' }
+    // 470 — บันทึกเวลาที่อ่านไมล์ด้วย (time-aware) → วันที่ทำนับเฉพาะระยะ GPS หลังเวลานี้ (ไม่ข้ามทั้งวัน · เหมือนบันทึกไมล์ปกติ 446)
+    if (odometer > vehicle.currentOdometer) { patch.currentOdometer = odometer; patch.odometerAnchorDate = date; patch.odometerAnchorTime = recordedTime }
     if (nextDue > 0) patch.nextServiceOdometer = nextDue
     if (Object.keys(patch).length > 0) updateVehicle(vehicle.id, patch)
-    // reset form
+    // reset form (คงวัน/เวลาไว้ เผื่อบันทึกหลายงานครั้งเดียวกัน)
     setType(MAINTENANCE_TYPES[0]); setOdometer(0); setDescription(''); setCost(0); setNextDue(0)
   }
 
@@ -801,6 +802,10 @@ function MaintenanceModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () 
             <div>
               <label className={labelCls}>วันที่</label>
               <input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls}>เวลาที่อ่านไมล์</label>
+              <input type="time" className={inputCls} value={recordedTime} onChange={e => setRecordedTime(e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>ประเภท</label>
@@ -845,7 +850,7 @@ function MaintenanceModal({ vehicle, onClose }: { vehicle: Vehicle; onClose: () 
           <ul className="divide-y divide-slate-100">
             {records.map(m => (
               <li key={m.id} className="py-2.5 flex items-start gap-3 text-sm">
-                <span className="text-slate-400 w-20 shrink-0">{formatDate(m.date)}</span>
+                <span className="text-slate-400 w-20 shrink-0">{formatDate(m.date)}{m.recordedTime && <span className="block text-[10px] text-slate-300">{m.recordedTime} น.</span>}</span>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-700">
                     {m.type}
