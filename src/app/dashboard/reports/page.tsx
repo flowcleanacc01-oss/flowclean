@@ -35,9 +35,10 @@ import LFRowAudit from '@/components/LFRowAudit'
 import ExecutiveDashboard from '@/components/executive/ExecutiveDashboard'
 import RoundPnLReport from '@/components/RoundPnLReport'
 import CustomerValueReport from '@/components/CustomerValueReport'
+import DiscountAuditReport from '@/components/DiscountAuditReport'
 import type { CarryOverMode, CarryOverAdjustment, BillingStatement } from '@/types'
 
-type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'roundpnl' | 'custvalue' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'priceaudit' | 'sdaudit' | 'wbaudit' | 'driftaudit' | 'lfrowaudit' | 'closing' | 'trustaudit' | 'aggaudit' | 'anchoraudit' | 'scheduleaudit' | 'executive'
+type TabKey = 'monthly' | 'revenue' | 'customer' | 'item' | 'pnl' | 'roundpnl' | 'custvalue' | 'aging' | 'carryover' | 'discrepancy' | 'delivery' | 'stock' | 'consolidation' | 'discountaudit' | 'priceaudit' | 'sdaudit' | 'wbaudit' | 'driftaudit' | 'lfrowaudit' | 'closing' | 'trustaudit' | 'aggaudit' | 'anchoraudit' | 'scheduleaudit' | 'executive'
 
 const REPORTS_TABS = ['monthly', 'revenue', 'customer', 'item', 'pnl', 'roundpnl', 'custvalue', 'aging', 'carryover', 'discrepancy', 'delivery', 'stock', 'consolidation', 'priceaudit', 'sdaudit', 'wbaudit', 'driftaudit', 'lfrowaudit', 'closing', 'trustaudit', 'aggaudit', 'anchoraudit', 'scheduleaudit', 'executive'] as const
 
@@ -124,6 +125,7 @@ export default function ReportsPage() {
     { key: 'delivery', label: 'รายงานส่งของ' },
     { key: 'stock', label: 'สต็อกรายเดือน' },
     { key: 'consolidation', label: 'รวบเดือน' },
+    { key: 'discountaudit', label: '🎁 ส่วนลด/ชดเชย' },
     { key: 'priceaudit', label: '🛡️ Price Audit' },
     { key: 'sdaudit', label: '🔍 SD Audit' },
     { key: 'wbaudit', label: '🔍 WB Audit' },
@@ -1595,6 +1597,7 @@ export default function ReportsPage() {
 
       {/* 217.1: Price Audit Tab — read-only monitoring */}
       {tab === 'priceaudit' && <PriceAudit />}
+      {tab === 'discountaudit' && <DiscountAuditReport />}
       {tab === 'sdaudit' && <SDAudit />}
       {tab === 'wbaudit' && <WBAudit />}
       {tab === 'driftaudit' && <CarryDriftAudit />}
