@@ -2,20 +2,20 @@
 // 449 — Milk-Run Analytics · แท็บ "สถิติหน้างาน"
 //   Phase 1: backfill (reconstruct GPS history → gps_visits/gps_legs) + สรุปข้อมูลที่เก็บ
 //   Phase 2/3 (ต่อยอดในไฟล์นี้): สถิติเวลา/dwell/leg · anomaly · เทียบคนขับ · หา route
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react'
 import { useStore } from '@/lib/store'
 import { fetchGpsCars, fetchGpsTrips } from '@/lib/gps-service'
 import { fetchGpsVisits, fetchGpsLegs, saveReconstructedDay } from '@/lib/supabase-service'
 import { reconstructVisitsLegs, type RoundWindow } from '@/lib/visit-reconstruct'
 import { customerStats, legStats, arrivalVsWindow, minToHHMM, type Dist, type CustomerStat, type LegStat } from '@/lib/visit-stats'
 import { detectAnomalies, driverScores, routeOpportunities, detectRevisits, revisitsByCustomer, type Anomaly, type DriverScore, type RouteOpportunity, type RevisitIncident, type RevisitCustomerSummary } from '@/lib/visit-anomaly'
-import { normalizePlate } from '@/lib/v2x-types'
+import { normalizePlate, type GpsCar } from '@/lib/v2x-types'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { exportCSV } from '@/lib/export'
 import type { LatLng } from '@/lib/geo'
-import { cn, todayISO } from '@/lib/utils'
+import { cn, todayISO, formatDayMonth, formatDate } from '@/lib/utils'
 import type { GpsVisit, GpsLeg, Vehicle } from '@/types'
-import { Database, Loader2, Play, X, RefreshCw, AlertTriangle, CheckCircle2, Truck, Clock, Route, Search, FileSpreadsheet, Repeat } from 'lucide-react'
+import { Database, Loader2, Play, X, RefreshCw, AlertTriangle, CheckCircle2, Truck, Clock, Route, Search, FileSpreadsheet, Repeat, ChevronDown } from 'lucide-react'
 
 // 451 — เรียงทุกคอลัมน์ + export CSV (theme เดียวกับรายงานอื่น: SortHeader ลูกศร ↑↓ สี accent + exportCSV BOM)
 type SortDir = 'asc' | 'desc'
@@ -67,12 +67,32 @@ function enumerateDays(from: string, to: string): string[] {
 
 interface BackfillProgress { done: number; total: number; visits: number; legs: number; errors: number; current: string }
 
-export default function MilkRunTab() {
+export default function MilkRunTab({ onOpenTrip }: { onOpenTrip?: (carId: string, date: string) => void }) {
   const { customers, companyInfo, savedPlaces, rounds, dailyTrips, vehicles, crew } = useStore()
 
   const [visits, setVisits] = useState<GpsVisit[] | null>(null)
   const [legs, setLegs] = useState<GpsLeg[] | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // 472.3 — เปิดเที่ยววิ่งจากแถวสถิติ: รถในสถิติเป็น vehicleId (ภายใน) → map เป็น GPS carId ผ่านป้ายทะเบียน
+  const [gpsCars, setGpsCars] = useState<GpsCar[]>([])
+  useEffect(() => { fetchGpsCars().then(setGpsCars).catch(() => {}) }, [])
+  const vehById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles])
+  const carIdByVehicle = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const car of gpsCars) {
+      const v = vehicles.find(veh => normalizePlate(veh.licensePlate) === car.plateNorm)
+      if (v) m.set(v.id, car.carId)
+    }
+    return m
+  }, [gpsCars, vehicles])
+  const openVehicleTrip = useCallback((vehicleId: string, date: string) => {
+    const carId = carIdByVehicle.get(vehicleId)
+    if (carId && onOpenTrip) onOpenTrip(carId, date)
+  }, [carIdByVehicle, onOpenTrip])
+  // แถวที่กางดูรายละเอียด (รถ/วัน/เวลา + เปิดเที่ยว) — key = composite stable
+  const [openAnoKey, setOpenAnoKey] = useState<string | null>(null)
+  const [openRevKey, setOpenRevKey] = useState<string | null>(null)
 
   const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 13); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })
   const [to, setTo] = useState(todayISO())
@@ -394,7 +414,7 @@ export default function MilkRunTab() {
         <SummaryCard icon={Clock} label="การจอดที่ลูกค้า (visit)" value={loading ? '—' : (summary?.visits ?? 0).toLocaleString()} />
         <SummaryCard icon={Route} label="ช่วงเดินทาง (leg)" value={loading ? '—' : (summary?.legs ?? 0).toLocaleString()} />
         <SummaryCard icon={Truck} label="ลูกค้าที่มีสถิติ" value={loading ? '—' : (summary?.customers ?? 0).toLocaleString()} />
-        <SummaryCard icon={Database} label="ช่วงข้อมูล" value={loading ? '—' : (summary && summary.minDate ? `${summary.minDate.slice(5)} – ${summary.maxDate.slice(5)}` : 'ยังไม่มี')} />
+        <SummaryCard icon={Database} label="ช่วงข้อมูล" value={loading ? '—' : (summary && summary.minDate ? `${formatDayMonth(summary.minDate)} – ${formatDayMonth(summary.maxDate)}` : 'ยังไม่มี')} />
       </div>
 
       {/* Backfill */}
@@ -611,17 +631,36 @@ export default function MilkRunTab() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {sortedAnomalies.map((a, i) => (
-                          <tr key={i} className="hover:bg-slate-50">
-                            <td className="px-3 py-2 text-slate-500 text-xs whitespace-nowrap">{a.date.slice(5)}</td>
-                            <td className="px-3 py-2 text-slate-500 whitespace-nowrap">{anomalyKind(a)}</td>
-                            <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{anomalyPlace(a)}</td>
-                            <td className="px-3 py-2 text-right text-rose-600 font-semibold whitespace-nowrap">{Math.round(a.value)} น.</td>
-                            <td className="px-3 py-2 text-right text-slate-500 whitespace-nowrap">{Math.round(a.median)} น.</td>
-                            <td className="px-3 py-2 text-right text-rose-500 font-medium whitespace-nowrap">+{Math.round(a.value - a.median)} น.</td>
-                            <td className="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">{a.driverId ? drvName(a.driverId) : '—'}</td>
-                          </tr>
-                        ))}
+                        {sortedAnomalies.map((a, i) => {
+                          const k = `ano|${a.date}|${a.kind}|${a.time}|${a.value}|${i}`
+                          const open = openAnoKey === k
+                          return (
+                            <Fragment key={k}>
+                              <tr onClick={() => setOpenAnoKey(open ? null : k)} className="hover:bg-slate-50 cursor-pointer">
+                                <td className="px-3 py-2 text-slate-500 text-xs whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1">
+                                    <ChevronDown className={cn('w-3 h-3 text-slate-300 transition-transform', open && 'rotate-180')} />
+                                    {formatDayMonth(a.date)}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-slate-500 whitespace-nowrap">{anomalyKind(a)}</td>
+                                <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{anomalyPlace(a)}</td>
+                                <td className="px-3 py-2 text-right text-rose-600 font-semibold whitespace-nowrap">{Math.round(a.value)} น.</td>
+                                <td className="px-3 py-2 text-right text-slate-500 whitespace-nowrap">{Math.round(a.median)} น.</td>
+                                <td className="px-3 py-2 text-right text-rose-500 font-medium whitespace-nowrap">+{Math.round(a.value - a.median)} น.</td>
+                                <td className="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">{a.driverId ? drvName(a.driverId) : '—'}</td>
+                              </tr>
+                              {open && (
+                                <tr className="bg-slate-50/70">
+                                  <td colSpan={7} className="px-3 pb-2.5 pt-0.5">
+                                    <TripDetailLine vehicleCode={vehById.get(a.vehicleId)?.code} date={a.date} timeLabel={hhmm(a.time) || '—'}
+                                      canOpen={!!onOpenTrip && carIdByVehicle.has(a.vehicleId)} onOpen={() => openVehicleTrip(a.vehicleId, a.date)} />
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -711,7 +750,7 @@ export default function MilkRunTab() {
                               <td className="px-3 py-2 text-right text-amber-700 font-semibold">{s.incidents}</td>
                               <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{s.loopKmTotal.toFixed(1)} กม.</td>
                               <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{Math.round(s.loopMinTotal)} น.</td>
-                              <td className="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">{s.lastDate.slice(5)}</td>
+                              <td className="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">{formatDayMonth(s.lastDate)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -742,18 +781,38 @@ export default function MilkRunTab() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {sortedRevisits.map((r, i) => (
-                            <tr key={i} className="hover:bg-slate-50">
-                              <td className="px-3 py-2 text-slate-500 text-xs whitespace-nowrap">{r.date.slice(5)}</td>
-                              <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{custName(r.customerId)}</td>
-                              <td className="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">{r.driverId ? drvName(r.driverId) : '—'}</td>
-                              <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{hhmm(r.firstArrive)}</td>
-                              <td className="px-3 py-2 text-right text-amber-700 font-medium whitespace-nowrap">{hhmm(r.revisitArrive)}</td>
-                              <td className="px-3 py-2 text-right text-slate-500">{r.otherStops}</td>
-                              <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{r.loopKm.toFixed(1)} กม.</td>
-                              <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{Math.round(r.loopMin)} น.</td>
-                            </tr>
-                          ))}
+                          {sortedRevisits.map((r, i) => {
+                            const k = `rev|${r.date}|${r.vehicleId}|${r.customerId}|${r.firstArrive}|${i}`
+                            const open = openRevKey === k
+                            return (
+                              <Fragment key={k}>
+                                <tr onClick={() => setOpenRevKey(open ? null : k)} className="hover:bg-slate-50 cursor-pointer">
+                                  <td className="px-3 py-2 text-slate-500 text-xs whitespace-nowrap">
+                                    <span className="inline-flex items-center gap-1">
+                                      <ChevronDown className={cn('w-3 h-3 text-slate-300 transition-transform', open && 'rotate-180')} />
+                                      {formatDayMonth(r.date)}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{custName(r.customerId)}</td>
+                                  <td className="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">{r.driverId ? drvName(r.driverId) : '—'}</td>
+                                  <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{hhmm(r.firstArrive)}</td>
+                                  <td className="px-3 py-2 text-right text-amber-700 font-medium whitespace-nowrap">{hhmm(r.revisitArrive)}</td>
+                                  <td className="px-3 py-2 text-right text-slate-500">{r.otherStops}</td>
+                                  <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{r.loopKm.toFixed(1)} กม.</td>
+                                  <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">{Math.round(r.loopMin)} น.</td>
+                                </tr>
+                                {open && (
+                                  <tr className="bg-slate-50/70">
+                                    <td colSpan={8} className="px-3 pb-2.5 pt-0.5">
+                                      <TripDetailLine vehicleCode={vehById.get(r.vehicleId)?.code} date={r.date}
+                                        timeLabel={`เข้า ${hhmm(r.firstArrive)} → วนกลับ ${hhmm(r.revisitArrive)}`}
+                                        canOpen={!!onOpenTrip && carIdByVehicle.has(r.vehicleId)} onOpen={() => openVehicleTrip(r.vehicleId, r.date)} />
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -782,6 +841,27 @@ function TimeDist({ d, kind }: { d: Dist; kind: 'time' | 'dur' }) {
       <span className="font-semibold text-slate-700">{fmt(d.median)}{kind === 'dur' && ' น.'}</span>
       {(d.p25 !== d.p75) && <span className="text-[11px] text-slate-400"> ({fmt(d.p25)}–{fmt(d.p75)})</span>}
     </span>
+  )
+}
+
+/** 472.3 — แถบรายละเอียดเมื่อกางดูแถวสถิติ: รถ + วัน/เวลา + ปุ่มเปิดเที่ยววิ่ง (เหมือนจุดที่ยังไม่รู้จัก) */
+function TripDetailLine({ vehicleCode, date, timeLabel, canOpen, onOpen }: {
+  vehicleCode?: string; date: string; timeLabel: string; canOpen: boolean; onOpen: () => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs border-l-2 border-[#3DD8D8]/40 pl-3">
+      <span className="inline-flex items-center gap-1 text-slate-700 font-medium">
+        <Truck className="w-3.5 h-3.5 text-slate-400" /> {vehicleCode ? `คัน ${vehicleCode}` : 'ไม่ทราบรถ'}
+      </span>
+      <span className="inline-flex items-center gap-1 text-slate-500">
+        <Clock className="w-3.5 h-3.5 text-slate-400" /> {formatDate(date)} · {timeLabel}
+      </span>
+      <button type="button" onClick={onOpen} disabled={!canOpen}
+        className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#3DD8D8] text-[#1B3A5C] hover:bg-[#2bb8b8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        title={canOpen ? 'เปิดเที่ยววิ่งของรถคันนี้ในวันนั้น' : 'จับคู่ GPS ของรถคันนี้ไม่ได้ (ตรวจป้ายทะเบียน)'}>
+        <Route className="w-3.5 h-3.5" /> เปิดเที่ยววิ่ง →
+      </button>
+    </div>
   )
 }
 

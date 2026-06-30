@@ -27,7 +27,7 @@ import type { RouteTrack } from '@/components/RouteMap'
 import { isScheduledDay } from '@/lib/schedule-audit'
 import { matchesThaiQueryAnyField } from '@/lib/thai-search'
 import { tripsToStops, clusterUnknownStops, type RawStop } from '@/lib/unknown-places'
-import { todayISO, cn } from '@/lib/utils'
+import { todayISO, cn, formatDayMonth } from '@/lib/utils'
 import { canViewFleet } from '@/lib/permissions'
 import {
   dailyTripId, SAVED_PLACE_CATEGORY_CONFIG,
@@ -169,7 +169,8 @@ export default function GpsPage() {
         : tab === 'dashboard' ? <DashboardTab vehicleByPlate={vehicleByPlate}
             onOpenTrip={(carId, date) => { setTripsInit({ carId, date }); setTab('trips') }} />
         : tab === 'audit' ? <AuditTab />
-        : tab === 'analytics' ? <MilkRunTab />
+        : tab === 'analytics' ? <MilkRunTab
+            onOpenTrip={(carId, date) => { setTripsInit({ carId, date }); setTab('trips') }} />
         : <PlacesTab vehicleByPlate={vehicleByPlate}
             onOpenTrip={(carId, date) => { setTripsInit({ carId, date }); setTab('trips') }} />}
     </div>
@@ -1786,7 +1787,7 @@ function PlacesTab({ vehicleByPlate, onOpenTrip }: { vehicleByPlate: Map<string,
                             จอด {c.count} ครั้ง
                             {c.dwellMedian > 0 && ` · นานเฉลี่ย ${c.dwellMedian} น.`}
                             {c.vehicleCodes.length > 0 && ` · รถ ${c.vehicleCodes.join(', ')}`}
-                            {c.firstDate && ` · ${c.firstDate.slice(5)}${c.lastDate !== c.firstDate ? `–${c.lastDate.slice(5)}` : ''}`}
+                            {c.firstDate && ` · ${formatDayMonth(c.firstDate)}${c.lastDate !== c.firstDate ? `–${formatDayMonth(c.lastDate)}` : ''}`}
                           </p>
                         </button>
                         <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noopener noreferrer"

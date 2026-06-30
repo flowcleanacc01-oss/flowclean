@@ -84,6 +84,13 @@ export function formatDateShort(dateStr: string): string {
   }
 }
 
+/** 472 — Format วันที่-เดือน สั้น (DD-MM เช่น "19-01") จาก ISO YYYY-MM-DD
+ *  string-only (ไม่ parse Date) กัน TZ shift · ให้ตรง convention dd-MM ทั้งแอป (เลิก slice(5)=MM-DD) */
+export function formatDayMonth(dateStr: string): string {
+  if (!dateStr || dateStr.length < 10) return dateStr
+  return `${dateStr.slice(8, 10)}-${dateStr.slice(5, 7)}`
+}
+
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('th-TH', {
     minimumFractionDigits: 2,

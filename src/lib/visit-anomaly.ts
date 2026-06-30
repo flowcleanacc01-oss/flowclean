@@ -17,6 +17,8 @@ function push<T>(map: Map<string, T[]>, key: string, val: T) {
 export interface Anomaly {
   kind: 'dwell' | 'travel'
   date: string
+  vehicleId: string       // 472 — รถที่เกิดเหตุ (ใช้เปิดเที่ยววิ่ง)
+  time: string            // 472 — เวลาเกิดเหตุ (datetime · dwell=ถึง / travel=ออก)
   driverId: string
   customerId: string      // dwell
   fromCustomerId: string  // travel
@@ -38,7 +40,7 @@ export function detectAnomalies(visits: GpsVisit[], legs: GpsLeg[]): Anomaly[] {
     const q1 = quantile(sorted, 0.25), q3 = quantile(sorted, 0.75), med = quantile(sorted, 0.5)
     const hi = q3 + IQR_K * (q3 - q1)
     for (const v of vs) {
-      if (v.dwellMin > hi) out.push({ kind: 'dwell', date: v.date, driverId: v.driverId, customerId: cid, fromCustomerId: '', toCustomerId: '', value: v.dwellMin, median: med })
+      if (v.dwellMin > hi) out.push({ kind: 'dwell', date: v.date, vehicleId: v.vehicleId, time: v.arriveTime, driverId: v.driverId, customerId: cid, fromCustomerId: '', toCustomerId: '', value: v.dwellMin, median: med })
     }
   }
 
@@ -52,7 +54,7 @@ export function detectAnomalies(visits: GpsVisit[], legs: GpsLeg[]): Anomaly[] {
     const hi = q3 + IQR_K * (q3 - q1)
     const [fromCustomerId, toCustomerId] = key.split('>')
     for (const l of ls) {
-      if (l.travelMin > hi) out.push({ kind: 'travel', date: l.date, driverId: l.driverId, customerId: '', fromCustomerId, toCustomerId, value: l.travelMin, median: med })
+      if (l.travelMin > hi) out.push({ kind: 'travel', date: l.date, vehicleId: l.vehicleId, time: l.departTime, driverId: l.driverId, customerId: '', fromCustomerId, toCustomerId, value: l.travelMin, median: med })
     }
   }
 
